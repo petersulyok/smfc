@@ -1,0 +1,6 @@
+#
+# smfc.service
+#
+
+# Startup options for the service
+OPTIONS="-c /opt/smfc/smfc.conf -l 2"

@@ -1,0 +1,11 @@
+[Unit]
+Description=SuperMicro Fan Control
+After=syslog.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/smfc
+ExecStart=/opt/smfc/smfc.py $OPTIONS
+
+[Install]
+WantedBy=multi-user.target
