@@ -16,9 +16,11 @@ You need the following things:
 
 ### 2. Installation and configuration
  1. Setup the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
- 2. For the efficient power management (and lower heat generation) you may consider to:
-		 - CPU: enable Intel(R) Speed Shift Technology and/or Intel(R) SpeedStep features in BIOS
-		 - HD: enable advanced power management and sleep timer for SATA hard disks (`hdparm`)
+ 2. For the efficient power consumption (and lower heat generation) you may consider to enable:
+ 
+	 - Intel(R) Speed Shift Technology and/or Intel(R) SpeedStep features in BIOS for the CPU
+	 - advanced power management and sleep timer for SATA hard disks (`hdparm`)
+	 
  3. Installation can be executed by running script `install.sh`. Default target directory is `/opt/smfc`. Some other files will be installed to folders `/etc/default` and `/etc/systemd/system` too.
  4. Edit configuration file `/opt/smfc/smfc.conf` based on your installation (fans and HDs).
  5. Edit command line options in `/etc/default/smfc`.
