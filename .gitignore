@@ -4,3 +4,4 @@ __pycache__/
 .idea/*
 .coverage
 htmlcov/*
+*.csv
