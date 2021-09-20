@@ -1,6 +1,6 @@
 
 # smfc
-Super Micro fan control for Linux (home) boxes
+Super Micro fan control for Linux (home) server/NAS
 
 ## TL;DR
 
@@ -9,7 +9,7 @@ This is a `systemd service` running on Linux and is able to control fans of CPU 
 ### 1. Prerequisites
  - Super Micro X9/X10/X11 motherboard with BMC (AST2x00 chip)
  - python 3.6+
- - Linux (kernel 5.6+) with `systemd` (`coretemp` and `drivetemp` kernel modules for CPU and SATA HD temperatures)
+ - Linux (kernel 5.6+) with `systemd` (`coretemp` and `drivetemp` kernel modules for CPU and hard disk temperatures)
  - `bash`
  - `ipmitool`
  - optional: `smartmontools` for feature *standby guard* 
@@ -54,8 +54,8 @@ For HD zone an additional optional feature was implemented, called *Standby guar
 
 This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that mode. With this feature we can avoid a situation where the array is partially in standby mode while other members are still active.
 
-### 2. IPMI fan control and sensor thresholds
-This is a well-known fact in the NAS and home server community that in case of Super Micro boards IPMI `FULL MODE`the rotation speed of the fans can be controlled freely while the rotation speed does not go above or fall below predefined thresholds. If it happens, IPMI sets the fans back to full rotation speed (level 100%). You can avoid such a situation if you redefine IPMI thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
+### 2. IPMI fan control and thresholds
+This is a well-known fact for NAS and home server community that in case of Super Micro boards with IPMI `FULL MODE` the rotation speed of the fans can be controlled freely while the rotation speed does not go above or fall below predefined thresholds. If it happens, IPMI sets the fans back to full rotation speed (level 100%). You can avoid such a situation if you redefine IPMI thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
 
  IPMI defines six sensor thresholds for fans:
  1. Lower Non-Recoverable  
@@ -137,7 +137,7 @@ Use file `/etc/modules` for persistent loading of these modules. Both modules pr
  - CPU: `/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input`
  - HD: `/sys/class/scsi_device/0:0:0:0/device/hwmon/hwmon*/temp1_input`
 
-There is an enumeration mechanism (i.e. numbering) in Linux kernel, so your final path may be different.
+There is an enumeration mechanism (i.e. numbering) in Linux kernel, so your final path may be different. Reading file content from filesystem `/sys` is the fastest way to get the temperature of the CPU and hard disks. `drivetemp` has also an additional advantage that it can read temperature of the hard disks in standby mode too. 
 
 TODO: Recommendation for AMD users.
 
@@ -341,7 +341,7 @@ You should configure the temperatures and levels with the same value.
 
 With this setup there will be a constant 60% fan level in the specific zone. The temperature value is ignored, `steps` parameter is also ignored.
 
-### Q: How do the author test/use the service?
+### Q: How does the author test/use this service?
 My configuration is the following:
 
  - [Super Micro X11SCH-F motherboard](https://www.supermicro.com/en/products/motherboard/X11SCH-F)
@@ -353,8 +353,8 @@ My configuration is the following:
 
  - Debian Linux LTS (actually bullseye with Linux kernel 5.10)
  - 8 x [WD Red 12TB (WD120EFAX)](https://shop.westerndigital.com/en-ie/products/outlet/internal-drives/wd-red-plus-sata-3-5-hdd#WD120EFAX) hard disks in ZFS RAID
- - 3 Noctua fans (FAN1, FAN2, FAN4) in CPU zone 
- - 2 Noctua fans (FANA, FANB) in HD zone
+ - 3 x [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN4) in CPU zone 
+ - 2 x [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) fans (FANA, FANB) in HD zone
 
 ## References
 Further readings:
@@ -364,9 +364,13 @@ Further readings:
  - [\[TrueNAS forums\] Script to control fan speed in response to hard drive temperatures](https://www.truenas.com/community/threads/script-to-control-fan-speed-in-response-to-hard-drive-temperatures.41294/)
 - [\[Pcfe's blog\] Set fan thresholds on my Super Micro H11DSi-NT](https://blog.pcfe.net/hugo/posts/2018-08-14-epyc-ipmi-fans/)
 - [\[Super Micro\] IPMI Utilities](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities)
+- Documentation of [`coretemp`](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html) kernel module
+- Documentation of [`drivetemp`](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) kernel module and its [github project](https://github.com/groeck/drivetemp)
 
 Similar projects:
  - [\[GitHub\] Kevin Horton's nas_fan_control](https://github.com/khorton/nas_fan_control)
  - [\[GitHub\] Rob Urban's fork nas_fan control](https://github.com/roburban/nas_fan_control)
  - [\[GitHub\] sretalla's fork nas_fan control](https://github.com/sretalla/nas_fan_control)
  - [\[GitHub\] Andrew Gunnerson's ipmi-fan-control](https://github.com/chenxiaolong/ipmi-fan-control)
+
+> Written with [StackEdit](https://stackedit.io/).
