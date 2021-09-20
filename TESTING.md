@@ -19,16 +19,16 @@ Several smoke tests are included in `smfc` project to check the service with dif
 	|`run_test_hd_4_constant.sh`| 4 x HD with constant fan output level |`./test/hd_4_constant/`|
 	|`run_test_hd_8.sh`| 8 x HD |`./test/hd_8/`|
 
-## Unittests
-All classes and the main function are unittested and the unittests can be found in `./test/` folder. They can be executed with the help of a helper script:
+## Unit tests
+All classes and the main function are completely unit tested. These tests can be found in `./test/` folder. They can be executed in the project folder with the help of a shell script:
 	
 	./run_unittest.sh
 
-You can measure test coverage
+You can also measure the coverage of the unit tests (a python package called `coverage` should be installed for this)
 
 	pip3 install coverage
 	./run_coverage.sh
 
-The HTML result can be reviewed in `./htmlcov/` with opening `index.html` in a browser. The actual coverage report is 98%.
+Coverage will generate a detailed HTML report (see `./htmlcov/index.html`) with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage report is 98%.
 
 > Written with [StackEdit](https://stackedit.io/).
