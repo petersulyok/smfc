@@ -30,7 +30,7 @@ This service was planned for PC cases with two independent cooling systems, CPU 
 
 In this service a fan control logic is implemented for both zones which can:
 
- 1. read the zone's temperature from Linux kernel  (in case of HD zone this is an average value of multiple hard disks)
+ 1. read the zone's temperature from Linux kernel (minimum, average, maximum temperature values can be calculated based on the configuration)
  2. calculate the proper fan level based on a user-defined control parameters and the temperature value
  3. setup the newly calculated fan level with the help of `ipmitool`
  
@@ -169,21 +169,27 @@ You may configure logging output and logging level here and these options can be
 Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 
 	#
-	# smfc.conf
-	# smfc service configuration parameters
+	#   smfc.conf
+	#   smfc service configuration parameters
 	#
-
+	
+	
 	[Ipmi]
 	# Path for ipmitool (str, default=/usr/bin/ipmitool)
-	command=/usr/bin/ipmitool
+	command=/usr/bin/ipmitool 
 	# Delay time after changing IPMI fan mode (int, seconds, default=10)
 	fan_mode_delay=10
 	# Delay time after changing IPMI fan level (int, seconds, default=2)
 	fan_level_delay=2
-
+	
+	
 	[CPU zone]
 	# Fan controller enabled (bool, default=0)
 	enabled=1
+	# Number of CPUs (int, default=1)
+	count=1
+	# Calculation of CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
+	temp_calc=1
 	# Discrete steps in mapping of temperatures to fan level (int, default=5)
 	steps=5
 	# Threshold in temperature change before the fan controller reacts (float, C, default=4.0)
@@ -200,10 +206,15 @@ Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 	max_level=100
 	# Path for CPU hwmon/coretemp file in sysfs (str, default=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input)
 	hwmon_path=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input
-	  
+	
+	
 	[HD zone]
 	# Fan controller enabled (bool, default=0)
 	enabled=1
+	# Number of HDs (int, default=8)
+	count=8
+	# Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
+	temp_calc=1
 	# Discrete steps in mapping of temperatures to fan level (int, default=4)
 	steps=4
 	# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
@@ -218,33 +229,32 @@ Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 	min_level=35
 	# Maximum HD fan level (int, %, default=100)
 	max_level=100
-	# Number of the hard disks (int, default=8)
-	hd_numbers=8
 	# Names of the HDs (str list, default=/dev/sda /dev/sdb /dev/sdc /dev/sdd /dev/sde /dev/sdf /dev/sdg /dev/sdh)
 	hd_names=/dev/sda /dev/sdb /dev/sdc /dev/sdd /dev/sde /dev/sdf /dev/sdg /dev/sdh
 	# Path for HD hwmon/drivetemp files in sysfs (str multi-line list,
-	# default=/sys/class/scsi_device/0:0:0:0/device/hwmon/hwmon*/temp1_input
-	#         /sys/class/scsi_device/1:0:0:0/device/hwmon/hwmon*/temp1_input
-	#         /sys/class/scsi_device/2:0:0:0/device/hwmon/hwmon*/temp1_input
-	#         /sys/class/scsi_device/3:0:0:0/device/hwmon/hwmon*/temp1_input
-	#         /sys/class/scsi_device/4:0:0:0/device/hwmon/hwmon*/temp1_input
-	#         /sys/class/scsi_device/5:0:0:0/device/hwmon/hwmon*/temp1_input
-	#         /sys/class/scsi_device/6:0:0:0/device/hwmon/hwmon*/temp1_input
-	#         /sys/class/scsi_device/7:0:0:0/device/hwmon/hwmon*/temp1_input
+	#   default=/sys/class/scsi_device/0:0:0:0/device/hwmon/hwmon*/temp1_input
+	#           /sys/class/scsi_device/1:0:0:0/device/hwmon/hwmon*/temp1_input
+	#           /sys/class/scsi_device/2:0:0:0/device/hwmon/hwmon*/temp1_input
+	#           /sys/class/scsi_device/3:0:0:0/device/hwmon/hwmon*/temp1_input
+	#           /sys/class/scsi_device/4:0:0:0/device/hwmon/hwmon*/temp1_input
+	#           /sys/class/scsi_device/5:0:0:0/device/hwmon/hwmon*/temp1_input
+	#           /sys/class/scsi_device/6:0:0:0/device/hwmon/hwmon*/temp1_input
+	#           /sys/class/scsi_device/7:0:0:0/device/hwmon/hwmon*/temp1_input
 	hwmon_path=/sys/class/scsi_device/0:0:0:0/device/hwmon/hwmon*/temp1_input
-	           /sys/class/scsi_device/1:0:0:0/device/hwmon/hwmon*/temp1_input
-	           /sys/class/scsi_device/2:0:0:0/device/hwmon/hwmon*/temp1_input
-	           /sys/class/scsi_device/3:0:0:0/device/hwmon/hwmon*/temp1_input
-	           /sys/class/scsi_device/4:0:0:0/device/hwmon/hwmon*/temp1_input
-	           /sys/class/scsi_device/5:0:0:0/device/hwmon/hwmon*/temp1_input
-	           /sys/class/scsi_device/6:0:0:0/device/hwmon/hwmon*/temp1_input
-	           /sys/class/scsi_device/7:0:0:0/device/hwmon/hwmon*/temp1_input
+			   /sys/class/scsi_device/1:0:0:0/device/hwmon/hwmon*/temp1_input
+			   /sys/class/scsi_device/2:0:0:0/device/hwmon/hwmon*/temp1_input
+			   /sys/class/scsi_device/3:0:0:0/device/hwmon/hwmon*/temp1_input
+			   /sys/class/scsi_device/4:0:0:0/device/hwmon/hwmon*/temp1_input
+			   /sys/class/scsi_device/5:0:0:0/device/hwmon/hwmon*/temp1_input
+			   /sys/class/scsi_device/6:0:0:0/device/hwmon/hwmon*/temp1_input
+			   /sys/class/scsi_device/7:0:0:0/device/hwmon/hwmon*/temp1_input
 	# Standby guard feature for the RAID array (bool, default=0)
 	standby_guard_enabled=1
-	# Threshold for number of HDs in STANDBY state before the full RAID array will go STANDBY (int, default=1)
+	# Number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)
 	standby_hd_limit=1
 	# Path for 'smartctl' command (str, default=/usr/sbin/smartctl)
 	smartctl_path=/usr/sbin/smartctl
+
 
 Important notes:
 
