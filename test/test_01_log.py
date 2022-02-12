@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 #
-#   test_01_log.py (C) 2021, Peter Sulyok
-#   Unittest for smfc.py/Log() class.
+#   test_01_log.py (C) 2021-2022, Peter Sulyok
+#   Unit test for smfc.py/Log() class.
 #
 
 import syslog
@@ -11,7 +11,7 @@ from unittest.mock import patch, MagicMock
 
 
 class LogTestCase(unittest.TestCase):
-    """Unittests for Log() class in smfc.py"""
+    """Unit test class for smfc.Log() class"""
 
     def primitive_test_1_pos(self, level: int, output: int, error: str) -> None:
         """This is a primitive positive test function. It contains the following steps:
@@ -52,7 +52,7 @@ class LogTestCase(unittest.TestCase):
         self.assertTrue(type(cm.exception) == ValueError, error)
 
     def test_init(self) -> None:
-        """This is a unittest for function Log.__init__()"""
+        """This is a unit test for function Log.__init__()"""
 
         # 1: Test valid values
         self.primitive_test_1_pos(Log.LOG_NONE, Log.LOG_STDOUT, "log init 01")
@@ -87,7 +87,7 @@ class LogTestCase(unittest.TestCase):
         del myLog
 
     def test_map_to_syslog(self) -> None:
-        """This is a unittest for function Log.map_to_syslog()."""
+        """This is a unit test for function Log.map_to_syslog()."""
         self.primitive_test_3_pos(Log.LOG_ERROR, syslog.LOG_ERR, "log map_to_syslog 01")
         self.primitive_test_3_pos(Log.LOG_INFO, syslog.LOG_INFO, "log map_to_syslog 02")
         self.primitive_test_3_pos(Log.LOG_DEBUG, syslog.LOG_DEBUG, "log map_to_syslog 03")
@@ -105,7 +105,7 @@ class LogTestCase(unittest.TestCase):
         del myLog
 
     def test_level_to_str(self) -> None:
-        """This is a unittest for function Log.level_to_str()."""
+        """This is a unit test for function Log.level_to_str()."""
         self.primitive_test_4_pos(Log.LOG_ERROR, 'ERROR', "log level_to_str 01")
         self.primitive_test_4_pos(Log.LOG_INFO, 'INFO', "log level_to_str 02")
         self.primitive_test_4_pos(Log.LOG_DEBUG, 'DEBUG', "log level_to_str 03")
@@ -135,7 +135,7 @@ class LogTestCase(unittest.TestCase):
             del myLog
 
     def test_msg_to_xxx(self) -> None:
-        """ This is a unittest for function Log.msg()."""
+        """ This is a unit test for function Log.msg()."""
 
         # Test all combinations of class initialization values and same/different log level values.
         self.primitive_test_5_pos(Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_NONE, 0, "log msg_to_??? 01")

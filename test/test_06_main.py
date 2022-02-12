@@ -1,21 +1,20 @@
 #!/usr/bin/python3
 #
-#   test_02_ipmi.py (C) 2021, Peter Sulyok
-#   Unittests for smfc/main() function.
+#   test_06_main.py (C) 2021-2022, Peter Sulyok
+#   Unit tests for smfc.main() function.
 #
 import sys
-import os
 import configparser
 import unittest
 import smfc
 from unittest.mock import patch, MagicMock
+from test_00_data import TestData
 
 
 class MainTestCase(unittest.TestCase):
-    """Unittests for main() function in smfc.py"""
+    """Unit test for smfc.main() function"""
 
-    ipmi_command: str = '/tmp/test_06_main_ipmi_command.sh'
-    config_file: str = '/tmp/test_06_main.conf'
+    sleep_counter: int
 
     def primitive_test_1_neg(self, command_line: str, exit_code: int, error: str):
         """This is a primitive negative test function. It contains the following steps:
@@ -30,7 +29,7 @@ class MainTestCase(unittest.TestCase):
             sys.argv = ('smfc.py ' + command_line).split()
             with self.assertRaises(SystemExit) as cm:
                 smfc.main()
-            self.assertEqual(cm.exception.code, exit_code, error)
+        self.assertEqual(cm.exception.code, exit_code, error)
 
     def primitive_test_2_neg(self, ipmi_command: str, mode_delay: int, level_delay: int, exit_code: int, error: str):
         """This is a primitive negative test function. It contains the following steps:
@@ -38,7 +37,14 @@ class MainTestCase(unittest.TestCase):
             - execute smfc.main()
             - ASSERT: if not sys.exit will not happen with the specified exit code
         """
+        my_td = TestData()
         my_config = configparser.ConfigParser()
+        if ipmi_command == 'NON_EXIST':
+            ipmi_command = './non-existent-dir/non-existent-file'
+        if ipmi_command == 'BAD':
+            ipmi_command = my_td.create_command_file()
+        if ipmi_command == 'GOOD':
+            ipmi_command = my_td.create_ipmi_command()
         my_config['Ipmi'] = {
             'command': ipmi_command,
             'fan_mode_delay': str(mode_delay),
@@ -50,19 +56,16 @@ class MainTestCase(unittest.TestCase):
         my_config['HD zone'] = {
             'enabled': '0'
         }
-        with open(self.config_file, 'w+') as cf:
-            my_config.write(cf)
+        conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mock_parser_print_help = MagicMock()
         with patch('builtins.print', mock_print), \
              patch('argparse.ArgumentParser._print_message', mock_parser_print_help):
-            sys.argv = ('smfc.py -o 0 -c ' + self.config_file).split()
+            sys.argv = ('smfc.py -o 0 -c ' + conf_file).split()
             with self.assertRaises(SystemExit) as cm:
                 smfc.main()
-            self.assertEqual(cm.exception.code, exit_code, error)
-        os.remove(self.config_file)
-
-    sleep_counter: int
+        self.assertEqual(cm.exception.code, exit_code, error)
+        del my_td
 
     def mocked_sleep(self, t):
         """Mocked time.sleep() function. Exists at the 10th call."""
@@ -76,14 +79,22 @@ class MainTestCase(unittest.TestCase):
             - execute smfc.main()
             - The main loop will be executed 3 times then exit
         """
+        my_td = TestData()
+        cmd_ipmi = my_td.create_ipmi_command()
+        cmd_smart = my_td.create_command_file('echo "ACTIVE"')
+        cpu_hwmon_path = my_td.get_cpu_1()
+        hd_hwmon_path = my_td.get_hd_8()
+        hd_names = my_td.get_hd_names(8)
         my_config = configparser.ConfigParser()
         my_config['Ipmi'] = {
-            'command': './test/hd_8/test1.sh',
+            'command': cmd_ipmi,
             'fan_mode_delay': '0',
             'fan_level_delay': '0'
         }
         my_config['CPU zone'] = {
             'enabled': str(cpuzone),
+            'count': '1',
+            'temp_calc': '1',
             'steps': '5',
             'sensitivity': '5',
             'polling': '0',
@@ -91,10 +102,12 @@ class MainTestCase(unittest.TestCase):
             'max_temp': '55',
             'min_level': '35',
             'max_level': '100',
-            'hwmon_path': './test/hd_8/hwmon/cpu/*/temp1_input'
+            'hwmon_path': '\n'.join(cpu_hwmon_path)+'\n'
         }
         my_config['HD zone'] = {
             'enabled': str(hdzone),
+            'count': '8',
+            'temp_calc': '1',
             'steps': '4',
             'sensitivity': '2',
             'polling': '0',
@@ -102,22 +115,13 @@ class MainTestCase(unittest.TestCase):
             'max_temp': '48',
             'min_level': '35',
             'max_level': '100',
-            'hd_numbers': '8',
-            'hd_names': '/dev/sda /dev/sdb /dev/sdc /dev/sdd /dev/sde /dev/sdf /dev/sdg /dev/sdh',
-            'hwmon_path': ('./test/hd_8/hwmon/hd/0/*/temp1_input\n'
-                           './test/hd_8/hwmon/hd/1/*/temp1_input\n'
-                           './test/hd_8/hwmon/hd/2/*/temp1_input\n'
-                           './test/hd_8/hwmon/hd/3/*/temp1_input\n'
-                           './test/hd_8/hwmon/hd/4/?/temp1_input\n'
-                           './test/hd_8/hwmon/hd/5/*/temp1_input\n'
-                           './test/hd_8/hwmon/hd/6/*/temp1_input\n'
-                           './test/hd_8/hwmon/hd/7/*/temp1_input'),
+            'hd_names': hd_names,
+            'hwmon_path': '\n'.join(hd_hwmon_path)+'\n',
             'standby_guard_enabled': '1',
             'standby_hd_limit': '2',
-            'smartctl_path': './test/hd_8/test2.sh'
+            'smartctl_path': cmd_smart
         }
-        with open(self.config_file, 'w+') as cf:
-            my_config.write(cf)
+        conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mock_parser_print_help = MagicMock()
         mock_time_sleep = MagicMock()
@@ -126,14 +130,14 @@ class MainTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('argparse.ArgumentParser._print_message', mock_parser_print_help), \
              patch('time.sleep', mock_time_sleep):
-            sys.argv = ('smfc.py -o 0 -c ' + self.config_file).split()
+            sys.argv = ('smfc.py -o 0 -c ' + conf_file).split()
             with self.assertRaises(SystemExit) as cm:
                 smfc.main()
-            self.assertEqual(cm.exception.code, exit_code, error)
-        os.remove(self.config_file)
+        self.assertEqual(cm.exception.code, exit_code, error)
+        del my_td
 
     def test_main(self) -> None:
-        """This is a unittest for function main()"""
+        """This is a unit test for function main()"""
 
         # Test standard exits (0, 2).
         self.primitive_test_1_neg('-h', 0, 'smfc main 1')
@@ -152,13 +156,13 @@ class MainTestCase(unittest.TestCase):
         self.primitive_test_1_neg('-o 0 -l 3 -c ./nonexistent_folder/nonexistent_config_file.conf', 6, 'smfc main 8')
 
         # Test exits(7) at Ipmi() init.
-        self.primitive_test_2_neg('./bin/nonexistent_command.sh', 0, 0, 7, 'smfc main 9')
-        self.primitive_test_2_neg('./test/hd_2/test1.sh', -1, 0, 7, 'smfc main 10')
-        self.primitive_test_2_neg('./test/hd_2/test1.sh', 0, -1, 7, 'smfc main 11')
-        self.primitive_test_2_neg('./test/hd_2/test2.sh', 0, 0, 7, 'smfc main 12')
+        self.primitive_test_2_neg('NON-EXIST', 0, 0, 7, 'smfc main 9')
+        self.primitive_test_2_neg('GOOD', -1, 0, 7, 'smfc main 10')
+        self.primitive_test_2_neg('GOOD', 0, -1, 7, 'smfc main 11')
+        self.primitive_test_2_neg('BAD', 0, 0, 7, 'smfc main 12')
 
-        # Test exits(8) in Ipmi() init.
-        self.primitive_test_2_neg('./test/hd_2/test1.sh', 0, 0, 8, 'smfc main 13')
+        # Test exits(8) at controller init.
+        self.primitive_test_2_neg('GOOD', 0, 0, 8, 'smfc main 13')
 
         # Test for main loop. Exits(10) at the 10th call of the mocked time.sleep().
         self.primitive_test_3_pos(1, 0, 10, 'smfc main 14')

@@ -14,7 +14,7 @@ import syslog
 from typing import List, Callable
 
 # Program version string
-version_str: str = '1.0'
+version_str: str = '1.1'
 
 
 class Log:
@@ -324,6 +324,8 @@ class FanController(object):
         self.log = log
         self.ipmi = ipmi
         self.ipmi_zone = ipmi_zone
+        if self.ipmi_zone not in {Ipmi.CPU_ZONE, Ipmi.HD_ZONE}:
+            raise ValueError('invalid value: ipmi_zone')
         self.name = name
         self.count = count
         if self.count <= 0:
@@ -332,11 +334,11 @@ class FanController(object):
         if self.temp_calc not in {self.CALC_MIN, self.CALC_AVG, self.CALC_MAX}:
             raise ValueError('invalid value: temp_calc')
         self.steps = steps
-        if self.steps < 0:
-            raise ValueError('steps < 0')
+        if self.steps <= 0:
+            raise ValueError('steps <= 0')
         self.sensitivity = sensitivity
-        if self.sensitivity < 0:
-            raise ValueError('sensitivity < 0')
+        if self.sensitivity <= 0:
+            raise ValueError('sensitivity <= 0')
         self.polling = polling
         if self.polling < 0:
             raise ValueError('polling < 0')
@@ -344,7 +346,6 @@ class FanController(object):
             raise ValueError('max_temp < min_temp')
         self.min_temp = min_temp
         self.max_temp = max_temp
-        self.temp_step = (max_temp - min_temp) / steps
         if max_level < min_level:
             raise ValueError('max_level < min_level')
         self.min_level = min_level
@@ -375,6 +376,7 @@ class FanController(object):
         except IOError as e:
             raise e
         # Initialize calculated and measured values.
+        self.temp_step = (max_temp - min_temp) / steps
         self.level_step = (max_level - min_level) / steps
         self.last_temp = 0
         self.last_level = 0
@@ -419,9 +421,9 @@ class FanController(object):
                     value = float(f.read()) / 1000
                     if value < minimum:
                         minimum = value
-            return minimum
         except (IOError, FileNotFoundError) as e:
             raise e
+        return minimum
 
     def get_avg_temp(self):
         """Get average temperature of the controlled entities in the IPMI zone. Can raise IOError exception.
@@ -438,9 +440,9 @@ class FanController(object):
                 with open(i, "r") as f:
                     average += float(f.read()) / 1000
                     counter += 1
-            return average / counter
         except (IOError, FileNotFoundError) as e:
             raise e
+        return average / counter
 
     def get_max_temp(self) -> float:
         """Get the maximum temperature of the controlled entities in the IPMI zone. Can raise IOError exception.
@@ -450,17 +452,16 @@ class FanController(object):
         """
         maximum: float = -1.0
         value: float
-
-        # Calculate minimum temperature for HDs
+        # Calculate minimum temperature.
         try:
             for i in self.hwmon_path:
                 with open(i, "r") as f:
                     value = float(f.read()) / 1000
                     if value > maximum:
                         maximum = value
-            return maximum
         except (IOError, FileNotFoundError) as e:
             raise e
+        return maximum
 
     def set_fan_level(self, level: int) -> None:
         """Set the new fan level in an IPMI zone. Can raise exception (ValueError).
@@ -513,7 +514,7 @@ class FanController(object):
         else:
             current_gain = int(round((current_temp - self.min_temp) / self.temp_step))
             current_level = int(round(float(current_gain) * self.level_step)) + self.min_level
-        # Step 4 - A new fan level will be set and logged.
+        # Step 4: the new fan level will be set and logged.
         if current_level != self.last_level:
             self.last_level = current_level
             self.set_fan_level(current_level)
@@ -546,7 +547,7 @@ class CpuZone(FanController):
         FanController.__init__(
             self, log, ipmi, Ipmi.CPU_ZONE, "CPU zone",
             config['CPU zone'].getint('count', fallback=1),
-            config['CPU zone'].getint('temp_calc', fallback=1),
+            config['CPU zone'].getint('temp_calc', fallback=FanController.CALC_AVG),
             config['CPU zone'].getint('steps', fallback=5),
             config['CPU zone'].getfloat('sensitivity', fallback=4),
             config['CPU zone'].getfloat('polling', fallback=2),
@@ -554,8 +555,8 @@ class CpuZone(FanController):
             config['CPU zone'].getfloat('max_temp', fallback=55),
             config['CPU zone'].getint('min_level', fallback=35),
             config['CPU zone'].getint('max_level', fallback=100),
-            config['CPU zone'].get('hwmon_path', (
-                                   '(/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input\n'
+            config['CPU zone'].get('hwmon_path', fallback=(
+                                   '/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input\n'
                                    )).splitlines()
             )
 
@@ -589,7 +590,7 @@ class HdZone(FanController):
         FanController.__init__(
             self, log, ipmi, Ipmi.HD_ZONE, "HD zone",
             config['HD zone'].getint('count', fallback=8),
-            config['HD zone'].getint('temp_calc', fallback=1),
+            config['HD zone'].getint('temp_calc', fallback=FanController.CALC_AVG),
             config['HD zone'].getint('steps', fallback=4),
             config['HD zone'].getfloat('sensitivity', fallback=2),
             config['HD zone'].getfloat('polling', fallback=2400),
@@ -597,7 +598,7 @@ class HdZone(FanController):
             config['HD zone'].getfloat('max_temp', fallback=48),
             config['HD zone'].getint('min_level', fallback=35),
             config['HD zone'].getint('max_level', fallback=100),
-            config['HD zone'].get('hwmon_path', (
+            config['HD zone'].get('hwmon_path', fallback=(
                                   '/sys/class/scsi_device/0:0:0:0/device/hwmon/hwmon*/temp1_input\n'
                                   '/sys/class/scsi_device/1:0:0:0/device/hwmon/hwmon*/temp1_input\n'
                                   '/sys/class/scsi_device/2:0:0:0/device/hwmon/hwmon*/temp1_input\n'
@@ -605,7 +606,7 @@ class HdZone(FanController):
                                   '/sys/class/scsi_device/4:0:0:0/device/hwmon/hwmon*/temp1_input\n'
                                   '/sys/class/scsi_device/5:0:0:0/device/hwmon/hwmon*/temp1_input\n'
                                   '/sys/class/scsi_device/6:0:0:0/device/hwmon/hwmon*/temp1_input\n'
-                                  '/sys/class/scsi_device/7:0:0:0/device/hwmon/hwmon*/temp1_input'
+                                  '/sys/class/scsi_device/7:0:0:0/device/hwmon/hwmon*/temp1_input\n'
                                   )).splitlines()
             )
         # Save and validate further HdZone class specific parameters.

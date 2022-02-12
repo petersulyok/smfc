@@ -4,10 +4,10 @@ Super Micro fan control for Linux (home) server/NAS
 
 ## TL;DR
 
-This is a `systemd service` running on Linux and is able to control fans of CPU and HD zones with the help of IPMI functions on a Super Micro X9/X10/X11 motherboard.
+This is a `systemd service` running on Linux and is able to control fans in CPU and HD zones with the help of IPMI on Super Micro X9/X10/X11 motherboards.
 
 ### 1. Prerequisites
- - Super Micro X9/X10/X11 motherboard with BMC (AST2x00 chip)
+ - a Super Micro X9/X10/X11 motherboard with BMC (AST2x00 chip)
  - python 3.6+
  - Linux (kernel 5.6+) with `systemd` (`coretemp` and `drivetemp` kernel modules for CPU and hard disk temperatures)
  - `bash`

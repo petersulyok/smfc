@@ -1,108 +1,51 @@
 #!/usr/bin/python3
 #
-#   test_05_hdzone.py (C) 2021, Peter Sulyok
-#   Unittests for smfc/HdZone() class.
+#   test_05_hdzone.py (C) 2021-2022, Peter Sulyok
+#   Unit tests for smfc.HdZone() class.
 #
 import configparser
-import glob
-import os
 import subprocess
 import unittest
+import smfc
 from smfc import Log, Ipmi, HdZone
+from test_00_data import TestData
 from unittest.mock import patch, MagicMock
 from typing import List, Any
 
 
 class HdZoneTestCase(unittest.TestCase):
-    """Unittests for HdZone() class in smfc.py"""
+    """Unit test class for smfc.HdZone() class"""
 
-    @staticmethod
-    def normalize_path(path: str) -> str:
-        file_names = glob.glob(path)
-        return file_names[0]        
-
-    # Path for the shell script substituting command ipmitool
-    ipmi_command: str = '/tmp/test_05_ipmi_hz.sh'
-
-    # Path for the shell script substituting command ipmitool
-    smartctl_command: str = '/tmp/test_05_smartctl_hz.sh'
-
-    # Path for hwmon_path files
-    temp8_files: str = (
-        './test/hd_8/hwmon/hd/0/*/temp1_input\n'
-        './test/hd_8/hwmon/hd/1/*/temp1_input\n'
-        './test/hd_8/hwmon/hd/2/*/temp1_input\n'
-        './test/hd_8/hwmon/hd/3/*/temp1_input\n'
-        './test/hd_8/hwmon/hd/4/?/temp1_input\n'
-        './test/hd_8/hwmon/hd/5/*/temp1_input\n'
-        './test/hd_8/hwmon/hd/6/*/temp1_input\n'
-        './test/hd_8/hwmon/hd/7/*/temp1_input'
-        )
-    default8_files: str = (
-        '/sys/class/scsi_device/0:0:0:0/device/hwmon/hwmon*/temp1_input\n'
-        '/sys/class/scsi_device/1:0:0:0/device/hwmon/hwmon*/temp1_input\n'
-        '/sys/class/scsi_device/2:0:0:0/device/hwmon/hwmon*/temp1_input\n'
-        '/sys/class/scsi_device/3:0:0:0/device/hwmon/hwmon*/temp1_input\n'
-        '/sys/class/scsi_device/4:0:0:0/device/hwmon/hwmon*/temp1_input\n'
-        '/sys/class/scsi_device/5:0:0:0/device/hwmon/hwmon*/temp1_input\n'
-        '/sys/class/scsi_device/6:0:0:0/device/hwmon/hwmon*/temp1_input\n'
-        '/sys/class/scsi_device/7:0:0:0/device/hwmon/hwmon*/temp1_input'
-        )
-    temp8_wr_files: str = (
-        '/tmp/cz_test_05_hd0_temp\n'
-        '/tmp/cz_test_05_hd1_temp\n'
-        '/tmp/cz_test_05_hd2_temp\n'
-        '/tmp/cz_test_05_hd3_temp\n'
-        '/tmp/cz_test_05_hd4_temp\n'
-        '/tmp/cz_test_05_hd5_temp\n'
-        '/tmp/cz_test_05_hd6_temp\n'
-        '/tmp/cz_test_05_hd7_temp'
-        )
-    temp4_files: str = (
-        './test/hd_4/hwmon/hd/0/*/temp1_input\n'
-        './test/hd_4/hwmon/hd/1/*/temp1_input\n'
-        './test/hd_4/hwmon/hd/2/?/temp1_input\n'
-        './test/hd_4/hwmon/hd/3/*/temp1_input'
-        )
-    temp2_files: str = (
-        './test/hd_2/hwmon/hd/0/*/temp1_input\n'
-        './test/hd_2/hwmon/hd/1/?/temp1_input'
-        )
-    err2_files: str = (
-        './test/hd_2/hwmon/hd/0/|/temp1_input\n'
-        './test/hd_2/hwmon/hd/1/&/temp1_input'
-        )
-
-    # HD names
-    names8: str = '/dev/sda /dev/sdb /dev/sdc /dev/sdd /dev/sde /dev/sdf /dev/sdg /dev/sdh'
-    names4: str = '/dev/sda /dev/sdb /dev/sdc /dev/sdd'
-    names2: str = '/dev/sda /dev/sdb'
-
-    def primitive_test_1_pos(self, steps: int, sensitivity: float, polling: float, min_temp: float, max_temp: float,
-                             min_level: int, max_level: int, hd_number: int, hd_names: str, hwmon_path: str,
-                             sb_limit: int, error: str):
+    def primitive_test_1_pos(self, count: int, temp_calc: int, steps: int, sensitivity: float, polling: float,
+                             min_temp: float, max_temp: float, min_level: int, max_level: int, sb_limit: int,
+                             error: str):
         """This is a primitive negative test function. It contains the following steps:
             - mock print, subprocesses.run functions
             - initialize a Config, Log, Ipmi, and HdZone classes
             - ASSERT: if the class attributes contain different values that were passed to __init__
             - delete the instances
         """
-        with open(self.ipmi_command, "w+") as f:
-            f.write('#!/bin/bash\necho " 01"\n')
-        os.system('chmod +x '+self.ipmi_command)
-        with open(self.smartctl_command, "w+") as f:
-            f.write('#!/bin/bash\necho "ACTIVE"\n')
-        os.system('chmod +x '+self.smartctl_command)
+        my_td = TestData()
+        cmd_ipmi = my_td.create_command_file('echo " 01"')
+        cmd_smart = my_td.create_command_file('echo "ACTIVE"')
+        hwmon_path = my_td.get_hd_2()
+        if count == 4:
+            hwmon_path = my_td.get_hd_4()
+        if count == 8:
+            hwmon_path = my_td.get_hd_8()
+        hd_names = my_td.get_hd_names(count)
         mock_print = MagicMock()
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
             my_config['Ipmi'] = {
-                'command': self.ipmi_command,
+                'command': cmd_ipmi,
                 'fan_mode_delay': '0',
                 'fan_level_delay': '0'
             }
             my_config['HD zone'] = {
                 'enabled': '1',
+                'count': str(count),
+                'temp_calc': str(temp_calc),
                 'steps': str(steps),
                 'sensitivity': str(sensitivity),
                 'polling': str(polling),
@@ -110,192 +53,104 @@ class HdZoneTestCase(unittest.TestCase):
                 'max_temp': str(max_temp),
                 'min_level': str(min_level),
                 'max_level': str(max_level),
-                'hd_numbers': str(hd_number),
                 'hd_names': hd_names,
-                'hwmon_path': hwmon_path,
+                'hwmon_path': '\n'.join(hwmon_path)+'\n',
                 'standby_guard_enabled': '1',
                 'standby_hd_limit': str(sb_limit),
-                'smartctl_path': self.smartctl_command
+                'smartctl_path': cmd_smart
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            self.assertEqual(my_hdzone.steps, steps, error)
-            self.assertEqual(my_hdzone.sensitivity, sensitivity, error)
-            self.assertEqual(my_hdzone.polling, polling, error)
-            self.assertEqual(my_hdzone.min_temp, min_temp, error)
-            self.assertEqual(my_hdzone.max_temp, max_temp, error)
-            self.assertEqual(my_hdzone.min_level, min_level, error)
-            self.assertEqual(my_hdzone.max_level, max_level, error)
-            self.assertEqual(my_hdzone.hd_numbers, hd_number, error)
-            self.assertEqual(my_hdzone.hd_names, hd_names.split(), error)
-            normalized_hwmon = hwmon_path.splitlines()
-            for i in range(len(normalized_hwmon)):
-                normalized_hwmon[i] = self.normalize_path(normalized_hwmon[i])
-            self.assertEqual(my_hdzone.hwmon_path, normalized_hwmon, error)
-            self.assertEqual(my_hdzone.standby_hd_limit, sb_limit, error)
-            self.assertEqual(my_hdzone.smartctl_path, self.smartctl_command, error)
+        self.assertEqual(my_hdzone.ipmi_zone, Ipmi.HD_ZONE, error)
+        self.assertEqual(my_hdzone.name, "HD zone", error)
+        self.assertEqual(my_hdzone.count, count, error)
+        self.assertEqual(my_hdzone.temp_calc, temp_calc, error)
+        self.assertEqual(my_hdzone.steps, steps, error)
+        self.assertEqual(my_hdzone.sensitivity, sensitivity, error)
+        self.assertEqual(my_hdzone.polling, polling, error)
+        self.assertEqual(my_hdzone.min_temp, min_temp, error)
+        self.assertEqual(my_hdzone.max_temp, max_temp, error)
+        self.assertEqual(my_hdzone.min_level, min_level, error)
+        self.assertEqual(my_hdzone.max_level, max_level, error)
+        self.assertEqual(my_hdzone.hd_names, hd_names.split(), error)
+        self.assertEqual(my_hdzone.hwmon_path, hwmon_path, error)
+        self.assertEqual(my_hdzone.standby_hd_limit, sb_limit, error)
+        self.assertEqual(my_hdzone.smartctl_path, cmd_smart, error)
         del my_hdzone
         del my_ipmi
         del my_log
         del my_config
-        os.remove(self.ipmi_command)
-        os.remove(self.smartctl_command)
+        del my_td
 
-    def primitive_test_2_pos(self, steps: int, sensitivity: float, polling: float, min_temp: float, max_temp: float,
-                             min_level: int, max_level: int, hd_number: int, hd_names: str, sb_limit: int,
-                             smartctl_command: str, error: str):
-        """This is a primitive positive test function. It contains the following steps:
+    def primitive_test_2_pos(self, error: str):
+        """This is a primitive negative test function. It contains the following steps:
             - mock print, subprocesses.run functions
             - initialize a Config, Log, Ipmi, and HdZone classes
-            - ASSERT: if default values will not be saved properly in __init__
+            - ASSERT: if the class attributes contain different values that were passed to __init__
             - delete the instances
         """
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': self.ipmi_command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
-            }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'hwmon_path': self.temp8_files,
-                'standby_guard_enabled': '1'
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            self.assertEqual(my_hdzone.steps, steps, error)
-            self.assertEqual(my_hdzone.sensitivity, sensitivity, error)
-            self.assertEqual(my_hdzone.polling, polling, error)
-            self.assertEqual(my_hdzone.min_temp, min_temp, error)
-            self.assertEqual(my_hdzone.max_temp, max_temp, error)
-            self.assertEqual(my_hdzone.min_level, min_level, error)
-            self.assertEqual(my_hdzone.max_level, max_level, error)
-            self.assertEqual(my_hdzone.hd_numbers, hd_number, error)
-            self.assertEqual(my_hdzone.hd_names, hd_names.split(), error)
-            normalized_hwmon = self.temp8_files.splitlines()
-            for i in range(len(normalized_hwmon)):
-                normalized_hwmon[i] = self.normalize_path(normalized_hwmon[i])
-            self.assertEqual(my_hdzone.hwmon_path, normalized_hwmon, error)
-            self.assertEqual(my_hdzone.standby_hd_limit, sb_limit, error)
-            self.assertEqual(my_hdzone.smartctl_path, smartctl_command, error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
-
-    def primitive_test_3_neg(self, hd_number: int, hd_names: str, hwmon_path: str, sb_hd_limit: int,
-                             exception: Any, error: str):
-        """This is a primitive positive test function. It contains the following steps:
-            - mock print, subprocesses.run functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - ASSERT: if the exceptions are raised in case of invalid parameters in __init__
-            - delete the instances
-        """
-        with open(self.ipmi_command, "w+") as f:
-            f.write('#!/bin/bash\necho " 01"\n')
-        os.system('chmod +x '+self.ipmi_command)
-        with open(self.smartctl_command, "w+") as f:
-            f.write('#!/bin/bash\necho "ACTIVE"\n')
-        os.system('chmod +x '+self.smartctl_command)
+        my_td = TestData()
+        cmd_ipmi = my_td.create_command_file('echo " 01"')
+        hwmon_path = my_td.get_hd_8()
+        hd_names = my_td.get_hd_names(8)
         mock_print = MagicMock()
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
             my_config['Ipmi'] = {
-                'command': self.ipmi_command,
+                'command': cmd_ipmi,
                 'fan_mode_delay': '0',
                 'fan_level_delay': '0'
             }
             my_config['HD zone'] = {
                 'enabled': '1',
-                'hd_numbers': str(hd_number),
-                'hd_names': hd_names,
-                'hwmon_path': hwmon_path,
+                'hwmon_path': '\n'.join(hwmon_path) + '\n',
                 'standby_guard_enabled': '1',
-                'standby_hd_limit': sb_hd_limit
             }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
+            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
-            with self.assertRaises(Exception) as cm:
-                HdZone(my_log, my_ipmi, my_config)
-            self.assertEqual(type(cm.exception), exception, error)
-        del my_ipmi
-        del my_log
-        del my_config
-        os.remove(self.ipmi_command)
-        os.remove(self.smartctl_command)
-
-    def test_init(self) -> None:
-        """This is a unittest for function HdZone.__init__()"""
-        # Test valid parameters.
-        self.primitive_test_1_pos(4, 2, 2, 32, 48, 35, 100, 8, self.names8, self.temp8_files, 2, 'hz init 1')
-        self.primitive_test_1_pos(4, 2, 2, 32, 48, 35, 100, 4, self.names4, self.temp4_files, 2, 'hz init 2')
-        self.primitive_test_1_pos(4, 2, 2, 32, 48, 35, 100, 2, self.names2, self.temp2_files, 2, 'hz init 3')
-        
-        # Test loading default values (if they are not specified in INI files).
-        self.primitive_test_2_pos(4, 2, 2400, 32, 48, 35, 100, 8, self.names8, 1, '/usr/sbin/smartctl', 'hz init 4')
-
-        # Test error cases.
-        # Negative hd number
-        self.primitive_test_3_neg(-10, self.names8, self.temp8_files, 1, ValueError, 'hz init 5')
-        # Inconsistent hd_numbers and size of hd_names
-        self.primitive_test_3_neg(5, self.names8, self.temp8_files, 1, ValueError, 'hz init 5')
-        # Inconsistent hd_numbers and size of hwmon_path 
-        self.primitive_test_3_neg(8, self.names8, self.temp4_files, 1, ValueError, 'hz init 7')
-        # Invalid hwmon
-        self.primitive_test_3_neg(2, self.names2, self.err2_files, 1, ValueError, 'hz init 8')
-        # Negative standby_hd_limit
-        self.primitive_test_3_neg(2, self.names2, self.temp2_files, -1, ValueError, 'hz init 9')
-
-    def primitive_test_4_pos(self, level: int):
-        """This is a primitive positive test function. It contains the following steps:
-            - mock print, subprocesses.run, Ipmi.set_fan_level functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - calls HdZone.set_fan_level()
-            - ASSERT: if the Ipmi.set_fan_level was called with different parameters
-            - delete the instances
-        """
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': self.ipmi_command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
-            }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'hd_number': '8',
-                'hwmon_path': self.temp8_files,
-                'standby_guard_enabled': '1'
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_ipmi.set_fan_level = MagicMock(name='set_fan_level')
-            my_ipmi.set_fan_level.return_value = Ipmi.SUCCESS
             my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            my_hdzone.set_fan_level(level)
-            my_ipmi.set_fan_level.assert_any_call(Ipmi.HD_ZONE, level)
+            self.assertEqual(my_hdzone.count, 8, error)
+            self.assertEqual(my_hdzone.temp_calc, smfc.FanController.CALC_AVG, error)
+            self.assertEqual(my_hdzone.steps, 4, error)
+            self.assertEqual(my_hdzone.sensitivity, 2, error)
+            self.assertEqual(my_hdzone.polling, 2400, error)
+            self.assertEqual(my_hdzone.min_temp, 32, error)
+            self.assertEqual(my_hdzone.max_temp, 48, error)
+            self.assertEqual(my_hdzone.min_level, 35, error)
+            self.assertEqual(my_hdzone.max_level, 100, error)
+            self.assertEqual(my_hdzone.hd_names, hd_names.split(), error)
+            # Default value is not checked, maybe the path does not exist where the unit test is executed.
+            #self.assertEqual(my_hdzone.hwmon_path, (
+            #                 '/sys/class/scsi_device/0:0:0:0/device/hwmon/hwmon*/temp1_input\n'
+            #                 '/sys/class/scsi_device/1:0:0:0/device/hwmon/hwmon*/temp1_input\n'
+            #                 '/sys/class/scsi_device/2:0:0:0/device/hwmon/hwmon*/temp1_input\n'
+            #                 '/sys/class/scsi_device/3:0:0:0/device/hwmon/hwmon*/temp1_input\n'
+            #                 '/sys/class/scsi_device/4:0:0:0/device/hwmon/hwmon*/temp1_input\n'
+            #                 '/sys/class/scsi_device/5:0:0:0/device/hwmon/hwmon*/temp1_input\n'
+            #                 '/sys/class/scsi_device/6:0:0:0/device/hwmon/hwmon*/temp1_input\n'
+            #                 '/sys/class/scsi_device/7:0:0:0/device/hwmon/hwmon*/temp1_input'
+            #                 ), error)
+            self.assertEqual(my_hdzone.standby_hd_limit, 1, error)
+            # Default value is not checked, maybe the path does not exist where the unit test is executed.
+            #self.assertEqual(my_hdzone.smartctl_path, '/usr/sbin/smartctl', error)
         del my_hdzone
         del my_ipmi
         del my_log
         del my_config
+        del my_td
 
-    def test_set_fan_level(self) -> None:
-        """This is a unittest for function HdZone.set_fan_level()"""
+    def test_init(self) -> None:
+        """This is a unit test for function HdZone.__init__()"""
         # Test valid parameters.
-        self.primitive_test_4_pos(45)   # 'hz set_fan_level 1'
+        self.primitive_test_1_pos(2, smfc.FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, 'hz init 1')
+        self.primitive_test_1_pos(4, smfc.FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, 'hz init 2')
+        self.primitive_test_1_pos(8, smfc.FanController.CALC_MAX, 4, 2, 2, 32, 48, 35, 100, 2, 'hz init 3')
 
-    def primitive_test_5_pos(self, states: List[bool], result: str, error: str):
+        # Test loading default values (if they are not specified in INI files).
+        self.primitive_test_2_pos('hz init 4')
+
+    def primitive_test_3_pos(self, states: List[bool], result: str, error: str):
         """This is a primitive positive test function. It contains the following steps:
             - mock print, subprocesses.run, Ipmi.set_fan_level functions
             - initialize a Config, Log, Ipmi, and HdZone classes
@@ -303,6 +158,8 @@ class HdZoneTestCase(unittest.TestCase):
             - ASSERT: if the result is different than the internal state
             - delete the instances
         """
+        my_td = TestData()
+        hwmon_path = my_td.get_hd_8()
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -310,50 +167,50 @@ class HdZoneTestCase(unittest.TestCase):
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
             my_config['Ipmi'] = {
-                'command': self.ipmi_command,
                 'fan_mode_delay': '0',
                 'fan_level_delay': '0'
             }
             my_config['HD zone'] = {
                 'enabled': '1',
-                'hwmon_path': self.temp8_files,
+                'hwmon_path': '\n'.join(hwmon_path)+'\n',
                 'standby_guard_enabled': '1'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_hdzone = HdZone(my_log, my_ipmi, my_config)
             my_hdzone.standby_array_states = states
-            self.assertEqual(my_hdzone.get_standby_state_str(), result, error)
+        self.assertEqual(my_hdzone.get_standby_state_str(), result, error)
         del my_hdzone
         del my_ipmi
         del my_log
         del my_config
+        del my_td
 
     def test_get_standby_state_str(self) -> None:
-        """This is a unittest for function HdZone.set_fan_level()"""
+        """This is a unit test for function HdZone.set_fan_level()"""
         # Test valid parameters.
-        self.primitive_test_5_pos([True, True, True, True, True, True, True, True],         'SSSSSSSS',
+        self.primitive_test_3_pos([True, True, True, True, True, True, True, True],         'SSSSSSSS',
                                   'hz get_standby_state_str 1')
-        self.primitive_test_5_pos([False, False, False, False, False, False, False, False], 'AAAAAAAA',
+        self.primitive_test_3_pos([False, False, False, False, False, False, False, False], 'AAAAAAAA',
                                   'hz get_standby_state_str 2')
-        self.primitive_test_5_pos([True, False, False, False, False, False, False, False],  'SAAAAAAA',
+        self.primitive_test_3_pos([True, False, False, False, False, False, False, False],  'SAAAAAAA',
                                   'hz get_standby_state_str 3')
-        self.primitive_test_5_pos([False, True, False, False, False, False, False, False],  'ASAAAAAA',
+        self.primitive_test_3_pos([False, True, False, False, False, False, False, False],  'ASAAAAAA',
                                   'hz get_standby_state_str 4')
-        self.primitive_test_5_pos([False, False, True, False, False, False, False, False],  'AASAAAAA',
+        self.primitive_test_3_pos([False, False, True, False, False, False, False, False],  'AASAAAAA',
                                   'hz get_standby_state_str 5')
-        self.primitive_test_5_pos([False, False, False, True, False, False, False, False],  'AAASAAAA',
+        self.primitive_test_3_pos([False, False, False, True, False, False, False, False],  'AAASAAAA',
                                   'hz get_standby_state_str 6')
-        self.primitive_test_5_pos([False, False, False, False, True, False, False, False],  'AAAASAAA',
+        self.primitive_test_3_pos([False, False, False, False, True, False, False, False],  'AAAASAAA',
                                   'hz get_standby_state_str 7')
-        self.primitive_test_5_pos([False, False, False, False, False, True, False, False],  'AAAAASAA',
+        self.primitive_test_3_pos([False, False, False, False, False, True, False, False],  'AAAAASAA',
                                   'hz get_standby_state_str 8')
-        self.primitive_test_5_pos([False, False, False, False, False, False, True, False],  'AAAAAASA',
+        self.primitive_test_3_pos([False, False, False, False, False, False, True, False],  'AAAAAASA',
                                   'hz get_standby_state_str 9')
-        self.primitive_test_5_pos([False, False, False, False, False, False, False, True],  'AAAAAAAS',
+        self.primitive_test_3_pos([False, False, False, False, False, False, False, True],  'AAAAAAAS',
                                   'hz get_standby_state_str 10')
 
-    def primitive_test_6_pos(self, states: List[bool], in_standby: int, error: str):
+    def primitive_test_4_pos(self, states: List[bool], in_standby: int, error: str):
         """This is a primitive positive test function. It contains the following steps:
             - mock print, subprocesses.run, Ipmi.set_fan_level functions
             - initialize a Config, Log, Ipmi, and HdZone classes
@@ -362,6 +219,9 @@ class HdZoneTestCase(unittest.TestCase):
             - delete the instances
         """
         results: List[subprocess.CompletedProcess]
+
+        my_td = TestData()
+        hwmon_path = my_td.get_hd_8()
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -369,20 +229,19 @@ class HdZoneTestCase(unittest.TestCase):
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
             my_config['Ipmi'] = {
-                'command': self.ipmi_command,
                 'fan_mode_delay': '0',
                 'fan_level_delay': '0'
             }
             my_config['HD zone'] = {
                 'enabled': '1',
-                'hwmon_path': self.temp8_files,
+                'hwmon_path': '\n'.join(hwmon_path)+'\n',
                 'standby_guard_enabled': '1'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_hdzone = HdZone(my_log, my_ipmi, my_config)
             results = [None, None, None, None, None, None, None, None]
-            for i in range(my_hdzone.hd_numbers):
+            for i in range(my_hdzone.count):
                 if states[i]:
                     results[i] = subprocess.CompletedProcess([], 0, 'STANDBY')
                 else:
@@ -396,135 +255,43 @@ class HdZoneTestCase(unittest.TestCase):
         del my_config
 
     def test_check_standby_state(self) -> None:
-        """This is a unittest for function Hd.set_fan_level()"""
+        """This is a unit test for function Hd.set_fan_level()"""
         # Test valid parameters.
-        self.primitive_test_6_pos([True, True, True, True, True, True, True, True], 8,
+        self.primitive_test_4_pos([True, True, True, True, True, True, True, True], 8,
                                   'hz check_standby_state 1')
-        self.primitive_test_6_pos([False, True, True, True, True, True, True, True], 7,
+        self.primitive_test_4_pos([False, True, True, True, True, True, True, True], 7,
                                   'hz check_standby_state 2')
-        self.primitive_test_6_pos([True, False, True, True, True, True, True, True], 7,
+        self.primitive_test_4_pos([True, False, True, True, True, True, True, True], 7,
                                   'hz check_standby_state 3')
-        self.primitive_test_6_pos([True, True, False, True, True, True, True, True], 7,
+        self.primitive_test_4_pos([True, True, False, True, True, True, True, True], 7,
                                   'hz check_standby_state 4')
-        self.primitive_test_6_pos([True, True, True, False, True, True, True, True], 7,
+        self.primitive_test_4_pos([True, True, True, False, True, True, True, True], 7,
                                   'hz check_standby_state 5')
-        self.primitive_test_6_pos([True, True, True, True, False, True, True, True], 7,
+        self.primitive_test_4_pos([True, True, True, True, False, True, True, True], 7,
                                   'hz check_standby_state 6')
-        self.primitive_test_6_pos([True, True, True, True, True, False, True, True], 7,
+        self.primitive_test_4_pos([True, True, True, True, True, False, True, True], 7,
                                   'hz check_standby_state 7')
-        self.primitive_test_6_pos([True, True, True, True, True, True, False, True], 7,
+        self.primitive_test_4_pos([True, True, True, True, True, True, False, True], 7,
                                   'hz check_standby_state 8')
-        self.primitive_test_6_pos([True, True, True, True, True, True, True, False], 7,
+        self.primitive_test_4_pos([True, True, True, True, True, True, True, False], 7,
                                   'hz check_standby_state 9')
 
-        self.primitive_test_6_pos([True, False, True, True, True, True, True, False], 6,
+        self.primitive_test_4_pos([True, False, True, True, True, True, True, False], 6,
                                   'hz check_standby_state 10')
-        self.primitive_test_6_pos([True, False, True, True, False, True, True, False], 5,
+        self.primitive_test_4_pos([True, False, True, True, False, True, True, False], 5,
                                   'hz check_standby_state 11')
-        self.primitive_test_6_pos([False, False, True, True, False, True, True, False], 4,
+        self.primitive_test_4_pos([False, False, True, True, False, True, True, False], 4,
                                   'hz check_standby_state 12')
-        self.primitive_test_6_pos([False, False, True, False, False, True, True, False], 3,
+        self.primitive_test_4_pos([False, False, True, False, False, True, True, False], 3,
                                   'hz check_standby_state 13')
-        self.primitive_test_6_pos([False, False, True, False, False, True, False, False], 2,
+        self.primitive_test_4_pos([False, False, True, False, False, True, False, False], 2,
                                   'hz check_standby_state 14')
-        self.primitive_test_6_pos([False, False, False, False, False, True, False, False], 1,
+        self.primitive_test_4_pos([False, False, False, False, False, True, False, False], 1,
                                   'hz check_standby_state 15')
-        self.primitive_test_6_pos([False, False, False, False, False, False, False, False], 0,
+        self.primitive_test_4_pos([False, False, False, False, False, False, False, False], 0,
                                   'hz check_standby_state 16')
 
-    def primitive_test_7_pos(self, temperatures: List[float], avg_temp: float, error: str):
-        """This is a primitive positive test function. It contains the following steps:
-            - mock print, subprocesses.run functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - deletes hwmon files
-            - calls HdZone.get_temp()
-            - ASSERT: if the return temperature is different than the value in the file
-            - delete the instances
-        """
-        r = self.temp8_wr_files.splitlines()
-        for i in range(len(r)):
-            with open(r[i], "w+") as f:
-                f.write(str(temperatures[i] * 1000))
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': self.ipmi_command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
-            }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'hd_number': 8,
-                'hwmon_path': self.temp8_wr_files,
-                'standby_guard_enabled': '0'
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            self.assertEqual(my_hdzone.get_temp(), avg_temp, error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
-        for i in range(len(r)):
-            os.remove(r[i])
-
-    def primitive_test_8_neg(self, exception: Any, error: str):
-        """This is a primitive negative test function. It contains the following steps:
-            - mock print, subprocesses.run functions
-            - initialize a Config, Log, Ipmi, and CpuZone classes
-            - calls CpuZone.get_temp()
-            - ASSERT: if no exception raised in case of file IO errors
-            - delete the instances
-        """
-        r = self.temp8_wr_files.splitlines()
-        for i in range(len(r)):
-            with open(r[i], "w+") as f:
-                f.write(str('38500'))
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': self.ipmi_command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
-            }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'hd_number': 8,
-                'hwmon_path': self.temp8_wr_files,
-                'standby_guard_enabled': '0'
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            for i in range(len(r)):
-                os.remove(r[i])
-            with self.assertRaises(Exception) as cm:
-                my_hdzone.get_temp()
-            self.assertTrue(type(cm.exception) in exception, error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
-
-    def test_get_temp(self) -> None:
-        """This is a unittest for function HdZone.get_temp()"""
-        # Test valid parameters.
-        self.primitive_test_7_pos([38.5, 38.5, 38.5, 38.5, 38.5, 38.5, 38.5, 38.5], 38.5, 'hz get_temp 1')
-        self.primitive_test_7_pos([31.1, 32.1, 33.1, 34.1, 35.1, 36.1, 37.1, 38.1], 34.6, 'hz get_temp 2')
-
-        # Test exceptions.
-        self.primitive_test_8_neg((IOError, FileNotFoundError), 'hz get_temp 3')
-
-    def primitive_test_9_pos(self, states: List[bool], count: int, error: str):
+    def primitive_test_5_pos(self, states: List[bool], count: int, error: str):
         """This is a primitive positive test function. It contains the following steps:
             - mock print, subprocesses.run, Ipmi.set_fan_level functions
             - initialize a Config, Log, Ipmi, and HdZone classes
@@ -532,6 +299,8 @@ class HdZoneTestCase(unittest.TestCase):
             - ASSERT: if the subprocess.run called with wrong parameters and array state is not in fully standby
             - delete the instances
         """
+        my_td = TestData()
+        hwmon_path = my_td.get_hd_8()
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -539,16 +308,13 @@ class HdZoneTestCase(unittest.TestCase):
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
             my_config['Ipmi'] = {
-                'command': self.ipmi_command,
                 'fan_mode_delay': '0',
                 'fan_level_delay': '0'
             }
             my_config['HD zone'] = {
                 'enabled': '1',
-                'hd_number': '8',
-                'hwmon_path': self.temp8_files,
+                'hwmon_path': '\n'.join(hwmon_path)+'\n',
                 'standby_guard_enabled': '1',
-                'smartctl_path': self.smartctl_command
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -562,22 +328,23 @@ class HdZoneTestCase(unittest.TestCase):
         del my_ipmi
         del my_log
         del my_config
+        del my_td
 
     def test_go_standby_state(self) -> None:
-        """This is a unittest for function HdZone.go_standby_state()"""
+        """This is a unit test for function HdZone.go_standby_state()"""
 
         # Test valid parameters.
-        self.primitive_test_9_pos([False, False, False, False, False, False, False, False], 8, 'hz go_standby_state 2')
-        self.primitive_test_9_pos([True, False, False, False, False, False, False, False],  7, 'hz go_standby_state 3')
-        self.primitive_test_9_pos([True, True, False, False, False, False, False, False],   6, 'hz go_standby_state 4')
-        self.primitive_test_9_pos([True, True, True, False, False, False, False, False],    5, 'hz go_standby_state 5')
-        self.primitive_test_9_pos([True, True, True, True, False, False, False, False],     4, 'hz go_standby_state 6')
-        self.primitive_test_9_pos([True, True, True, True, True, False, False, False],      3, 'hz go_standby_state 7')
-        self.primitive_test_9_pos([True, True, True, True, True, True, False, False],       2, 'hz go_standby_state 8')
-        self.primitive_test_9_pos([True, True, True, True, True, True, True, False],        1, 'hz go_standby_state 9')
-        self.primitive_test_9_pos([True, True, True, True, True, True, True, True],         0, 'hz go_standby_state 1')
+        self.primitive_test_5_pos([False, False, False, False, False, False, False, False], 8, 'hz go_standby_state 1')
+        self.primitive_test_5_pos([True, False, False, False, False, False, False, False], 7, 'hz go_standby_state 2')
+        self.primitive_test_5_pos([True, True, False, False, False, False, False, False], 6, 'hz go_standby_state 3')
+        self.primitive_test_5_pos([True, True, True, False, False, False, False, False], 5, 'hz go_standby_state 4')
+        self.primitive_test_5_pos([True, True, True, True, False, False, False, False], 4, 'hz go_standby_state 5')
+        self.primitive_test_5_pos([True, True, True, True, True, False, False, False], 3, 'hz go_standby_state 6')
+        self.primitive_test_5_pos([True, True, True, True, True, True, False, False], 2, 'hz go_standby_state 7')
+        self.primitive_test_5_pos([True, True, True, True, True, True, True, False], 1, 'hz go_standby_state 8')
+        self.primitive_test_5_pos([True, True, True, True, True, True, True, True], 0, 'hz go_standby_state 9')
 
-    def primitive_test_10_pos(self, old_state: bool, states: List[bool], new_state: bool, error: str):
+    def primitive_test_6_pos(self, old_state: bool, states: List[bool], new_state: bool, error: str):
         """This is a primitive positive test function. It contains the following steps:
             - mock print, subprocesses.run, Ipmi.set_fan_level functions
             - initialize a Config, Log, Ipmi, and HdZone classes
@@ -585,6 +352,8 @@ class HdZoneTestCase(unittest.TestCase):
             - ASSERT: if the expected standby_flag is different
             - delete the instances
         """
+        my_td = TestData()
+        hwmon_path = my_td.get_hd_8()
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -592,14 +361,12 @@ class HdZoneTestCase(unittest.TestCase):
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
             my_config['Ipmi'] = {
-                'command': self.ipmi_command,
                 'fan_mode_delay': '0',
                 'fan_level_delay': '0'
             }
             my_config['HD zone'] = {
                 'enabled': '1',
-                'hd_number': '8',
-                'hwmon_path': self.temp8_files,
+                'hwmon_path': '\n'.join(hwmon_path)+'\n',
                 'standby_guard_enabled': '1'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
@@ -618,25 +385,25 @@ class HdZoneTestCase(unittest.TestCase):
         del my_config
 
     def test_run_standby_guard(self) -> None:
-        """This is a unittest for function HdZone.run_standby_guard()"""
+        """This is a unit test for function HdZone.run_standby_guard()"""
         # No state changes.
-        self.primitive_test_10_pos(False, [False, False, False, False, False, False, False, False], False,
+        self.primitive_test_6_pos(False, [False, False, False, False, False, False, False, False], False,
                                    'hz run_standby_guard 1')
-        self.primitive_test_10_pos(True, [True, True, True, True, True, True, True, True], True,
+        self.primitive_test_6_pos(True, [True, True, True, True, True, True, True, True], True,
                                    'hz run_standby_guard 2')
 
         # Step 2: from ACTIVE to STANDBY.
-        self.primitive_test_10_pos(False, [False, True, False, False, False, False, False, False], True,
+        self.primitive_test_6_pos(False, [False, True, False, False, False, False, False, False], True,
                                    'hz run_standby_guard 3')
-        self.primitive_test_10_pos(False, [False, True, False, True, False, False, False, False], True,
+        self.primitive_test_6_pos(False, [False, True, False, True, False, False, False, False], True,
                                    'hz run_standby_guard 4')
-        self.primitive_test_10_pos(False, [True, True, True, True, True, True, True, True], True,
+        self.primitive_test_6_pos(False, [True, True, True, True, True, True, True, True], True,
                                    'hz run_standby_guard 5')
 
         # Step 3: from STANDBY to ACTIVE.
-        self.primitive_test_10_pos(True, [False, False, False, False, False, False, False, False], False,
+        self.primitive_test_6_pos(True, [False, False, False, False, False, False, False, False], False,
                                    'hz run_standby_guard 6')
-        self.primitive_test_10_pos(True, [True, False, False, True, True, True, True, True], False,
+        self.primitive_test_6_pos(True, [True, False, False, True, True, True, True, True], False,
                                    'hz run_standby_guard 7')
 
 
