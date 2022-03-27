@@ -1,6 +1,6 @@
 
 # smfc
-Super Micro fan control for Linux (home) server/NAS
+Super Micro fan control for Linux (home) servers
 
 ## TL;DR
 
@@ -16,7 +16,7 @@ This is a `systemd service` running on Linux and is able to control fans in CPU 
 
 ### 2. Installation and configuration
  1. Setup the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
- 2. Optional: you may consider to enable advanced power management features for your CPU and SATA hard disks for a minimal power consumption (i.e. heat generation) and a low fan noise. 
+ 2. Optional: you may consider enabling advanced power management features for your CPU and SATA hard disks for lower power consumption (i.e. heat generation) and for lower fan noise. 
  3. Load kernel modules (`coretemp` and `drivetemp`).
  4. Install the service with running the script `install.sh`.
  5. Edit the configuration file `/opt/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
@@ -26,36 +26,40 @@ This is a `systemd service` running on Linux and is able to control fans in CPU 
 ## Details
 
 ### 1. How does it work?
-This service was planned for PC cases with two independent cooling systems, CPU zone and HD (peripheral) zone, with their own fans and own temperatures. The fan rotation speeds in these zones can be controlled dynamically by IPMI functions. You can read more about [Super Micro IPMI utilities](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities) and [`ipmitool`](https://github.com/ipmitool/ipmitool). The service will use IPMI `FULL MODE` for fans. 
+This service was planned for Super Micro motherboards installed in computer chassis with two independent cooling systems employing separate fans. In IPMI terms these are called:
+ - CPU zone (FAN1, FAN2, etc.)
+ - HD or peripheral zone (FANA, FANB, etc) 
 
 In this service a fan control logic is implemented for both zones which can:
 
- 1. read the zone's temperature from Linux kernel (minimum, average, maximum temperature values can be calculated based on the configuration)
- 2. calculate the proper fan level based on a user-defined control parameters and the temperature value
- 3. setup the newly calculated fan level with the help of `ipmitool`
- 
-The user-defined parameters creates a mapping where a temperature interval is being mapped to a fan level interval. Using this mapping any new temperate value can be mapped to a new fan level.
+ 1. read the zone's temperature from Linux kernel
+ 2. calculate a new fan level based on the user-defined control function and the current temperature value of the zone 
+ 3. setup the new fan level through IPMI in the zone
 
- <img src="https://github.com/petersulyok/smfc/raw/main/doc/control_function.jpg" align="center" width="500">
+<img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.jpg" align="center" width="600">
 
-When we adjust the rotation speed of a fan, it takes time while fan reaches the new rotation speed. We always apply a delay time in this case (see configuration parameter `[IPMI] fan_level_delay`). The fan control logic try to avoid the continuous adjustments of the fan rotation speeds (when the temperature is changing continuously) in two different ways:
+The fan control logic can be enabled and disabled independently per zone. All fans in a zone will have the same rotation speed. The user can configure different temperature calculation method for a zone (e.g. minimum, average, maximum temperatures).
+
+The user-defined parameters (see configuration file) create function where a temperature interval is being mapped to a fan level interval.
+
+ <img src="https://github.com/petersulyok/smfc/raw/main/doc/userdefined_control_function.jpg" align="center" width="500">
+
+When we adjust the rotation speed of a fan, it takes time while fan reaches the new rotation speed. We always apply a delay time in this case (see configuration parameter `[IPMI] fan_level_delay`). The fan control logic tries to avoid the continuous adjustments of the fan rotation speeds in two different ways:
 
  1. It calculates only limited discrete steps for fan output levels (defined by configuration parameter `[CPU zone]/[HD zone] steps`)
  2. it uses a sensitivity threshold for temperature changes (see configuration parameter `[CPU zone]/[HD zone] sensitivity`) and if the temperature change will not reach  threshold then the control logic will not react
 
- <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output.jpg" align="center" width="500">
-
-The fan control logic can be enabled and disabled independently per zone.
+ <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output_levels.jpg" align="center" width="500">
 
 For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
 	
  - SATA hard disks are organized in a RAID array
  - this array will go to standby mode recurrently
 
-This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that mode. With this feature we can avoid a situation where the array is partially in standby mode while other members are still active.
+This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature we can avoid a situation where the array is partially in standby mode while other members are still active.
 
 ### 2. IPMI fan control and thresholds
-This is a well-known fact for NAS and home server community that in case of Super Micro boards with IPMI `FULL MODE` the rotation speed of the fans can be controlled freely while the rotation speed does not go above or fall below predefined thresholds. If it happens, IPMI sets the fans back to full rotation speed (level 100%). You can avoid such a situation if you redefine IPMI thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
+Many utilities and scripts (created by NAS and home server community) are using `IPMI FULL MODE`. In this mode the rotations speed of the fans can be changed freely while they do not reach the lower and the upper threshold values. If it happens then IPMI will set the all fans back to full rotation speed in the zone. In order to avoid this situation you redefine IPMI sensor thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
 
  IPMI defines six sensor thresholds for fans:
  1. Lower Non-Recoverable  
@@ -86,7 +90,7 @@ You can read more about:
  - Change IPMI sensors thresholds: [TrueNAS Forums](https://www.truenas.com/community/resources/how-to-change-ipmi-sensor-thresholds-using-ipmitool.35/)
 
 ### 3. Power management
-If  low noise, low power consumption (i.e. low heat generation) are important attributes of your Linux box then you may consider the following chapters.
+If  low noise and low power consumption (i.e. low heat generation) are important attributes of your Linux box then you may consider the following chapters.
 #### 3.1 CPU
 Most of the modern CPUs has multiple energy saving features. You can check your BIOS and enable [these features](https://metebalci.com/blog/a-minimum-complete-tutorial-of-cpu-power-management-c-states-and-p-states/) like:
 
@@ -258,7 +262,7 @@ Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 
 Important notes:
 
- 1. `[CPU zone] / [HD zone} min_level / max_level`: Check the stability of the fans and refine these values on demand. As it was stated earlier, IPMI can switch back to full rotation speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
+ 1. `[CPU zone] / [HD zone} min_level / max_level`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotation speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
 
 		root:~# cat fan_result.csv
 		Level,FAN1,FAN2,FAN4,FANA,FANB
