@@ -40,7 +40,7 @@ In this service a fan control logic is implemented for both zones which can:
 
 The fan control logic can be enabled and disabled independently per zone. All fans in a zone will have the same rotation speed. The user can configure different temperature calculation method for a zone (e.g. minimum, average, maximum temperatures).
 
-The user-defined parameters (see configuration file) create function where a temperature interval is being mapped to a fan level interval.
+The user-defined parameters (see configuration file) create a function where a temperature interval is being mapped to a fan level interval.
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/userdefined_control_function.jpg" align="center" width="500">
 
@@ -361,7 +361,7 @@ My configuration is the following:
  - [Super Micro X11SCH-F motherboard](https://www.supermicro.com/en/products/motherboard/X11SCH-F)
  - [Intel Core i3-8300T CPU](https://ark.intel.com/content/www/us/en/ark/products/129943/intel-core-i3-8300t-processor-8m-cache-3-20-ghz.html)
 - 32 GB ECC DDR4 RAM
- - [Fractal Design Node 804 case](https://www.fractal-design.com/products/cases/node/node-804/black/), with separated chambers for the motherboard and the hard disks:
+ - [Fractal Design Node 804 case](https://www.fractal-design.com/products/cases/node/node-804/black/), with separate chambers for the motherboard and the hard disks:
  
 	<img src="https://www.legitreviews.com/wp-content/uploads/2014/05/fractal-design-node-804-vendor-fans.jpg" align="center" width="500">
 
