@@ -14,7 +14,7 @@ import syslog
 from typing import List, Callable
 
 # Program version string
-version_str: str = '1.1'
+version_str: str = '1.2'
 
 
 class Log:
