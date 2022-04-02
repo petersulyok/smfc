@@ -21,10 +21,10 @@ if [ ! -d "$TARGET_DIR" ]; then
 fi
 
 # Copy new files to the target folders
-cp smfc.py "$TARGET_DIR/"
-cp smfc.conf "$TARGET_DIR/"
-cp smfc /etc/default/
-cp smfc.service /etc/systemd/system/
+cp ./src/smfc.py "$TARGET_DIR/"
+cp ./src/smfc.conf "$TARGET_DIR/"
+cp ./src/smfc /etc/default/
+cp ./src/smfc.service /etc/systemd/system/
 chown root.root "$TARGET_DIR/smfc.py" "$TARGET_DIR/smfc.conf" /etc/default/smfc /etc/systemd/system/smfc.service
 
 echo "Installation finished successfully."
