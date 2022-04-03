@@ -3,11 +3,11 @@
 #   test_06_main.py (C) 2021-2022, Peter Sulyok
 #   Unit tests for smfc.main() function.
 #
-import sys
 import configparser
+import sys
 import unittest
-import smfc
 from unittest.mock import patch, MagicMock
+import smfc
 from test_00_data import TestData
 
 

@@ -6,10 +6,10 @@
 import configparser
 import time
 import unittest
+from typing import List, Tuple, Any
+from unittest.mock import patch, MagicMock
 from smfc import FanController, Log, Ipmi
 from test_00_data import TestData
-from unittest.mock import patch, MagicMock
-from typing import List, Tuple, Any
 
 
 class FanControllerTestCase(unittest.TestCase):

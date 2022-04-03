@@ -3,14 +3,14 @@
 #   smfc.py (C) 2020-2022, Peter Sulyok
 #   IPMI fan controller for Super Micro X9/X10/X11 motherboards.
 #
-import sys
-import subprocess
-import time
+import argparse
 import configparser
 import glob
 import os
-import argparse
+import subprocess
+import sys
 import syslog
+import time
 from typing import List, Callable
 
 # Program version string

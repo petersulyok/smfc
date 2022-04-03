@@ -7,10 +7,10 @@
 import configparser
 import subprocess
 import unittest
+from typing import Any
+from unittest.mock import patch, MagicMock
 from smfc import Log, Ipmi
 from test_00_data import TestData
-from unittest.mock import patch, MagicMock
-from typing import Any
 
 
 class IpmiTestCase(unittest.TestCase):

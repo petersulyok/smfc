@@ -6,11 +6,11 @@
 import configparser
 import subprocess
 import unittest
+from typing import List
+from unittest.mock import patch, MagicMock
 import smfc
 from smfc import Log, Ipmi, HdZone
 from test_00_data import TestData
-from unittest.mock import patch, MagicMock
-from typing import List, Any
 
 
 class HdZoneTestCase(unittest.TestCase):

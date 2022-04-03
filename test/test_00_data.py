@@ -3,11 +3,11 @@
 #   test_00_data.py (C) 2022, Peter Sulyok
 #   Test data handling class for unit tests.
 #
+import configparser
 import glob
 import os
-import configparser
-import shutil
 import random
+import shutil
 import tempfile
 from typing import List
 

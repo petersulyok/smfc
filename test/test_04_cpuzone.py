@@ -5,10 +5,10 @@
 #
 import configparser
 import unittest
+from unittest.mock import patch, MagicMock
 import smfc
 from smfc import Log, Ipmi, CpuZone
 from test_00_data import TestData
-from unittest.mock import patch, MagicMock
 
 
 class CpuZoneTestCase(unittest.TestCase):

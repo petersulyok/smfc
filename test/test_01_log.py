@@ -6,8 +6,8 @@
 
 import syslog
 import unittest
-from smfc import Log
 from unittest.mock import patch, MagicMock
+from smfc import Log
 
 
 class LogTestCase(unittest.TestCase):
