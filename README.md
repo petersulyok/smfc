@@ -1,4 +1,4 @@
-
+﻿
 # smfc
 Super Micro fan control for Linux (home) servers
 
@@ -259,7 +259,6 @@ Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 	# Path for 'smartctl' command (str, default=/usr/sbin/smartctl)
 	smartctl_path=/usr/sbin/smartctl
 
-
 Important notes:
 
  1. `[CPU zone] / [HD zone} min_level / max_level`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotation speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
@@ -286,7 +285,9 @@ Important notes:
 
 	My experience is that Noctua fans in my box are running stable in the 35-100% fan level interval.  
 
- 3. `[CPU zone] / [HD zone} hwmon_path`: The service will automatically resolve any wildcard characters in the path specified here in order to make this configuration step more flexible and comfortable.
+ 2. `[CPU zone] / [HD zone] hwmon_path`: The service will automatically resolve any wildcard characters in the path specified here in order to make this configuration step more flexible and comfortable.
+
+ 3. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
 
 ### 7. Running the service
 This `systemd` service can be started stopped in the standard way. Do not forget to reload `systemd` configuration after a new installation or if you changed the service definition file:
@@ -356,7 +357,7 @@ You should configure the temperatures and levels with the same value.
 With this setup there will be a constant 60% fan level in the specific zone. The temperature value is ignored, `steps` parameter is also ignored.
 
 ### Q: How does the author test/use this service?
-My configuration is the following:
+The configuration is the following:
 
  - [Super Micro X11SCH-F motherboard](https://www.supermicro.com/en/products/motherboard/X11SCH-F)
  - [Intel Core i3-8300T CPU](https://ark.intel.com/content/www/us/en/ark/products/129943/intel-core-i3-8300t-processor-8m-cache-3-20-ghz.html)
