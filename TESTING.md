@@ -1,4 +1,4 @@
-
+﻿
 # Testing  
 Short summary about testing environment of `smfc` project.  
 Notes:  
@@ -16,27 +16,28 @@ Several smoke tests are provided for `smfc` where the service is executed with d
 
 - the following smoke scripts and configurations are available:  
    
-   |Helper script|Configuration|
-   |--|--|
-   |`run_test_cpu_1.sh`| 1 x CPU |
-   |`run_test_cpu_2.sh`| 2 x CPU |
-   |`run_test_cpu_4.sh`| 2 x CPU |
-   |`run_test_hd_1.sh`| 1 x HD |
-   |`run_test_hd_2.sh`| 2 x HD |
-   |`run_test_hd_4.sh`| 4 x HD |
-   |`run_test_hd_8.sh`| 8 x HD | 
-   |`run_test_const_level.sh`| constant fan output level |  
+   | Helper script | CPU configuration | HD configuration | Standby guard |
+   |--|--|--|--|
+   |`run_test_cpu_1.sh`| 1 x CPU | 1 x HD | enabled |
+   |`run_test_cpu_2.sh`| 2 x CPUs | disabled | disabled |
+   |`run_test_cpu_4.sh`| 4 x CPUs | 4 x HDs | enabled |
+   |`run_test_hd_1.sh`| disabled | 1 x HD | enabled |
+   |`run_test_hd_2.sh`| 1 x CPU | 2 x HDs | disabled |
+   |`run_test_hd_4.sh`| 2 x CPUs | 4 x HDs | disabled |
+   |`run_test_hd_8.sh`| 4 x CPUs | 8 x HDs | enabled |
+   |`run_test_const_level.sh`| 1 x CPU (60% constant fan level) | 4 x HDs (55% constant fan level) | enabled |
 
 ## Unit tests  
-All classes and the main function are completely unit tested. They can be executed from both the project and the test folders with the help of a shell script:
+All classes and the main function are completely unit tested. The unit tests can be executed from both the project root and the test folders with the help of a shell script:
 
 	./run_unittest.sh
 	./test/run_unittest.sh
 
-The coverage can be also measured for the unit tests (a python package called `coverage` should be installed)  
+The coverage can be measured for the unit tests (a Python package called `coverage` should be installed). The coverage measurement script can be executed from both project root and test folders:
 
 	pip3 install coverage
-	./run_coverage.sh  
+	./run_coverage.sh
+	./test/run_coverage.sh  
 
 Coverage will generate a detailed HTML report (see `./htmlcov/index.html`) with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage report is 98%.  
   
