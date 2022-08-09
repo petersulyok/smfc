@@ -47,10 +47,10 @@ class Log:
         """
         # Setup log configuration.
         if log_level not in {self.LOG_NONE, self.LOG_ERROR, self.LOG_INFO, self.LOG_DEBUG}:
-            raise ValueError('Invalid log level value ({})'.format(log_level))
+            raise ValueError(f'Invalid log level value ({log_level})')
         self.log_level = log_level
         if log_output not in {self.LOG_STDOUT, self.LOG_STDERR, self.LOG_SYSLOG}:
-            raise ValueError('Invalid log output value ({})'.format(log_output))
+            raise ValueError(f'Invalid log output value ({log_output})')
         self.log_output = log_output
         if self.log_output == self.LOG_STDOUT:
             self.msg = self.msg_to_stdout
@@ -64,8 +64,8 @@ class Log:
         # Print the configuration out at DEBUG log level.
         if self.log_level >= self.LOG_DEBUG:
             self.msg(Log.LOG_DEBUG, 'Logging module was initialized with:')
-            self.msg(Log.LOG_DEBUG, '   log_level = {}'.format(self.log_level))
-            self.msg(Log.LOG_DEBUG, '   log_output = {}'.format(self.log_output))
+            self.msg(Log.LOG_DEBUG, f'   log_level = {self.log_level}')
+            self.msg(Log.LOG_DEBUG, f'   log_output = {self.log_output}')
 
     def map_to_syslog(self, level: int) -> int:
         """Map log level to syslog values.
@@ -119,7 +119,7 @@ class Log:
         """
         if level is not self.LOG_NONE:
             if level <= self.log_level:
-                print('{}: {}'.format(self.level_to_str(level), msg), flush=True, file=sys.stdout)
+                print(f'{self.level_to_str(level)}: {msg}', flush=True, file=sys.stdout)
 
     def msg_to_stderr(self, level: int, msg: str) -> None:
         """Print a log message to stderr.
@@ -130,7 +130,7 @@ class Log:
         """
         if level is not self.LOG_NONE:
             if level <= self.log_level:
-                print('{}: {}'.format(self.level_to_str(level), msg), flush=True, file=sys.stderr)
+                print(f'{self.level_to_str(level)}: {msg}', flush=True, file=sys.stderr)
 
 
 class Ipmi:
@@ -175,16 +175,16 @@ class Ipmi:
             raise e
         # Check 2: fan_mode_delay must be positive.
         if self.fan_mode_delay < 0:
-            raise ValueError('Negative fan_mode_delay ({})'.format(self.fan_mode_delay))
+            raise ValueError(f'Negative fan_mode_delay ({self.fan_mode_delay})')
         # Check 3: fan_mode_delay must be positive.
         if self.fan_level_delay < 0:
-            raise ValueError('Negative fan_level_delay ({})'.format(self.fan_level_delay))
+            raise ValueError(f'Negative fan_level_delay ({self.fan_level_delay})')
         # Print the configuration out at DEBUG log level.
         if self.log.log_level >= self.log.LOG_DEBUG:
             self.log.msg(self.log.LOG_DEBUG, 'Ipmi module was initialized with :')
-            self.log.msg(self.log.LOG_DEBUG, '   command = {}'.format(self.command))
-            self.log.msg(self.log.LOG_DEBUG, '   fan_mode_delay = {}'.format(self.fan_mode_delay))
-            self.log.msg(self.log.LOG_DEBUG, '   fan_level_delay = {}'.format(self.fan_level_delay))
+            self.log.msg(self.log.LOG_DEBUG, f'   command = {self.command}')
+            self.log.msg(self.log.LOG_DEBUG, f'   fan_mode_delay = {self.fan_mode_delay}')
+            self.log.msg(self.log.LOG_DEBUG, f'   fan_level_delay = {self.fan_level_delay}')
 
     def get_fan_mode(self) -> int:
         """Get the current IPMI fan mode.
@@ -231,7 +231,7 @@ class Ipmi:
         """
         # Validate mode parameter.
         if mode not in {self.STANDARD_MODE, self.FULL_MODE, self.OPTIMAL_MODE, self.HEAVY_IO_MODE}:
-            raise ValueError('Invalid fan mode value ({}).'.format(mode))
+            raise ValueError(f'Invalid fan mode value ({mode}).')
         # Call ipmitool command and set the new IPMI fan mode.
         try:
             subprocess.run([self.command, 'raw', '0x30', '0x45', '0x01', str(mode)],
@@ -252,10 +252,10 @@ class Ipmi:
 
         # Validate zone parameter
         if zone not in {self.CPU_ZONE, self.HD_ZONE}:
-            raise ValueError('Invalid value: zone ({}).'.format(zone))
+            raise ValueError(f'Invalid value: zone ({zone}).')
         # Validate level parameter (must be in the interval [0..100%])
         if level not in range(0, 101):
-            raise ValueError('Invalid value: level ({}).'.format(level))
+            raise ValueError(f'Invalid value: level ({level}).')
         # Set the new IPMI fan level in the specific zone
         try:
             subprocess.run([self.command, 'raw', '0x30', '0x70', '0x66', '0x01', str(zone), str(level)],
@@ -379,18 +379,18 @@ class FanController(object):
         self.last_time = time.monotonic() - (polling + 1)
         # Print configuration at DEBUG log level.
         if self.log.log_level >= self.log.LOG_DEBUG:
-            self.log.msg(self.log.LOG_DEBUG, '{} fan controller was initialized with:'.format(self.name))
-            self.log.msg(self.log.LOG_DEBUG, '   IPMI zone = {}'.format(self.ipmi_zone))
-            self.log.msg(self.log.LOG_DEBUG, '   count = {}'.format(self.count))
-            self.log.msg(self.log.LOG_DEBUG, '   temp_calc = {}'.format(self.temp_calc))
-            self.log.msg(self.log.LOG_DEBUG, '   steps = {}'.format(self.steps))
-            self.log.msg(self.log.LOG_DEBUG, '   sensitivity = {}'.format(self.sensitivity))
-            self.log.msg(self.log.LOG_DEBUG, '   polling = {}'.format(self.polling))
-            self.log.msg(self.log.LOG_DEBUG, '   min_temp = {}'.format(self.min_temp))
-            self.log.msg(self.log.LOG_DEBUG, '   max_temp = {}'.format(self.max_temp))
-            self.log.msg(self.log.LOG_DEBUG, '   min_level = {}'.format(self.min_level))
-            self.log.msg(self.log.LOG_DEBUG, '   max_level = {}'.format(self.max_level))
-            self.log.msg(self.log.LOG_DEBUG, '   hwmon_path = {}'.format(self.hwmon_path))
+            self.log.msg(self.log.LOG_DEBUG, f'{self.name} fan controller was initialized with:')
+            self.log.msg(self.log.LOG_DEBUG, f'   IPMI zone = {self.ipmi_zone}')
+            self.log.msg(self.log.LOG_DEBUG, f'   count = {self.count}')
+            self.log.msg(self.log.LOG_DEBUG, f'   temp_calc = {self.temp_calc}')
+            self.log.msg(self.log.LOG_DEBUG, f'   steps = {self.steps}')
+            self.log.msg(self.log.LOG_DEBUG, f'   sensitivity = {self.sensitivity}')
+            self.log.msg(self.log.LOG_DEBUG, f'   polling = {self.polling}')
+            self.log.msg(self.log.LOG_DEBUG, f'   min_temp = {self.min_temp}')
+            self.log.msg(self.log.LOG_DEBUG, f'   max_temp = {self.max_temp}')
+            self.log.msg(self.log.LOG_DEBUG, f'   min_level = {self.min_level}')
+            self.log.msg(self.log.LOG_DEBUG, f'   max_level = {self.max_level}')
+            self.log.msg(self.log.LOG_DEBUG, f'   hwmon_path = {self.hwmon_path}')
             self.print_temp_level_mapping()
 
     def build_hwmon_path(self, hwmon_str: str) -> None:
@@ -404,8 +404,7 @@ class FanController(object):
                 self.hwmon_path = hwmon_str.split()
             # Check the size of the hwmon_path[] list.
             if len(self.hwmon_path) != self.count:
-                raise ValueError('Inconsistent count ({}) and size of hwmon_path ({})'
-                                 .format(self.count, len(self.hwmon_path)))
+                raise ValueError(f'Inconsistent count ({self.count}) and size of hwmon_path ({len(self.hwmon_path)})')
             # Convert wildcard characters if needed and check file existence.
             for i in range(self.count):
                 if '?' in self.hwmon_path[i] or '*' in self.hwmon_path[i]:
@@ -519,7 +518,7 @@ class FanController(object):
         # Step 2: read temperature and sensitivity gap.
         self.callback_func()
         current_temp = self.get_temp_func()
-        self.log.msg(self.log.LOG_DEBUG, '{}: new temperature > {:.1f}C'.format(self.name, current_temp))
+        self.log.msg(self.log.LOG_DEBUG, f'{self.name}: new temperature > {current_temp:.1f}C')
         if abs(current_temp - self.last_temp) < self.sensitivity:
             return
         self.last_temp = current_temp
@@ -537,14 +536,14 @@ class FanController(object):
         if current_level != self.last_level:
             self.last_level = current_level
             self.set_fan_level(current_level)
-            self.log.msg(self.log.LOG_INFO, '{}: new level > {:.1f}C > [T:{}C/L:{}%]'
-                         .format(self.name, current_temp, self.min_temp + (current_gain * self.temp_step),
-                                 current_level))
+            self.log.msg(self.log.LOG_INFO, f'{self.name}: new level > {current_temp:.1f}C > ' 
+                         f'[T:{self.min_temp+(current_gain*self.temp_step)}C/L:{current_level}%]')
 
     def print_temp_level_mapping(self) -> None:
         self.log.msg(self.log.LOG_DEBUG, '   Temperature:level mapping:')
         for i in range(self.steps + 1):
-            self.log.msg(self.log.LOG_DEBUG, f'   {i}. [T:{self.min_temp + (i * self.temp_step):.1f}C - L:{int(self.min_level + (i * self.level_step))}%]')
+            self.log.msg(self.log.LOG_DEBUG, f'   {i}. [T:{self.min_temp+(i*self.temp_step):.1f}C - '
+                         f'L:{int(self.min_level + (i * self.level_step))}%]')
 
 
 class CpuZone(FanController):
@@ -682,11 +681,11 @@ class HdZone(FanController):
             self.standby_flag = n == self.count
         # Print configuration in DEBUG log level (or higher).
         if self.log.log_level >= self.log.LOG_DEBUG:
-            self.log.msg(self.log.LOG_DEBUG, '   hd_names = {}'.format(self.hd_device_names))
+            self.log.msg(self.log.LOG_DEBUG, f'   hd_names = {self.hd_device_names}')
             if self.standby_guard_enabled:
                 self.log.msg(self.log.LOG_DEBUG, '   Standby guard is enabled:')
-                self.log.msg(self.log.LOG_DEBUG, '   standby_hd_limit = {}'.format(self.standby_hd_limit))
-                self.log.msg(self.log.LOG_DEBUG, '   smartctl_path = {}'.format(self.smartctl_path))
+                self.log.msg(self.log.LOG_DEBUG, f'   standby_hd_limit = {self.standby_hd_limit}')
+                self.log.msg(self.log.LOG_DEBUG, f'   smartctl_path = {self.smartctl_path}')
             else:
                 self.log.msg(self.log.LOG_DEBUG, '   Standby guard is disabled')
 
@@ -708,9 +707,10 @@ class HdZone(FanController):
             # Find SATA names for specific hd_names= references.
             for i in range(self.count):
                 if 'by-id' not in self.hd_device_names[i]:
-                    raise ValueError(f'Invalid hd_names={self.hd_device_names[i]}, name is not in /dev/disk/by-id form.')
+                    raise ValueError(f'Invalid hd_names={self.hd_device_names[i]}, name is not'
+                                     f'in \'/dev/disk/by-id\' form.')
                 if not os.path.islink(self.hd_device_names[i]):
-                    raise ValueError('Invalid hd_names={self.hd_device_names[i]},  reference is not link.')
+                    raise ValueError(f'Invalid hd_names={self.hd_device_names[i]}, the reference is not link.')
                 hd_sata_names[i] = os.path.basename(os.readlink(self.hd_device_names[i]))
             # Find the proper sys/hwmon files based on SATA names.
             hwmon_dir = '/sys/class/scsi_disk'
@@ -811,9 +811,8 @@ class HdZone(FanController):
         # Step 2: check if the array is going to STANDBY state.
         if not self.standby_flag and hds_in_standby >= self.standby_hd_limit:
             minutes = (cur_time - self.standby_change_timestamp) / float(3600)
-            self.log.msg(self.log.LOG_INFO,
-                         'Standby guard: Change ACTIVE to STANDBY after {:.1f} hour(s) [{}]'
-                         .format(minutes, self.get_standby_state_str()))
+            self.log.msg(self.log.LOG_INFO, f'Standby guard: Change ACTIVE to STANDBY after {minutes:.1f} hour(s)'
+                         f'[{self.get_standby_state_str()}]')
             self.go_standby_state()
             self.standby_flag = True
             self.standby_change_timestamp = cur_time
@@ -821,9 +820,8 @@ class HdZone(FanController):
         # Step 3: check if the array is waking up.
         elif self.standby_flag and hds_in_standby < self.count:
             minutes = (cur_time - self.standby_change_timestamp) / float(3600)
-            self.log.msg(self.log.LOG_INFO,
-                         'Standby guard: Change STANDBY to ACTIVE after {:.1f} hour(s) [{}]'
-                         .format(minutes, self.get_standby_state_str()))
+            self.log.msg(self.log.LOG_INFO, f'Standby guard: Change STANDBY to ACTIVE after {minutes:.1f} hour(s)'
+                         f'[{self.get_standby_state_str()}]')
             self.standby_flag = False
             self.standby_change_timestamp = cur_time
 
@@ -856,34 +854,34 @@ def main():
     try:
         my_log = Log(my_results.l, my_results.o)
     except ValueError as e:
-        print('ERROR: {}.'.format(e), flush=True, file=sys.stdout)
+        print(f'ERROR: {e}.', flush=True, file=sys.stdout)
         sys.exit(5)
 
     if my_log.log_level >= my_log.LOG_DEBUG:
         my_log.msg(my_log.LOG_DEBUG, 'Command line arguments:')
-        my_log.msg(my_log.LOG_DEBUG, '   original arguments: {}'.format(' '.join(sys.argv[:])))
-        my_log.msg(my_log.LOG_DEBUG, '   parsed config file = {}'.format(my_results.config_file))
-        my_log.msg(my_log.LOG_DEBUG, '   parsed log level = {}'.format(my_results.l))
-        my_log.msg(my_log.LOG_DEBUG, '   parsed log output = {}'.format(my_results.o))
+        my_log.msg(my_log.LOG_DEBUG, f'   original arguments: {" ".join(sys.argv[:])}')
+        my_log.msg(my_log.LOG_DEBUG, f'   parsed config file = {my_results.config_file}')
+        my_log.msg(my_log.LOG_DEBUG, f'   parsed log level = {my_results.l}')
+        my_log.msg(my_log.LOG_DEBUG, f'   parsed log output = {my_results.o}')
 
     # Parse and load configuration file.
     my_config = configparser.ConfigParser()
     if my_config is None or my_config.read(my_results.config_file) == []:
-        my_log.msg(my_log.LOG_ERROR, 'Cannot load configuration file ({})'.format(my_results.config_file))
+        my_log.msg(my_log.LOG_ERROR, f'Cannot load configuration file ({my_results.config_file})')
         sys.exit(6)
-    my_log.msg(my_log.LOG_DEBUG, 'Configuration file ({}) loaded'.format(my_results.config_file))
+    my_log.msg(my_log.LOG_DEBUG, f'Configuration file ({my_results.config_file}) loaded')
 
     # Create an Ipmi class instances and set required IPMI fan mode.
     try:
         my_ipmi = Ipmi(my_log, my_config)
         old_mode = my_ipmi.get_fan_mode()
     except (ValueError, FileNotFoundError) as e:
-        my_log.msg(my_log.LOG_ERROR, '{}.'.format(e))
+        my_log.msg(my_log.LOG_ERROR, f'{e}.')
         sys.exit(7)
-    my_log.msg(my_log.LOG_DEBUG, 'Old IPMI fan mode = {}'.format(my_ipmi.get_fan_mode_name(old_mode)))
+    my_log.msg(my_log.LOG_DEBUG, f'Old IPMI fan mode = {my_ipmi.get_fan_mode_name(old_mode)}')
     if old_mode != my_ipmi.FULL_MODE:
         my_ipmi.set_fan_mode(my_ipmi.FULL_MODE)
-        my_log.msg(my_log.LOG_DEBUG, 'New IPMI fan mode = {}'.format(my_ipmi.get_fan_mode_name(my_ipmi.FULL_MODE)))
+        my_log.msg(my_log.LOG_DEBUG, f'New IPMI fan mode = {my_ipmi.get_fan_mode_name(my_ipmi.FULL_MODE)}')
 
     # Create an instance for CPU zone fan controller if enabled.
     my_cpu_zone = None
@@ -909,7 +907,7 @@ def main():
     else:  # elif not cpu_zone_enabled and not hd_controller_enabled:
         my_log.msg(my_log.LOG_ERROR, 'None of the fan controllers are enabled, service terminated.')
         sys.exit(8)
-    my_log.msg(my_log.LOG_DEBUG, 'Main loop wait time = {} sec'.format(wait))
+    my_log.msg(my_log.LOG_DEBUG, f'Main loop wait time = {wait} sec')
 
     # Main execution loop.
     while True:
