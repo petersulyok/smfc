@@ -25,80 +25,127 @@ class TestData:
         """It deletes the temporary directory with is all content."""
         shutil.rmtree(self.td_dir)
 
-    def create_temp_files(self, prefix: str, count: int, temp_list: List[float] = None,
-                          wildchar: bool = False) -> List[str]:
+    def create_cpu_temp_files(self, count: int, temp_list: List[float] = None, wildchar: bool = False) -> str:
         """Generic method to create temporary test data files (similarly to hwmon naming convention and content)."""
-        new_list: List[str] = []
+        new_list: str = ''
         new_dir: str
         new_path: str
 
-        new_dir = tempfile.mkdtemp(prefix=prefix+str(count)+'_', dir=self.td_dir)
-        if wildchar:
-            wc = '?'
-        else:
-            wc = '0'
+        new_dir = self.td_dir + '/sys/devices/platform/'
         for i in range(count):
-            new_path = os.path.join(new_dir, str(i), wc)
-            os.makedirs(new_path)
-            h, name = tempfile.mkstemp(dir=new_path)
-            with os.fdopen(h, "w+t") as f:
-                if temp_list is not None:
+            new_path = new_dir + 'coretemp.'+str(i) + '/'
+            os.makedirs(new_path, exist_ok=True)
+            real_path = new_path + 'hwmon/hwmon'+str(i) + '/'
+            if wildchar:
+                list_path = new_path + 'hwmon/hwmon*/'
+            else:
+                list_path = real_path
+            os.makedirs(real_path, exist_ok=True)
+            real_name = real_path + 'temp1_input'
+            list_name = list_path + 'temp1_input'
+            with open(real_name, "w+t") as f:
+                if temp_list:
                     v = temp_list[i]
                 else:
-                    v = random.uniform(25.0, 55.0)
+                    v = random.uniform(30.0, 60.0)
                 f.write(str(v * 1000))
-            new_list.append(name)
+            new_list = new_list + list_name + '\n'
         return new_list
 
-    def get_cpu_1(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('cpu', 1, temp_list=temperatures, wildchar=False)
+    def create_hd_temp_files(self, count: int, temp_list: List[float] = None, wildchar: bool = False) -> str:
+        """Generic method to create temporary test data files (similarly to hwmon naming convention and content)."""
+        letters: list[str] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']
+        new_list: str = ''
+        new_dir: str
+        new_path: str
 
-    def get_cpu_1w(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('cpu', 1, temp_list=temperatures, wildchar=True)
-
-    def get_cpu_2(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('cpu', 2, temp_list=temperatures, wildchar=False)
-
-    def get_cpu_2w(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('cpu', 2, temp_list=temperatures, wildchar=True)
-
-    def get_cpu_4(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('cpu', 4, temp_list=temperatures, wildchar=False)
-
-    def get_cpu_4w(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('cpu', 4, temp_list=temperatures, wildchar=True)
-
-    def get_hd_1(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('hd', 1, temp_list=temperatures, wildchar=False)
-
-    def get_hd_1w(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('hd', 1, temp_list=temperatures, wildchar=True)
-
-    def get_hd_2(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('hd', 2, temp_list=temperatures, wildchar=False)
-
-    def get_hd_2w(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('hd', 2, temp_list=temperatures, wildchar=True)
-
-    def get_hd_4(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('hd', 4, temp_list=temperatures, wildchar=False)
-
-    def get_hd_4w(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('hd', 4, temp_list=temperatures, wildchar=True)
-
-    def get_hd_8(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('hd', 8, temp_list=temperatures, wildchar=False)
-
-    def get_hd_8w(self, temperatures: List[float] = None) -> List[str]:
-        return self.create_temp_files('hd', 8, temp_list=temperatures, wildchar=True)
-
-    @staticmethod
-    def get_hd_names(count: int) -> str:
-        letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
-        s = ''
+        new_dir = self.td_dir + '/sys/class/scsi_disk/'
         for i in range(count):
-            s += '/dev/sd' + letters[i] + ' '
-        return s
+            new_path = new_dir + str(i)+':0:0:0/'
+            os.makedirs(new_path, exist_ok=True)
+            os.makedirs(new_path + 'device/block/sd'+letters[i], exist_ok=True)
+            real_path = new_path + 'hwmon/hwmon'+str(i) + '/'
+            if wildchar:
+                list_path = new_path + 'hwmon/hwmon*/'
+            else:
+                list_path = real_path
+            os.makedirs(real_path, exist_ok=True)
+            real_name = real_path + 'temp1_input'
+            list_name = list_path + 'temp1_input'
+            with open(real_name, "w+t") as f:
+                if temp_list:
+                    v = temp_list[i]
+                else:
+                    v = random.uniform(32.0, 45.0)
+                f.write(str(v * 1000))
+            new_list = new_list + list_name + '\n'
+        return new_list
+
+    def get_cpu_1(self, temperatures: List[float] = None) -> str:
+        return self.create_cpu_temp_files(1, temp_list=temperatures, wildchar=False)
+
+    def get_cpu_1w(self, temperatures: List[float] = None) -> str:
+        return self.create_cpu_temp_files(1, temp_list=temperatures, wildchar=True)
+
+    def get_cpu_2(self, temperatures: List[float] = None) -> str:
+        return self.create_cpu_temp_files(2, temp_list=temperatures, wildchar=False)
+
+    def get_cpu_2w(self, temperatures: List[float] = None) -> str:
+        return self.create_cpu_temp_files(2, temp_list=temperatures, wildchar=True)
+
+    def get_cpu_4(self, temperatures: List[float] = None) -> str:
+        return self.create_cpu_temp_files(4, temp_list=temperatures, wildchar=False)
+
+    def get_cpu_4w(self, temperatures: List[float] = None) -> str:
+        return self.create_cpu_temp_files(4, temp_list=temperatures, wildchar=True)
+
+    def get_hd_1(self, temperatures: List[float] = None) -> str:
+        return self.create_hd_temp_files(1, temp_list=temperatures, wildchar=False)
+
+    def get_hd_1w(self, temperatures: List[float] = None) -> str:
+        return self.create_hd_temp_files(1, temp_list=temperatures, wildchar=True)
+
+    def get_hd_2(self, temperatures: List[float] = None) -> str:
+        return self.create_hd_temp_files(2, temp_list=temperatures, wildchar=False)
+
+    def get_hd_2w(self, temperatures: List[float] = None) -> str:
+        return self.create_hd_temp_files(2, temp_list=temperatures, wildchar=True)
+
+    def get_hd_4(self, temperatures: List[float] = None) -> str:
+        return self.create_hd_temp_files(4, temp_list=temperatures, wildchar=False)
+
+    def get_hd_4w(self, temperatures: List[float] = None) -> str:
+        return self.create_hd_temp_files(4, temp_list=temperatures, wildchar=True)
+
+    def get_hd_8(self, temperatures: List[float] = None) -> str:
+        return self.create_hd_temp_files(8, temp_list=temperatures, wildchar=False)
+
+    def get_hd_8w(self, temperatures: List[float] = None) -> str:
+        return self.create_hd_temp_files(8, temp_list=temperatures, wildchar=True)
+
+    def get_hd_names(self, count: int) -> str:
+        letters: list[str] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']
+        hd_names: str = ''
+        dev_dir: str
+        dev_name: str
+        dev_dir = os.path.join(self.td_dir, 'dev/disk/by-id/')
+        separator = ' '
+        if random.randint(1, 2) % 2 == 0:
+            separator = '\n'
+        os.makedirs(dev_dir, exist_ok=True)
+        for i in range(count):
+            # Create /dev/sd? file.
+            sdx_name = os.path.join(self.td_dir, 'dev', 'sd'+letters[i])
+            with open(sdx_name, 'w+t') as f:
+                f.write(str(' '))
+            random_str = ''
+            for k in range(8):
+                random_str = random_str + random.choice('0123456789ABCDEF')
+            # Create a link with device name.
+            dev_name = os.path.join(dev_dir, 'ata-HD_HD1100XOI-'+random_str )
+            os.symlink('../../sd'+letters[i], dev_name)
+            hd_names = hd_names + dev_name + separator
+        return hd_names
 
     @staticmethod
     def normalize_path(old_list: List[str]) -> List[str]:
@@ -107,6 +154,20 @@ class TestData:
             fn = glob.glob(old_list[i])
             new_list.append(fn[0])
         return new_list
+
+    @staticmethod
+    def create_path_list(hwmon_str: str) -> List[str]:
+        new_list: List[str] = []
+        # Convert the string into a string array (respecting multi-line strings).
+        if "\n" in hwmon_str:
+            new_list = hwmon_str.splitlines()
+        else:
+            new_list = hwmon_str.split()
+        return new_list
+
+    @staticmethod
+    def create_normalized_path_list(hwmon_str: str) -> List[str]:
+        return TestData.normalize_path(TestData.create_path_list(hwmon_str))
 
     def create_config_file(self, my_config: configparser.ConfigParser) -> str:
         h, name = tempfile.mkstemp(prefix='config', suffix='.conf', dir=self.td_dir)
