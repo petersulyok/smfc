@@ -61,9 +61,9 @@ class TestData:
 
         new_dir = self.td_dir + '/sys/class/scsi_disk/'
         for i in range(count):
-            new_path = new_dir + str(i)+':0:0:0/'
+            new_path = new_dir + str(i)+':0:0:0/device/'
             os.makedirs(new_path, exist_ok=True)
-            os.makedirs(new_path + 'device/block/sd'+letters[i], exist_ok=True)
+            os.makedirs(new_path + 'block/sd'+letters[i], exist_ok=True)
             real_path = new_path + 'hwmon/hwmon'+str(i) + '/'
             if wildchar:
                 list_path = new_path + 'hwmon/hwmon*/'

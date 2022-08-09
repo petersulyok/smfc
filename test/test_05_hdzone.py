@@ -294,7 +294,7 @@ class HdZoneTestCase(unittest.TestCase):
         # Mock function for glob.glob().
         def mocked_glob(file: str, *args, **kwargs):
             if file.startswith('/sys/class/scsi_disk'):
-                if 'device' in file:
+                if 'block' in file:
                     file = my_td.td_dir + file
                 else:
                     return None     # Invalid filename generated here!

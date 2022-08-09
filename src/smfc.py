@@ -597,7 +597,7 @@ class CpuZone(FanController):
                 path = '/sys/devices/platform/coretemp.' + str(i) + '/hwmon/hwmon*/temp1_input'
                 file_names = glob.glob(path)
                 if not file_names:
-                    raise ValueError(self.ERROR_MSG_FILE_IO.format(self.hwmon_path[i]))
+                    raise ValueError(self.ERROR_MSG_FILE_IO.format(path))
                 self.hwmon_path[i] = file_names[0]
 
 
@@ -716,6 +716,8 @@ class HdZone(FanController):
             for f in os.listdir(hwmon_dir):
                 sn = os.path.join(hwmon_dir, f, 'device/block/sd*')
                 file_names = glob.glob(sn)
+                if not file_names:
+                    raise ValueError(self.ERROR_MSG_FILE_IO.format(sn))
                 sn = os.path.basename(file_names[0])
                 try:
                     index = hd_sata_names.index(sn)
@@ -723,9 +725,10 @@ class HdZone(FanController):
                     # It means that we found an unknown SATA name, and we can skip it
                     # because this disk is not part of the configuration.
                     continue
-                file_names = glob.glob(os.path.join(hwmon_dir, f, 'hwmon/hwmon*/temp1_input'))
+                path = os.path.join(hwmon_dir, f, 'device/hwmon/hwmon*/temp1_input')
+                file_names = glob.glob(path)
                 if not file_names:
-                    raise ValueError(self.ERROR_MSG_FILE_IO.format(self.hwmon_path[index]))
+                    raise ValueError(self.ERROR_MSG_FILE_IO.format(path))
                 self.hwmon_path[index] = file_names[0]
             # Check the size of hwmon_path array
             if len(self.hwmon_path) != self.count:
