@@ -682,6 +682,7 @@ class HdZone(FanController):
             self.standby_flag = n == self.count
         # Print configuration in DEBUG log level (or higher).
         if self.log.log_level >= self.log.LOG_DEBUG:
+            self.log.msg(self.log.LOG_DEBUG, '   hd_names = {}'.format(self.hd_device_names))
             if self.standby_guard_enabled:
                 self.log.msg(self.log.LOG_DEBUG, '   Standby guard is enabled:')
                 self.log.msg(self.log.LOG_DEBUG, '   standby_hd_limit = {}'.format(self.standby_hd_limit))
