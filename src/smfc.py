@@ -75,8 +75,6 @@ class Log:
             Returns:
                 int: syslog log level
             """
-        syslog_level: int               # Syslog log level
-
         syslog_level = syslog.LOG_ERR
         if level == self.LOG_INFO:
             syslog_level = syslog.LOG_INFO
@@ -92,12 +90,12 @@ class Log:
             Returns:
                 str: log level string
             """
-        s = 'ERROR'
+        string = 'ERROR'
         if level == self.LOG_INFO:
-            s = 'INFO'
+            string = 'INFO'
         elif level == self.LOG_DEBUG:
-            s = 'DEBUG'
-        return s
+            string = 'DEBUG'
+        return string
 
     def msg_to_syslog(self, level: int, msg: str) -> None:
         """Print a log message to syslog.
@@ -194,6 +192,7 @@ class Ipmi:
         """
         r: subprocess.CompletedProcess  # result of the executed process
         m: int                          # fan mode
+
         # Read the current IPMI fan mode.
         try:
             r = subprocess.run([self.command, 'raw', '0x30', '0x45', '0x00'], capture_output=True, text=True)
@@ -278,27 +277,27 @@ class FanController(object):
     ERROR_MSG_FILE_IO: str = 'Cannot read file ({}).'
 
     # Configuration parameters
-    log: Log  # Reference to a Log class instance
-    ipmi: Ipmi  # Reference to an Ipmi class instance
-    ipmi_zone: int  # IPMI zone identifier
-    name: str  # Name of the controller
-    count: int  # Number of controlled entities
-    temp_calc: int  # Calculate of the temperature (0-min, 1-avg, 2-max)
-    steps: int  # Discrete steps in temperatures and fan levels
-    sensitivity: float  # Temperature change to activate fan controller (C)
-    polling: float  # Polling interval to read temperature (sec)
-    min_temp: float  # Minimum temperature value (C)
-    max_temp: float  # Maximum temperature value (C)
-    min_level: int  # Minimum fan level (0..100%)
-    max_level: int  # Maximum fan level (0..100%)
-    hwmon_path: List[str]  # Paths for hwmon files in sysfs
+    log: Log                # Reference to a Log class instance
+    ipmi: Ipmi              # Reference to an Ipmi class instance
+    ipmi_zone: int          # IPMI zone identifier
+    name: str               # Name of the controller
+    count: int              # Number of controlled entities
+    temp_calc: int          # Calculate of the temperature (0-min, 1-avg, 2-max)
+    steps: int              # Discrete steps in temperatures and fan levels
+    sensitivity: float      # Temperature change to activate fan controller (C)
+    polling: float          # Polling interval to read temperature (sec)
+    min_temp: float         # Minimum temperature value (C)
+    max_temp: float         # Maximum temperature value (C)
+    min_level: int          # Minimum fan level (0..100%)
+    max_level: int          # Maximum fan level (0..100%)
+    hwmon_path: List[str]   # Paths for hwmon files in sysfs
 
     # Measured or calculated attributes
-    temp_step: float  # A temperature steps value (C)
-    level_step: float  # A fan level step value (0..100%)
-    last_time: float  # Last system time we polled temperature (timestamp)
-    last_temp: float  # Last measured temperature value (C)
-    last_level: int  # Last configured fan level (0..100%)
+    temp_step: float        # A temperature steps value (C)
+    level_step: float       # A fan level step value (0..100%)
+    last_time: float        # Last system time we polled temperature (timestamp)
+    last_temp: float        # Last measured temperature value (C)
+    last_level: int         # Last configured fan level (0..100%)
 
     # Function variable for selected temperature calculation method
     get_temp_func: Callable[[], float]
@@ -417,11 +416,14 @@ class FanController(object):
 
     def get_1_temp(self) -> float:
         """Get a single temperature of the controlled entities in the IPMI zone. Can raise IOError exception."""
+        value: float    # Float value to calculate the temperature.
+
         try:
             with open(self.hwmon_path[0], "r") as f:
-                return float(f.read()) / 1000
+                value = float(f.read()) / 1000
         except (IOError, FileNotFoundError) as e:
             raise e
+        return value
 
     def get_min_temp(self) -> float:
         """Get the minimum temperature of the controlled entities in the IPMI zone. Can raise IOError exception.
@@ -429,8 +431,8 @@ class FanController(object):
            Returns:
                 float: minimum temperature of controlled entities (C)
         """
-        minimum: float = 1000.0
-        value: float
+        minimum: float = 1000.0     # Minimum temperature value
+        value: float                # Float value
 
         # Calculate minimum temperature.
         try:
@@ -449,8 +451,8 @@ class FanController(object):
         Returns:
             float: average temperature of the controlled entities (C)
         """
-        average: float = 0
-        counter: int = 0
+        average: float = 0      # Average temperature
+        counter: int = 0        # Value counter
 
         # Calculate average temperature.
         try:
@@ -468,8 +470,9 @@ class FanController(object):
            Returns:
                 float: maximum temperature of the controlled entities (C)
         """
-        maximum: float = -1.0
-        value: float
+        maximum: float = -1.0   # Maximum temperature
+        value: float            # Temperature value
+
         # Calculate minimum temperature.
         try:
             for i in self.hwmon_path:
@@ -582,8 +585,8 @@ class CpuZone(FanController):
 
     def build_hwmon_path(self, hwmon_str: str) -> None:
         """Build hwmon_path[] list for the CPU zone."""
-        path: str
-        file_name: List[str]
+        path: str               # Path string
+        file_name: List[str]    # Result list of glob.glob()
 
         # If the user specified the hwmon_path= configuration item.
         if hwmon_str:
@@ -626,13 +629,14 @@ class HdZone(FanController):
             ipmi (Ipmi): reference to an Ipmi class instance
             config (configparser.ConfigParser): reference to the configuration (default=None)
         """
-        count: int
-        hd_names: str
+        count: int      # HD count
+        hd_names: str   # String for hd_names=
 
-        # Initialize arrays with proper size.
+        # Read count parameter.
         count = config[self.HD_ZONE_TAG].getint('count', fallback=1)
         if count <= 0:
             raise ValueError('count <= 0')
+        # Initialize lista with proper size.
         self.hd_device_names = [''] * count
         self.hwmon_path = [''] * count
         # Save and validate further HdZone class specific parameters.
@@ -691,10 +695,11 @@ class HdZone(FanController):
 
     def build_hwmon_path(self, hwmon_str: str) -> None:
         """Build hwmon_path[] list for the HD zone."""
-        hwmon_dir: str
-        hd_sata_names: List[str]  # SATA device names of the hard disks (e.g. 'sda')
-        s: str
-        filenames: List[str]
+        hwmon_dir: str              # hwmon directory
+        path: str                   # Path string
+        hd_sata_names: List[str]    # SATA HD names
+        sn: str                     # String for a sata name
+        file_names: List[str]       # Result list for glob.glob()
 
         # If the user specified a hwmon_path= configuration item.
         if hwmon_str:
@@ -746,7 +751,8 @@ class HdZone(FanController):
         Returns:
             str:   standby state string where all HD represented with a character (A-ACTIVE, S-STANDBY)
         """
-        result: str = ''                # Result string
+        result: str = ''    # Result string
+
         for i in range(self.count):
             if self.standby_array_states[i]:
                 result += 'S'
@@ -760,8 +766,7 @@ class HdZone(FanController):
         Returns:
             int:   number of HDs in STANDBY mode
         """
-        i: int  # Loop variable
-        r: subprocess.CompletedProcess  # Result of the executed process
+        r: subprocess.CompletedProcess      # Result of the executed process.
 
         # Check the current power state of the HDs
         for i in range(self.count):
@@ -777,19 +782,18 @@ class HdZone(FanController):
     def go_standby_state(self):
         """Put active HDs to STANDBY state in the array (based on the actual state of 'standby_states').
         """
-        n: int  # Loop variable
-        r: subprocess.CompletedProcess  # Return state of the executed process
+        r: subprocess.CompletedProcess      # Result of the executed process.
 
-        # Iterate though on HDs in the array
-        for n in range(self.count):
-            # if the 'nth' HD is ACTIVE
-            if not self.standby_array_states[n]:
+        # Iterate through HDs list
+        for i in range(self.count):
+            # if the HD is ACTIVE
+            if not self.standby_array_states[i]:
                 # then move it to STANDBY state
-                r = subprocess.run([self.smartctl_path, '-s', 'standby,now', self.hd_device_names[n]],
+                r = subprocess.run([self.smartctl_path, '-s', 'standby,now', self.hd_device_names[i]],
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 if r.returncode != 0:
                     raise Exception(self.ERROR_MSG_SMARTCTL.format(r.returncode))
-                self.standby_array_states[n] = True
+                self.standby_array_states[i] = True
 
     def run_standby_guard(self):
         """Monitor changes in the power state of an HD array and help them to move to STANDBY state together.
@@ -800,9 +804,9 @@ class HdZone(FanController):
             * step 3: Check if the array is waking up (i.e. was in STANDBY state before and there is any ACTIVE
                       HD(s) in the array) and log the event
         """
-        hds_in_standby: int  # HDs in standby mode
-        minutes: float  # Elapsed time in minutes
-        cur_time: float  # New timestamp for STANDBY change
+        hds_in_standby: int     # HDs in standby mode
+        minutes: float          # Elapsed time in minutes
+        cur_time: float         # New timestamp for STANDBY change
 
         # Step 1: check the current power state of the HD array
         hds_in_standby = self.check_standby_state()
@@ -828,16 +832,16 @@ class HdZone(FanController):
 
 def main():
     """Main function: starting point of the systemd service."""
-    my_parser: argparse.ArgumentParser  # Instance for an ArgumentParser class
-    my_results: argparse.Namespace  # Results of parsed command line arguments
-    my_config: configparser.ConfigParser  # Instance for a parsed configuration
-    my_log: Log  # Instance for a Log class
-    my_ipmi: Ipmi  # Instance for an Ipmi class
-    my_cpu_zone: CpuZone  # Instance for a CPU Zone fan controller class
-    my_hd_zone: HdZone  # Instance for an HD Zone fan controller class
-    old_mode: int  # Old IPMI fan mode
-    cpu_zone_enabled: bool  # CPU zone fan controller enabled
-    hd_zone_enabled: bool  # HD zone fan controller enabled
+    my_parser: argparse.ArgumentParser      # Instance for an ArgumentParser class
+    my_results: argparse.Namespace          # Results of parsed command line arguments
+    my_config: configparser.ConfigParser    # Instance for a parsed configuration
+    my_log: Log                             # Instance for a Log class
+    my_ipmi: Ipmi                           # Instance for an Ipmi class
+    my_cpu_zone: CpuZone                    # Instance for a CPU Zone fan controller class
+    my_hd_zone: HdZone                      # Instance for an HD Zone fan controller class
+    old_mode: int                           # Old IPMI fan mode
+    cpu_zone_enabled: bool                  # CPU zone fan controller enabled
+    hd_zone_enabled: bool                   # HD zone fan controller enabled
 
     # Parse the command line arguments.
     my_parser = argparse.ArgumentParser()
