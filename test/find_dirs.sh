@@ -12,7 +12,7 @@ else
         test_dir=../test
     else
         # Case 3: we are in test directory.
-        if [ -d "hwmon" ]; then
+        if [ -d "bin" ]; then
             src_dir=../src
             export PYTHONPATH=$PYTHONPATH:$src_dir
             test_dir=.
