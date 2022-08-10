@@ -573,8 +573,8 @@ class CpuZone(FanController):
         super(CpuZone, self).__init__(
             log, ipmi, Ipmi.CPU_ZONE, 'CPU zone', count,
             config[self.CPU_ZONE_TAG].getint('temp_calc', fallback=FanController.CALC_AVG),
-            config[self.CPU_ZONE_TAG].getint('steps', fallback=5),
-            config[self.CPU_ZONE_TAG].getfloat('sensitivity', fallback=4.0),
+            config[self.CPU_ZONE_TAG].getint('steps', fallback=6),
+            config[self.CPU_ZONE_TAG].getfloat('sensitivity', fallback=3.0),
             config[self.CPU_ZONE_TAG].getfloat('polling', fallback=2),
             config[self.CPU_ZONE_TAG].getfloat('min_temp', fallback=30.0),
             config[self.CPU_ZONE_TAG].getfloat('max_temp', fallback=60.0),
@@ -656,8 +656,8 @@ class HdZone(FanController):
             config[self.HD_ZONE_TAG].getint('steps', fallback=4),
             config[self.HD_ZONE_TAG].getfloat('sensitivity', fallback=2),
             config[self.HD_ZONE_TAG].getfloat('polling', fallback=10),
-            config[self.HD_ZONE_TAG].getfloat('min_temp', fallback=30),
-            config[self.HD_ZONE_TAG].getfloat('max_temp', fallback=45),
+            config[self.HD_ZONE_TAG].getfloat('min_temp', fallback=32),
+            config[self.HD_ZONE_TAG].getfloat('max_temp', fallback=46),
             config[self.HD_ZONE_TAG].getint('min_level', fallback=35),
             config[self.HD_ZONE_TAG].getint('max_level', fallback=100),
             config[self.HD_ZONE_TAG].get('hwmon_path')
