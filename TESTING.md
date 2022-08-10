@@ -10,7 +10,7 @@ Notes:
 ## Smoke tests  
 Several smoke tests are provided for `smfc` where the service is executed with different configuration parameters. Notes:  
   
-- all smoke tests should be executed from the project folder and can be stopped by pressing `CTLR+C`:
+- all smoke tests should be executed from the project root folder and can be stopped by pressing `CTLR+C`:
 
 	`#./test/run_test_cpu_1.sh`
 
@@ -28,16 +28,16 @@ Several smoke tests are provided for `smfc` where the service is executed with d
    |`run_test_const_level.sh`| 1 x CPU (60% constant fan level) | 4 x HDs (55% constant fan level) | enabled |
 
 ## Unit tests  
-All classes and the main function are completely unit tested. The unit tests can be executed from both the project root and the test folders with the help of a shell script:
+All classes and the main function are completely unit tested. The unit tests can be executed from multiple folders with the help of a shell script:
 
-	./run_unittest.sh
-	./test/run_unittest.sh
+	./test/run_unittest.sh		# project root folder
+	./run_unittest.sh			# test folder
+	../test/run_unittest.sh		# src folder
 
-The coverage can be measured for the unit tests (a Python package called `coverage` should be installed). The coverage measurement script can be executed from both project root and test folders:
+The coverage can be measured for the unit tests (a Python package called `coverage` should be installed). The coverage measurement script can be executed in the same way as unit tests:
 
 	pip3 install coverage
 	./run_coverage.sh
-	./test/run_coverage.sh  
 
 Coverage will generate a detailed HTML report (see `./htmlcov/index.html`) with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage report is 98%.  
   
