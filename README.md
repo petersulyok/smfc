@@ -16,7 +16,7 @@ This is a `systemd service` running on Linux and is able to control fans in CPU 
 
 ### 2. Installation and configuration
  1. Setup the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
- 2. Optional: you may consider enabling advanced power management features for your CPU and SATA hard disks for lower power consumption (i.e. heat generation) and for lower fan noise. 
+ 2. Optional: you may consider enabling advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp` and `drivetemp`).
  4. Install the service with running the script `install.sh`.
  5. Edit the configuration file `/opt/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
@@ -38,28 +38,41 @@ In this service a fan control logic is implemented for both zones which can:
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.jpg" align="center" width="600">
 
-The fan control logic can be enabled and disabled independently per zone. All fans in a zone will have the same rotation speed. The user can configure different temperature calculation method for a zone (e.g. minimum, average, maximum temperatures).
+The fan control logic can be enabled and disabled independently per zone. All fans in a zone will have the same rotation speed. The user can configure different temperature calculation method (e.g. minimum, average, maximum temperatures) in case of  multiple heat sources in a zone .
 
-The user-defined parameters (see configuration file) create a function where a temperature interval is being mapped to a fan level interval.
+#### 1.1 User-defined control function
+The user-defined parameters (see configuration file below for more details) create a function where a temperature interval is being mapped to a fan level interval.
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/userdefined_control_function.jpg" align="center" width="500">
 
-When we adjust the rotation speed of a fan, it takes time while fan reaches the new rotation speed. We always apply a delay time in this case (see configuration parameter `[IPMI] fan_level_delay`). The fan control logic tries to avoid the continuous adjustments of the fan rotation speeds in two different ways:
+The following five parameters will define the function in both zones:
 
- 1. It calculates only limited discrete steps for fan output levels (defined by configuration parameter `[CPU zone]/[HD zone] steps`)
- 2. it uses a sensitivity threshold for temperature changes (see configuration parameter `[CPU zone]/[HD zone] sensitivity`) and if the temperature change will not reach  threshold then the control logic will not react
+     min_temp=
+     max_temp=
+     min_level=
+     max_level=
+     steps=
+
+With the help of this function the `smfc` will map a temperature value to a fan level. Changing the rotation speed of a fan is a very slow process (could take seconds depending on fan type and the requested amount of change) so we try to minimize these kind of actions. Instead of setting fan rotation speed continuously we define discrete fan levels based on `steps=` parameter.
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output_levels.jpg" align="center" width="500">
 
+Additional notes on changing fan levels:
+
+ 1. When the service adjusts the rotation speed of a fan, it always applies a delay time defined in configuration parameter `[IPMI] fan_level_delay=` in order to let the fan implement the physical change. 
+ 2. There is also a sensitivity threshold parameter (`sensitivity=`) for temperature changes. If the temperature change is below this value then then control logic will not react. 
+ 3. There configuration parameter `polling=` can also impact the frequency of change of the fan levels. The bigger polling time in a zone the lower frequency of changing of the fan speed.
+
+#### 1.2 Standby guard
 For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
 	
- - SATA hard disks are organized in a RAID array
- - this array will go to standby mode recurrently
+ - SATA hard disks are organized into a RAID array
+ - the RAID array will go to standby mode recurrently
 
 This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature we can avoid a situation where the array is partially in standby mode while other members are still active.
 
 ### 2. IPMI fan control and thresholds
-Many utilities and scripts (created by NAS and home server community) are using `IPMI FULL MODE`. In this mode the rotations speed of the fans can be changed freely while they do not reach the lower and the upper threshold values. If it happens then IPMI will set the all fans back to full rotation speed in the zone. In order to avoid this situation you redefine IPMI sensor thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
+Many utilities and scripts (created by NAS and home server community) are using `IPMI FULL MODE`. In this mode the IPMI system set fan rotation speed initially to 100% but then it can be changed freely it is not reaching the lower and the upper threshold values. If it happens then IPMI will set the all fans back to full rotation speed (100%) in the zone. In order to avoid this situation you should redefine IPMI sensor thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
 
  IPMI defines six sensor thresholds for fans:
  1. Lower Non-Recoverable  
@@ -90,7 +103,7 @@ You can read more about:
  - Change IPMI sensors thresholds: [TrueNAS Forums](https://www.truenas.com/community/resources/how-to-change-ipmi-sensor-thresholds-using-ipmitool.35/)
 
 ### 3. Power management
-If  low noise and low power consumption (i.e. low heat generation) are important attributes of your Linux box then you may consider the following chapters.
+If  low noise and low heat generation are important attributes of your Linux box then you may consider the following chapters.
 #### 3.1 CPU
 Most of the modern CPUs has multiple energy saving features. You can check your BIOS and enable [these features](https://metebalci.com/blog/a-minimum-complete-tutorial-of-cpu-power-management-c-states-and-p-states/) like:
 
@@ -128,7 +141,9 @@ In file `/etc/hdparm.conf` you can specify all parameters in a persistent way:
 	}
 	...
 
-If you are planning to spin down your hard disks and put them to standby mode you have to setup the configuration parameter `[HD zone] polling` minimum twice as much as the spin down timer here.
+Important notes: 
+ 1. If you plan to spin down your hard disks or RAID array (i.e. put them to standby mode) you have to setup the configuration parameter `[HD zone] polling=` minimum twice bigger as the `spindown_time` specified here.
+ 2. In file `/etc/hdparm.conf` you have to specify hard disk names in `/dev/disk/by-id/...` form.
 
 ### 4. Kernel modules
 We need to load two important Linux kernel modules:
@@ -136,12 +151,12 @@ We need to load two important Linux kernel modules:
  - [`coretemp`](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html): temperature report for Intel(R) CPUs
  - [`drivetemp`](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html): temperature report for SATA hard disks (available in kernel 5.6+ versions)
 
-Use file `/etc/modules` for persistent loading of these modules. Both modules provides `hwmon` interface in filesystem `/sys` so we can read the the temperatures of CPU and hard disks easily with reading the content of specific files. Check your installation and identify the location of these files:
+Use file `/etc/modules` for persistent loading of these modules. Both modules provides `hwmon` interface in filesystem `/sys` so we can read the the temperatures of CPU and hard disks easily with reading the content of specific files. The service will find the following locations of these files:
 
  - CPU: `/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input`
- - HD: `/sys/class/scsi_device/0:0:0:0/device/hwmon/hwmon*/temp1_input`
+ - HD: `/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input`
 
-There is an enumeration mechanism (i.e. numbering) in Linux kernel, so your final path may be different. Reading file content from filesystem `/sys` is the fastest way to get the temperature of the CPU and hard disks. `drivetemp` has also an additional advantage that it can read temperature of the hard disks in standby mode too. 
+Reading file content from `/sys` is the fastest way to get the temperature of the CPU and hard disks. The `drivetemp` module has also an additional advantage that it can read temperature of the hard disks even if they are in standby mode. 
 
 TODO: Recommendation for AMD users.
 
@@ -172,96 +187,86 @@ You may configure logging output and logging level here and these options can be
 ### 6. Configuration file
 Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 
-	#
-	#   smfc.conf
-	#   smfc service configuration parameters
-	#
-	
-	
-	[Ipmi]
-	# Path for ipmitool (str, default=/usr/bin/ipmitool)
-	command=/usr/bin/ipmitool 
-	# Delay time after changing IPMI fan mode (int, seconds, default=10)
-	fan_mode_delay=10
-	# Delay time after changing IPMI fan level (int, seconds, default=2)
-	fan_level_delay=2
-	
-	
-	[CPU zone]
-	# Fan controller enabled (bool, default=0)
-	enabled=1
-	# Number of CPUs (int, default=1)
-	count=1
-	# Calculation of CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
-	temp_calc=1
-	# Discrete steps in mapping of temperatures to fan level (int, default=5)
-	steps=5
-	# Threshold in temperature change before the fan controller reacts (float, C, default=4.0)
-	sensitivity=4.0
-	# Polling time interval for reading temperature (int, sec, default=2)
-	polling=2
-	# Minimum CPU temperature (float, C, default=30.0)
-	min_temp=30.0
-	# Maximum CPU temperature (float, C, default=55.0)
-	max_temp=55.0
-	# Minimum CPU fan level (int, %, default=35)
-	min_level=35
-	# Maximum CPU fan level (int, %, default=100)
-	max_level=100
-	# Path for CPU hwmon/coretemp file in sysfs (str, default=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input)
-	hwmon_path=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input
-	
-	
-	[HD zone]
-	# Fan controller enabled (bool, default=0)
-	enabled=1
-	# Number of HDs (int, default=8)
-	count=8
-	# Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
-	temp_calc=1
-	# Discrete steps in mapping of temperatures to fan level (int, default=4)
-	steps=4
-	# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
-	sensitivity = 2
-	# Polling interval for reading temperature (int, sec, default=2400)
-	polling=2400
-	# Minimum HD temperature (float, C, default=32.0)
-	min_temp=32.0
-	# Maximum HD temperature (float, C, default=48.0)
-	max_temp=48.0
-	# Minimum HD fan level (int, %, default=35)
-	min_level=35
-	# Maximum HD fan level (int, %, default=100)
-	max_level=100
-	# Names of the HDs (str list, default=/dev/sda /dev/sdb /dev/sdc /dev/sdd /dev/sde /dev/sdf /dev/sdg /dev/sdh)
-	hd_names=/dev/sda /dev/sdb /dev/sdc /dev/sdd /dev/sde /dev/sdf /dev/sdg /dev/sdh
-	# Path for HD hwmon/drivetemp files in sysfs (str multi-line list,
-	#   default=/sys/class/scsi_device/0:0:0:0/device/hwmon/hwmon*/temp1_input
-	#           /sys/class/scsi_device/1:0:0:0/device/hwmon/hwmon*/temp1_input
-	#           /sys/class/scsi_device/2:0:0:0/device/hwmon/hwmon*/temp1_input
-	#           /sys/class/scsi_device/3:0:0:0/device/hwmon/hwmon*/temp1_input
-	#           /sys/class/scsi_device/4:0:0:0/device/hwmon/hwmon*/temp1_input
-	#           /sys/class/scsi_device/5:0:0:0/device/hwmon/hwmon*/temp1_input
-	#           /sys/class/scsi_device/6:0:0:0/device/hwmon/hwmon*/temp1_input
-	#           /sys/class/scsi_device/7:0:0:0/device/hwmon/hwmon*/temp1_input
-	hwmon_path=/sys/class/scsi_device/0:0:0:0/device/hwmon/hwmon*/temp1_input
-			   /sys/class/scsi_device/1:0:0:0/device/hwmon/hwmon*/temp1_input
-			   /sys/class/scsi_device/2:0:0:0/device/hwmon/hwmon*/temp1_input
-			   /sys/class/scsi_device/3:0:0:0/device/hwmon/hwmon*/temp1_input
-			   /sys/class/scsi_device/4:0:0:0/device/hwmon/hwmon*/temp1_input
-			   /sys/class/scsi_device/5:0:0:0/device/hwmon/hwmon*/temp1_input
-			   /sys/class/scsi_device/6:0:0:0/device/hwmon/hwmon*/temp1_input
-			   /sys/class/scsi_device/7:0:0:0/device/hwmon/hwmon*/temp1_input
-	# Standby guard feature for the RAID array (bool, default=0)
-	standby_guard_enabled=1
-	# Number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)
-	standby_hd_limit=1
-	# Path for 'smartctl' command (str, default=/usr/sbin/smartctl)
-	smartctl_path=/usr/sbin/smartctl
+    #  
+    #   smfc.conf  
+    #   smfc service configuration parameters  
+    #  
+      
+      
+    [Ipmi]  
+    # Path for ipmitool (str, default=/usr/bin/ipmitool)  
+    command=/usr/bin/ipmitool   
+    # Delay time after changing IPMI fan mode (int, seconds, default=10)  
+    fan_mode_delay=10  
+    # Delay time after changing IPMI fan level (int, seconds, default=2)  
+    fan_level_delay=2  
+      
+      
+    [CPU zone]  
+    # Fan controller enabled (bool, default=0)  
+    enabled=1  
+    # Number of CPUs (int, default=1)  
+    count=1  
+    # Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)  
+    temp_calc=1  
+    # Discrete steps in mapping of temperatures to fan level (int, default=6)  
+    steps=6  
+    # Threshold in temperature change before the fan controller reacts (float, C, default=3.0)  
+    sensitivity=3.0  
+    # Polling time interval for reading temperature (int, sec, default=2)  
+    polling=2  
+    # Minimum CPU temperature (float, C, default=30.0)  
+    min_temp=30.0  
+    # Maximum CPU temperature (float, C, default=60.0)  
+    max_temp=60.0  
+    # Minimum CPU fan level (int, %, default=35)  
+    min_level=35  
+    # Maximum CPU fan level (int, %, default=100)  
+    max_level=100  
+    # Optional parameter, it will be generated automatically (can be used for testing and in special cases).
+    # Path for CPU sys/hwmon/coretemp file(s) (str multi-line list, default=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input)  
+    # hwmon_path=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input  
+    #            /sys/devices/platform/coretemp.1/hwmon/hwmon*/temp1_input  
+      
+      
+    [HD zone]  
+    # Fan controller enabled (bool, default=0)  
+    enabled=1  
+    # Number of HDs (int, default=1)  
+    count=1  
+    # Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)  
+    temp_calc=1  
+    # Discrete steps in mapping of temperatures to fan level (int, default=4)  
+    steps=4  
+    # Threshold in temperature change before the fan controller reacts (float, C, default=2.0)  
+    sensitivity=2.0  
+    # Polling interval for reading temperature (int, sec, default=10)  
+    polling=10  
+    # Minimum HD temperature (float, C, default=32.0)  
+    min_temp=32.0  
+    # Maximum HD temperature (float, C, default=46.0)  
+    max_temp=46.0  
+    # Minimum HD fan level (int, %, default=35)  
+    min_level=35  
+    # Maximum HD fan level (int, %, default=100)  
+    max_level=100  
+    # Names of the HDs (str multi-line list, default=)  
+    # These names MUST BE specified in '/dev/disk/by-id/...'' form!  
+    hd_names=  
+    # Optional parameter, it will be generated automatically (can be used for testing and in special cases).
+    # Path for HD sys/hwmon/drivetemp file(s) (str multi-line list, default=/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input)  
+    # hwmon_path=/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input  
+    #            /sys/class/scsi_disk/1:0:0:0/device/hwmon/hwmon*/temp1_input  
+    # Standby guard feature for RAID arrays (bool, default=0)  
+    standby_guard_enabled=0  
+    # Number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)  
+    standby_hd_limit=1  
+    # Path for 'smartctl' command (str, default=/usr/sbin/smartctl)  
+    smartctl_path=/usr/sbin/smartctl
 
 Important notes:
-
- 1. `[CPU zone] / [HD zone} min_level / max_level`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotation speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
+ 1. `[HD zone} hd_names=`: These names must be specified in `/dev/disk/by-id/...` form (the `/dev/sd?` form could be changing after each reboot). This is not part of the default configuration since they are hardware specific, it must be specified manually.
+ 2. `[CPU zone] / [HD zone} min_level= / max_level=`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotation speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
 
 		root:~# cat fan_result.csv
 		Level,FAN1,FAN2,FAN4,FANA,FANB
@@ -284,10 +289,8 @@ Important notes:
 		20,1300,1300,1200,1300,1300
 
 	My experience is that Noctua fans in my box are running stable in the 35-100% fan level interval.  
-
- 2. `[CPU zone] / [HD zone] hwmon_path`: The service will automatically resolve any wildcard characters in the path specified here in order to make this configuration step more flexible and comfortable.
-
- 3. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
+ 3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is **optional**  and it will be generated automatically. You can use that for testing purpose or if the automatic generation did not work for you. In this case wild character (`?,*`) resolution will be available.
+4. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
 
 ### 7. Running the service
 This `systemd` service can be started stopped in the standard way. Do not forget to reload `systemd` configuration after a new installation or if you changed the service definition file:
@@ -314,7 +317,7 @@ This `systemd` service can be started stopped in the standard way. Do not forget
 If you are testing your configuration you can start `smfc.py` directly in a terminal. Logging to the standard output and debug log level are useful in this case:
 
 	cd /opt
-	smfc.py -o 0 -l 3
+	sudo smfc.py -o 0 -l 3
 
 ### 8. Checking result and monitoring logs
 All messages will be logged to the specific output and the specific level.
@@ -389,3 +392,4 @@ Similar projects:
  - [\[GitHub\] Andrew Gunnerson's ipmi-fan-control](https://github.com/chenxiaolong/ipmi-fan-control)
 
 > Written with [StackEdit](https://stackedit.io/).
+
