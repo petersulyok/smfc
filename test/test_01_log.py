@@ -50,7 +50,7 @@ class LogTestCase(unittest.TestCase):
         """
         with self.assertRaises(ValueError) as cm:
             Log(level, output)
-        self.assertTrue(type(cm.exception) == ValueError, error)
+        self.assertEqual(type(cm.exception), ValueError, error)
 
     def test_init(self) -> None:
         """This is a unit test for function Log.__init__()"""

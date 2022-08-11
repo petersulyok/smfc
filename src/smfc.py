@@ -418,7 +418,7 @@ class FanController:
         value: float    # Float value to calculate the temperature.
 
         try:
-            with open(self.hwmon_path[0], "r", encoding="locale") as f:
+            with open(self.hwmon_path[0], "r", encoding="UTF-8") as f:
                 value = float(f.read()) / 1000
         except (IOError, FileNotFoundError) as e:
             raise e
@@ -436,7 +436,7 @@ class FanController:
         # Calculate minimum temperature.
         try:
             for i in self.hwmon_path:
-                with open(i, "r", encoding="locale") as f:
+                with open(i, "r", encoding="UTF-8") as f:
                     value = float(f.read()) / 1000
                     if value < minimum:
                         minimum = value
@@ -456,7 +456,7 @@ class FanController:
         # Calculate average temperature.
         try:
             for i in self.hwmon_path:
-                with open(i, "r", encoding="locale") as f:
+                with open(i, "r", encoding="UTF-8") as f:
                     average += float(f.read()) / 1000
                     counter += 1
         except (IOError, FileNotFoundError) as e:
@@ -475,7 +475,7 @@ class FanController:
         # Calculate minimum temperature.
         try:
             for i in self.hwmon_path:
-                with open(i, "r", encoding="locale") as f:
+                with open(i, "r", encoding="UTF-8") as f:
                     value = float(f.read()) / 1000
                     if value > maximum:
                         maximum = value
@@ -870,7 +870,7 @@ def main():
 
     # Parse and load configuration file.
     my_config = configparser.ConfigParser()
-    if not my_config:
+    if not my_config or not my_config.read(my_results.config_file):
         my_log.msg(my_log.LOG_ERROR, f'Cannot load configuration file ({my_results.config_file})')
         sys.exit(6)
     my_log.msg(my_log.LOG_DEBUG, f'Configuration file ({my_results.config_file}) loaded')

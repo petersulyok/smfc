@@ -10,8 +10,8 @@ import unittest
 import glob
 from typing import List
 from unittest.mock import patch, MagicMock
-from smfc import Log, Ipmi, FanController, HdZone
 from test_00_data import TestData
+from smfc import Log, Ipmi, FanController, HdZone
 
 
 class HdZoneTestCase(unittest.TestCase):

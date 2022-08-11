@@ -7,8 +7,9 @@ import configparser
 import sys
 import unittest
 from unittest.mock import patch, MagicMock
-import smfc
 from test_00_data import TestData
+import smfc
+
 
 
 class MainTestCase(unittest.TestCase):
@@ -67,7 +68,7 @@ class MainTestCase(unittest.TestCase):
         self.assertEqual(cm.exception.code, exit_code, error)
         del my_td
 
-    def mocked_sleep(self, t):
+    def mocked_sleep(self, *args):
         """Mocked time.sleep() function. Exists at the 10th call."""
         self.sleep_counter += 1
         if self.sleep_counter >= 10:

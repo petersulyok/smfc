@@ -8,8 +8,8 @@ import time
 import unittest
 from typing import List, Tuple
 from unittest.mock import patch, MagicMock
-from smfc import FanController, Log, Ipmi
 from test_00_data import TestData
+from smfc import FanController, Log, Ipmi
 
 
 class FanControllerTestCase(unittest.TestCase):
@@ -258,7 +258,7 @@ class FanControllerTestCase(unittest.TestCase):
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             # get_1_temp() / get_avg_temp()
-            if code == 1 or code == 3:
+            if code in (1, 3):
                 cm = FanController.CALC_AVG
             # get_min_temp()
             elif code == 2:
@@ -305,7 +305,7 @@ class FanControllerTestCase(unittest.TestCase):
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
-            if code == 1 or code == 3:
+            if code in (1, 3):
                 cm = FanController.CALC_AVG
             # get_min_temp()
             elif code == 2:
@@ -481,29 +481,29 @@ class FanControllerTestCase(unittest.TestCase):
         self.pt_run_p1(5, 1, 1, 30, 50, 35, 100, 55.0, 100, f'fc run {counter}')
         counter += 1
 
-        ''' Default temperature and fan level value pairs
-        [30C:35%], 
-        [31C:35%], 
-        [32C:35%], 
-        [33C:48%], 
-        [34C:48%], 
-        [35C:48%], 
-        [36C:61%], 
-        [37C:61%], 
-        [38C:61%], 
-        [39C:61%], 
-        [40C:61%], 
-        [41C:74%], 
-        [42C:74%], 
-        [43C:74%], 
-        [44C:87%], 
-        [45C:87%], 
-        [46C:87%], 
-        [47C:87%], 
-        [48C:87%], 
-        [49C:100%], 
+        """ Default temperature and fan level value pairs
+        [30C:35%],
+        [31C:35%],
+        [32C:35%],
+        [33C:48%],
+        [34C:48%],
+        [35C:48%],
+        [36C:61%],
+        [37C:61%],
+        [38C:61%],
+        [39C:61%],
+        [40C:61%],
+        [41C:74%],
+        [42C:74%],
+        [43C:74%],
+        [44C:87%],
+        [45C:87%],
+        [46C:87%],
+        [47C:87%],
+        [48C:87%],
+        [49C:100%],
         [50C:100%],
-        '''
+        """
 
 
 if __name__ == "__main__":

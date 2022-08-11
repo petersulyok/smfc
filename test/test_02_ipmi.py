@@ -9,8 +9,8 @@ import subprocess
 import unittest
 from typing import Any
 from unittest.mock import patch, MagicMock
-from smfc import Log, Ipmi
 from test_00_data import TestData
+from smfc import Log, Ipmi
 
 
 class IpmiTestCase(unittest.TestCase):
@@ -95,7 +95,7 @@ class IpmiTestCase(unittest.TestCase):
             - delete shell script
         """
         td = TestData()
-        command = td.create_command_file('echo " {:02}"'.format(expected_mode))
+        command = td.create_command_file(f'echo " {expected_mode:02}"')
         mock_print = MagicMock()
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
@@ -117,7 +117,7 @@ class IpmiTestCase(unittest.TestCase):
         """Primitive negative test function. It contains the following steps:
             - create a shell script for IPMI command parameter
             - initialize a Config, Log, Ipmi classes
-            - delete shell script 
+            - delete shell script
             - call get_fan_mode() function
             - ASSERT: if the no exception raised
             - delete the class instances
@@ -318,7 +318,7 @@ class IpmiTestCase(unittest.TestCase):
             my_ipmi = Ipmi(my_log, my_config)
             with self.assertRaises(Exception) as cm:
                 my_ipmi.set_fan_level(zone, level)
-            self.assertTrue(type(cm.exception) is exception, error)
+            self.assertTrue(isinstance(cm.exception, exception), error)
         del my_log
         del my_config
         del td

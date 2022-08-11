@@ -7,8 +7,8 @@ import configparser
 import glob
 import unittest
 from unittest.mock import patch, MagicMock
-from smfc import Log, Ipmi, FanController, CpuZone
 from test_00_data import TestData
+from smfc import Log, Ipmi, FanController, CpuZone
 
 
 class CpuZoneTestCase(unittest.TestCase):
