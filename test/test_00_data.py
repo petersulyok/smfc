@@ -142,7 +142,7 @@ class TestData:
             for k in range(8):
                 random_str = random_str + random.choice('0123456789ABCDEF')
             # Create a link with device name.
-            dev_name = os.path.join(dev_dir, 'ata-HD_HD1100XOI-'+random_str )
+            dev_name = os.path.join(dev_dir, 'ata-HD_HD1100XOI-'+random_str)
             os.symlink('../../sd'+letters[i], dev_name)
             hd_names = hd_names + dev_name + separator
         return hd_names
@@ -157,7 +157,7 @@ class TestData:
 
     @staticmethod
     def create_path_list(hwmon_str: str) -> List[str]:
-        new_list: List[str] = []
+        new_list: List[str]
         # Convert the string into a string array (respecting multi-line strings).
         if "\n" in hwmon_str:
             new_list = hwmon_str.splitlines()
@@ -214,4 +214,5 @@ fi
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x01" ]] ; then
 	exit 0
 fi
-""")
+"""
+        )

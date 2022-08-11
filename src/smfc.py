@@ -168,7 +168,7 @@ class Ipmi:
         # Validate configuration
         # Check 1: a valid command can be executed successfully.
         try:
-            subprocess.run([self.command, 'sdr'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run([self.command, 'sdr'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except FileNotFoundError as e:
             raise e
         # Check 2: fan_mode_delay must be positive.
@@ -195,7 +195,8 @@ class Ipmi:
 
         # Read the current IPMI fan mode.
         try:
-            r = subprocess.run([self.command, 'raw', '0x30', '0x45', '0x00'], capture_output=True, text=True)
+            r = subprocess.run([self.command, 'raw', '0x30', '0x45', '0x00'],
+                               check=False, capture_output=True, text=True)
             m = int(r.stdout)
         except (FileNotFoundError, ValueError) as e:
             raise e
@@ -234,7 +235,7 @@ class Ipmi:
         # Call ipmitool command and set the new IPMI fan mode.
         try:
             subprocess.run([self.command, 'raw', '0x30', '0x45', '0x01', str(mode)],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                           check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except FileNotFoundError as e:
             raise e
         # Give time for IPMI system/fans to apply changes in the new fan mode.
@@ -247,8 +248,6 @@ class Ipmi:
             zone (int): fan zone (CPU_ZONE_TAG, HD_ZONE_TAG)
             level (int): fan level in % (0-100)
         """
-        r: subprocess.CompletedProcess  # Result of the executed process
-
         # Validate zone parameter
         if zone not in {self.CPU_ZONE, self.HD_ZONE}:
             raise ValueError(f'Invalid value: zone ({zone}).')
@@ -258,14 +257,14 @@ class Ipmi:
         # Set the new IPMI fan level in the specific zone
         try:
             subprocess.run([self.command, 'raw', '0x30', '0x70', '0x66', '0x01', str(zone), str(level)],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                           check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except FileNotFoundError as e:
             raise e
         # Give time for IPMI and fans to spin up/down.
         time.sleep(self.fan_level_delay)
 
 
-class FanController(object):
+class FanController:
     """Generic fan controller class for an IPMI zone."""
 
     # Constant values for temperature calculation
@@ -419,7 +418,7 @@ class FanController(object):
         value: float    # Float value to calculate the temperature.
 
         try:
-            with open(self.hwmon_path[0], "r") as f:
+            with open(self.hwmon_path[0], "r", encoding="locale") as f:
                 value = float(f.read()) / 1000
         except (IOError, FileNotFoundError) as e:
             raise e
@@ -437,7 +436,7 @@ class FanController(object):
         # Calculate minimum temperature.
         try:
             for i in self.hwmon_path:
-                with open(i, "r") as f:
+                with open(i, "r", encoding="locale") as f:
                     value = float(f.read()) / 1000
                     if value < minimum:
                         minimum = value
@@ -457,7 +456,7 @@ class FanController(object):
         # Calculate average temperature.
         try:
             for i in self.hwmon_path:
-                with open(i, "r") as f:
+                with open(i, "r", encoding="locale") as f:
                     average += float(f.read()) / 1000
                     counter += 1
         except (IOError, FileNotFoundError) as e:
@@ -476,7 +475,7 @@ class FanController(object):
         # Calculate minimum temperature.
         try:
             for i in self.hwmon_path:
-                with open(i, "r") as f:
+                with open(i, "r", encoding="locale") as f:
                     value = float(f.read()) / 1000
                     if value > maximum:
                         maximum = value
@@ -496,7 +495,7 @@ class FanController(object):
 
     def callback_func(self) -> None:
         """Call-back function for a child class."""
-        pass
+        #pass
 
     def run(self) -> None:
         """Run IPMI zone controller function with the following steps:
@@ -539,10 +538,11 @@ class FanController(object):
         if current_level != self.last_level:
             self.last_level = current_level
             self.set_fan_level(current_level)
-            self.log.msg(self.log.LOG_INFO, f'{self.name}: new level > {current_temp:.1f}C > ' 
+            self.log.msg(self.log.LOG_INFO, f'{self.name}: new level > {current_temp:.1f}C > '
                          f'[T:{self.min_temp+(current_gain*self.temp_step)}C/L:{current_level}%]')
 
     def print_temp_level_mapping(self) -> None:
+        """Print out the uder-defined temperature to level mapping value in log DEBUG level."""
         self.log.msg(self.log.LOG_DEBUG, '   Temperature:level mapping:')
         for i in range(self.steps + 1):
             self.log.msg(self.log.LOG_DEBUG, f'   {i}. [T:{self.min_temp+(i*self.temp_step):.1f}C - '
@@ -570,7 +570,7 @@ class CpuZone(FanController):
         self.hwmon_path = [''] * count
 
         # Initialize FanController class.
-        super(CpuZone, self).__init__(
+        super().__init__(
             log, ipmi, Ipmi.CPU_ZONE, 'CPU zone', count,
             config[self.CPU_ZONE_TAG].getint('temp_calc', fallback=FanController.CALC_AVG),
             config[self.CPU_ZONE_TAG].getint('steps', fallback=6),
@@ -586,12 +586,12 @@ class CpuZone(FanController):
     def build_hwmon_path(self, hwmon_str: str) -> None:
         """Build hwmon_path[] list for the CPU zone."""
         path: str               # Path string
-        file_name: List[str]    # Result list of glob.glob()
+        file_names: List[str]   # Result list of glob.glob()
 
         # If the user specified the hwmon_path= configuration item.
         if hwmon_str:
             # Convert the string into a list of path.
-            super(CpuZone, self).build_hwmon_path(hwmon_str)
+            super().build_hwmon_path(hwmon_str)
         # If the hwmon_path string was not specified it will be created automatically.
         else:
             # Construct hwmon_path with the resolution of wildcard characters.
@@ -650,7 +650,7 @@ class HdZone(FanController):
         if len(self.hd_device_names) != count:
             raise ValueError(f'Inconsistent count ({count}) and size of hd_names ({len(self.hd_device_names)})')
         # Initialize FanController class.
-        super(HdZone, self).__init__(
+        super().__init__(
             log, ipmi, Ipmi.HD_ZONE, "HD zone", count,
             config[self.HD_ZONE_TAG].getint('temp_calc', fallback=FanController.CALC_AVG),
             config[self.HD_ZONE_TAG].getint('steps', fallback=4),
@@ -704,7 +704,7 @@ class HdZone(FanController):
         # If the user specified a hwmon_path= configuration item.
         if hwmon_str:
             # Convert the string into a string array (respecting multi-line strings).
-            super(HdZone, self).build_hwmon_path(hwmon_str)
+            super().build_hwmon_path(hwmon_str)
         # If the hwmon_path string is not given it will be created automatically.
         else:
             # Initialize hd_sata_names[] array
@@ -772,7 +772,7 @@ class HdZone(FanController):
         for i in range(self.count):
             self.standby_array_states[i] = False
             r = subprocess.run([self.smartctl_path, '-i', '-n', 'standby', self.hd_device_names[i]],
-                               capture_output=True, text=True)
+                               check=False, capture_output=True, text=True)
             if r.returncode not in {0, 2}:
                 raise Exception(self.ERROR_MSG_SMARTCTL.format(r.returncode))
             if str(r.stdout).find("STANDBY") != -1:
@@ -790,7 +790,7 @@ class HdZone(FanController):
             if not self.standby_array_states[i]:
                 # then move it to STANDBY state
                 r = subprocess.run([self.smartctl_path, '-s', 'standby,now', self.hd_device_names[i]],
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                   check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 if r.returncode != 0:
                     raise Exception(self.ERROR_MSG_SMARTCTL.format(r.returncode))
                 self.standby_array_states[i] = True
@@ -870,7 +870,7 @@ def main():
 
     # Parse and load configuration file.
     my_config = configparser.ConfigParser()
-    if my_config is None or my_config.read(my_results.config_file) == []:
+    if not my_config:
         my_log.msg(my_log.LOG_ERROR, f'Cannot load configuration file ({my_results.config_file})')
         sys.exit(6)
     my_log.msg(my_log.LOG_DEBUG, f'Configuration file ({my_results.config_file}) loaded')
