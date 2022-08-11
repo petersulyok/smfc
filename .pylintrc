@@ -1,0 +1,3 @@
+[MESSAGES CONTROL]
+disable=too-many-branches,too-many-instance-attributes,too-many-statements,too-many-arguments,too-many-locals,
+        invalid-name,line-too-long,missing-module-docstring
