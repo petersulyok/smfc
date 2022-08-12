@@ -8,7 +8,7 @@ This is a `systemd service` running on Linux and is able to control fans in CPU 
 
 ### 1. Prerequisites
  - a Super Micro X9/X10/X11 motherboard with BMC (AST2x00 chip)
- - python 3.6+
+ - Python 3.7+
  - Linux (kernel 5.6+) with `systemd` (`coretemp` and `drivetemp` kernel modules for CPU and hard disk temperatures)
  - `bash`
  - `ipmitool`
