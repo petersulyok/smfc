@@ -495,7 +495,6 @@ class FanController:
 
     def callback_func(self) -> None:
         """Call-back function for a child class."""
-        #pass
 
     def run(self) -> None:
         """Run IPMI zone controller function with the following steps:

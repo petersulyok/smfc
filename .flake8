@@ -1,0 +1,12 @@
+[flake8]
+exclude = .git,__pycache__,doc,htmlcov
+max-line-length = 120
+per-file-ignores =
+    # closing bracket does not match indentation of opening bracket's line
+    test_03_fancontroller.py: E123
+    # undefined name
+    test_04_cpuzone.py: F821
+    test_05_hdzone.py: F821
+    # indentation contains tabs
+    # indentation contains mixed spaces and tabs
+    test_00_data.py: W191, E101
