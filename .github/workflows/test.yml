@@ -21,12 +21,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pytest pylint
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest pytest-cov flake8 pylint
       - name: Lint with flake8 and pylint
         run: |
           flake8 . --count --show-source --statistics
           find . -name '*.py' -exec pylint {} \;
-      - name: Test with pytest
+      - name: Test and coverage with pytest
         run: |
           pytest
+          
