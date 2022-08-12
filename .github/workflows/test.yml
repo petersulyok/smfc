@@ -1,8 +1,9 @@
-name: flake8 and unit tests
+name: Tests
 
 on:
   - push
   - pull_request
+
 jobs:
   test:
 
