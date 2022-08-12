@@ -1,9 +1,10 @@
 **/__pycache__
 **/.mypy_cache
+**/.pytest_cache
+**/htmlcov
+**/.coverage
 *.py[cod]
 .vscode
 .idea
 .env
-**/.coverage
-**/htmlcov/
 *.csv
