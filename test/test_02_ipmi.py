@@ -287,9 +287,9 @@ class IpmiTestCase(unittest.TestCase):
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_ipmi.set_fan_level(zone, level)
-            mock_subprocess_run.assert_called_with([command, 'raw', '0x30', '0x70', '0x66', '0x01', str(zone),
-                                                    str(level)], check=False, stdout=subprocess.DEVNULL,
-                                                    stderr=subprocess.DEVNULL)
+            mock_subprocess_run.assert_called_with([command, 'raw', '0x30', '0x70', '0x66', '0x01',
+                                                    str(zone), str(level)],
+                                                   check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             del my_ipmi
             del my_log
             del my_config

@@ -27,20 +27,20 @@ class LogTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print),\
              patch('syslog.openlog', mock_syslog_openlog), \
              patch('syslog.syslog', mock_syslog_syslog):
-            myLog = Log(level, output)
-            self.assertEqual(myLog.log_level, level, error)
-            if myLog.log_output != Log.LOG_SYSLOG and myLog.log_level == Log.LOG_DEBUG:
+            my_log = Log(level, output)
+            self.assertEqual(my_log.log_level, level, error)
+            if my_log.log_output != Log.LOG_SYSLOG and my_log.log_level == Log.LOG_DEBUG:
                 self.assertEqual(mock_print.call_count, 3)
-            if myLog.log_output is Log.LOG_STDOUT:
-                self.assertEqual(myLog.msg, myLog.msg_to_stdout, error)
-            elif myLog.log_output is Log.LOG_STDERR:
-                self.assertEqual(myLog.msg, myLog.msg_to_stderr, error)
-            elif myLog.log_output == Log.LOG_SYSLOG:
-                if myLog.log_level == Log.LOG_DEBUG:
+            if my_log.log_output is Log.LOG_STDOUT:
+                self.assertEqual(my_log.msg, my_log.msg_to_stdout, error)
+            elif my_log.log_output is Log.LOG_STDERR:
+                self.assertEqual(my_log.msg, my_log.msg_to_stderr, error)
+            elif my_log.log_output == Log.LOG_SYSLOG:
+                if my_log.log_level == Log.LOG_DEBUG:
                     self.assertEqual(mock_syslog_syslog.call_count, 3, error)
-                if myLog.log_level != Log.LOG_NONE:
+                if my_log.log_level != Log.LOG_NONE:
                     mock_syslog_openlog.assert_called()
-            del myLog
+            del my_log
 
     def pt_init_n1(self, level: int, output: int, error: str) -> None:
         """This is a primitive negative test function. It contains the following steps:
@@ -82,10 +82,10 @@ class LogTestCase(unittest.TestCase):
             - ASSERT: if map_to_syslog function maps a specified log levels to a wrong syslog level value
             - delete the instance
         """
-        myLog = Log(Log.LOG_INFO, Log.LOG_STDOUT)
-        myLevel = myLog.map_to_syslog(level)
-        self.assertEqual(syslog_level, myLevel, error)
-        del myLog
+        my_log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
+        my_level = my_log.map_to_syslog(level)
+        self.assertEqual(syslog_level, my_level, error)
+        del my_log
 
     def test_map_to_syslog(self) -> None:
         """This is a unit test for function Log.map_to_syslog()."""
@@ -100,10 +100,10 @@ class LogTestCase(unittest.TestCase):
             - ASSERT: if level_to_str function maps a log level to an invalid string value
             - delete the Log instance
         """
-        myLog = Log(Log.LOG_INFO, Log.LOG_STDOUT)
-        myStr = myLog.level_to_str(level)
-        self.assertEqual(myStr, level_str, error)
-        del myLog
+        my_log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
+        my_str = my_log.level_to_str(level)
+        self.assertEqual(my_str, level_str, error)
+        del my_log
 
     def test_level_to_str(self) -> None:
         """This is a unit test for function Log.level_to_str()."""
@@ -123,9 +123,9 @@ class LogTestCase(unittest.TestCase):
         mock_syslog_syslog = MagicMock()
         mock_print = MagicMock()
         with patch('builtins.print', mock_print), patch('syslog.syslog', mock_syslog_syslog):
-            myLog = Log(level, output)
-            myLog.msg(msg_level, "This is a test log message.")
-            if myLog.log_level == Log.LOG_DEBUG:
+            my_log = Log(level, output)
+            my_log.msg(msg_level, "This is a test log message.")
+            if my_log.log_level == Log.LOG_DEBUG:
                 count += 3
             if output == Log.LOG_STDOUT:
                 self.assertEqual(mock_print.call_count, count, error)
@@ -133,7 +133,7 @@ class LogTestCase(unittest.TestCase):
                 self.assertEqual(mock_print.call_count, count, error)
             elif output == Log.LOG_SYSLOG:
                 self.assertEqual(mock_syslog_syslog.call_count, count, error)
-            del myLog
+            del my_log
 
     def test_msg_to_xxx(self) -> None:
         """ This is a unit test for function Log.msg()."""

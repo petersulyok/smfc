@@ -33,9 +33,9 @@ class TestData:
 
         new_dir = self.td_dir + '/sys/devices/platform/'
         for i in range(count):
-            new_path = new_dir + 'coretemp.'+str(i) + '/'
+            new_path = new_dir + 'coretemp.' + str(i) + '/'
             os.makedirs(new_path, exist_ok=True)
-            real_path = new_path + 'hwmon/hwmon'+str(i) + '/'
+            real_path = new_path + 'hwmon/hwmon' + str(i) + '/'
             if wildchar:
                 list_path = new_path + 'hwmon/hwmon*/'
             else:
@@ -61,10 +61,10 @@ class TestData:
 
         new_dir = self.td_dir + '/sys/class/scsi_disk/'
         for i in range(count):
-            new_path = new_dir + str(i)+':0:0:0/device/'
+            new_path = new_dir + str(i) + ':0:0:0/device/'
             os.makedirs(new_path, exist_ok=True)
-            os.makedirs(new_path + 'block/sd'+letters[i], exist_ok=True)
-            real_path = new_path + 'hwmon/hwmon'+str(i) + '/'
+            os.makedirs(new_path + 'block/sd' + letters[i], exist_ok=True)
+            real_path = new_path + 'hwmon/hwmon' + str(i) + '/'
             if wildchar:
                 list_path = new_path + 'hwmon/hwmon*/'
             else:
@@ -150,7 +150,7 @@ class TestData:
         os.makedirs(dev_dir, exist_ok=True)
         for i in range(count):
             # Create /dev/sd? file.
-            sdx_name = os.path.join(self.td_dir, 'dev', 'sd'+letters[i])
+            sdx_name = os.path.join(self.td_dir, 'dev', 'sd' + letters[i])
             with open(sdx_name, 'w+t', encoding="UTF-8") as f:
                 f.write(str(' '))
             j = 0
@@ -159,8 +159,8 @@ class TestData:
                 random_str = random_str + random.choice('0123456789ABCDEF')
                 j += 1
             # Create a link with device name.
-            dev_name = os.path.join(dev_dir, 'ata-HD_HD1100XOI-'+random_str)
-            os.symlink('../../sd'+letters[i], dev_name)
+            dev_name = os.path.join(dev_dir, 'ata-HD_HD1100XOI-' + random_str)
+            os.symlink('../../sd' + letters[i], dev_name)
             hd_names = hd_names + dev_name + separator
         return hd_names
 
@@ -238,5 +238,4 @@ fi
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x01" ]] ; then
 	exit 0
 fi
-"""
-        )
+""")

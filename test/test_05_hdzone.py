@@ -395,23 +395,23 @@ class HdZoneTestCase(unittest.TestCase):
 
     def test_get_standby_state_str(self) -> None:
         """This is a unit test for function HdZone.get_standby_state_str()"""
-        self.pt_gsss_p1([True,  True,  True,  True,  True,  True,  True,  True],
+        self.pt_gsss_p1([True, True, True, True, True, True, True, True],
                         'SSSSSSSS', 'hz get_standby_state_str 1')
         self.pt_gsss_p1([False, False, False, False, False, False, False, False],
                         'AAAAAAAA', 'hz get_standby_state_str 2')
-        self.pt_gsss_p1([True,  False, False, False, False, False, False, False],
+        self.pt_gsss_p1([True, False, False, False, False, False, False, False],
                         'SAAAAAAA', 'hz get_standby_state_str 3')
-        self.pt_gsss_p1([False, True,  False, False, False, False, False, False],
+        self.pt_gsss_p1([False, True, False, False, False, False, False, False],
                         'ASAAAAAA', 'hz get_standby_state_str 4')
-        self.pt_gsss_p1([False, False, True,  False, False, False, False, False],
+        self.pt_gsss_p1([False, False, True, False, False, False, False, False],
                         'AASAAAAA', 'hz get_standby_state_str 5')
-        self.pt_gsss_p1([False, False, False, True,  False, False, False, False],
+        self.pt_gsss_p1([False, False, False, True, False, False, False, False],
                         'AAASAAAA', 'hz get_standby_state_str 6')
-        self.pt_gsss_p1([False, False, False, False, True,  False, False, False],
+        self.pt_gsss_p1([False, False, False, False, True, False, False, False],
                         'AAAASAAA', 'hz get_standby_state_str 7')
-        self.pt_gsss_p1([False, False, False, False, False, True,  False, False],
+        self.pt_gsss_p1([False, False, False, False, False, True, False, False],
                         'AAAAASAA', 'hz get_standby_state_str 8')
-        self.pt_gsss_p1([False, False, False, False, False, False, True,  False],
+        self.pt_gsss_p1([False, False, False, False, False, False, True, False],
                         'AAAAAASA', 'hz get_standby_state_str 9')
         self.pt_gsss_p1([False, False, False, False, False, False, False, True],
                         'AAAAAAAS', 'hz get_standby_state_str 10')

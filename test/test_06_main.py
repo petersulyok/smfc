@@ -11,7 +11,6 @@ from test_00_data import TestData
 import smfc
 
 
-
 class MainTestCase(unittest.TestCase):
     """Unit test for smfc.main() function"""
 
