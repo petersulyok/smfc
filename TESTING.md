@@ -1,11 +1,11 @@
 ﻿
 # Testing  
-Short summary about testing environment of `smfc` project.  
+Short summary about test environment of `smfc` project.  
 Notes:  
   
  - All test related content can be found in `test` folder
- - Only `python3` and `bash` are needed for the execution of the tests (was tested on Linux, MacOSX)  
- - commands `ipmitool` and `smartctl`are substituted by shell scripts, they are not required for running tests
+ - Only `python3` and `bash` are required for the execution of the tests (was tested on Linux, MacOSX)  
+ - commands `ipmitool` and `smartctl`are substituted by shell scripts, so they are not required for test execution
   
 ## Smoke tests  
 Several smoke tests are provided for `smfc` where the service is executed with different configuration parameters. Notes:  
@@ -28,17 +28,15 @@ Several smoke tests are provided for `smfc` where the service is executed with d
    |`run_test_const_level.sh`| 1 x CPU (60% constant fan level) | 4 x HDs (55% constant fan level) | enabled |
 
 ## Unit tests  
-All classes and the main function are completely unit tested. The unit tests can be executed from multiple folders with the help of a shell script:
+All classes and the main function are completely unit tested. The unit tests can be executed with `pytest`. It can be installed with `pip`:
 
-	./test/run_unittest.sh		# project root folder
-	./run_unittest.sh			# test folder
-	../test/run_unittest.sh		# src folder
+	pip install pytest pytest-cov
+	pytest
 
-The coverage can be measured for the unit tests (a Python package called `coverage` should be installed). The coverage measurement script can be executed in the same way as unit tests:
+The project has `pytest.ini` file containing configuration parameters for `pytest`. The code coverage is also measured and displayed during the test execution. For a more detailed HTML coverage report run this command:
 
-	pip3 install coverage
-	./run_coverage.sh
+	pytest --cov-report=html
 
-Coverage will generate a detailed HTML report (see `./htmlcov/index.html`) with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage report is 98%.  
+The detailed HTML report will be available in folder `./htmlcov/index.html` with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage result is 98%.  
   
 > Written with [StackEdit](https://stackedit.io/).
