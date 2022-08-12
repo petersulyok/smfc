@@ -1,5 +1,7 @@
 ﻿
 # smfc
+[![Tests](https://github.com/petersulyok/smfc/actions/workflows/test.yml/badge.svg)](https://github.com/petersulyok/smfc/actions/workflows/tests.yml)
+
 Super Micro fan control for Linux (home) servers
 
 ## TL;DR
