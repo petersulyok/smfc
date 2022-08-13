@@ -1,16 +1,25 @@
 name: Tests
 
 on:
-  - push
-  - pull_request
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   test:
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: ["ubuntu-latest"]
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11.0-rc.1"]
+        include:
+          - coverage: true
+            os: "ubuntu-latest"
+            python-version: "3.9"
 
     steps:
       - uses: actions/checkout@v3
@@ -21,12 +30,22 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-cov flake8 pylint
+          pip install pytest pytest-cov flake8 pylint coverage
       - name: Lint with flake8 and pylint
         run: |
           flake8
           find . -name '*.py' -exec pylint {} \;
-      - name: Test and coverage with pytest
+      - name: Test with pytest
         run: |
           pytest
-          
+      - name: Generate coverage report
+        if: "matrix.coverage"
+        run: |
+          python -m coverage xml
+      - name: Upload coverage to Codecov
+        if: "matrix.coverage"
+        uses: codecov/codecov-action@v3
+        with:
+          fail_ci_if_error: true
+          files: ./coverage.xml
+          verbose: true
