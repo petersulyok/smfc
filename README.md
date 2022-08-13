@@ -1,5 +1,9 @@
-﻿# smfc
-[![Tests](https://github.com/petersulyok/smfc/actions/workflows/test.yml/badge.svg)](https://github.com/petersulyok/smfc/actions/workflows/tests.yml)
+﻿
+# smfc
+[![Tests](https://github.com/petersulyok/smfc/actions/workflows/test.yml/badge.svg)
+](https://github.com/petersulyok/smfc/actions/workflows/tests.yml) [![Codecov](https://codecov.io/gh/petersulyok/smfc/branch/main/graph/badge.svg)
+](https://app.codecov.io/gh/petersulyok/smfc) [![Tests](https://img.shields.io/github/issues/petersulyok/smfc)
+](https://github.com/petersulyok/smfc/issues)
 Super Micro fan control for Linux (home) servers
 
 ## TL;DR
