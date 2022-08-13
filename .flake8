@@ -1,5 +1,5 @@
 [flake8]
-exclude = .git,__pycache__,doc,htmlcov
+exclude = doc, htmlcov, .git, __pycache__, .pytest_cache, .mypy_cache, .vscode, .idea
 max-line-length = 120
 per-file-ignores =
     # closing bracket does not match indentation of opening bracket's line
@@ -10,3 +10,6 @@ per-file-ignores =
     # indentation contains tabs
     # indentation contains mixed spaces and tabs
     test_00_data.py: W191, E101
+count = True
+show-source = True
+statistics = True
