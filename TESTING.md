@@ -38,5 +38,16 @@ The project has `pytest.ini` file containing configuration parameters for `pytes
 	pytest --cov-report=html
 
 The detailed HTML report will be available in folder `./htmlcov/index.html` with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage result is 98%.  
-  
+
+## Github workflow
+A github workflow implemented for this project that will be executed for all pushes and pull requests. The workflow contains the following steps:
+
+ - lint with `flake8` and `pylint`
+ - unit test with `pytest` (coverage measurement is included)
+
+The workflow is executed on the following test matrix:
+
+ - OS: `ubuntu-latest`
+ - Python version: `3.7`, `3.8`, `3.9`, `3.10`, `3.11-rc.1`
+ 
 > Written with [StackEdit](https://stackedit.io/).
