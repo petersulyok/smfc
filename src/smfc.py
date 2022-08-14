@@ -7,7 +7,6 @@ import argparse
 import configparser
 import glob
 import os
-import platform
 import subprocess
 import sys
 import syslog
