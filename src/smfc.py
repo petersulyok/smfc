@@ -58,8 +58,7 @@ class Log:
             self.msg = self.msg_to_stderr
         else:
             self.msg = self.msg_to_syslog
-            if 'Windows' not in platform.platform():
-                syslog.openlog('smfc.service', facility=syslog.LOG_DAEMON)
+            syslog.openlog('smfc.service', facility=syslog.LOG_DAEMON)
 
         # Print the configuration out at DEBUG log level.
         if self.log_level >= self.LOG_DEBUG:
@@ -365,10 +364,7 @@ class FanController:
         self.build_hwmon_path(hwmon_path)
         # Check if temperature can be read successfully.
         if hwmon_path:
-            try:
-                self.get_temp_func()
-            except IOError as e:
-                raise e
+            self.get_temp_func()
         # Initialize calculated and measured values.
         self.temp_step = (max_temp - min_temp) / steps
         self.level_step = (max_level - min_level) / steps
@@ -676,10 +672,8 @@ class HdZone(FanController):
                 raise ValueError('standby_hd_limit > count')
             self.smartctl_path = config[self.HD_ZONE_TAG].get('smartctl_path', '/usr/sbin/smartctl')
             # Get the current power state of the HD array.
-            try:
-                n = self.check_standby_state()
-            except Exception as e:
-                raise e
+            n = self.check_standby_state()
+            # Set calculated parameters.
             self.standby_change_timestamp = time.monotonic()
             self.standby_flag = n == self.count
         # Print configuration in DEBUG log level (or higher).
@@ -773,7 +767,7 @@ class HdZone(FanController):
             r = subprocess.run([self.smartctl_path, '-i', '-n', 'standby', self.hd_device_names[i]],
                                check=False, capture_output=True, text=True)
             if r.returncode not in {0, 2}:
-                raise Exception(self.ERROR_MSG_SMARTCTL.format(r.returncode))
+                raise ValueError(self.ERROR_MSG_SMARTCTL.format(r.returncode))
             if str(r.stdout).find("STANDBY") != -1:
                 self.standby_array_states[i] = True
         return self.standby_array_states.count(True)
@@ -791,7 +785,7 @@ class HdZone(FanController):
                 r = subprocess.run([self.smartctl_path, '-s', 'standby,now', self.hd_device_names[i]],
                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 if r.returncode != 0:
-                    raise Exception(self.ERROR_MSG_SMARTCTL.format(r.returncode))
+                    raise ValueError(self.ERROR_MSG_SMARTCTL.format(r.returncode))
                 self.standby_array_states[i] = True
 
     def run_standby_guard(self):

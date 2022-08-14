@@ -26,8 +26,8 @@ class IpmiTestCase(unittest.TestCase):
             - delete the instances
             - delete shell script
         """
-        td = TestData()
-        command = td.create_command_file()
+        my_td = TestData()
+        command = my_td.create_command_file()
         mock_print = MagicMock()
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
@@ -45,7 +45,7 @@ class IpmiTestCase(unittest.TestCase):
         del my_ipmi
         del my_log
         del my_config
-        del td
+        del my_td
 
     def pt_init_n1(self, cmd_exists: bool, mode_delay: int, level_delay: int,
                    exception: Any, error: str) -> None:
@@ -56,10 +56,10 @@ class IpmiTestCase(unittest.TestCase):
             - delete all instances
             - delete shell script if needed
         """
-        td = TestData()
-        command = td.create_command_file()
+        my_td = TestData()
+        command = my_td.create_command_file()
         if not cmd_exists:
-            td.delete_file(command)
+            my_td.delete_file(command)
         my_config = configparser.ConfigParser()
         my_config['Ipmi'] = {
             'command': command,
@@ -72,7 +72,7 @@ class IpmiTestCase(unittest.TestCase):
         self.assertEqual(type(cm.exception), exception, error)
         del my_log
         del my_config
-        del td
+        del my_td
 
     def test_init(self) -> None:
         """This is a unit test for function Ipmi.__init__()"""
@@ -94,8 +94,8 @@ class IpmiTestCase(unittest.TestCase):
             - delete the instances
             - delete shell script
         """
-        td = TestData()
-        command = td.create_command_file(f'echo " {expected_mode:02}"')
+        my_td = TestData()
+        command = my_td.create_command_file(f'echo " {expected_mode:02}"')
         mock_print = MagicMock()
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
@@ -111,7 +111,7 @@ class IpmiTestCase(unittest.TestCase):
         del my_ipmi
         del my_log
         del my_config
-        del td
+        del my_td
 
     def pt_gfm_n1(self, s: str, delete: bool, exception: Any, error: str) -> None:
         """Primitive negative test function. It contains the following steps:
@@ -122,8 +122,8 @@ class IpmiTestCase(unittest.TestCase):
             - ASSERT: if the no exception raised
             - delete the class instances
         """
-        td = TestData()
-        command = td.create_command_file('echo " ' + s + '"')
+        my_td = TestData()
+        command = my_td.create_command_file('echo " ' + s + '"')
         my_config = configparser.ConfigParser()
         my_config['Ipmi'] = {
             'command': command,
@@ -133,14 +133,14 @@ class IpmiTestCase(unittest.TestCase):
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, my_config)
         if delete:
-            td.delete_file(command)
+            my_td.delete_file(command)
         with self.assertRaises(Exception) as cm:
             my_ipmi.get_fan_mode()
         self.assertEqual(type(cm.exception), exception, error)
         del my_ipmi
         del my_log
         del my_config
-        del td
+        del my_td
 
     def test_get_fan_mode(self) -> None:
         """This is a unit test for function Ipmi.get_fan_mode()"""
@@ -164,8 +164,8 @@ class IpmiTestCase(unittest.TestCase):
             - delete the instances
             - delete shell script
         """
-        td = TestData()
-        command = td.create_command_file('echo " 01"')
+        my_td = TestData()
+        command = my_td.create_command_file('echo " 01"')
         mock_print = MagicMock()
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
@@ -181,7 +181,7 @@ class IpmiTestCase(unittest.TestCase):
         del my_ipmi
         del my_log
         del my_config
-        del td
+        del my_td
 
     def test_get_fan_mode_name(self) -> None:
         """This is a unit test for function Ipmi.get_fan_mode_name()"""
@@ -202,8 +202,8 @@ class IpmiTestCase(unittest.TestCase):
             - delete the instances
             - delete shell script
         """
-        td = TestData()
-        command = td.create_command_file()
+        my_td = TestData()
+        command = my_td.create_command_file()
         my_config = configparser.ConfigParser()
         my_config['Ipmi'] = {
             'command': command,
@@ -220,7 +220,7 @@ class IpmiTestCase(unittest.TestCase):
         del my_ipmi
         del my_log
         del my_config
-        del td
+        del my_td
 
     def pt_sfm_n1(self, no_script: bool, fan_mode: int, exception: Any, error: str) -> None:
         """Primitive negative test function. It contains the following steps:
@@ -232,8 +232,8 @@ class IpmiTestCase(unittest.TestCase):
             - delete all instances
             - delete shell script (depending on 'no_script' parameter)
         """
-        td = TestData()
-        command = td.create_command_file()
+        my_td = TestData()
+        command = my_td.create_command_file()
         my_config = configparser.ConfigParser()
         my_config['Ipmi'] = {
             'command': command,
@@ -243,14 +243,14 @@ class IpmiTestCase(unittest.TestCase):
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, my_config)
         if no_script:
-            td.delete_file(command)
+            my_td.delete_file(command)
         with self.assertRaises(Exception) as cm:
             my_ipmi.set_fan_mode(fan_mode)
         self.assertEqual(type(cm.exception), exception, error)
         del my_ipmi
         del my_log
         del my_config
-        del td
+        del my_td
 
     def test_set_fan_mode(self) -> None:
         """This is a unit test for function Ipmi.set_fan_mode()"""
@@ -272,8 +272,8 @@ class IpmiTestCase(unittest.TestCase):
             - ASSERT: if set_fan_level() calls subprocess.run() command with other parameters than expected
             - delete the instances
         """
-        td = TestData()
-        command = td.create_command_file()
+        my_td = TestData()
+        command = my_td.create_command_file()
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         with patch('builtins.print', mock_print), \
@@ -293,7 +293,7 @@ class IpmiTestCase(unittest.TestCase):
             del my_ipmi
             del my_log
             del my_config
-            del td
+            del my_td
 
     def pt_sfl_n1(self, zone: int, level: int, exception: Any, error: str) -> None:
         """Primitive negative test function. It contains the following steps:
@@ -302,8 +302,8 @@ class IpmiTestCase(unittest.TestCase):
             - ASSERT: if set_fan_level() does not raise exception in case of invalid parameters
             - delete the instances
         """
-        td = TestData()
-        command = td.create_command_file()
+        my_td = TestData()
+        command = my_td.create_command_file()
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         with patch('builtins.print', mock_print), \
@@ -321,7 +321,34 @@ class IpmiTestCase(unittest.TestCase):
             self.assertTrue(isinstance(cm.exception, exception), error)
         del my_log
         del my_config
-        del td
+        del my_td
+
+    def pt_sfl_n2(self, zone: int, level: int, exception: Any, error: str) -> None:
+        """Primitive negative test function. It contains the following steps:
+            - mock print() function
+            - initialize a Config, Log, Ipmi classes
+            - ASSERT: if set_fan_level() does not raise exception in case of missing command
+            - delete the instances
+        """
+        my_td = TestData()
+        command = my_td.create_command_file()
+        mock_print = MagicMock()
+        with patch('builtins.print', mock_print):
+            my_config = configparser.ConfigParser()
+            my_config['Ipmi'] = {
+                'command': command,
+                'fan_mode_delay': '0',
+                'fan_level_delay': '0'
+            }
+            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
+            my_ipmi = Ipmi(my_log, my_config)
+            # command deleted.
+            del my_td
+            with self.assertRaises(Exception) as cm:
+                my_ipmi.set_fan_level(zone, level)
+            self.assertEqual(type(cm.exception), exception, error)
+        del my_log
+        del my_config
 
     def test_set_fan_level(self) -> None:
         """This is a unit test for function Ipmi.set_fan_level()"""
@@ -340,6 +367,9 @@ class IpmiTestCase(unittest.TestCase):
         self.pt_sfl_n1(Ipmi.CPU_ZONE, 101, ValueError, 'ipmi set_fan_level 8')
         self.pt_sfl_n1(-1, 50, ValueError, 'ipmi set_fan_level 9')
         self.pt_sfl_n1(10, 50, ValueError, 'ipmi set_fan_level 10')
+
+        # Check exception in case of missing command.
+        self.pt_sfl_n2(Ipmi.CPU_ZONE, 50, FileNotFoundError, 'ipmi set_fan_level 11')
 
 
 if __name__ == "__main__":

@@ -452,19 +452,67 @@ class HdZoneTestCase(unittest.TestCase):
             results = [None, None, None, None, None, None, None, None]
             for i in range(my_hdzone.count):
                 if states[i]:
-                    results[i] = subprocess.CompletedProcess([], 0, 'STANDBY')
+                    results[i] = subprocess.CompletedProcess([], returncode=2, stdout='STANDBY')
                 else:
-                    results[i] = subprocess.CompletedProcess([], 0, 'ACTIVE')
-            mock_subprocess_run.side_effect = results
+                    results[i] = subprocess.CompletedProcess([], returncode=0, stdout='ACTIVE')
+            mock_subprocess_run.side_effect = iter(results)
             my_hdzone.standby_array_states = states
             self.assertEqual(my_hdzone.check_standby_state(), in_standby, error)
         del my_hdzone
         del my_ipmi
         del my_log
         del my_config
+        del my_td
+
+    def pt_css_n1(self, error: str):
+        """Primitive negative test function. It contains the following steps:
+            - mock print(), subprocesses.run() functions
+            - initialize a Config, Log, Ipmi, and HdZone classes
+            - calls HdZone.check_standby_state()
+            - ASSERT: if assert will not be raised for an unknown return code of 'smartctl'
+            - delete all instances
+        """
+        my_td = TestData()
+        # We need count > 1 not to turn off Standby guard.
+        hwmon_path = my_td.get_hd_2()
+        hd_names = my_td.get_hd_names(2)
+        mock_print = MagicMock()
+        mock_subprocess_run = MagicMock()
+        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
+        with patch('builtins.print', mock_print), \
+             patch('subprocess.run', mock_subprocess_run):
+            my_config = configparser.ConfigParser()
+            my_config['Ipmi'] = {
+                'fan_mode_delay': '0',
+                'fan_level_delay': '0'
+            }
+            my_config['HD zone'] = {
+                'enabled': '1',
+                'count': '2',
+                'hd_names': hd_names,
+                'hwmon_path': hwmon_path,
+                'standby_guard_enabled': '1'
+            }
+            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
+            my_ipmi = Ipmi(my_log, my_config)
+            my_hdzone = HdZone(my_log, my_ipmi, my_config)
+            mock_subprocess_run.side_effect = [subprocess.CompletedProcess([], returncode=4, stdout='STANDBY'),
+                                               subprocess.CompletedProcess([], returncode=2, stdout='STANDBY')
+                                               ]
+            my_hdzone.standby_array_states = [False, True]
+            with self.assertRaises(Exception) as cm:
+                my_hdzone.check_standby_state()
+            self.assertEqual(type(cm.exception), ValueError, error)
+        del my_hdzone
+        del my_ipmi
+        del my_log
+        del my_config
+        del my_td
 
     def test_check_standby_state(self) -> None:
         """This is a unit test for function Hd.check_standby_state()"""
+
+        # Test expected states.
         self.pt_css_p1([True, True, True, True, True, True, True, True], 8, 'hz check_standby_state 1')
         self.pt_css_p1([False, True, True, True, True, True, True, True], 7, 'hz check_standby_state 2')
         self.pt_css_p1([True, False, True, True, True, True, True, True], 7, 'hz check_standby_state 3')
@@ -481,6 +529,9 @@ class HdZoneTestCase(unittest.TestCase):
         self.pt_css_p1([False, False, True, False, False, True, False, False], 2, 'hz check_standby_state 14')
         self.pt_css_p1([False, False, False, False, False, True, False, False], 1, 'hz check_standby_state 15')
         self.pt_css_p1([False, False, False, False, False, False, False, False], 0, 'hz check_standby_state 16')
+
+        # Test raised exception.
+        self.pt_css_n1('hz check_standby_state 17')
 
     def pt_gss_p1(self, states: List[bool], count: int, error: str):
         """Primitive positive test function. It contains the following steps:
@@ -524,8 +575,55 @@ class HdZoneTestCase(unittest.TestCase):
         del my_config
         del my_td
 
+    def pt_gss_n1(self, error: str):
+        """Primitive negative test function. It contains the following steps:
+            - mock print(), subprocesses.run() functions
+            - initialize a Config, Log, Ipmi, and HdZone classes
+            - calls HdZone.go_standby_state()
+            - ASSERT: if exception will not be raised after a not zero return code
+            - delete the instances
+        """
+        my_td = TestData()
+        # We need count > 1 not to turn off Standby guard.
+        hwmon_path = my_td.get_hd_2()
+        hd_names = my_td.get_hd_names(2)
+        mock_print = MagicMock()
+        mock_subprocess_run = MagicMock()
+        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
+        with patch('builtins.print', mock_print), \
+             patch('subprocess.run', mock_subprocess_run):
+            my_config = configparser.ConfigParser()
+            my_config['Ipmi'] = {
+                'fan_mode_delay': '0',
+                'fan_level_delay': '0'
+            }
+            my_config['HD zone'] = {
+                'enabled': '1',
+                'count': '2',
+                'hd_names': hd_names,
+                'hwmon_path': hwmon_path,
+                'standby_guard_enabled': '1',
+            }
+            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
+            my_ipmi = Ipmi(my_log, my_config)
+            my_hdzone = HdZone(my_log, my_ipmi, my_config)
+            mock_subprocess_run.side_effect = [subprocess.CompletedProcess([], returncode=4),
+                                               subprocess.CompletedProcess([], returncode=2)
+                                               ]
+            my_hdzone.standby_array_states = [False, True]
+            with self.assertRaises(Exception) as cm:
+                my_hdzone.go_standby_state()
+            self.assertEqual(type(cm.exception), ValueError, error)
+        del my_hdzone
+        del my_ipmi
+        del my_log
+        del my_config
+        del my_td
+
     def test_go_standby_state(self) -> None:
         """This is a unit test for function HdZone.go_standby_state()"""
+
+        # Test expected values.
         self.pt_gss_p1([False, False, False, False, False, False, False, False], 8, 'hz go_standby_state 1')
         self.pt_gss_p1([True, False, False, False, False, False, False, False], 7, 'hz go_standby_state 2')
         self.pt_gss_p1([True, True, False, False, False, False, False, False], 6, 'hz go_standby_state 3')
@@ -535,6 +633,9 @@ class HdZoneTestCase(unittest.TestCase):
         self.pt_gss_p1([True, True, True, True, True, True, False, False], 2, 'hz go_standby_state 7')
         self.pt_gss_p1([True, True, True, True, True, True, True, False], 1, 'hz go_standby_state 8')
         self.pt_gss_p1([True, True, True, True, True, True, True, True], 0, 'hz go_standby_state 9')
+
+        # Test exception taised.
+        self.pt_gss_n1('hz go_standby_state 10')
 
     def pt_rsg_p1(self, old_state: bool, states: List[bool], new_state: bool, error: str):
         """Primitive positive test function. It contains the following steps:
