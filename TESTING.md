@@ -33,9 +33,13 @@ All classes and the main function are completely unit tested. The unit tests can
 	pip install pytest pytest-cov
 	pytest
 
-The project has `pytest.ini` file containing configuration parameters for `pytest`. The code coverage is also measured and displayed during the test execution. For a more detailed HTML coverage report run this command:
+The code coverage could be also measured and displayed during the test execution:
 
-	pytest --cov-report=html
+	pytest --cov=src --cov=test
+
+For a more detailed HTML coverage report run this command:
+
+	pytest --cov=src --cov=test --cov-report=html
 
 The detailed HTML report will be available in folder `./htmlcov/index.html` with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage result is 98%.  
 
