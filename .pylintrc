@@ -1,7 +1,0 @@
-[MASTER]
-init-hook='import sys; sys.path.append("."); sys.path.append("./src"); sys.path.append("./test")'
-
-[MESSAGES CONTROL]
-disable=too-many-branches,too-many-instance-attributes,too-many-statements,too-many-arguments,too-many-locals,
-        too-many-public-methods,invalid-name,line-too-long,missing-module-docstring,pointless-string-statement,
-        duplicate-code, unsubscriptable-object
