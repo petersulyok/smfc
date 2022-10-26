@@ -6,5 +6,7 @@
 *.py[cod]
 .vscode
 .idea
-.env
+.venv*
+venv*
 *.csv
+.python-version
