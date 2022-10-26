@@ -67,11 +67,13 @@ class MainTestCase(unittest.TestCase):
         self.assertEqual(cm.exception.code, exit_code, error)
         del my_td
 
+    #pragma pylint: disable=unused-argument
     def mocked_sleep(self, *args):
         """Mocked time.sleep() function. Exists at the 10th call."""
         self.sleep_counter += 1
         if self.sleep_counter >= 10:
             sys.exit(10)
+    # pragma pylint: enable=unused-argument
 
     def pt_main_p1(self, cpuzone: int, hdzone: int, exit_code: int, error: str):
         """Primitive positive test function. It contains the following steps:
