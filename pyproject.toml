@@ -1,0 +1,43 @@
+# pytest options
+[tool.pytest.ini_options]
+pythonpath = "src"
+filterwarnings = [ "default", "ignore::pytest.PytestCollectionWarning"]
+
+# flake8 options
+[tool.flake8]
+exclude = [
+    "doc", "htmlcov", ".git", "__pycache__", ".pytest_cache", ".vscode", ".idea", "venv*", ".venv*"
+]
+max-line-length = 120
+count = true
+show-source = true
+statistics = true
+per-file-ignores = [
+    # closing bracket does not match indentation of opening bracket's line
+    "test_03_fancontroller.py: E123",
+    # undefined name
+    "test_04_cpuzone.py: F821",
+    "test_05_hdzone.py: F821",
+    # indentation contains tabs
+    # indentation contains mixed spaces and tabs
+    "test_00_data.py: W191, E101"
+    ]
+
+# coverage options
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "unittest.main()"
+    ]
+
+# pylint options
+[tool.pylint.'MASTER']
+init-hook='import sys; sys.path.append("."); sys.path.append("./src"); sys.path.append("./test")'
+
+[tool.pylint.'MESSAGES CONTROL']
+disable= [
+    "too-many-branches", "too-many-instance-attributes", "too-many-statements", "too-many-arguments",
+    "too-many-locals", "too-many-public-methods", "invalid-name", "line-too-long", "missing-module-docstring",
+    "pointless-string-statement", "duplicate-code", "unsubscriptable-object"
+    ]
