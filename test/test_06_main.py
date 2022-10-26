@@ -67,7 +67,7 @@ class MainTestCase(unittest.TestCase):
         self.assertEqual(cm.exception.code, exit_code, error)
         del my_td
 
-    #pragma pylint: disable=unused-argument
+    # pragma pylint: disable=unused-argument
     def mocked_sleep(self, *args):
         """Mocked time.sleep() function. Exists at the 10th call."""
         self.sleep_counter += 1
