@@ -158,7 +158,7 @@ class MainTestCase(unittest.TestCase):
         self.pt_main_n1('-o 0 -l 3 -c ./nonexistent_folder/nonexistent_config_file.conf', 6, 'smfc main 8')
 
         # Test exits(7) at Ipmi() init.
-        self.pt_main_n2('NON-EXIST', 0, 0, 7, 'smfc main 9')
+        self.pt_main_n2('NON_EXIST', 0, 0, 7, 'smfc main 9')
         self.pt_main_n2('GOOD', -1, 0, 7, 'smfc main 10')
         self.pt_main_n2('GOOD', 0, -1, 7, 'smfc main 11')
         self.pt_main_n2('BAD', 0, 0, 7, 'smfc main 12')
