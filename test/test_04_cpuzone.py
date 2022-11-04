@@ -229,9 +229,9 @@ class CpuZoneTestCase(unittest.TestCase):
         """
         # Mock function for glob.glob(). This function will generate invalid file name!
         def mocked_glob(file: str, *args, **kwargs):
-            if file.startswith('/sys/devices/platform'):
+            # if file.startswith('/sys/devices/platform'):
                 return None     # Invalid file name generated here !
-            return original_glob(file, *args, **kwargs)
+            # return original_glob(file, *args, **kwargs)
 
         my_td = TestData()
         command = my_td.create_command_file()
