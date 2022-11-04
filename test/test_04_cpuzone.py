@@ -228,14 +228,16 @@ class CpuZoneTestCase(unittest.TestCase):
             - delete all instances
         """
         # Mock function for glob.glob(). This function will generate invalid file name!
+        # pragma pylint: disable=unused-argument
         def mocked_glob(file: str, *args, **kwargs):
             # if file.startswith('/sys/devices/platform'):
-                return None     # Invalid file name generated here !
+            return None     # Invalid file name generated here !
             # return original_glob(file, *args, **kwargs)
+        # pragma pylint: enable=unused-argument
 
         my_td = TestData()
         command = my_td.create_command_file()
-        original_glob = glob.glob
+        # original_glob = glob.glob
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_glob = MagicMock(side_effect=mocked_glob)
