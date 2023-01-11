@@ -195,6 +195,9 @@ class Ipmi:
         try:
             r = subprocess.run([self.command, 'raw', '0x30', '0x45', '0x00'],
                                check=False, capture_output=True, text=True)
+            # Check runtime errors (e.g. /dev/ipmi0 access issues for a non-root user)
+            if r.returncode != 0:
+                raise RuntimeError(r.stderr)
             m = int(r.stdout)
         except (FileNotFoundError, ValueError) as e:
             raise e
