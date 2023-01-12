@@ -187,6 +187,12 @@ class Ipmi:
 
         Returns:
             int: fan mode (ERROR, STANDARD_MODE, FULL_MODE, OPTIMAL_MODE, HEAVY_IO_MODE)
+
+        Raises:
+            FileNotFoundError: ipmitool command cannot be found
+            ValueError: output of the ipmitool cannot be interpreted/converted
+            RuntimeError: ipmitool execution problem in IPMI (e.g. non-root user, incompatible IPMI systems
+                or motherboards)
         """
         r: subprocess.CompletedProcess  # result of the executed process
         m: int                          # fan mode
@@ -195,7 +201,6 @@ class Ipmi:
         try:
             r = subprocess.run([self.command, 'raw', '0x30', '0x45', '0x00'],
                                check=False, capture_output=True, text=True)
-            # Check runtime errors (e.g. /dev/ipmi0 access issues for a non-root user)
             if r.returncode != 0:
                 raise RuntimeError(r.stderr)
             m = int(r.stdout)
