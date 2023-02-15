@@ -69,7 +69,7 @@ Additional notes on changing fan levels:
  3. There configuration parameter `polling=` can also impact the frequency of change of the fan levels. The bigger polling time in a zone the lower frequency of changing of the fan speed.
 
 #### 1.2 Swapped zones
-For some real installation it could be useful to swap IPMI zones. In this case `FAN1, FAN2, ...` fans will cool the HD zone and `FANA, FANB, ...` fans will cool CPU zone. This feature could be handy if you need more fans for the HD zone and usually Super Micro motherboards have more fan connectors in the CPU zone. This feature can be enabled with `[IPMI] swapped_zones=True` configuration parameter, in default it is disabled. 
+In some cases it is useful to swap IPMI zones. In this way the fans `FAN1, FAN2, ...` will cool the HD zone and the fans `FANA, FANB, ...` will cool the CPU zone. This feature could be useful if you need more fans for the HD zone since Super Micro motherboards have more fan connectors in the CPU zone usually. This feature can be enabled with `[IPMI] swapped_zones=True` configuration parameter, in default it is disabled. 
 
 #### 1.3 Standby guard
 For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
@@ -296,7 +296,8 @@ Important notes:
 		25,300,300,300,400,300
 		20,1300,1300,1200,1300,1300
 
-	My experience is that Noctua fans in my box are running stable in the 35-100% fan level interval.  
+	My experience is that Noctua fans in my box are running stable in the 35-100% fan level interval. An additional user experience is (see [issue #12](https://github.com/petersulyok/smfc/issues/12)) when Noctua fans are paired with Ultra Low Noise Adapter the minimum stable fan level could go up to 45% (i.e. 35% is not stable).  
+
  3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is **optional** and it will be generated automatically. You can use that for testing purpose or if the automatic generation did not work for you. In this case resolution of the wild characters (`?,*`) is still available.
 4. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
 
