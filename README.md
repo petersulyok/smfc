@@ -208,7 +208,8 @@ Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
     fan_mode_delay=10  
     # Delay time after changing IPMI fan level (int, seconds, default=2)  
     fan_level_delay=2  
-      
+	# CPU and HD zones are swapped (bool, default=0).
+	swapped_zones=0      
       
     [CPU zone]  
     # Fan controller enabled (bool, default=0)  
