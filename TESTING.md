@@ -8,7 +8,7 @@ Notes:
  - commands `ipmitool` and `smartctl`are substituted by shell scripts, so they are not required for test execution
 - installation of required Python test tools can be done with `pip`:  
 
-	`pip install -r requirements-dev.txt`
+	`$ pip install -r requirements-dev.txt`
 
  
 ## Smoke tests  
@@ -16,7 +16,7 @@ Several smoke tests are provided for `smfc` where the service is executed with d
   
 - all smoke tests should be executed from the project root folder and can be stopped by pressing `CTLR+C`:
 
-	`#./test/run_test_cpu_1.sh`
+	`$ ./test/run_test_cpu_1.sh`
 
 - the following smoke scripts and configurations are available:  
    
@@ -85,7 +85,7 @@ The code coverage could be also measured and displayed during the test execution
 
 For a more detailed HTML coverage report run this command:
 
-	pytest --cov=src --cov=test --cov-report=html
+	$ pytest --cov=src --cov=test --cov-report=html
 
 The detailed HTML report will be available in folder `./htmlcov/index.html` with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage result is 98%.  
 
