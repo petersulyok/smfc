@@ -136,6 +136,7 @@ class Ipmi:
     command: str                        # Full path for ipmitool command.
     fan_mode_delay: float               # Delay time after execution of IPMI set fan mode function
     fan_level_delay: float              # Delay time after execution of IPMI set fan level function
+    swapped_zones: bool                 # CPU and HD zones are swapped
 
     # Constant values for IPMI fan modes:
     STANDARD_MODE: int = 0
@@ -163,6 +164,8 @@ class Ipmi:
         self.command = config['Ipmi'].get('command', '/usr/bin/ipmitool')
         self.fan_mode_delay = config['Ipmi'].getint('fan_mode_delay', fallback=10)
         self.fan_level_delay = config['Ipmi'].getint('fan_level_delay', fallback=2)
+        self.swapped_zones = config['Ipmi'].getboolean('swapped_zones', fallback=False)
+
         # Validate configuration
         # Check 1: a valid command can be executed successfully.
         try:
@@ -181,6 +184,7 @@ class Ipmi:
             self.log.msg(self.log.LOG_DEBUG, f'   command = {self.command}')
             self.log.msg(self.log.LOG_DEBUG, f'   fan_mode_delay = {self.fan_mode_delay}')
             self.log.msg(self.log.LOG_DEBUG, f'   fan_level_delay = {self.fan_level_delay}')
+            self.log.msg(self.log.LOG_DEBUG, f'   swapped_zones = {self.swapped_zones}')
 
     def get_fan_mode(self) -> int:
         """Get the current IPMI fan mode.
@@ -257,6 +261,9 @@ class Ipmi:
         # Validate zone parameter
         if zone not in {self.CPU_ZONE, self.HD_ZONE}:
             raise ValueError(f'Invalid value: zone ({zone}).')
+        # Handle swapped zones
+        if self.swapped_zones:
+            zone = 1 - zone
         # Validate level parameter (must be in the interval [0..100%])
         if level not in range(0, 101):
             raise ValueError(f'Invalid value: level ({level}).')

@@ -58,7 +58,7 @@ The following five parameters will define the function in both zones:
      max_level=
      steps=
 
-With this function the `smfc` can map any new temperature measurement value value to a fan level. Changing the fan rotation speed is a very slow process (i.e. it could take seconds depending on fan type and the requested amount of change), so we try to minimize these kinds of actions. Instead of setting fan rotation speed continuously we define discrete fan levels based on `steps=` parameter.
+With this function the `smfc` can map any new temperature measurement value to a fan level. Changing the fan rotation speed is a very slow process (i.e. it could take seconds depending on fan type and the requested amount of change), so we try to minimize these kinds of actions. Instead of setting fan rotation speed continuously we define discrete fan levels based on `steps=` parameter.
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output_levels.jpg" align="center" width="500">
 
@@ -68,7 +68,10 @@ Additional notes on changing fan levels:
  2. There is also a sensitivity threshold parameter (`sensitivity=`) for temperature changes. If the temperature change is below this value, then then control logic will not react at all. 
  3. There configuration parameter `polling=` can also impact the frequency of change of the fan levels. The bigger polling time in a zone the lower frequency of changing of the fan speed.
 
-#### 1.2 Standby guard
+#### 1.2 Swapped zones
+For some real installation it could be useful to swap IPMI zones. In this case `FAN1, FAN2, ...` fans will cool the HD zone and `FANA, FANB, ...` fans will cool CPU zone. This feature could be handy if you need more fans for the HD zone and usually Super Micro motherboards have more fan connectors in the CPU zone. This feature can be enabled with `[IPMI] swapped_zones=True` configuration parameter, in default it is disabled. 
+
+#### 1.3 Standby guard
 For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
 	
  - SATA hard disks are organized into a RAID array

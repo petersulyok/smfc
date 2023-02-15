@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-#   test_02_ipmi.py (C) 2021, Peter Sulyok
+#   test_02_ipmi.py (C) 2021-2023, Peter Sulyok
 #   Unit tests for smfc.Ipmi() class.
 #
 
@@ -16,7 +16,7 @@ from smfc import Log, Ipmi
 class IpmiTestCase(unittest.TestCase):
     """Unit test class for smfc.Ipmi() class"""
 
-    def pt_init_p1(self, mode_delay: int, level_delay: int, error: str):
+    def pt_init_p1(self, mode_delay: int, level_delay: int, swapped: bool, error: str):
         """This is a primitive positive test function. It contains the following steps:
             - create a shell script for IPMI command parameter
             - mock print() function
@@ -34,20 +34,22 @@ class IpmiTestCase(unittest.TestCase):
             my_config['Ipmi'] = {
                 'command': command,
                 'fan_mode_delay': str(mode_delay),
-                'fan_level_delay': str(level_delay)
+                'fan_level_delay': str(level_delay),
+                'swapped_zones': str(swapped)
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
         self.assertEqual(my_ipmi.command, command, error)
         self.assertEqual(my_ipmi.fan_mode_delay, mode_delay, error)
         self.assertEqual(my_ipmi.fan_level_delay, level_delay, error)
-        self.assertEqual(mock_print.call_count, 3 + 4)  # Log-3, Ipmi-4
+        self.assertEqual(my_ipmi.swapped_zones, swapped, error)
+        self.assertEqual(mock_print.call_count, 3 + 5)  # Log-3, Ipmi-5
         del my_ipmi
         del my_log
         del my_config
         del my_td
 
-    def pt_init_n1(self, cmd_exists: bool, mode_delay: int, level_delay: int,
+    def pt_init_n1(self, cmd_exists: bool, mode_delay: int, level_delay: int, swapped: int,
                    exception: Any, error: str) -> None:
         """Primitive negative test function. It contains the following steps:
             - create a shell script depending on flag need_to_create
@@ -64,7 +66,8 @@ class IpmiTestCase(unittest.TestCase):
         my_config['Ipmi'] = {
             'command': command,
             'fan_mode_delay': str(mode_delay),
-            'fan_level_delay': str(level_delay)
+            'fan_level_delay': str(level_delay),
+            'swapped_zones': str(swapped)
         }
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         with self.assertRaises(Exception) as cm:
@@ -78,12 +81,14 @@ class IpmiTestCase(unittest.TestCase):
         """This is a unit test for function Ipmi.__init__()"""
 
         # Test valid parameters.
-        self.pt_init_p1(10, 2, 'ipmi init 1')
+        self.pt_init_p1(10, 2, False, 'ipmi init 1')
 
         # Test raising exception on invalid parameters.
-        self.pt_init_n1(True, -1, 2, ValueError, 'ipmi init 2')
-        self.pt_init_n1(True, 10, -2, ValueError, 'ipmi init 3')
-        self.pt_init_n1(False, 10, 2, FileNotFoundError, 'ipmi init 4')
+        self.pt_init_n1(True, -1, 2, 0, ValueError, 'ipmi init 2')
+        self.pt_init_n1(True, 10, -2, 0, ValueError, 'ipmi init 3')
+        self.pt_init_n1(True, 10, 2, -1, ValueError, 'ipmi init 4')
+        self.pt_init_n1(True, 10, 2, 3, ValueError, 'ipmi init 5')
+        self.pt_init_n1(False, 10, 2, 0, FileNotFoundError, 'ipmi init 6')
 
     def pt_gfm_p1(self, expected_mode: int, error: str) -> None:
         """Primitive positive test function. It contains the following steps:
@@ -102,7 +107,8 @@ class IpmiTestCase(unittest.TestCase):
             my_config['Ipmi'] = {
                 'command': command,
                 'fan_mode_delay': '10',
-                'fan_level_delay': '2'
+                'fan_level_delay': '2',
+                'swapped_zones': '0'
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -128,7 +134,8 @@ class IpmiTestCase(unittest.TestCase):
         my_config['Ipmi'] = {
             'command': command,
             'fan_mode_delay': '10',
-            'fan_level_delay': '2'
+            'fan_level_delay': '2',
+            'swapped_zones': '0'
         }
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, my_config)
@@ -172,7 +179,8 @@ class IpmiTestCase(unittest.TestCase):
             my_config['Ipmi'] = {
                 'command': command,
                 'fan_mode_delay': '1',
-                'fan_level_delay': '2'
+                'fan_level_delay': '2',
+                'swapped_zones': '0'
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -208,7 +216,8 @@ class IpmiTestCase(unittest.TestCase):
         my_config['Ipmi'] = {
             'command': command,
             'fan_mode_delay': '0',
-            'fan_level_delay': '1'
+            'fan_level_delay': '1',
+            'swapped_zones': '0'
         }
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, my_config)
@@ -238,7 +247,8 @@ class IpmiTestCase(unittest.TestCase):
         my_config['Ipmi'] = {
             'command': command,
             'fan_mode_delay': '0',
-            'fan_level_delay': '1'
+            'fan_level_delay': '1',
+            'swapped_zones': '0'
         }
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, my_config)
@@ -265,7 +275,7 @@ class IpmiTestCase(unittest.TestCase):
         self.pt_sfm_n1(False, 100, ValueError, 'ipmi get_fan_mode 5')
         self.pt_sfm_n1(True, Ipmi.FULL_MODE, FileNotFoundError, 'ipmi get_fan_mode 6')
 
-    def pt_sfl_p1(self, zone: int, level: int) -> None:
+    def pt_sfl_p1(self, zone: int, level: int, swapped: bool) -> None:
         """Primitive positive test function. It contains the following steps:
             - mock print(), subprocess.run() functions
             - initialize a Config, Log, Ipmi classes
@@ -282,11 +292,14 @@ class IpmiTestCase(unittest.TestCase):
             my_config['Ipmi'] = {
                 'command': command,
                 'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+                'fan_level_delay': '0',
+                'swapped_zones': str(swapped)
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_ipmi.set_fan_level(zone, level)
+            if swapped:
+                zone = 1 - zone
             mock_subprocess_run.assert_called_with([command, 'raw', '0x30', '0x70', '0x66', '0x01',
                                                     str(zone), str(level)],
                                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -312,7 +325,8 @@ class IpmiTestCase(unittest.TestCase):
             my_config['Ipmi'] = {
                 'command': command,
                 'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+                'fan_level_delay': '0',
+                'swapped_zones': '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -338,7 +352,8 @@ class IpmiTestCase(unittest.TestCase):
             my_config['Ipmi'] = {
                 'command': command,
                 'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+                'fan_level_delay': '0',
+                'swapped_zones': '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -354,22 +369,28 @@ class IpmiTestCase(unittest.TestCase):
         """This is a unit test for function Ipmi.set_fan_level()"""
 
         # Test valid parameters.
-        self.pt_sfl_p1(Ipmi.CPU_ZONE, 0)     # 'ipmi set_fan_level 1'
-        self.pt_sfl_p1(Ipmi.CPU_ZONE, 50)    # 'ipmi set_fan_level 2'
-        self.pt_sfl_p1(Ipmi.CPU_ZONE, 100)   # 'ipmi set_fan_level 3'
+        self.pt_sfl_p1(Ipmi.CPU_ZONE, 0, False)     # 'ipmi set_fan_level 1'
+        self.pt_sfl_p1(Ipmi.CPU_ZONE, 50, False)    # 'ipmi set_fan_level 2'
+        self.pt_sfl_p1(Ipmi.CPU_ZONE, 100, False)   # 'ipmi set_fan_level 3'
+        self.pt_sfl_p1(Ipmi.CPU_ZONE, 0, True)      # 'ipmi set_fan_level 4'
+        self.pt_sfl_p1(Ipmi.CPU_ZONE, 50, True)     # 'ipmi set_fan_level 5'
+        self.pt_sfl_p1(Ipmi.CPU_ZONE, 100, True)    # 'ipmi set_fan_level 6'
 
-        self.pt_sfl_p1(Ipmi.HD_ZONE, 0)      # 'ipmi set_fan_level 4'
-        self.pt_sfl_p1(Ipmi.HD_ZONE, 50)     # 'ipmi set_fan_level 5'
-        self.pt_sfl_p1(Ipmi.HD_ZONE, 100)    # 'ipmi set_fan_level 6'
+        self.pt_sfl_p1(Ipmi.HD_ZONE, 0, False)      # 'ipmi set_fan_level 7'
+        self.pt_sfl_p1(Ipmi.HD_ZONE, 50, False)     # 'ipmi set_fan_level 8'
+        self.pt_sfl_p1(Ipmi.HD_ZONE, 100, False)    # 'ipmi set_fan_level 9'
+        self.pt_sfl_p1(Ipmi.HD_ZONE, 0, True)       # 'ipmi set_fan_level 10'
+        self.pt_sfl_p1(Ipmi.HD_ZONE, 50, True)      # 'ipmi set_fan_level 11'
+        self.pt_sfl_p1(Ipmi.HD_ZONE, 100, True)     # 'ipmi set_fan_level 12'
 
         # Test invalid parameters and exceptions.
-        self.pt_sfl_n1(Ipmi.CPU_ZONE, -1, ValueError, 'ipmi set_fan_level 7')
-        self.pt_sfl_n1(Ipmi.CPU_ZONE, 101, ValueError, 'ipmi set_fan_level 8')
-        self.pt_sfl_n1(-1, 50, ValueError, 'ipmi set_fan_level 9')
-        self.pt_sfl_n1(10, 50, ValueError, 'ipmi set_fan_level 10')
+        self.pt_sfl_n1(Ipmi.CPU_ZONE, -1, ValueError, 'ipmi set_fan_level 13')
+        self.pt_sfl_n1(Ipmi.CPU_ZONE, 101, ValueError, 'ipmi set_fan_level 14')
+        self.pt_sfl_n1(-1, 50, ValueError, 'ipmi set_fan_level 15')
+        self.pt_sfl_n1(10, 50, ValueError, 'ipmi set_fan_level 16')
 
         # Check exception in case of missing command.
-        self.pt_sfl_n2(Ipmi.CPU_ZONE, 50, FileNotFoundError, 'ipmi set_fan_level 11')
+        self.pt_sfl_n2(Ipmi.CPU_ZONE, 50, FileNotFoundError, 'ipmi set_fan_level 17')
 
 
 if __name__ == "__main__":
