@@ -20,7 +20,7 @@ This is a `systemd service` running on Linux and is able to control fans in CPU 
  - optional: `smartmontools` for feature *standby guard* 
 
 ### 2. Installation and configuration
- 1. Setup the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
+ 1. Set up the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
  2. Optional: you may consider enabling advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp` and `drivetemp`).
  4. Install the service with running the script `install.sh`.
@@ -39,7 +39,7 @@ In this service a fan control logic is implemented for both zones which can:
 
  1. read the zone's temperature from Linux kernel
  2. calculate a new fan level based on the user-defined control function and the current temperature value of the zone 
- 3. setup the new fan level through IPMI in the zone
+ 3. set up the new fan level through IPMI in the zone
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.jpg" align="center" width="600">
 
@@ -65,7 +65,7 @@ With this function the `smfc` can map any new temperature measurement value to a
 Additional notes on changing fan levels:
 
  1. When the service adjusts the fan rotation speed, it always applies a delay time defined in configuration parameter `[IPMI] fan_level_delay=` in order to let the fan implement the physical change.
- 2. There is also a sensitivity threshold parameter (`sensitivity=`) for temperature changes. If the temperature change is below this value, then then control logic will not react at all. 
+ 2. There is also a sensitivity threshold parameter (`sensitivity=`) for temperature changes. If the temperature change is below this value then control logic will not react at all. 
  3. There configuration parameter `polling=` can also impact the frequency of change of the fan levels. The bigger polling time in a zone the lower frequency of changing of the fan speed.
 
 #### 1.2 Swapped zones
@@ -80,7 +80,7 @@ For HD zone an additional optional feature was implemented, called *Standby guar
 This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature we can avoid a situation where the array is partially in standby mode while other members are still active.
 
 ### 2. IPMI fan control and thresholds
-Many utilities and scripts (created by NAS and home server community) are using `IPMI FULL MODE`. In this mode the IPMI system set fan rotation speed initially to 100% but then it can be changed freely it is not reaching the lower and the upper threshold values. If it happens then IPMI will set all fans back to full rotation speed (100%) in the zone. In order to avoid this situation, you should redefine IPMI sensor thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
+Many utilities and scripts (created by NAS and home server community) are using `IPMI FULL MODE`. In this mode the IPMI system set fan rotation speed initially to 100% but after then it can be changed freely while it is not reaching the lower and the upper threshold values. If it happens then IPMI will set all fans back to full rotation speed (100%) in the zone. In order to avoid this situation, you should redefine IPMI sensor thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
 
  IPMI defines six sensor thresholds for fans:
  1. Lower Non-Recoverable  
@@ -150,8 +150,8 @@ In file `/etc/hdparm.conf` you can specify all parameters in a persistent way:
 	...
 
 Important notes: 
- 1. If you plan to spin down your hard disks or RAID array (i.e. put them to standby mode) you have to setup the configuration parameter `[HD zone] polling=` minimum twice bigger as the `spindown_time` specified here.
- 2. In file `/etc/hdparm.conf` you must hard disk names in `/dev/disk/by-id/...` form to avoid inconsistency.
+ 1. If you plan to spin down your hard disks or RAID array (i.e. put them to standby mode) you have to set up the configuration parameter `[HD zone] polling=` minimum twice bigger as the `spindown_time` specified here.
+ 2. In file `/etc/hdparm.conf` you must define HD names in `/dev/disk/by-id/...` form to avoid inconsistency.
 
 ### 4. Kernel modules
 We need to load two important Linux kernel modules:
@@ -274,7 +274,7 @@ Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
     smartctl_path=/usr/sbin/smartctl
 
 Important notes:
- 1. `[HD zone} hd_names=`: These names must be specified in `/dev/disk/by-id/...` form. The `/dev/sd?` form is not stable, could be changing after each reboot). This is not part of the default configuration since they are hardware specific, it must be specified manually.
+ 1. `[HD zone} hd_names=`: These names must be specified in `/dev/disk/by-id/...` form. The `/dev/sd?` form is not stable, could be changing after each reboot. This is not part of the default configuration since they are hardware specific, it must be specified manually.
  2. `[CPU zone] / [HD zone} min_level= / max_level=`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotation speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
 
 		root:~# cat fan_result.csv
@@ -299,8 +299,8 @@ Important notes:
 
 	My experience is that Noctua fans in my box are running stable in the 35-100% fan level interval. An additional user experience is (see [issue #12](https://github.com/petersulyok/smfc/issues/12)) when Noctua fans are paired with Ultra Low Noise Adapter the minimum stable fan level could go up to 45% (i.e. 35% is not stable).  
 
- 3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is **optional** and it will be generated automatically. You can use that for testing purpose or if the automatic generation did not work for you. In this case resolution of the wild characters (`?,*`) is still available.
-4. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
+ 3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is **optional**, and it will be generated automatically. You can use that for testing purpose or if the automatic generation did not work for you. In this case resolution of the wild characters (`?,*`) is still available.
+ 4. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
 
 ### 7. Running the service
 This `systemd` service can be started stopped in the standard way. Do not forget to reload `systemd` configuration after a new installation or if you changed the service definition file:
@@ -343,12 +343,13 @@ With the help of command `journalctl` you can check logs easily. For examples:
 
 ## FAQ
 
-### Q: My fans are spinning up and they are loud. What is wrong?
+### Q: My fans are spinning up and loud. What is wrong?
+Most probably the rotation speed of the fans went above or below of a threshold value
 You can check the current fan rotation speeds:
 
 	ipmitool sdr
 
-and you can also check Super Micro remote web interface (Server Health > Health Event log). If you see Assertions log messages for fans:
+and you can also check event log on Super Micro remote web interface (Server Health > Health Event log). If you see Assertions log messages for fans:
 
 	Fan(FAN1)	Lower Critical - going low - Assertion
 	Fan(FAN1)	Lower Non-recoverable - going low - Assertion
@@ -357,7 +358,7 @@ and you can also check Super Micro remote web interface (Server Health > Health 
 	Fan(FAN4)	Lower Critical - going low - Assertion
 	Fan(FAN4)	Lower Non-recoverable - going low - Assertion
 
-then  you must adjust your configuration (i.e. threshold values) because IPMI switched back to full rotation speed.
+then you must adjust your configuration (i.e. threshold values) because IPMI switched back to full rotation speed.
 
 ### Q: I would like to use constant fan rotation speed in one or both zones. How can I configure that?
 You should configure the temperatures and levels with the same value. 
@@ -393,7 +394,7 @@ Further readings:
 - [\[Pcfe's blog\] Set fan thresholds on my Super Micro H11DSi-NT](https://blog.pcfe.net/hugo/posts/2018-08-14-epyc-ipmi-fans/)
 - [\[Super Micro\] IPMI Utilities](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities)
 - Documentation of [`coretemp`](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html) kernel module
-- Documentation of [`drivetemp`](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) kernel module and its [github project](https://github.com/groeck/drivetemp)
+- Documentation of [`drivetemp`](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) kernel module and its [GitHub project](https://github.com/groeck/drivetemp)
 
 Similar projects:
  - [\[GitHub\] Kevin Horton's nas_fan_control](https://github.com/khorton/nas_fan_control)
