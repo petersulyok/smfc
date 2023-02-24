@@ -21,7 +21,7 @@ This is a `systemd service` running on Linux and is able to control fans in CPU 
 
 ### 2. Installation and configuration
  1. Set up the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
- 2. Optional: you may consider enabling advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
+ 2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp` and `drivetemp`).
  4. Install the service with running the script `install.sh`.
  5. Edit the configuration file `/opt/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
@@ -374,13 +374,13 @@ With this setup there will be a constant 60% fan level in the specific zone. The
 The configuration is the following:
 
  - [Super Micro X11SCH-F motherboard](https://www.supermicro.com/en/products/motherboard/X11SCH-F)
- - [Intel Core i3-8300T CPU](https://ark.intel.com/content/www/us/en/ark/products/129943/intel-core-i3-8300t-processor-8m-cache-3-20-ghz.html)
-- 32 GB ECC DDR4 RAM
+ - [Intel Core i3-9300T CPU](https://ark.intel.com/content/www/us/en/ark/products/134875/intel-core-i39300t-processor-8m-cache-up-to-3-80-ghz.html)
+ - 64 GB ECC DDR4 RAM
  - [Fractal Design Node 804 case](https://www.fractal-design.com/products/cases/node/node-804/black/), with separate chambers for the motherboard and the hard disks:
  
 	<img src="https://www.legitreviews.com/wp-content/uploads/2014/05/fractal-design-node-804-vendor-fans.jpg" align="center" width="500">
 
- - Debian Linux LTS (actually bullseye with Linux kernel 5.10)
+ - Debian Linux LTS (actually bullseye with backport Linux kernel 6.0)
  - 8 x [WD Red 12TB (WD120EFAX)](https://shop.westerndigital.com/en-ie/products/outlet/internal-drives/wd-red-plus-sata-3-5-hdd#WD120EFAX) hard disks in ZFS RAID
  - 3 x [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN4) in CPU zone 
  - 2 x [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) fans (FANA, FANB) in HD zone
@@ -391,10 +391,10 @@ Further readings:
  - [\[STH forums\] Reference Material: Supermicro X9/X10/X11 Fan Speed Control](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/)
  - [\[TrueNAS forums\] How To: Change IPMI Sensor Thresholds using ipmitool](https://www.truenas.com/community/resources/how-to-change-ipmi-sensor-thresholds-using-ipmitool.35/)
  - [\[TrueNAS forums\] Script to control fan speed in response to hard drive temperatures](https://www.truenas.com/community/threads/script-to-control-fan-speed-in-response-to-hard-drive-temperatures.41294/)
-- [\[Pcfe's blog\] Set fan thresholds on my Super Micro H11DSi-NT](https://blog.pcfe.net/hugo/posts/2018-08-14-epyc-ipmi-fans/)
-- [\[Super Micro\] IPMI Utilities](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities)
-- Documentation of [`coretemp`](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html) kernel module
-- Documentation of [`drivetemp`](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) kernel module and its [GitHub project](https://github.com/groeck/drivetemp)
+ - [\[Pcfe's blog\] Set fan thresholds on my Super Micro H11DSi-NT](https://blog.pcfe.net/hugo/posts/2018-08-14-epyc-ipmi-fans/)
+ - [\[Super Micro\] IPMI Utilities](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities)
+ - Documentation of [`coretemp`](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html) kernel module
+ - Documentation of [`drivetemp`](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) kernel module and its [GitHub project](https://github.com/groeck/drivetemp)
 
 Similar projects:
  - [\[GitHub\] Kevin Horton's nas_fan_control](https://github.com/khorton/nas_fan_control)
