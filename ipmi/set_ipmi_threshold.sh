@@ -27,7 +27,3 @@ do
     # Edit the upper threshold values here (1600, 1700, 1800)!
     ipmitool sensor thresh FAN${i} upper 1600 1700 1800
 done
-
-# Setup different lower/upper IPMI thresholds for FAN3 (Noctua NF-A6x25 PWM rotation speed 800-3100 rpm).
-ipmitool sensor thresh FAN3 lower 500 600 700
-ipmitool sensor thresh FAN3 upper 3200 3300 3400
