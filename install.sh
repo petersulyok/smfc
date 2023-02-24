@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+#   install.sh (C) 2021-2023, Peter Sulyok
+#   Installation script for smfc service.
+#
 
 TARGET_DIR=/opt/smfc
 POSTFIX=$(date +%4Y%m%d_%H%M%S)
@@ -29,7 +33,7 @@ chown root.root "$TARGET_DIR/smfc.py" "$TARGET_DIR/smfc.conf" /etc/default/smfc 
 
 # Generate a real hd_names= entry in the new 'smfc.conf'.
 hd_name=$(ls -l /dev/disk/by-id/|grep .*ata-.*sda$|tr -s ' '|cut -d' ' -f 9)
-if [ -n $hd_name ];
+if [ -n "$hd_name" ];
 then
   sed -i "s|hd_names=|hd_names=/dev/disk/by-id/$hd_name|g" "$TARGET_DIR/smfc.conf"
 fi
