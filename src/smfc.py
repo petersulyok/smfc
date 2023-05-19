@@ -152,6 +152,13 @@ class Ipmi:
     SUCCESS: int = 0
     ERROR: int = -1
 
+    # Constant values for the configuration.
+    CS_IPMI: str = 'Ipmi'
+    CV_COMMAND: str = 'command'
+    CV_FAN_MODE_DELAY: str = 'fan_mode_delay'
+    CV_FAN_LEVEL_DELAY: str = 'fan_level_delay'
+    CV_SWAPPED_ZONES: str = 'swapped_zones'
+
     def __init__(self, log: Log, config: configparser.ConfigParser) -> None:
         """Initialize the Ipmi class with a log class and with a configuration class.
 
@@ -161,10 +168,10 @@ class Ipmi:
         """
         # Set default or read from configuration
         self.log = log
-        self.command = config['Ipmi'].get('command', '/usr/bin/ipmitool')
-        self.fan_mode_delay = config['Ipmi'].getint('fan_mode_delay', fallback=10)
-        self.fan_level_delay = config['Ipmi'].getint('fan_level_delay', fallback=2)
-        self.swapped_zones = config['Ipmi'].getboolean('swapped_zones', fallback=False)
+        self.command = config[self.CS_IPMI].get(self.CV_COMMAND, '/usr/bin/ipmitool')
+        self.fan_mode_delay = config[self.CS_IPMI].getint(self.CV_FAN_MODE_DELAY, fallback=10)
+        self.fan_level_delay = config[self.CS_IPMI].getint(self.CV_FAN_LEVEL_DELAY, fallback=2)
+        self.swapped_zones = config[self.CS_IPMI].getboolean(self.CV_SWAPPED_ZONES, fallback=False)
 
         # Validate configuration
         # Check 1: a valid command can be executed successfully.
@@ -181,10 +188,10 @@ class Ipmi:
         # Print the configuration out at DEBUG log level.
         if self.log.log_level >= self.log.LOG_DEBUG:
             self.log.msg(self.log.LOG_DEBUG, 'Ipmi module was initialized with :')
-            self.log.msg(self.log.LOG_DEBUG, f'   command = {self.command}')
-            self.log.msg(self.log.LOG_DEBUG, f'   fan_mode_delay = {self.fan_mode_delay}')
-            self.log.msg(self.log.LOG_DEBUG, f'   fan_level_delay = {self.fan_level_delay}')
-            self.log.msg(self.log.LOG_DEBUG, f'   swapped_zones = {self.swapped_zones}')
+            self.log.msg(self.log.LOG_DEBUG, f'   {self.CV_COMMAND} = {self.command}')
+            self.log.msg(self.log.LOG_DEBUG, f'   {self.CV_FAN_MODE_DELAY} = {self.fan_mode_delay}')
+            self.log.msg(self.log.LOG_DEBUG, f'   {self.CV_FAN_LEVEL_DELAY} = {self.fan_level_delay}')
+            self.log.msg(self.log.LOG_DEBUG, f'   {self.CV_SWAPPED_ZONES} = {self.swapped_zones}')
 
     def get_fan_mode(self) -> int:
         """Get the current IPMI fan mode.
