@@ -9,15 +9,15 @@ Super Micro fan control for Linux (home) servers.
 
 ## TL;DR
 
-This is a `systemd service` running on Linux and is able to control fans in CPU and HD zones with the help of IPMI on Super Micro X9/X10/X11 motherboards.
+This is a `systemd service` running on Linux and is able to control fans in CPU and HD zones with the help of IPMI on Super Micro X10/X11 (and some X9) motherboards.
 
 ### 1. Prerequisites
- - a Super Micro X9/X10/X11 motherboard with BMC (AST2x00 chip)
+ - a Super Micro X10/X11 motherboard with BMC (i.e. AST2x00) chip
  - Python 3.7+
  - Linux (kernel 5.6+) with `systemd` (`coretemp` and `drivetemp` kernel modules for CPU and hard disk temperatures)
  - `bash`
  - `ipmitool`
- - optional: `smartmontools` for feature *standby guard* 
+ - optional: `smartmontools` for the *standby guard* feature 
 
 ### 2. Installation and configuration
  1. Set up the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
@@ -29,7 +29,6 @@ This is a `systemd service` running on Linux and is able to control fans in CPU 
  7. Check results in system log
 
 ## Details
-
 ### 1. How does it work?
 This service was planned for Super Micro motherboards installed in computer chassis with two independent cooling systems employing separate fans. In IPMI terms these are called:
  - CPU zone (FAN1, FAN2, etc.)
@@ -79,7 +78,12 @@ For HD zone an additional optional feature was implemented, called *Standby guar
 
 This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature we can avoid a situation where the array is partially in standby mode while other members are still active.
 
-### 2. IPMI fan control and thresholds
+### 2. Super Micro compatibility
+This software is compatible with Super Micro X10 and X11 motherboards with BMC chip (e.g. AST2500) and IPMI functionality. In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware setup (not all X9 motherboards employes a BMC chip). The earlier X8 motherboards are not compatible with this software.
+
+TODO: Testing and feedback would be needed about the compatibility with Supermicro X12 and X13 moatherboards.
+
+### 3. IPMI fan control and thresholds
 Many utilities and scripts (created by NAS and home server community) are using `IPMI FULL MODE`. In this mode the IPMI system set fan rotation speed initially to 100% but after then it can be changed freely while it is not reaching the lower and the upper threshold values. If it happens then IPMI will set all fans back to full rotation speed (100%) in the zone. In order to avoid this situation, you should redefine IPMI sensor thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
 
  IPMI defines six sensor thresholds for fans:
@@ -112,9 +116,9 @@ You can read more about:
  - IPMI fan control: [STH Forums](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/) and [TrueNAS Forums](https://www.truenas.com/community/threads/pid-fan-controller-perl-script.50908/)
  - Change IPMI sensors thresholds: [TrueNAS Forums](https://www.truenas.com/community/resources/how-to-change-ipmi-sensor-thresholds-using-ipmitool.35/)
 
-### 3. Power management
+### 4. Power management
 If low noise and low heat generation are important attributes of your Linux box, then you may consider the following chapters.
-#### 3.1 CPU
+#### 4.1 CPU
 Most of the modern CPUs has multiple energy saving features. You can check your BIOS and enable [these features](https://metebalci.com/blog/a-minimum-complete-tutorial-of-cpu-power-management-c-states-and-p-states/) like:
 
  - Intel(R) Speed Shift Technology
@@ -126,7 +130,7 @@ With this setup the CPU will change its base frequency and power consumption dyn
 
 TODO: Recommendation for AMD users.
 
-#### 3.2 SATA hard disks
+#### 4.2 SATA hard disks
 In case of SATA hard disks, you may enable:
 
  - advanced power management
@@ -155,7 +159,7 @@ Important notes:
  1. If you plan to spin down your hard disks or RAID array (i.e. put them to standby mode) you have to set up the configuration parameter `[HD zone] polling=` minimum twice bigger as the `spindown_time` specified here.
  2. In file `/etc/hdparm.conf` you must define HD names in `/dev/disk/by-id/...` form to avoid inconsistency.
 
-### 4. Kernel modules
+### 5. Kernel modules
 We need to load two important Linux kernel modules:
 
  - [`coretemp`](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html): temperature report for Intel(R) CPUs
@@ -170,7 +174,7 @@ Reading file content from `/sys` is the fastest way to get the temperature of th
 
 TODO: Recommendation for AMD users.
 
-### 5. Installation
+### 6. Installation
 For the installation you need a root user. The default installation script `install.sh` will use the following folders:
 
 |File|Installation folder|Description|
@@ -194,7 +198,7 @@ but you can use freely any other folders too. The service has the following comm
 
 You may configure logging output and logging level here and these options can be specified in `/etc/default/smfc`in a persistent way.
 
-### 6. Configuration file
+### 7. Configuration file
 Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 
     #  
@@ -304,7 +308,7 @@ Important notes:
  3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is **optional**, and it will be generated automatically. You can use that for testing purpose or if the automatic generation did not work for you. In this case resolution of the wild characters (`?,*`) is still available.
  4. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
 
-### 7. Running the service
+### 8. Running the service
 This `systemd` service can be started stopped in the standard way. Do not forget to reload `systemd` configuration after a new installation or if you changed the service definition file:
 
 	systemctl daemon-reload
@@ -331,7 +335,7 @@ If you are testing your configuration, you can start `smfc.py` directly in a ter
 	cd /opt
 	sudo smfc.py -o 0 -l 3
 
-### 8. Checking result and monitoring logs
+### 9. Checking result and monitoring logs
 All messages will be logged to the specific output and the specific level.
 With the help of command `journalctl` you can check logs easily. For examples:
 
@@ -405,4 +409,3 @@ Similar projects:
  - [\[GitHub\] Andrew Gunnerson's ipmi-fan-control](https://github.com/chenxiaolong/ipmi-fan-control)
 
 > Written with [StackEdit](https://stackedit.io/).
-
