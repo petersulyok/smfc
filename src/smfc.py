@@ -15,7 +15,7 @@ from typing import List, Callable
 
 
 # Program version string
-version_str: str = '2.3.1'
+version_str: str = '2.3.2'
 
 
 class Log:
