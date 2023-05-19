@@ -79,9 +79,9 @@ For HD zone an additional optional feature was implemented, called *Standby guar
 This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature we can avoid a situation where the array is partially in standby mode while other members are still active.
 
 ### 2. Super Micro compatibility
-This software is compatible with Super Micro X10 and X11 motherboards with BMC chip (e.g. AST2500) and IPMI functionality. In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware setup (not all X9 motherboards employes a BMC chip). The earlier X8 motherboards are not compatible with this software.
+This software is compatible with Super Micro X10 and X11 motherboards with BMC chip (e.g. AST2500) and IPMI functionality. In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employes a BMC chip). The earlier X8 motherboards are not compatible with this software.
 
-TODO: Testing and feedback would be needed about the compatibility with Supermicro X12 and X13 moatherboards.
+TODO: Testing and feedback would be needed about the compatibility with Supermicro X12/X13 motherboards.
 
 ### 3. IPMI fan control and thresholds
 Many utilities and scripts (created by NAS and home server community) are using `IPMI FULL MODE`. In this mode the IPMI system set fan rotation speed initially to 100% but after then it can be changed freely while it is not reaching the lower and the upper threshold values. If it happens then IPMI will set all fans back to full rotation speed (100%) in the zone. In order to avoid this situation, you should redefine IPMI sensor thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
