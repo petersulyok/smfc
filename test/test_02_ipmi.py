@@ -32,10 +32,10 @@ class IpmiTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_COMMAND: command,
-                Ipmi.CV_FAN_MODE_DELAY: str(mode_delay),
-                Ipmi.CV_FAN_LEVEL_DELAY: str(level_delay),
-                Ipmi.CV_SWAPPED_ZONES: str(swapped)
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: str(mode_delay),
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: str(level_delay),
+                Ipmi.CV_IPMI_SWAPPED_ZONES: str(swapped)
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -64,10 +64,10 @@ class IpmiTestCase(unittest.TestCase):
             my_td.delete_file(command)
         my_config = configparser.ConfigParser()
         my_config[Ipmi.CS_IPMI] = {
-            Ipmi.CV_COMMAND: command,
-            Ipmi.CV_FAN_MODE_DELAY: str(mode_delay),
-            Ipmi.CV_FAN_LEVEL_DELAY: str(level_delay),
-            Ipmi.CV_SWAPPED_ZONES: str(swapped)
+            Ipmi.CV_IPMI_COMMAND: command,
+            Ipmi.CV_IPMI_FAN_MODE_DELAY: str(mode_delay),
+            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: str(level_delay),
+            Ipmi.CV_IPMI_SWAPPED_ZONES: str(swapped)
         }
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         with self.assertRaises(Exception) as cm:
@@ -105,10 +105,10 @@ class IpmiTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_COMMAND: command,
-                Ipmi.CV_FAN_MODE_DELAY: '10',
-                Ipmi.CV_FAN_LEVEL_DELAY: '2',
-                Ipmi.CV_SWAPPED_ZONES: '0'
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '10',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '2',
+                Ipmi.CV_IPMI_SWAPPED_ZONES: '0'
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -132,10 +132,10 @@ class IpmiTestCase(unittest.TestCase):
         command = my_td.create_command_file('echo " ' + s + '"')
         my_config = configparser.ConfigParser()
         my_config[Ipmi.CS_IPMI] = {
-            Ipmi.CV_COMMAND: command,
-            Ipmi.CV_FAN_MODE_DELAY: '10',
-            Ipmi.CV_FAN_LEVEL_DELAY: '2',
-            Ipmi.CV_SWAPPED_ZONES: '0'
+            Ipmi.CV_IPMI_COMMAND: command,
+            Ipmi.CV_IPMI_FAN_MODE_DELAY: '10',
+            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '2',
+            Ipmi.CV_IPMI_SWAPPED_ZONES: '0'
         }
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, my_config)
@@ -177,10 +177,10 @@ class IpmiTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_COMMAND: command,
-                Ipmi.CV_FAN_MODE_DELAY: '1',
-                Ipmi.CV_FAN_LEVEL_DELAY: '2',
-                Ipmi.CV_SWAPPED_ZONES: '0'
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '1',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '2',
+                Ipmi.CV_IPMI_SWAPPED_ZONES: '0'
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -214,10 +214,10 @@ class IpmiTestCase(unittest.TestCase):
         command = my_td.create_command_file()
         my_config = configparser.ConfigParser()
         my_config[Ipmi.CS_IPMI] = {
-            Ipmi.CV_COMMAND: command,
-            Ipmi.CV_FAN_MODE_DELAY: '0',
-            Ipmi.CV_FAN_LEVEL_DELAY: '1',
-            Ipmi.CV_SWAPPED_ZONES: '0'
+            Ipmi.CV_IPMI_COMMAND: command,
+            Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '1',
+            Ipmi.CV_IPMI_SWAPPED_ZONES: '0'
         }
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, my_config)
@@ -245,10 +245,10 @@ class IpmiTestCase(unittest.TestCase):
         command = my_td.create_command_file()
         my_config = configparser.ConfigParser()
         my_config[Ipmi.CS_IPMI] = {
-            Ipmi.CV_COMMAND: command,
-            Ipmi.CV_FAN_MODE_DELAY: '0',
-            Ipmi.CV_FAN_LEVEL_DELAY: '1',
-            Ipmi.CV_SWAPPED_ZONES: '0'
+            Ipmi.CV_IPMI_COMMAND: command,
+            Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '1',
+            Ipmi.CV_IPMI_SWAPPED_ZONES: '0'
         }
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, my_config)
@@ -290,10 +290,10 @@ class IpmiTestCase(unittest.TestCase):
                 patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_COMMAND: command,
-                Ipmi.CV_FAN_MODE_DELAY: '0',
-                Ipmi.CV_FAN_LEVEL_DELAY: '0',
-                Ipmi.CV_SWAPPED_ZONES: str(swapped)
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0',
+                Ipmi.CV_IPMI_SWAPPED_ZONES: str(swapped)
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -323,10 +323,10 @@ class IpmiTestCase(unittest.TestCase):
                 patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_COMMAND: command,
-                Ipmi.CV_FAN_MODE_DELAY: '0',
-                Ipmi.CV_FAN_LEVEL_DELAY: '0',
-                Ipmi.CV_SWAPPED_ZONES: '0'
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0',
+                Ipmi.CV_IPMI_SWAPPED_ZONES: '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -350,10 +350,10 @@ class IpmiTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_COMMAND: command,
-                Ipmi.CV_FAN_MODE_DELAY: '0',
-                Ipmi.CV_FAN_LEVEL_DELAY: '0',
-                Ipmi.CV_SWAPPED_ZONES: '0'
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0',
+                Ipmi.CV_IPMI_SWAPPED_ZONES: '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
