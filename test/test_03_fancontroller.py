@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-#   test_03_fancontroller.py (C) 2021-2022, Peter Sulyok
+#   test_03_fancontroller.py (C) 2021-2023, Peter Sulyok
 #   Unit tests for smfc.FanController() class.
 #
 import configparser
@@ -9,7 +9,7 @@ import unittest
 from typing import List, Tuple
 from unittest.mock import patch, MagicMock
 from test_00_data import TestData
-from smfc import FanController, Log, Ipmi
+from smfc import FanController, Log, Ipmi, CpuZone, HdZone
 
 
 class FanControllerTestCase(unittest.TestCase):
@@ -31,10 +31,10 @@ class FanControllerTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': cmd,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: cmd,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -80,10 +80,10 @@ class FanControllerTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': cmd,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: cmd,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -105,51 +105,66 @@ class FanControllerTestCase(unittest.TestCase):
 
         # Test valid parameters:
         # a. no hwmon_path specified.
-        self.pt_init_p1(Ipmi.CPU_ZONE, 'CPU zone', 1, m_avg, 5, 4, 2, 30, 50, 35, 100, None, 'fc init 1')
+        self.pt_init_p1(Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 1, m_avg, 5, 4, 2, 30, 50, 35, 100, None,
+                        'fc init 1')
         list_1 = my_td.get_cpu_1()
         # b. no wild characters in hwmon_path
-        self.pt_init_p1(Ipmi.CPU_ZONE, 'CPU zone', 1, m_avg, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 2')
-        self.pt_init_p1(Ipmi.CPU_ZONE, 'CPU zone', 2, m_max, 5, 4, 2, 30, 50, 35, 100, my_td.get_cpu_2(), 'fc init 3')
-        self.pt_init_p1(Ipmi.CPU_ZONE, 'CPU zone', 4, m_min, 5, 4, 2, 30, 50, 35, 100, my_td.get_cpu_4(), 'fc init 4')
-        self.pt_init_p1(Ipmi.HD_ZONE, 'HD zone', 1, m_avg, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_1(), 'fc init 5')
-        self.pt_init_p1(Ipmi.HD_ZONE, 'HD zone', 2, m_max, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_2(), 'fc init 6')
-        self.pt_init_p1(Ipmi.HD_ZONE, 'HD zone', 4, m_max, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_4(), 'fc init 7')
-        self.pt_init_p1(Ipmi.HD_ZONE, 'HD zone', 8, m_min, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_8(), 'fc init 8')
+        self.pt_init_p1(Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 1, m_avg, 5, 4, 2, 30, 50, 35, 100, list_1,
+                        'fc init 2')
+        self.pt_init_p1(Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 2, m_max, 5, 4, 2, 30, 50, 35, 100, my_td.get_cpu_2(),
+                        'fc init 3')
+        self.pt_init_p1(Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 4, m_min, 5, 4, 2, 30, 50, 35, 100, my_td.get_cpu_4(),
+                        'fc init 4')
+        self.pt_init_p1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 1, m_avg, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_1(),
+                        'fc init 5')
+        self.pt_init_p1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 2, m_max, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_2(),
+                        'fc init 6')
+        self.pt_init_p1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 4, m_max, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_4(),
+                        'fc init 7')
+        self.pt_init_p1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 8, m_min, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_8(),
+                        'fc init 8')
         # c. there are wild characters in hwmon_path
-        self.pt_init_p1(Ipmi.CPU_ZONE, 'CPU zone', 1, m_min, 5, 4, 2, 30, 50, 35, 100, my_td.get_cpu_1w(), 'fc init 9')
-        self.pt_init_p1(Ipmi.CPU_ZONE, 'CPU zone', 2, m_avg, 5, 4, 2, 30, 50, 35, 100, my_td.get_cpu_2w(), 'fc init 10')
-        self.pt_init_p1(Ipmi.CPU_ZONE, 'CPU zone', 4, m_max, 5, 4, 2, 30, 50, 35, 100, my_td.get_cpu_4w(), 'fc init 11')
-        self.pt_init_p1(Ipmi.HD_ZONE, 'HD zone', 1, m_min, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_1w(), 'fc init 12')
-        self.pt_init_p1(Ipmi.HD_ZONE, 'HD zone', 2, m_min, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_2w(), 'fc init 13')
-        self.pt_init_p1(Ipmi.HD_ZONE, 'HD zone', 4, m_avg, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_4w(), 'fc init 14')
-        self.pt_init_p1(Ipmi.HD_ZONE, 'HD zone', 8, m_max, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_8w(), 'fc init 15')
+        self.pt_init_p1(Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 1, m_min, 5, 4, 2, 30, 50, 35, 100, my_td.get_cpu_1w(),
+                        'fc init 9')
+        self.pt_init_p1(Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 2, m_avg, 5, 4, 2, 30, 50, 35, 100, my_td.get_cpu_2w(),
+                        'fc init 10')
+        self.pt_init_p1(Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 4, m_max, 5, 4, 2, 30, 50, 35, 100, my_td.get_cpu_4w(),
+                        'fc init 11')
+        self.pt_init_p1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 1, m_min, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_1w(),
+                        'fc init 12')
+        self.pt_init_p1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 2, m_min, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_2w(),
+                        'fc init 13')
+        self.pt_init_p1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 4, m_avg, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_4w(),
+                        'fc init 14')
+        self.pt_init_p1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 8, m_max, 5, 4, 2, 30, 50, 35, 100, my_td.get_hd_8w(),
+                        'fc init 15')
 
         # Test invalid parameters:
         # ipmi_zone is invalid
-        self.pt_init_n1(-1, 'CPU zone', 1, 0, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 16')
-        self.pt_init_n1(100, 'CPU zone', 1, 0, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 17')
+        self.pt_init_n1(-1, CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 16')
+        self.pt_init_n1(100, CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 17')
         # count <= 0
-        self.pt_init_n1(Ipmi.CPU_ZONE, 'CPU zone', -1, 0, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 18')
-        self.pt_init_n1(Ipmi.CPU_ZONE, 'CPU zone', 0, 0, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 19')
+        self.pt_init_n1(Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, -1, 0, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 18')
+        self.pt_init_n1(Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 0, 0, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 19')
         # temp_calc is invalid
-        self.pt_init_n1(Ipmi.CPU_ZONE, 'CPU zone', 1, -1, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 20')
-        self.pt_init_n1(Ipmi.CPU_ZONE, 'CPU zone', 1, 100, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 21')
+        self.pt_init_n1(Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 1, -1, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 20')
+        self.pt_init_n1(Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 1, 100, 5, 4, 2, 30, 50, 35, 100, list_1, 'fc init 21')
         # step <= 0
-        self.pt_init_n1(Ipmi.HD_ZONE, 'HD zone', 1, 1, -2, 4, 2, 30, 50, 35, 100, list_1, 'fc init 22')
-        self.pt_init_n1(Ipmi.HD_ZONE, 'HD zone', 1, 1, 0, 4, 2, 30, 50, 35, 100, list_1, 'fc init 23')
+        self.pt_init_n1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 1, 1, -2, 4, 2, 30, 50, 35, 100, list_1, 'fc init 22')
+        self.pt_init_n1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 1, 1, 0, 4, 2, 30, 50, 35, 100, list_1, 'fc init 23')
         # sensitivity <= 0
-        self.pt_init_n1(Ipmi.HD_ZONE, 'HD zone', 1, 1, 5, 0, 2, 30, 50, 35, 100, list_1, 'fc init 24')
-        self.pt_init_n1(Ipmi.HD_ZONE, 'HD zone', 1, 1, 5, -2, 2, 30, 50, 35, 100, list_1, 'fc init 25')
+        self.pt_init_n1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 1, 1, 5, 0, 2, 30, 50, 35, 100, list_1, 'fc init 24')
+        self.pt_init_n1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 1, 1, 5, -2, 2, 30, 50, 35, 100, list_1, 'fc init 25')
         # polling < 0
-        self.pt_init_n1(Ipmi.HD_ZONE, 'HD zone', 1, 1, 5, 4, -2, 30, 50, 35, 100, list_1, 'fc init 26')
+        self.pt_init_n1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 1, 1, 5, 4, -2, 30, 50, 35, 100, list_1, 'fc init 26')
         # max_temp < min_temp
-        self.pt_init_n1(Ipmi.HD_ZONE, 'HD zone', 1, 1, 5, 4, 2, 50, 30, 35, 100, list_1, 'fc init 27')
+        self.pt_init_n1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 1, 1, 5, 4, 2, 50, 30, 35, 100, list_1, 'fc init 27')
         # max_level < min_level
-        self.pt_init_n1(Ipmi.HD_ZONE, 'HD zone', 1, 1, 5, 4, 2, 30, 50, 100, 35, list_1, 'fc init 28')
+        self.pt_init_n1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 1, 1, 5, 4, 2, 30, 50, 100, 35, list_1, 'fc init 28')
         # len(hwmon_path) != count
-        self.pt_init_n1(Ipmi.HD_ZONE, 'HD zone', 2, 1, 5, 4, 2, 30, 50, 100, 35, list_1, 'fc init 29')
+        self.pt_init_n1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 2, 1, 5, 4, 2, 30, 50, 100, 35, list_1, 'fc init 29')
         # Invalid hwmon_path
-        self.pt_init_n1(Ipmi.HD_ZONE, 'HD zone', 1, 1, 5, 4, 2, 30, 50, 35, 100, './xyz/temp/a', 'fc init 30')
+        self.pt_init_n1(Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, 1, 1, 5, 4, 2, 30, 50, 35, 100, './xyz/temp/a', 'fc init 30')
 
         del my_td
 
@@ -167,15 +182,15 @@ class FanControllerTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': cmd,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: cmd,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
-            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, 'CPU zone', counter, FanController.CALC_AVG, 5,
-                                  4, 2, 30, 50, 35, 100, None)
+            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, counter, FanController.CALC_AVG,
+                                  5, 4, 2, 30, 50, 35, 100, None)
             my_fc.build_hwmon_path(hwmon_str)
             self.assertEqual(my_fc.hwmon_path, my_td.create_normalized_path_list(hwmon_str), error)
         del my_fc
@@ -198,15 +213,15 @@ class FanControllerTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': cmd,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: cmd,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
-            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, 'CPU zone', counter, FanController.CALC_AVG, 5,
-                                  4, 2, 30, 50, 35, 100, None)
+            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, counter, FanController.CALC_AVG,
+                                  5, 4, 2, 30, 50, 35, 100, None)
             with self.assertRaises(ValueError) as cm:
                 my_fc.build_hwmon_path(hwmon_str)
             self.assertEqual(type(cm.exception), ValueError, error)
@@ -250,10 +265,10 @@ class FanControllerTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': cmd,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: cmd,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -266,7 +281,7 @@ class FanControllerTestCase(unittest.TestCase):
             # get_max_temp()
             else:  # code == 4:
                 cm = FanController.CALC_MAX
-            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, 'CPU zone', count, cm, 5,
+            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, count, cm, 5,
                                   4, 2, 30, 50, 35, 100, hwmon_path)
             if code == 1:
                 f = my_fc.get_1_temp()
@@ -298,10 +313,10 @@ class FanControllerTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': cmd,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: cmd,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -313,7 +328,7 @@ class FanControllerTestCase(unittest.TestCase):
             # get_max_temp()
             else:  # code == 4:
                 cm = FanController.CALC_MAX
-            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, 'CPU zone', count, cm, 5,
+            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, count, cm, 5,
                                   4, 2, 30, 50, 35, 100, hwmon_path)
             del td
             with self.assertRaises(IOError) as cm:
@@ -380,16 +395,16 @@ class FanControllerTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': cmd,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: cmd,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_ipmi.set_fan_level = MagicMock(name='set_fan_level')
             my_ipmi.set_fan_level.return_value = Ipmi.SUCCESS
-            my_fc = FanController(my_log, my_ipmi, ipmi_zone, 'CPU zone', 1, FanController.CALC_AVG, 5,
+            my_fc = FanController(my_log, my_ipmi, ipmi_zone, CpuZone.CS_CPU_ZONE, 1, FanController.CALC_AVG, 5,
                                   4, 2, 30, 50, 35, 100, None)
             my_fc.set_fan_level(level)
             my_ipmi.set_fan_level.assert_any_call(my_fc.ipmi_zone, level)
@@ -419,15 +434,15 @@ class FanControllerTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': cmd,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: cmd,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
-            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, 'CPU zone', 1, 1, steps, sensitivity, polling,
-                                  min_temp, max_temp, min_level, max_level, td.get_cpu_1([temp]))
+            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 1, 1, steps, sensitivity,
+                                  polling, min_temp, max_temp, min_level, max_level, td.get_cpu_1([temp]))
             my_fc.set_fan_level = MagicMock(name='set_fan_level')
             my_fc.last_time = time.monotonic() - (polling + 1)
             my_fc.last_level = 0

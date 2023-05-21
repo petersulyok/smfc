@@ -262,7 +262,7 @@ class Ipmi:
         """Set the IPMI fan level in a specific zone. Raise an exception in case of invalid parameters.
 
         Args:
-            zone (int): fan zone (CPU_ZONE_TAG, HD_ZONE_TAG)
+            zone (int): fan zone (CPU_ZONE, HD_ZONE)
             level (int): fan level in % (0-100)
         """
         # Validate zone parameter
@@ -568,7 +568,19 @@ class FanController:
 class CpuZone(FanController):
     """CPU zone fan control."""
 
-    CPU_ZONE_TAG: str = 'CPU zone'  # CPU zone chapter name in the configuration file.
+    # Constant values for the configuration parameters.
+    CS_CPU_ZONE: str = 'CPU zone'
+    CV_CPU_ZONE_ENABLED: str = 'enabled'
+    CV_CPU_ZONE_COUNT: str = 'count'
+    CV_CPU_ZONE_TEMP_CALC: str = 'temp_calc'
+    CV_CPU_ZONE_STEPS: str = 'steps'
+    CV_CPU_ZONE_SENSITIVITY: str = 'sensitivity'
+    CV_CPU_ZONE_POLLING: str = 'polling'
+    CV_CPU_ZONE_MIN_TEMP: str = 'min_temp'
+    CV_CPU_ZONE_MAX_TEMP: str = 'max_temp'
+    CV_CPU_ZONE_MIN_LEVEL: str = 'min_level'
+    CV_CPU_ZONE_MAX_LEVEL: str = 'max_level'
+    CV_CPU_ZONE_HWMON_PATH: str = 'hwmon_path'
 
     def __init__(self, log: Log, ipmi: Ipmi, config: configparser.ConfigParser) -> None:
         """Initialize the CpuZone class and raise exception in case of invalid configuration.
@@ -580,23 +592,23 @@ class CpuZone(FanController):
         """
 
         # Initialize arrays with proper size.
-        count = config[self.CPU_ZONE_TAG].getint('count', fallback=1)
+        count = config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_COUNT, fallback=1)
         if count <= 0:
             raise ValueError('count <= 0')
         self.hwmon_path = [''] * count
 
         # Initialize FanController class.
         super().__init__(
-            log, ipmi, Ipmi.CPU_ZONE, 'CPU zone', count,
-            config[self.CPU_ZONE_TAG].getint('temp_calc', fallback=FanController.CALC_AVG),
-            config[self.CPU_ZONE_TAG].getint('steps', fallback=6),
-            config[self.CPU_ZONE_TAG].getfloat('sensitivity', fallback=3.0),
-            config[self.CPU_ZONE_TAG].getfloat('polling', fallback=2),
-            config[self.CPU_ZONE_TAG].getfloat('min_temp', fallback=30.0),
-            config[self.CPU_ZONE_TAG].getfloat('max_temp', fallback=60.0),
-            config[self.CPU_ZONE_TAG].getint('min_level', fallback=35),
-            config[self.CPU_ZONE_TAG].getint('max_level', fallback=100),
-            config[self.CPU_ZONE_TAG].get('hwmon_path')
+            log, ipmi, Ipmi.CPU_ZONE, self.CS_CPU_ZONE, count,
+            config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
+            config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_STEPS, fallback=6),
+            config[self.CS_CPU_ZONE].getfloat(self.CV_CPU_ZONE_SENSITIVITY, fallback=3.0),
+            config[self.CS_CPU_ZONE].getfloat(self.CV_CPU_ZONE_POLLING, fallback=2),
+            config[self.CS_CPU_ZONE].getfloat(self.CV_CPU_ZONE_MIN_TEMP, fallback=30.0),
+            config[self.CS_CPU_ZONE].getfloat(self.CV_CPU_ZONE_MAX_TEMP, fallback=60.0),
+            config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_MIN_LEVEL, fallback=35),
+            config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_MAX_LEVEL, fallback=100),
+            config[self.CS_CPU_ZONE].get(self.CV_CPU_ZONE_HWMON_PATH)
         )
 
     def build_hwmon_path(self, hwmon_str: str) -> None:
@@ -624,7 +636,6 @@ class HdZone(FanController):
 
     # HdZone specific parameters.
     hd_device_names: List[str]          # Device names of the hard disks (e.g. '/dev/disk/by-id/...').
-    HD_ZONE_TAG: str = 'HD zone'        # HD zone chapter name in the configuration file.
 
     # Standby guard specific parameters.
     standby_guard_enabled: bool         # Standby guard feature enabled
@@ -636,6 +647,24 @@ class HdZone(FanController):
 
     # Error message.
     ERROR_MSG_SMARTCTL: str = 'Unknown smartctl return value {}'
+
+    # Constant values for the configuration parameters.
+    CS_HD_ZONE: str = 'HD zone'
+    CV_HD_ZONE_ENABLED: str = 'enabled'
+    CV_HD_ZONE_COUNT: str = 'count'
+    CV_HD_ZONE_TEMP_CALC: str = 'temp_calc'
+    CV_HD_ZONE_STEPS: str = 'steps'
+    CV_HD_ZONE_SENSITIVITY: str = 'sensitivity'
+    CV_HD_ZONE_POLLING: str = 'polling'
+    CV_HD_ZONE_MIN_TEMP: str = 'min_temp'
+    CV_HD_ZONE_MAX_TEMP: str = 'max_temp'
+    CV_HD_ZONE_MIN_LEVEL: str = 'min_level'
+    CV_HD_ZONE_MAX_LEVEL: str = 'max_level'
+    CV_HD_ZONE_HD_NAMES: str = 'hd_names'
+    CV_HD_ZONE_HWMON_PATH: str = 'hwmon_path'
+    CV_HD_ZONE_STANDBY_GUARD_ENABLED: str = 'standby_guard_enabled'
+    CV_HD_ZONE_STANDBY_HD_LIMIT: str = 'standby_hd_limit'
+    CV_HD_ZONE_SMARTCTL_PATH: str = 'smartctl_path'
 
     def __init__(self, log: Log, ipmi: Ipmi, config: configparser.ConfigParser) -> None:
         """Initialize the HdZone class. Abort in case of configuration errors.
@@ -649,14 +678,14 @@ class HdZone(FanController):
         hd_names: str   # String for hd_names=
 
         # Read count parameter.
-        count = config[self.HD_ZONE_TAG].getint('count', fallback=1)
+        count = config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_COUNT, fallback=1)
         if count <= 0:
             raise ValueError('count <= 0')
         # Initialize lista with proper size.
         self.hd_device_names = [''] * count
         self.hwmon_path = [''] * count
         # Save and validate further HdZone class specific parameters.
-        hd_names = config[self.HD_ZONE_TAG].get('hd_names')
+        hd_names = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_HD_NAMES)
         if not hd_names:
             raise ValueError('Parameter hd_names= is not specified.')
         if "\n" in hd_names:
@@ -667,31 +696,32 @@ class HdZone(FanController):
             raise ValueError(f'Inconsistent count ({count}) and size of hd_names ({len(self.hd_device_names)})')
         # Initialize FanController class.
         super().__init__(
-            log, ipmi, Ipmi.HD_ZONE, "HD zone", count,
-            config[self.HD_ZONE_TAG].getint('temp_calc', fallback=FanController.CALC_AVG),
-            config[self.HD_ZONE_TAG].getint('steps', fallback=4),
-            config[self.HD_ZONE_TAG].getfloat('sensitivity', fallback=2),
-            config[self.HD_ZONE_TAG].getfloat('polling', fallback=10),
-            config[self.HD_ZONE_TAG].getfloat('min_temp', fallback=32),
-            config[self.HD_ZONE_TAG].getfloat('max_temp', fallback=46),
-            config[self.HD_ZONE_TAG].getint('min_level', fallback=35),
-            config[self.HD_ZONE_TAG].getint('max_level', fallback=100),
-            config[self.HD_ZONE_TAG].get('hwmon_path')
+            log, ipmi, Ipmi.HD_ZONE, self.CS_HD_ZONE, count,
+            config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
+            config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_STEPS, fallback=4),
+            config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_SENSITIVITY, fallback=2),
+            config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_POLLING, fallback=10),
+            config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_MIN_TEMP, fallback=32),
+            config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_MAX_TEMP, fallback=46),
+            config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_MIN_LEVEL, fallback=35),
+            config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_MAX_LEVEL, fallback=100),
+            config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_HWMON_PATH)
         )
         # Read and validate the configuration of standby guard if enabled.
-        self.standby_guard_enabled = config[self.HD_ZONE_TAG].getboolean('standby_guard_enabled', fallback=False)
+        self.standby_guard_enabled = config[self.CS_HD_ZONE].getboolean(self.CV_HD_ZONE_STANDBY_GUARD_ENABLED,
+                                                                        fallback=False)
         if self.count == 1:
             self.log.msg(self.log.LOG_INFO, 'Standby guard is disabled << [HD zone] count=1')
             self.standby_guard_enabled = False
         if self.standby_guard_enabled:
             self.standby_array_states = [False] * count
             # Read and validate further parameters.
-            self.standby_hd_limit = config[self.HD_ZONE_TAG].getint('standby_hd_limit', fallback=1)
+            self.standby_hd_limit = config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_STANDBY_HD_LIMIT, fallback=1)
             if self.standby_hd_limit < 0:
                 raise ValueError('standby_hd_limit < 0')
             if self.standby_hd_limit > self.count:
                 raise ValueError('standby_hd_limit > count')
-            self.smartctl_path = config[self.HD_ZONE_TAG].get('smartctl_path', '/usr/sbin/smartctl')
+            self.smartctl_path = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
             # Get the current power state of the HD array.
             n = self.check_standby_state()
             # Set calculated parameters.
@@ -903,14 +933,14 @@ def main():
 
     # Create an instance for CPU zone fan controller if enabled.
     my_cpu_zone = None
-    cpu_zone_enabled = my_config['CPU zone'].getboolean('enabled', fallback=False)
+    cpu_zone_enabled = my_config[CpuZone.CS_CPU_ZONE].getboolean(CpuZone.CV_CPU_ZONE_ENABLED, fallback=False)
     if cpu_zone_enabled:
         my_log.msg(my_log.LOG_DEBUG, 'CPU zone fan controller enabled')
         my_cpu_zone = CpuZone(my_log, my_ipmi, my_config)
 
     # Create an instance for HD zone fan controller if enabled.
     my_hd_zone = None
-    hd_zone_enabled = my_config['HD zone'].getboolean('enabled', fallback=False)
+    hd_zone_enabled = my_config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED, fallback=False)
     if hd_zone_enabled:
         my_log.msg(my_log.LOG_DEBUG, 'HD zone fan controller enabled')
         my_hd_zone = HdZone(my_log, my_ipmi, my_config)

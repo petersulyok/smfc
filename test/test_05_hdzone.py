@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-#   test_05_hdzone.py (C) 2021-2022, Peter Sulyok
+#   test_05_hdzone.py (C) 2021-2023, Peter Sulyok
 #   Unit tests for smfc.HdZone() class.
 #
 import configparser
@@ -33,27 +33,27 @@ class HdZoneTestCase(unittest.TestCase):
         mock_print = MagicMock()
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': cmd_ipmi,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: cmd_ipmi,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'count': str(count),
-                'temp_calc': str(temp_calc),
-                'steps': str(steps),
-                'sensitivity': str(sensitivity),
-                'polling': str(polling),
-                'min_temp': str(min_temp),
-                'max_temp': str(max_temp),
-                'min_level': str(min_level),
-                'max_level': str(max_level),
-                'hd_names': hd_names,
-                'hwmon_path': hwmon_path,
-                'standby_guard_enabled': '1',
-                'standby_hd_limit': str(sb_limit),
-                'smartctl_path': cmd_smart
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: str(count),
+                HdZone.CV_HD_ZONE_TEMP_CALC: str(temp_calc),
+                HdZone.CV_HD_ZONE_STEPS: str(steps),
+                HdZone.CV_HD_ZONE_SENSITIVITY: str(sensitivity),
+                HdZone.CV_HD_ZONE_POLLING: str(polling),
+                HdZone.CV_HD_ZONE_MIN_TEMP: str(min_temp),
+                HdZone.CV_HD_ZONE_MAX_TEMP: str(max_temp),
+                HdZone.CV_HD_ZONE_MIN_LEVEL: str(min_level),
+                HdZone.CV_HD_ZONE_MAX_LEVEL: str(max_level),
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
+                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
+                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
+                HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: str(sb_limit),
+                HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -114,14 +114,14 @@ class HdZoneTestCase(unittest.TestCase):
              patch('glob.glob', mock_glob), \
              patch('os.listdir', mock_listdir):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'hd_names': hd_names
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -158,27 +158,27 @@ class HdZoneTestCase(unittest.TestCase):
         mock_print = MagicMock()
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': cmd_ipmi,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: cmd_ipmi,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'count': str(count),
-                'temp_calc': str(temp_calc),
-                'steps': str(steps),
-                'sensitivity': str(sensitivity),
-                'polling': str(polling),
-                'min_temp': str(min_temp),
-                'max_temp': str(max_temp),
-                'min_level': str(min_level),
-                'max_level': str(max_level),
-                'hd_names': hd_names,
-                'hwmon_path': hwmon_path,
-                'standby_guard_enabled': '1',
-                'standby_hd_limit': str(sb_limit),
-                'smartctl_path': cmd_smart
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: str(count),
+                HdZone.CV_HD_ZONE_TEMP_CALC: str(temp_calc),
+                HdZone.CV_HD_ZONE_STEPS: str(steps),
+                HdZone.CV_HD_ZONE_SENSITIVITY: str(sensitivity),
+                HdZone.CV_HD_ZONE_POLLING: str(polling),
+                HdZone.CV_HD_ZONE_MIN_TEMP: str(min_temp),
+                HdZone.CV_HD_ZONE_MAX_TEMP: str(max_temp),
+                HdZone.CV_HD_ZONE_MIN_LEVEL: str(min_level),
+                HdZone.CV_HD_ZONE_MAX_LEVEL: str(max_level),
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
+                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
+                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
+                HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: str(sb_limit),
+                HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -263,15 +263,15 @@ class HdZoneTestCase(unittest.TestCase):
              patch('glob.glob', mock_glob), \
              patch('os.listdir', mock_listdir):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'count': str(count),
-                'hd_names': hd_names
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: str(count),
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -321,15 +321,15 @@ class HdZoneTestCase(unittest.TestCase):
              patch('glob.glob', mock_glob), \
              patch('os.listdir', mock_listdir):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'count': str(count),
-                'hd_names': hd_names
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: str(count),
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -371,16 +371,16 @@ class HdZoneTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'count': '8',
-                'hd_names': hd_names,
-                'hwmon_path': hwmon_path,
-                'standby_guard_enabled': '1'
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: '8',
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
+                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
+                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -435,16 +435,16 @@ class HdZoneTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'count': '8',
-                'hd_names': hd_names,
-                'hwmon_path': hwmon_path,
-                'standby_guard_enabled': '1'
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: '8',
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
+                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
+                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -482,16 +482,16 @@ class HdZoneTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'count': '2',
-                'hd_names': hd_names,
-                'hwmon_path': hwmon_path,
-                'standby_guard_enabled': '1'
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: '2',
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
+                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
+                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -550,16 +550,16 @@ class HdZoneTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'count': '8',
-                'hd_names': hd_names,
-                'hwmon_path': hwmon_path,
-                'standby_guard_enabled': '1',
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: '8',
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
+                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
+                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -593,16 +593,16 @@ class HdZoneTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'count': '2',
-                'hd_names': hd_names,
-                'hwmon_path': hwmon_path,
-                'standby_guard_enabled': '1',
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: '2',
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
+                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
+                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -654,16 +654,16 @@ class HdZoneTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['HD zone'] = {
-                'enabled': '1',
-                'count': '8',
-                'hd_names': hd_names,
-                'hwmon_path': hwmon_path,
-                'standby_guard_enabled': '1'
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: '8',
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
+                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
+                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1'
             }
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)

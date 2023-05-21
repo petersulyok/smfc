@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-#   test_04_cpuzone.py (C) 2021-2022, Peter Sulyok
+#   test_04_cpuzone.py (C) 2021-2023, Peter Sulyok
 #   Unit tests for smfc.CpuZone() class.
 #
 import configparser
@@ -29,23 +29,23 @@ class CpuZoneTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['CPU zone'] = {
-                'enabled': '1',
-                'count': str(count),
-                'temp_calc': str(temp_calc),
-                'steps': str(steps),
-                'sensitivity': str(sensitivity),
-                'polling': str(polling),
-                'min_temp': str(min_temp),
-                'max_temp': str(max_temp),
-                'min_level': str(min_level),
-                'max_level': str(max_level),
-                'hwmon_path': hwmon_path
+            my_config[CpuZone.CS_CPU_ZONE] = {
+                CpuZone.CV_CPU_ZONE_ENABLED: '1',
+                CpuZone.CV_CPU_ZONE_COUNT: str(count),
+                CpuZone.CV_CPU_ZONE_TEMP_CALC: str(temp_calc),
+                CpuZone.CV_CPU_ZONE_STEPS: str(steps),
+                CpuZone.CV_CPU_ZONE_SENSITIVITY: str(sensitivity),
+                CpuZone.CV_CPU_ZONE_POLLING: str(polling),
+                CpuZone.CV_CPU_ZONE_MIN_TEMP: str(min_temp),
+                CpuZone.CV_CPU_ZONE_MAX_TEMP: str(max_temp),
+                CpuZone.CV_CPU_ZONE_MIN_LEVEL: str(min_level),
+                CpuZone.CV_CPU_ZONE_MAX_LEVEL: str(max_level),
+                CpuZone.CV_CPU_ZONE_HWMON_PATH: hwmon_path
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -94,13 +94,13 @@ class CpuZoneTestCase(unittest.TestCase):
              patch('subprocess.run', mock_subprocess_run), \
              patch('glob.glob', mock_glob):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['CPU zone'] = {
-                'enabled': '1',
+            my_config[CpuZone.CS_CPU_ZONE] = {
+                CpuZone.CV_CPU_ZONE_ENABLED: '1',
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -135,14 +135,14 @@ class CpuZoneTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['CPU zone'] = {
-                'enabled': '1',
-                'count': str(count),
+            my_config[CpuZone.CS_CPU_ZONE] = {
+                CpuZone.CV_CPU_ZONE_ENABLED: '1',
+                CpuZone.CV_CPU_ZONE_COUNT: str(count),
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -199,14 +199,14 @@ class CpuZoneTestCase(unittest.TestCase):
              patch('subprocess.run', mock_subprocess_run), \
              patch('glob.glob', mock_glob):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['CPU zone'] = {
-                'enabled': '1',
-                'count': str(count)
+            my_config[CpuZone.CS_CPU_ZONE] = {
+                CpuZone.CV_CPU_ZONE_ENABLED: '1',
+                CpuZone.CV_CPU_ZONE_COUNT: str(count)
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -245,14 +245,14 @@ class CpuZoneTestCase(unittest.TestCase):
              patch('subprocess.run', mock_subprocess_run), \
              patch('glob.glob', mock_glob):
             my_config = configparser.ConfigParser()
-            my_config['Ipmi'] = {
-                'command': command,
-                'fan_mode_delay': '0',
-                'fan_level_delay': '0'
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
             }
-            my_config['CPU zone'] = {
-                'enabled': '1',
-                'count': str(count)
+            my_config[CpuZone.CS_CPU_ZONE] = {
+                CpuZone.CV_CPU_ZONE_ENABLED: '1',
+                CpuZone.CV_CPU_ZONE_COUNT: str(count)
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)

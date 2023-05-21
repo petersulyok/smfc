@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-#   test_06_main.py (C) 2021-2022, Peter Sulyok
+#   test_06_main.py (C) 2021-2023, Peter Sulyok
 #   Unit tests for smfc.main() function.
 #
 import configparser
@@ -8,6 +8,7 @@ import sys
 import unittest
 from unittest.mock import patch, MagicMock
 from test_00_data import TestData
+from smfc import Ipmi, CpuZone, HdZone
 import smfc
 
 
@@ -45,16 +46,16 @@ class MainTestCase(unittest.TestCase):
             ipmi_command = my_td.create_command_file()
         if ipmi_command == 'GOOD':
             ipmi_command = my_td.create_ipmi_command()
-        my_config['Ipmi'] = {
-            'command': ipmi_command,
-            'fan_mode_delay': str(mode_delay),
-            'fan_level_delay': str(level_delay),
+        my_config[Ipmi.CS_IPMI] = {
+            Ipmi.CV_IPMI_COMMAND: ipmi_command,
+            Ipmi.CV_IPMI_FAN_MODE_DELAY: str(mode_delay),
+            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: str(level_delay),
         }
-        my_config['CPU zone'] = {
-            'enabled': '0'
+        my_config[CpuZone.CS_CPU_ZONE] = {
+            CpuZone.CV_CPU_ZONE_ENABLED: '0'
         }
-        my_config['HD zone'] = {
-            'enabled': '0'
+        my_config[HdZone.CS_HD_ZONE] = {
+            HdZone.CV_HD_ZONE_ENABLED: '0'
         }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
@@ -88,40 +89,40 @@ class MainTestCase(unittest.TestCase):
         hd_hwmon_path = my_td.get_hd_8()
         hd_names = my_td.get_hd_names(8)
         my_config = configparser.ConfigParser()
-        my_config['Ipmi'] = {
-            'command': cmd_ipmi,
-            'fan_mode_delay': '0',
-            'fan_level_delay': '0'
+        my_config[Ipmi.CS_IPMI] = {
+            Ipmi.CV_IPMI_COMMAND: cmd_ipmi,
+            Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
         }
-        my_config['CPU zone'] = {
-            'enabled': str(cpuzone),
-            'count': '1',
-            'temp_calc': '1',
-            'steps': '5',
-            'sensitivity': '5',
-            'polling': '0',
-            'min_temp': '30',
-            'max_temp': '60',
-            'min_level': '35',
-            'max_level': '100',
-            'hwmon_path': cpu_hwmon_path
+        my_config[CpuZone.CS_CPU_ZONE] = {
+            CpuZone.CV_CPU_ZONE_ENABLED: str(cpuzone),
+            CpuZone.CV_CPU_ZONE_COUNT: '1',
+            CpuZone.CV_CPU_ZONE_TEMP_CALC: '1',
+            CpuZone.CV_CPU_ZONE_STEPS: '5',
+            CpuZone.CV_CPU_ZONE_SENSITIVITY: '5',
+            CpuZone.CV_CPU_ZONE_POLLING: '0',
+            CpuZone.CV_CPU_ZONE_MIN_TEMP: '30',
+            CpuZone.CV_CPU_ZONE_MAX_TEMP: '60',
+            CpuZone.CV_CPU_ZONE_MIN_LEVEL: '35',
+            CpuZone.CV_CPU_ZONE_MAX_LEVEL: '100',
+            CpuZone.CV_CPU_ZONE_HWMON_PATH: cpu_hwmon_path
         }
-        my_config['HD zone'] = {
-            'enabled': str(hdzone),
-            'count': '8',
-            'temp_calc': '1',
-            'steps': '4',
-            'sensitivity': '2',
-            'polling': '0',
-            'min_temp': '30',
-            'max_temp': '45',
-            'min_level': '35',
-            'max_level': '100',
-            'hd_names': hd_names,
-            'hwmon_path': hd_hwmon_path,
-            'standby_guard_enabled': '1',
-            'standby_hd_limit': '2',
-            'smartctl_path': cmd_smart
+        my_config[HdZone.CS_HD_ZONE] = {
+            HdZone.CV_HD_ZONE_ENABLED: str(hdzone),
+            HdZone.CV_HD_ZONE_COUNT: '8',
+            HdZone.CV_HD_ZONE_TEMP_CALC: '1',
+            HdZone.CV_HD_ZONE_STEPS: '4',
+            HdZone.CV_HD_ZONE_SENSITIVITY: '2',
+            HdZone.CV_HD_ZONE_POLLING: '0',
+            HdZone.CV_HD_ZONE_MIN_TEMP: '30',
+            HdZone.CV_HD_ZONE_MAX_TEMP: '45',
+            HdZone.CV_HD_ZONE_MIN_LEVEL: '35',
+            HdZone.CV_HD_ZONE_MAX_LEVEL: '100',
+            HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
+            HdZone.CV_HD_ZONE_HWMON_PATH: hd_hwmon_path,
+            HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
+            HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: '2',
+            HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart
         }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
