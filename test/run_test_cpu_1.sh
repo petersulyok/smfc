@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#   run_test_cpu_1.sh (C) 2021-2022 Peter Sulyok
+#   run_test_cpu_1.sh (C) 2021-2023 Peter Sulyok
 #   This script will run smoke test: CPU 1 configuration.
 #
 

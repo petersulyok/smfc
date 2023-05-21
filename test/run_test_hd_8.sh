@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#   run_test_hd_8.sh (C) 2021-2022 Peter Sulyok
+#   run_test_hd_8.sh (C) 2021-2023 Peter Sulyok
 #   This script will run smoke test: HD 8 configuration.
 #
 
