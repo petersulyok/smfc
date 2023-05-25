@@ -940,7 +940,7 @@ def main():
 
     # Create an instance for HD zone fan controller if enabled.
     my_hd_zone = None
-    hd_zone_enabled = my_config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED, fallback=False)
+    hd_zone_enabled = my_config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_ENABLED, fallback=False)
     if hd_zone_enabled:
         my_log.msg(my_log.LOG_DEBUG, 'HD zone fan controller enabled')
         my_hd_zone = HdZone(my_log, my_ipmi, my_config)
