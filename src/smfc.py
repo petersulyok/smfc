@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 #
 #   smfc.py (C) 2020-2023, Peter Sulyok
-#   IPMI fan controller for Super Micro X9/X10/X11 motherboards.
+#   IPMI fan controller for Super Micro X10/X11 motherboards.
 #
 import argparse
 import configparser
@@ -15,7 +15,7 @@ from typing import List, Callable
 
 
 # Program version string
-version_str: str = '2.4.0'
+version_str: str = '2.5.0'
 
 
 class Log:
@@ -29,8 +29,9 @@ class Log:
     # Constants for log levels.
     LOG_NONE: int = 0
     LOG_ERROR: int = 1
-    LOG_INFO: int = 2
-    LOG_DEBUG: int = 3
+    LOG_CONFIG: int = 2
+    LOG_INFO: int = 3
+    LOG_DEBUG: int = 4
 
     # Constants for log outputs.
     LOG_STDOUT: int = 0
@@ -41,11 +42,11 @@ class Log:
         """Initialize Log class with log output and log level.
 
         Args:
-            log_level (int): user defined log level (LOG_NONE, LOG_ERROR, LOG_INFO, LOG_DEBUG)
+            log_level (int): user defined log level (LOG_NONE, LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             log_output (int): user defined log output (LOG_STDOUT, LOG_STDERR, LOG_SYSLOG)
         """
         # Setup log configuration.
-        if log_level not in {self.LOG_NONE, self.LOG_ERROR, self.LOG_INFO, self.LOG_DEBUG}:
+        if log_level not in {self.LOG_NONE, self.LOG_ERROR, self.LOG_CONFIG, self.LOG_INFO, self.LOG_DEBUG}:
             raise ValueError(f'Invalid log level value ({log_level})')
         self.log_level = log_level
         if log_output not in {self.LOG_STDOUT, self.LOG_STDERR, self.LOG_SYSLOG}:
@@ -60,21 +61,21 @@ class Log:
             syslog.openlog('smfc.service', facility=syslog.LOG_DAEMON)
 
         # Print the configuration out at DEBUG log level.
-        if self.log_level >= self.LOG_DEBUG:
-            self.msg(Log.LOG_DEBUG, 'Logging module was initialized with:')
-            self.msg(Log.LOG_DEBUG, f'   log_level = {self.log_level}')
-            self.msg(Log.LOG_DEBUG, f'   log_output = {self.log_output}')
+        if self.log_level >= self.LOG_CONFIG:
+            self.msg(Log.LOG_CONFIG, 'Logging module was initialized with:')
+            self.msg(Log.LOG_CONFIG, f'   log_level = {self.log_level}')
+            self.msg(Log.LOG_CONFIG, f'   log_output = {self.log_output}')
 
     def map_to_syslog(self, level: int) -> int:
         """Map log level to syslog values.
 
             Args:
-                level (int): log level (LOG_ERROR, LOG_INFO, LOG_DEBUG)
+                level (int): log level (LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             Returns:
                 int: syslog log level
             """
         syslog_level = syslog.LOG_ERR
-        if level == self.LOG_INFO:
+        if level == self.LOG_CONFIG or level == self.LOG_INFO:
             syslog_level = syslog.LOG_INFO
         elif level == self.LOG_DEBUG:
             syslog_level = syslog.LOG_DEBUG
@@ -84,11 +85,15 @@ class Log:
         """Convert a log level to a string.
 
             Args:
-                level (int): log level (LOG_ERROR, LOG_INFO, LOG_DEBUG)
+                level (int): log level (LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             Returns:
                 str: log level string
             """
-        string = 'ERROR'
+        string = 'NONE'
+        if level == self.LOG_ERROR:
+            string = 'ERROR'
+        if level == self.LOG_CONFIG:
+            string = 'CONFIG'
         if level == self.LOG_INFO:
             string = 'INFO'
         elif level == self.LOG_DEBUG:
@@ -99,7 +104,7 @@ class Log:
         """Print a log message to syslog.
 
         Args:
-            level (int): log level (LOG_ERROR, LOG_INFO, LOG_DEBUG)
+            level (int): log level (LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             msg (str): log message
         """
         if level is not self.LOG_NONE:
@@ -110,7 +115,7 @@ class Log:
         """Print a log message to stdout.
 
         Args:
-            level (int): log level (LOG_ERROR, LOG_INFO, LOG_DEBUG)
+            level (int): log level (LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             msg (str):  log message
         """
         if level is not self.LOG_NONE:
@@ -121,7 +126,7 @@ class Log:
         """Print a log message to stderr.
 
         Args:
-            level (int): log level (LOG_ERROR, LOG_INFO, LOG_DEBUG)
+            level (int): log level (LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             msg (str):  log message
         """
         if level is not self.LOG_NONE:
@@ -186,12 +191,12 @@ class Ipmi:
         if self.fan_level_delay < 0:
             raise ValueError(f'Negative fan_level_delay ({self.fan_level_delay})')
         # Print the configuration out at DEBUG log level.
-        if self.log.log_level >= self.log.LOG_DEBUG:
-            self.log.msg(self.log.LOG_DEBUG, 'Ipmi module was initialized with :')
-            self.log.msg(self.log.LOG_DEBUG, f'   {self.CV_IPMI_COMMAND} = {self.command}')
-            self.log.msg(self.log.LOG_DEBUG, f'   {self.CV_IPMI_FAN_MODE_DELAY} = {self.fan_mode_delay}')
-            self.log.msg(self.log.LOG_DEBUG, f'   {self.CV_IPMI_FAN_LEVEL_DELAY} = {self.fan_level_delay}')
-            self.log.msg(self.log.LOG_DEBUG, f'   {self.CV_IPMI_SWAPPED_ZONES} = {self.swapped_zones}')
+        if self.log.log_level >= self.log.LOG_CONFIG:
+            self.log.msg(self.log.LOG_CONFIG, 'Ipmi module was initialized with:')
+            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_COMMAND} = {self.command}')
+            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_FAN_MODE_DELAY} = {self.fan_mode_delay}')
+            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_FAN_LEVEL_DELAY} = {self.fan_level_delay}')
+            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_SWAPPED_ZONES} = {self.swapped_zones}')
 
     def get_fan_mode(self) -> int:
         """Get the current IPMI fan mode.
@@ -393,19 +398,19 @@ class FanController:
         self.last_level = 0
         self.last_time = time.monotonic() - (polling + 1)
         # Print configuration at DEBUG log level.
-        if self.log.log_level >= self.log.LOG_DEBUG:
-            self.log.msg(self.log.LOG_DEBUG, f'{self.name} fan controller was initialized with:')
-            self.log.msg(self.log.LOG_DEBUG, f'   IPMI zone = {self.ipmi_zone}')
-            self.log.msg(self.log.LOG_DEBUG, f'   count = {self.count}')
-            self.log.msg(self.log.LOG_DEBUG, f'   temp_calc = {self.temp_calc}')
-            self.log.msg(self.log.LOG_DEBUG, f'   steps = {self.steps}')
-            self.log.msg(self.log.LOG_DEBUG, f'   sensitivity = {self.sensitivity}')
-            self.log.msg(self.log.LOG_DEBUG, f'   polling = {self.polling}')
-            self.log.msg(self.log.LOG_DEBUG, f'   min_temp = {self.min_temp}')
-            self.log.msg(self.log.LOG_DEBUG, f'   max_temp = {self.max_temp}')
-            self.log.msg(self.log.LOG_DEBUG, f'   min_level = {self.min_level}')
-            self.log.msg(self.log.LOG_DEBUG, f'   max_level = {self.max_level}')
-            self.log.msg(self.log.LOG_DEBUG, f'   hwmon_path = {self.hwmon_path}')
+        if self.log.log_level >= self.log.LOG_CONFIG:
+            self.log.msg(self.log.LOG_CONFIG, f'{self.name} fan controller was initialized with:')
+            self.log.msg(self.log.LOG_CONFIG, f'   zone = {self.ipmi_zone}')
+            self.log.msg(self.log.LOG_CONFIG, f'   count = {self.count}')
+            self.log.msg(self.log.LOG_CONFIG, f'   temp_calc = {self.temp_calc}')
+            self.log.msg(self.log.LOG_CONFIG, f'   steps = {self.steps}')
+            self.log.msg(self.log.LOG_CONFIG, f'   sensitivity = {self.sensitivity}')
+            self.log.msg(self.log.LOG_CONFIG, f'   polling = {self.polling}')
+            self.log.msg(self.log.LOG_CONFIG, f'   min_temp = {self.min_temp}')
+            self.log.msg(self.log.LOG_CONFIG, f'   max_temp = {self.max_temp}')
+            self.log.msg(self.log.LOG_CONFIG, f'   min_level = {self.min_level}')
+            self.log.msg(self.log.LOG_CONFIG, f'   max_level = {self.max_level}')
+            self.log.msg(self.log.LOG_CONFIG, f'   hwmon_path = {self.hwmon_path}')
             self.print_temp_level_mapping()
 
     def build_hwmon_path(self, hwmon_str: str) -> None:
@@ -559,9 +564,9 @@ class FanController:
 
     def print_temp_level_mapping(self) -> None:
         """Print out the uder-defined temperature to level mapping value in log DEBUG level."""
-        self.log.msg(self.log.LOG_DEBUG, '   Temperature:level mapping:')
+        self.log.msg(self.log.LOG_CONFIG, '   Temperature to level mapping:')
         for i in range(self.steps + 1):
-            self.log.msg(self.log.LOG_DEBUG, f'   {i}. [T:{self.min_temp+(i*self.temp_step):.1f}C - '
+            self.log.msg(self.log.LOG_CONFIG, f'   {i}. [T:{self.min_temp+(i*self.temp_step):.1f}C - '
                          f'L:{int(self.min_level + (i * self.level_step))}%]')
 
 
@@ -711,7 +716,7 @@ class HdZone(FanController):
         self.standby_guard_enabled = config[self.CS_HD_ZONE].getboolean(self.CV_HD_ZONE_STANDBY_GUARD_ENABLED,
                                                                         fallback=False)
         if self.count == 1:
-            self.log.msg(self.log.LOG_INFO, 'Standby guard is disabled << [HD zone] count=1')
+            self.log.msg(self.log.LOG_INFO, '   Standby guard is disabled << [HD zone] count=1')
             self.standby_guard_enabled = False
         if self.standby_guard_enabled:
             self.standby_array_states = [False] * count
@@ -728,14 +733,14 @@ class HdZone(FanController):
             self.standby_change_timestamp = time.monotonic()
             self.standby_flag = n == self.count
         # Print configuration in DEBUG log level (or higher).
-        if self.log.log_level >= self.log.LOG_DEBUG:
-            self.log.msg(self.log.LOG_DEBUG, f'   hd_names = {self.hd_device_names}')
+        if self.log.log_level >= self.log.LOG_CONFIG:
+            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_HD_ZONE_HD_NAMES} = {self.hd_device_names}')
             if self.standby_guard_enabled:
-                self.log.msg(self.log.LOG_DEBUG, '   Standby guard is enabled:')
-                self.log.msg(self.log.LOG_DEBUG, f'   standby_hd_limit = {self.standby_hd_limit}')
-                self.log.msg(self.log.LOG_DEBUG, f'   smartctl_path = {self.smartctl_path}')
+                self.log.msg(self.log.LOG_CONFIG, '   Standby guard is enabled:')
+                self.log.msg(self.log.LOG_CONFIG, f'     {self.CV_HD_ZONE_STANDBY_HD_LIMIT} = {self.standby_hd_limit}')
+                self.log.msg(self.log.LOG_CONFIG, f'     {self.CV_HD_ZONE_SMARTCTL_PATH} = {self.smartctl_path}')
             else:
-                self.log.msg(self.log.LOG_DEBUG, '   Standby guard is disabled')
+                self.log.msg(self.log.LOG_CONFIG, '   Standby guard is disabled')
 
     def build_hwmon_path(self, hwmon_str: str) -> None:
         """Build hwmon_path[] list for the HD zone."""
@@ -892,8 +897,8 @@ def main():
     my_parser.add_argument('-c', action='store', dest='config_file', default='smfc.conf',
                            help='configuration file')
     my_parser.add_argument('-v', action='version', version='%(prog)s ' + version_str)
-    my_parser.add_argument('-l', type=int, choices=[0, 1, 2, 3], default=1,
-                           help='log level: 0-NONE, 1-ERROR(default), 2-INFO, 3-DEBUG')
+    my_parser.add_argument('-l', type=int, choices=[0, 1, 2, 3, 4], default=1,
+                           help='log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG')
     my_parser.add_argument('-o', type=int, choices=[0, 1, 2], default=2,
                            help='log output: 0-stdout, 1-stderr, 2-syslog(default)')
     my_results = my_parser.parse_args()
@@ -905,12 +910,12 @@ def main():
         print(f'ERROR: {e}.', flush=True, file=sys.stdout)
         sys.exit(5)
 
-    if my_log.log_level >= my_log.LOG_DEBUG:
-        my_log.msg(my_log.LOG_DEBUG, 'Command line arguments:')
-        my_log.msg(my_log.LOG_DEBUG, f'   original arguments: {" ".join(sys.argv[:])}')
-        my_log.msg(my_log.LOG_DEBUG, f'   parsed config file = {my_results.config_file}')
-        my_log.msg(my_log.LOG_DEBUG, f'   parsed log level = {my_results.l}')
-        my_log.msg(my_log.LOG_DEBUG, f'   parsed log output = {my_results.o}')
+    if my_log.log_level >= my_log.LOG_CONFIG:
+        my_log.msg(my_log.LOG_CONFIG, 'Command line arguments:')
+        my_log.msg(my_log.LOG_CONFIG, f'   original arguments: {" ".join(sys.argv[:])}')
+        my_log.msg(my_log.LOG_CONFIG, f'   parsed config file = {my_results.config_file}')
+        my_log.msg(my_log.LOG_CONFIG, f'   parsed log level = {my_results.l}')
+        my_log.msg(my_log.LOG_CONFIG, f'   parsed log output = {my_results.o}')
 
     # Parse and load configuration file.
     my_config = configparser.ConfigParser()

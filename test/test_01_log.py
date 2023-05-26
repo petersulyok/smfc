@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 #
 #   test_01_log.py (C) 2021-2023, Peter Sulyok
-#   Unit test for smfc.py/Log() class.
+#   Unit test for smfc.Log() class.
 #
 
 import syslog
@@ -58,22 +58,25 @@ class LogTestCase(unittest.TestCase):
         # 1: Test valid values
         self.pt_init_p1(Log.LOG_NONE, Log.LOG_STDOUT, "log init 01")
         self.pt_init_p1(Log.LOG_ERROR, Log.LOG_STDOUT, "log init 02")
-        self.pt_init_p1(Log.LOG_INFO, Log.LOG_STDOUT, "log init 03")
-        self.pt_init_p1(Log.LOG_DEBUG, Log.LOG_STDOUT, "log init 04")
+        self.pt_init_p1(Log.LOG_CONFIG, Log.LOG_STDOUT, "log init 03")
+        self.pt_init_p1(Log.LOG_INFO, Log.LOG_STDOUT, "log init 04")
+        self.pt_init_p1(Log.LOG_DEBUG, Log.LOG_STDOUT, "log init 05")
 
-        self.pt_init_p1(Log.LOG_NONE, Log.LOG_STDERR, "log init 05")
-        self.pt_init_p1(Log.LOG_ERROR, Log.LOG_STDERR, "log init 06")
-        self.pt_init_p1(Log.LOG_INFO, Log.LOG_STDERR, "log init 07")
-        self.pt_init_p1(Log.LOG_DEBUG, Log.LOG_STDERR, "log init 08")
+        self.pt_init_p1(Log.LOG_NONE, Log.LOG_STDERR, "log init 06")
+        self.pt_init_p1(Log.LOG_ERROR, Log.LOG_STDERR, "log init 07")
+        self.pt_init_p1(Log.LOG_CONFIG, Log.LOG_STDERR, "log init 08")
+        self.pt_init_p1(Log.LOG_INFO, Log.LOG_STDERR, "log init 09")
+        self.pt_init_p1(Log.LOG_DEBUG, Log.LOG_STDERR, "log init 10")
 
-        self.pt_init_p1(Log.LOG_NONE, Log.LOG_SYSLOG, "log init 09")
-        self.pt_init_p1(Log.LOG_ERROR, Log.LOG_SYSLOG, "log init 10")
-        self.pt_init_p1(Log.LOG_INFO, Log.LOG_SYSLOG, "log init 11")
-        self.pt_init_p1(Log.LOG_DEBUG, Log.LOG_SYSLOG, "log init 12")
+        self.pt_init_p1(Log.LOG_NONE, Log.LOG_SYSLOG, "log init 11")
+        self.pt_init_p1(Log.LOG_ERROR, Log.LOG_SYSLOG, "log init 12")
+        self.pt_init_p1(Log.LOG_CONFIG, Log.LOG_SYSLOG, "log init 13")
+        self.pt_init_p1(Log.LOG_INFO, Log.LOG_SYSLOG, "log init 14")
+        self.pt_init_p1(Log.LOG_DEBUG, Log.LOG_SYSLOG, "log init 15")
 
         # 2: Test invalid values.
-        self.pt_init_n1(100, Log.LOG_STDOUT, "log init 13")
-        self.pt_init_n1(Log.LOG_ERROR, 100, "log init 14")
+        self.pt_init_n1(100, Log.LOG_STDOUT, "log init 16")
+        self.pt_init_n1(Log.LOG_ERROR, 100, "log init 17")
 
     def pt_mts_p1(self, level: int, syslog_level: int, error: str) -> None:
         """Primitive positive test function. It contains the following steps:
@@ -90,8 +93,9 @@ class LogTestCase(unittest.TestCase):
     def test_map_to_syslog(self) -> None:
         """This is a unit test for function Log.map_to_syslog()."""
         self.pt_mts_p1(Log.LOG_ERROR, syslog.LOG_ERR, "log map_to_syslog 01")
-        self.pt_mts_p1(Log.LOG_INFO, syslog.LOG_INFO, "log map_to_syslog 02")
-        self.pt_mts_p1(Log.LOG_DEBUG, syslog.LOG_DEBUG, "log map_to_syslog 03")
+        self.pt_mts_p1(Log.LOG_CONFIG, syslog.LOG_INFO, "log map_to_syslog 02")
+        self.pt_mts_p1(Log.LOG_INFO, syslog.LOG_INFO, "log map_to_syslog 03")
+        self.pt_mts_p1(Log.LOG_DEBUG, syslog.LOG_DEBUG, "log map_to_syslog 04")
 
     def pt_lts_p1(self, level: int, level_str: str, error: str) -> None:
         """Primitive positive test function. It contains the following steps:
@@ -107,9 +111,11 @@ class LogTestCase(unittest.TestCase):
 
     def test_level_to_str(self) -> None:
         """This is a unit test for function Log.level_to_str()."""
-        self.pt_lts_p1(Log.LOG_ERROR, 'ERROR', "log level_to_str 01")
-        self.pt_lts_p1(Log.LOG_INFO, 'INFO', "log level_to_str 02")
-        self.pt_lts_p1(Log.LOG_DEBUG, 'DEBUG', "log level_to_str 03")
+        self.pt_lts_p1(Log.LOG_NONE, 'NONE', "log level_to_str 01")
+        self.pt_lts_p1(Log.LOG_ERROR, 'ERROR', "log level_to_str 02")
+        self.pt_lts_p1(Log.LOG_CONFIG, 'CONFIG', "log level_to_str 03")
+        self.pt_lts_p1(Log.LOG_INFO, 'INFO', "log level_to_str 04")
+        self.pt_lts_p1(Log.LOG_DEBUG, 'DEBUG', "log level_to_str 05")
 
     def pt_mtx_p1(self, level: int, output: int, msg_level: int, count: int, error: str) -> None:
         """Positive test function. It contains the following steps:
@@ -125,7 +131,7 @@ class LogTestCase(unittest.TestCase):
         with patch('builtins.print', mock_print), patch('syslog.syslog', mock_syslog_syslog):
             my_log = Log(level, output)
             my_log.msg(msg_level, "This is a test log message.")
-            if my_log.log_level == Log.LOG_DEBUG:
+            if my_log.log_level >= Log.LOG_CONFIG:
                 count += 3
             if output == Log.LOG_STDOUT:
                 self.assertEqual(mock_print.call_count, count, error)
@@ -133,7 +139,7 @@ class LogTestCase(unittest.TestCase):
                 self.assertEqual(mock_print.call_count, count, error)
             elif output == Log.LOG_SYSLOG:
                 self.assertEqual(mock_syslog_syslog.call_count, count, error)
-            del my_log
+        del my_log
 
     def test_msg_to_xxx(self) -> None:
         """ This is a unit test for function Log.msg()."""
@@ -141,61 +147,93 @@ class LogTestCase(unittest.TestCase):
         # Test all combinations of class initialization values and same/different log level values.
         self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_NONE, 0, "log msg_to_??? 01")
         self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_ERROR, 0, "log msg_to_??? 02")
+        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_CONFIG, 0, "log msg_to_??? 03")
         self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_INFO, 0, "log msg_to_??? 03")
+        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, "log msg_to_??? 04")
+
         self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_NONE, 0, "log msg_to_??? 05")
         self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_ERROR, 0, "log msg_to_??? 06")
-        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_INFO, 0, "log msg_to_??? 07")
-        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_DEBUG, 0, "log msg_to_??? 08")
+        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_CONFIG, 0, "log msg_to_??? 07")
+        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_INFO, 0, "log msg_to_??? 08")
+        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_DEBUG, 0, "log msg_to_??? 09")
 
-        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "log msg_to_??? 09")
-        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_ERROR, 0, "log msg_to_??? 10")
-        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_INFO, 0, "log msg_to_??? 11")
-        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, "log msg_to_??? 12")
+        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "log msg_to_??? 10")
+        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_ERROR, 0, "log msg_to_??? 11")
+        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_CONFIG, 0, "log msg_to_??? 12")
+        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_INFO, 0, "log msg_to_??? 13")
+        self.pt_mtx_p1(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, "log msg_to_??? 14")
 
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_NONE, 0, "log msg_to_??? 13")
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_ERROR, 1, "log msg_to_??? 14")
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_INFO, 0, "log msg_to_??? 15")
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, "log msg_to_??? 16")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_NONE, 0, "log msg_to_??? 15")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_ERROR, 1, "log msg_to_??? 16")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_CONFIG, 0, "log msg_to_??? 17")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_INFO, 0, "log msg_to_??? 18")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, "log msg_to_??? 19")
 
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_NONE, 0, "log msg_to_??? 17")
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_ERROR, 1, "log msg_to_??? 18")
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_INFO, 0, "log msg_to_??? 19")
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_DEBUG, 0, "log msg_to_??? 20")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_NONE, 0, "log msg_to_??? 20")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_ERROR, 1, "log msg_to_??? 21")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_CONFIG, 0, "log msg_to_??? 22")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_INFO, 0, "log msg_to_??? 23")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_DEBUG, 0, "log msg_to_??? 24")
 
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "log msg_to_??? 21")
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, "log msg_to_??? 22")
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_INFO, 0, "log msg_to_??? 23")
-        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, "log msg_to_??? 24")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "log msg_to_??? 25")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, "log msg_to_??? 26")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_CONFIG, 0, "log msg_to_??? 27")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_INFO, 0, "log msg_to_??? 28")
+        self.pt_mtx_p1(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, "log msg_to_??? 29")
 
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_NONE, 0, "log msg_to_??? 25")
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_ERROR, 1, "log msg_to_??? 26")
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_INFO, 1, "log msg_to_??? 27")
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, "log msg_to_??? 28")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_NONE, 0, "log msg_to_??? 30")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_ERROR, 1, "log msg_to_??? 31")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_CONFIG, 1, "log msg_to_??? 32")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_INFO, 0, "log msg_to_??? 33")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, "log msg_to_??? 34")
 
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_NONE, 0, "log msg_to_??? 29")
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_ERROR, 1, "log msg_to_??? 30")
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_INFO, 1, "log msg_to_??? 31")
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_DEBUG, 0, "log msg_to_??? 32")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_NONE, 0, "log msg_to_??? 35")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_ERROR, 1, "log msg_to_??? 36")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_CONFIG, 1, "log msg_to_??? 37")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_INFO, 0, "log msg_to_??? 38")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_DEBUG, 0, "log msg_to_??? 39")
 
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "log msg_to_??? 33")
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, "log msg_to_??? 34")
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_INFO, 1, "log msg_to_??? 35")
-        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, "log msg_to_??? 36")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "log msg_to_??? 40")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, "log msg_to_??? 41")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_CONFIG, 1, "log msg_to_??? 42")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_INFO, 0, "log msg_to_??? 43")
+        self.pt_mtx_p1(Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, "log msg_to_??? 44")
 
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_NONE, 0, "log msg_to_??? 37")
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_ERROR, 1, "log msg_to_??? 38")
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_INFO, 1, "log msg_to_??? 39")
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_DEBUG, 1, "log msg_to_??? 40")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_NONE, 0, "log msg_to_??? 45")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_ERROR, 1, "log msg_to_??? 46")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_CONFIG, 1, "log msg_to_??? 47")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_INFO, 1, "log msg_to_??? 48")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, "log msg_to_??? 49")
 
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_NONE, 0, "log msg_to_??? 41")
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_ERROR, 1, "log msg_to_??? 42")
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_INFO, 1, "log msg_to_??? 43")
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_DEBUG, 1, "log msg_to_??? 44")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_NONE, 0, "log msg_to_??? 50")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_ERROR, 1, "log msg_to_??? 51")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_CONFIG, 1, "log msg_to_??? 52")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_INFO, 1, "log msg_to_??? 53")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_DEBUG, 0, "log msg_to_??? 54")
 
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "log msg_to_??? 45")
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, "log msg_to_??? 46")
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_INFO, 1, "log msg_to_??? 47")
-        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_DEBUG, 1, "log msg_to_??? 48")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "log msg_to_??? 55")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, "log msg_to_??? 56")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_CONFIG, 1, "log msg_to_??? 57")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_INFO, 1, "log msg_to_??? 58")
+        self.pt_mtx_p1(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, "log msg_to_??? 59")
+
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_NONE, 0, "log msg_to_??? 60")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_ERROR, 1, "log msg_to_??? 61")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_CONFIG, 1, "log msg_to_??? 62")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_INFO, 1, "log msg_to_??? 63")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_DEBUG, 1, "log msg_to_??? 64")
+
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_NONE, 0, "log msg_to_??? 65")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_ERROR, 1, "log msg_to_??? 66")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_CONFIG, 1, "log msg_to_??? 67")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_INFO, 1, "log msg_to_??? 68")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_DEBUG, 1, "log msg_to_??? 69")
+
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "log msg_to_??? 70")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, "log msg_to_??? 71")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_CONFIG, 1, "log msg_to_??? 72")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_INFO, 1, "log msg_to_??? 73")
+        self.pt_mtx_p1(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_DEBUG, 1, "log msg_to_??? 74")
 
 
 if __name__ == "__main__":

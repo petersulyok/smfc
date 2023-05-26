@@ -146,10 +146,10 @@ class MainTestCase(unittest.TestCase):
         self.pt_main_n1('-h', 0, 'smfc main 1')
         self.pt_main_n1('-v', 0, 'smfc main 2')
         # Test exits for invalid command line parameters.
-        self.pt_main_n1('-l 4', 2, 'smfc main 3')
-        self.pt_main_n1('-o 3', 2, 'smfc main 4')
-        self.pt_main_n1('-o 1 -l 5', 2, 'smfc main 5')
-        self.pt_main_n1('-o 5 -l 1', 2, 'smfc main 6')
+        self.pt_main_n1('-l 10', 2, 'smfc main 3')
+        self.pt_main_n1('-o 9', 2, 'smfc main 4')
+        self.pt_main_n1('-o 1 -l 10', 2, 'smfc main 5')
+        self.pt_main_n1('-o 9 -l 1', 2, 'smfc main 6')
 
         # Test exits (5) at Log() init skipped (cannot be reproduced because of the parsing of
         # the command-line arguments parsing).
