@@ -75,7 +75,7 @@ class Log:
                 int: syslog log level
             """
         syslog_level = syslog.LOG_ERR
-        if level == self.LOG_CONFIG or level == self.LOG_INFO:
+        if level in (self.LOG_CONFIG, self.LOG_INFO):
             syslog_level = syslog.LOG_INFO
         elif level == self.LOG_DEBUG:
             syslog_level = syslog.LOG_DEBUG
