@@ -187,14 +187,14 @@ For the installation you need a root user. The default installation script `inst
 but you can use freely any other folders too. The service has the following command line options:
 
 	root@home:~/opt/smfc# ./smfc.py --help
-	usage: smfc.py [-h] [-c CONFIG_FILE] [-v] [-l {0,1,2,3}] [-o {0,1,2}]
-
+	usage: smfc.py [-h] [-c CONFIG_FILE] [-v] [-l {0,1,2,3,4}] [-o {0,1,2}]
+	
 	optional arguments:
-	  -h, --help      show this help message and exit
-	  -c CONFIG_FILE  configuration file
-	  -v              show program's version number and exit
-	  -l {0,1,2,3}    log level: 0-NONE, 1-ERROR(default), 2-INFO, 3-DEBUG
-	  -o {0,1,2}      log output: 0-stdout, 1-stderr, 2-syslog(default)
+  		-h, --help      show this help message and exit
+  		-c CONFIG_FILE  configuration file
+  		-v              show program's version number and exit
+  		-l {0,1,2,3,4}  log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG
+  		-o {0,1,2}      log output: 0-stdout, 1-stderr, 2-syslog(default)
 
 You may configure logging output and logging level here and these options can be specified in `/etc/default/smfc`in a persistent way.
 
@@ -308,8 +308,8 @@ Important notes:
  3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is **optional**, and it will be generated automatically. You can use that for testing purpose or if the automatic generation did not work for you. In this case resolution of the wild characters (`?,*`) is still available.
  4. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
 
-### 8. Running the service
-This `systemd` service can be started stopped in the standard way. Do not forget to reload `systemd` configuration after a new installation or if you changed the service definition file:
+### 8. Running of the service
+This `systemd` service can be started and stopped in the standard way. Do not forget to reload `systemd` configuration after a new installation or if you changed the service definition file:
 
 	systemctl daemon-reload
 	systemctl start smfc.service
