@@ -1,6 +1,6 @@
-flake8==5.0.4
-flake8-pyproject==1.1.0.post0
-coverage==6.5.0
-pylint==2.15.5
-pytest==7.2.0
-pytest-cov==4.0.0
+flake8
+flake8-pyproject
+coverage
+pylint
+pytest
+pytest-cov
