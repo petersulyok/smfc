@@ -27,6 +27,7 @@ This is a `systemd service` running on Linux and is able to control fans in CPU 
  5. Edit the configuration file `/opt/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
  6. Start the `systemd` service
  7. Check results in system log
+ 8. Leave a feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19)
 
 ## Details
 ### 1. How does it work?
@@ -80,6 +81,7 @@ This feature is monitoring the power state of SATA hard disks (with the help of 
 
 ### 2. Super Micro compatibility
 This software is compatible with Super Micro X10 and X11 motherboards with a BMC chip (e.g. AST2500) and IPMI functionality. In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employes a BMC chip). The earlier X8 motherboards are not compatible with this software.
+Feel free to create a short feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19) on your compatibility experience.
 
 TODO: Testing and feedback would be needed about the compatibility with Super Micro X12/X13 motherboards.
 
