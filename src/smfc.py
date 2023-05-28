@@ -400,7 +400,7 @@ class FanController:
         # Print configuration at DEBUG log level.
         if self.log.log_level >= self.log.LOG_CONFIG:
             self.log.msg(self.log.LOG_CONFIG, f'{self.name} fan controller was initialized with:')
-            self.log.msg(self.log.LOG_CONFIG, f'   zone = {self.ipmi_zone}')
+            self.log.msg(self.log.LOG_CONFIG, f'   ipmi zone = {self.ipmi_zone}')
             self.log.msg(self.log.LOG_CONFIG, f'   count = {self.count}')
             self.log.msg(self.log.LOG_CONFIG, f'   temp_calc = {self.temp_calc}')
             self.log.msg(self.log.LOG_CONFIG, f'   steps = {self.steps}')
@@ -716,7 +716,7 @@ class HdZone(FanController):
         self.standby_guard_enabled = config[self.CS_HD_ZONE].getboolean(self.CV_HD_ZONE_STANDBY_GUARD_ENABLED,
                                                                         fallback=False)
         if self.count == 1:
-            self.log.msg(self.log.LOG_INFO, '   Standby guard is disabled << [HD zone] count=1')
+            self.log.msg(self.log.LOG_INFO, '   WARNING: Standby guard is disabled ([HD zone] count=1')
             self.standby_guard_enabled = False
         if self.standby_guard_enabled:
             self.standby_array_states = [False] * count
