@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #   ipmi_bmc_reset.sh (C) 2023, Peter Sulyok
-#   This script will cold reset bmc and will measure required time for the operation.
+#   This script will send cold reset to BMC chip and will measure required time for the operation.
 #
 
 # This script must be executed by root.
