@@ -96,10 +96,10 @@ The code was checked with `pylint` and `flake8`. They can be executed this way:
 	flake8
 
 ## Github workflow
-A github workflow implemented for this project that will be executed for all pushes and pull requests. The workflow contains the following steps:
+A github workflow has been implemented for this project that is executed in case of push and pull request operations. The workflow contains the following steps:
 
  - lint with `flake8` and `pylint`
- - unit test with `pytest` (coverage measurement is included)
+ - unit test with `pytest` (coverage measurement is also included)
 
 The workflow is executed on the following test matrix:
 
