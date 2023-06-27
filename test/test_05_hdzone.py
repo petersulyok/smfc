@@ -4,7 +4,6 @@
 #   Unit tests for smfc.HdZone() class.
 #
 import configparser
-import os
 import subprocess
 import unittest
 import glob

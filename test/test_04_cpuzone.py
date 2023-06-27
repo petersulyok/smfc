@@ -373,8 +373,9 @@ class CpuZoneTestCase(unittest.TestCase):
             elif operation == 2:
                 os.system('echo "invalid value" >' + hwmon)
             # Index overflow, do nothing.
-            #else: operation == 3
-                # noop
+            else:
+                # operation == 3
+                pass
             with self.assertRaises(Exception) as cm:
                 my_cpuzone._get_nth_temp(index)
             self.assertTrue(type(cm.exception) in [IOError, FileNotFoundError, ValueError, IndexError], error)
