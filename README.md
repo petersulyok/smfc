@@ -92,8 +92,8 @@ The `smfc` service was originally designed for `SATA` hard drives, but now it is
 Some additional notes:
 
 - For `NVME` SSDs no kernel driver will be loaded the kernel itself can handle this disk type
-- For `SATA` disks the `drivetemp` kernel module should be loaded (this is the fastest way to read disk temperature and can report the temperature during sleep mode)
-- For `SAS/SCSI` disks the `hddtemp` linux command will be used (deamon mode is NOT required)
+- For `SATA` disks the `drivetemp` kernel module should be loaded (this is the fastest way to read disk temperature and the kernel module can report the temperature during sleep mode!)
+- For `SAS/SCSI` disks the `hddtemp` linux command will be used to read disk temperature (deamon mode is NOT required)
 - Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported.
 - Before you specify an `NVME` disk in the HD zone please consider fact that they operate on a significantly higher temperature range than the classical disks.
 - The service is classifying the disk types automatically based on the tags (`ata-`, `nvme-` and `scsi-`) in the disk names. For example:
