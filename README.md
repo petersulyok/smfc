@@ -17,7 +17,8 @@ This is a `systemd service` running on Linux and is able to control fans in CPU 
  - Linux (kernel 5.6+) with `systemd` (`coretemp` and `drivetemp` kernel modules for CPU and hard disk temperatures)
  - `bash`
  - `ipmitool`
- - optional: `smartmontools` for the *standby guard* feature 
+ - optional: `smartmontools` for the *standby guard* feature
+ - optional: `hddtemp` for the SAS/SCSI disks
 
 ### 2. Installation and configuration
  1. Set up the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
@@ -71,7 +72,33 @@ Additional notes on changing fan levels:
 #### 1.2 Swapped zones
 In some cases it is useful to swap IPMI zones. In this way the fans `FAN1, FAN2, ...` will cool the HD zone and the fans `FANA, FANB, ...` will cool the CPU zone. This feature could be useful if you need more fans for the HD zone since Super Micro motherboards have more fan connectors in the CPU zone usually. This feature can be enabled with `[IPMI] swapped_zones=True` configuration parameter, in default it is disabled. 
 
-#### 1.3 Standby guard
+#### 1.3 Hard disk compatibility
+The `smfc` was originally designed for `SATA` hard drives, but it is also compatible with `NVME` and `SAS/SCSI` disk types. The following table summarizes how the temperature is read for different disk types: 
+
+| Disk type  | Temperature source   | Kernel module | Command  |
+|------------|----------------------|---------------|-----------|
+| SATA       | Linux kernel (HWMON) | `drivetemp`   | -         |
+| NVME       | Linux kernel (HWMON) | -             | -         |
+| SAS/SCSI   | `hddtemp`            | -             | `hddtemp` |
+
+Some additional notes:
+
+- For `NVME` SSDs no kernel driver will be loaded the kernel itself can handle this disk type
+- For `SATA` disks the `drivetemp` kernel module should be loaded (this is the fastest way to read disk temperature and can report the temperature during sleep mode)
+- For `SAS/SCSI` disks the `hddtemp` linux command will be used (deamon mode is NOT required)
+- Different disks types can be mixed in `hd_names=` configuration parameter
+- The service is classifying the disk types automatically based on the tags (`ata-`, `nvme-` and `scsi-`) in the disk names. For example:
+	
+	| Disk type    | Sample disk name                                                                                                          |
+	|--------------|---------------------------------------------------------------------------------------------------------------------------|
+	| SATA         | `/dev/disk/by-id/ata-Samsung_SSD_850_EVO_2TB_S2HGNWEG911397Y` `/dev/disk/by-id/scsi-SATA_Samsung_SSD_870_S6PUNX0T715310D` |
+	| NVME         | `/dev/disk/by-id/nvme-WDS100T1X0E-00AFY0_2148GF484214`                                                                   |
+	| SAS/SCSI | `/dev/disk/by-id/scsi-SIBM-ESXS_ST14000NM0288_E_ZHW0XPFH0000C812756F`                                                     |
+
+- The power management (standy mode) and *Standby guard* feature for `SCSI` and `NVME` disks are not supported. In case of mixed set of disk drives it is very problematic to implement.
+- Before you specify an `NVME` disk in the HD zone please consider fact that they operate on a significantly higher temperature range than the classical disks.
+
+#### 1.4 Standby guard
 For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
 	
  - SATA hard disks are organized into a RAID array
