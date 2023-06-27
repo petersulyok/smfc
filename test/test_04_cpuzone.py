@@ -319,7 +319,6 @@ class CpuZoneTestCase(unittest.TestCase):
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_cpuzone = CpuZone(my_log, my_ipmi, my_config)
-
             self.assertEqual(my_cpuzone._get_nth_temp(index), temps[index], error)
         del my_cpuzone
         del my_ipmi
