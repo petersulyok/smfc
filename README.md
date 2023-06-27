@@ -72,7 +72,15 @@ Additional notes on changing fan levels:
 #### 1.2 Swapped zones
 In some cases it is useful to swap IPMI zones. In this way the fans `FAN1, FAN2, ...` will cool the HD zone and the fans `FANA, FANB, ...` will cool the CPU zone. This feature could be useful if you need more fans for the HD zone since Super Micro motherboards have more fan connectors in the CPU zone usually. This feature can be enabled with `[IPMI] swapped_zones=True` configuration parameter, in default it is disabled. 
 
-#### 1.3 Hard disk compatibility
+#### 1.3 Standby guard
+For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
+	
+ - SATA hard disks are organized into a RAID array
+ - the RAID array will go to standby mode recurrently
+
+This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature we can avoid a situation where the array is partially in standby mode while other members are still active.
+
+#### 1.4 Hard disk compatibility
 The `smfc` was originally designed for `SATA` hard drives, but it is also compatible with `NVME` and `SAS/SCSI` disk types. The following table summarizes how the temperature is read for different disk types: 
 
 | Disk type  | Temperature source   | Kernel module | Command  |
@@ -97,14 +105,6 @@ Some additional notes:
 
 - The power management (standy mode) and *Standby guard* feature for `SCSI` and `NVME` disks are not supported. In case of mixed set of disk drives it is very problematic to implement.
 - Before you specify an `NVME` disk in the HD zone please consider fact that they operate on a significantly higher temperature range than the classical disks.
-
-#### 1.4 Standby guard
-For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
-	
- - SATA hard disks are organized into a RAID array
- - the RAID array will go to standby mode recurrently
-
-This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature we can avoid a situation where the array is partially in standby mode while other members are still active.
 
 ### 2. Super Micro compatibility
 This software is compatible with Super Micro X10 and X11 motherboards with a BMC chip (e.g. AST2500) and IPMI functionality. In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employes a BMC chip). The earlier X8 motherboards are not compatible with this software.
