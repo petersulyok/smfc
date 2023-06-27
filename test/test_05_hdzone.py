@@ -29,7 +29,8 @@ class HdZoneTestCase(unittest.TestCase):
         my_td = TestData()
         cmd_ipmi = my_td.create_command_file('echo " 01"')
         cmd_smart = my_td.create_command_file('echo "ACTIVE"')
-        hd_names = my_td.get_hd_names(count)
+        cmd_hddtemp = my_td.create_command_file('echo "39"')
+        hd_names = my_td.create_hd_names(count)
         mock_print = MagicMock()
         with patch('builtins.print', mock_print):
             my_config = configparser.ConfigParser()
@@ -53,7 +54,8 @@ class HdZoneTestCase(unittest.TestCase):
                 HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
                 HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
                 HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: str(sb_limit),
-                HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart
+                HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart,
+                HdZone.CV_HD_ZONE_HDDTEMP_PATH: cmd_hddtemp
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -81,7 +83,7 @@ class HdZoneTestCase(unittest.TestCase):
 
     def pt_init_p2(self, error: str):
         """Primitive positive test function. It contains the following steps:
-            - mock print(), subprocesses.run(), glob.glob(), os.listdir() functions
+            - mock print(), subprocesses.run(), glob.glob() functions
             - initialize a Config, Log, Ipmi, and HdZone classes
             - ASSERT: if the class attributes contain different values than default configuration values
             - delete all instances
@@ -93,26 +95,17 @@ class HdZoneTestCase(unittest.TestCase):
                 file = my_td.td_dir + file
             return original_glob(file, *args, **kwargs)
 
-        # Mock function for os.listdir().
-        def mocked_listdir(dir_str: str):
-            if dir_str.startswith('/sys/class/scsi_disk'):
-                dir_str = my_td.td_dir + dir_str
-            return original_listdir(dir_str)
-
         my_td = TestData()
         command = my_td.create_command_file()
         hwmon_path = my_td.get_hd_1()
-        hd_names = my_td.get_hd_names(1)
+        hd_names = my_td.create_hd_names(1)
         original_glob = glob.glob
-        original_listdir = os.listdir
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_glob = MagicMock(side_effect=mocked_glob)
-        mock_listdir = MagicMock(side_effect=mocked_listdir)
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run), \
-             patch('glob.glob', mock_glob), \
-             patch('os.listdir', mock_listdir):
+             patch('glob.glob', mock_glob):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
                 Ipmi.CV_IPMI_COMMAND: command,
@@ -149,7 +142,7 @@ class HdZoneTestCase(unittest.TestCase):
         """Primitive negative test function. It contains the following steps:
             - mock print() function
             - initialize a Config, Log, Ipmi, and HdZone classes
-            - ASSERT: if the class attributes contain different values that were passed to __init__
+            - ASSERT: if no assertion is raised for invalid values at initialization
             - delete the instances
         """
         my_td = TestData()
@@ -204,26 +197,26 @@ class HdZoneTestCase(unittest.TestCase):
 
         # Test invalid values:
         # count <= 0
-        self.pt_init_n1(0, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.get_hd_names(1),
+        self.pt_init_n1(0, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.create_hd_names(1),
                         my_td.get_hd_1(), 'hz init 5')
-        self.pt_init_n1(-10, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.get_hd_names(1),
+        self.pt_init_n1(-10, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.create_hd_names(1),
                         my_td.get_hd_1(), 'hz init 6')
         # hd_names= not specified
         self.pt_init_n1(1, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, '',
                         my_td.get_hd_1(), 'hz init 7')
         # len(hd_names) != count
-        self.pt_init_n1(2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.get_hd_names(1),
+        self.pt_init_n1(2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.create_hd_names(1),
                         my_td.get_hd_2(), 'hz init 8')
         # standby_limit < 0
-        self.pt_init_n1(2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, -1, my_td.get_hd_names(2),
+        self.pt_init_n1(2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, -1, my_td.create_hd_names(2),
                         my_td.get_hd_2(), 'hz init 9')
         # standby_limit > count
-        self.pt_init_n1(2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4, my_td.get_hd_names(2),
+        self.pt_init_n1(2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4, my_td.create_hd_names(2),
                         my_td.get_hd_2(), 'hz init 10')
 
     def pt_bhp_p1(self, count: int, error: str):
         """Primitive positive test function. It contains the following steps:
-            - mock print(), subprocesses.run(), glob.glob() os.listdir() functions
+            - mock print(), subprocesses.run(), glob.glob() functions
             - initialize a Config, Log, Ipmi, and HdZone classes
             - ASSERT: if build_hwmon_path() will not create the expected list
             - delete all instances
@@ -235,12 +228,6 @@ class HdZoneTestCase(unittest.TestCase):
                 file = my_td.td_dir + file
             return original_glob(file, *args, **kwargs)
 
-        # Mock function for os.listdir().
-        def mocked_listdir(dir_str: str):
-            if dir_str.startswith('/sys/class/scsi_disk'):
-                dir_str = my_td.td_dir + dir_str
-            return original_listdir(dir_str)
-
         my_td = TestData()
         command = my_td.create_command_file()
         if count == 1:
@@ -251,17 +238,14 @@ class HdZoneTestCase(unittest.TestCase):
             hwmon_path = my_td.get_hd_4()
         else:
             hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.get_hd_names(count)
+        hd_names = my_td.create_hd_names(count)
         original_glob = glob.glob
-        original_listdir = os.listdir
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_glob = MagicMock(side_effect=mocked_glob)
-        mock_listdir = MagicMock(side_effect=mocked_listdir)
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run), \
-             patch('glob.glob', mock_glob), \
-             patch('os.listdir', mock_listdir):
+             patch('glob.glob', mock_glob):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
                 Ipmi.CV_IPMI_COMMAND: command,
@@ -285,7 +269,7 @@ class HdZoneTestCase(unittest.TestCase):
 
     def pt_bhp_n1(self, count: int, error: str):
         """Primitive negative test function. It contains the following steps:
-            - mock print(), subprocesses.run(), glob.glob() os.listdir() functions
+            - mock print(), subprocesses.run(), glob.glob() functions
             - initialize a Config, Log, Ipmi, and HdZone classes
             - ASSERT: if build_hwmon_path() will not raise ValueError exception for invalid values
             - delete all instances
@@ -296,30 +280,21 @@ class HdZoneTestCase(unittest.TestCase):
             if file.startswith('/sys/class/scsi_disk'):
                 if 'block' in file:
                     file = my_td.td_dir + file
-                else:
-                    return None     # Invalid filename generated here!
+            if "temp1_input" in file:
+                return None     # Invalid filename generated here!
             return original_glob(file, *args, **kwargs)
-
-        # Mock function for os.listdir().
-        def mocked_listdir(dir_str: str):
-            if dir_str.startswith('/sys/class/scsi_disk'):
-                dir_str = my_td.td_dir + dir_str
-            return original_listdir(dir_str)
 
         my_td = TestData()
         command = my_td.create_command_file()
-        hd_names = my_td.get_hd_names(count)
+        hd_names = my_td.create_hd_names(count)
         my_td.get_hd_1()
         original_glob = glob.glob
-        original_listdir = os.listdir
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_glob = MagicMock(side_effect=mocked_glob)
-        mock_listdir = MagicMock(side_effect=mocked_listdir)
         with patch('builtins.print', mock_print), \
              patch('subprocess.run', mock_subprocess_run), \
-             patch('glob.glob', mock_glob), \
-             patch('os.listdir', mock_listdir):
+             patch('glob.glob', mock_glob):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
                 Ipmi.CV_IPMI_COMMAND: command,
@@ -364,7 +339,7 @@ class HdZoneTestCase(unittest.TestCase):
         """
         my_td = TestData()
         hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.get_hd_names(8)
+        hd_names = my_td.create_hd_names(8)
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -428,7 +403,7 @@ class HdZoneTestCase(unittest.TestCase):
 
         my_td = TestData()
         hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.get_hd_names(8)
+        hd_names = my_td.create_hd_names(8)
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -475,7 +450,7 @@ class HdZoneTestCase(unittest.TestCase):
         my_td = TestData()
         # We need count > 1 not to turn off Standby guard.
         hwmon_path = my_td.get_hd_2()
-        hd_names = my_td.get_hd_names(2)
+        hd_names = my_td.create_hd_names(2)
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -543,7 +518,7 @@ class HdZoneTestCase(unittest.TestCase):
         """
         my_td = TestData()
         hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.get_hd_names(8)
+        hd_names = my_td.create_hd_names(8)
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -586,7 +561,7 @@ class HdZoneTestCase(unittest.TestCase):
         my_td = TestData()
         # We need count > 1 not to turn off Standby guard.
         hwmon_path = my_td.get_hd_2()
-        hd_names = my_td.get_hd_names(2)
+        hd_names = my_td.create_hd_names(2)
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -647,7 +622,7 @@ class HdZoneTestCase(unittest.TestCase):
         """
         my_td = TestData()
         hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.get_hd_names(8)
+        hd_names = my_td.create_hd_names(8)
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
         mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -692,6 +667,82 @@ class HdZoneTestCase(unittest.TestCase):
         # 3. change from STANDBY to ACTIVE.
         self.pt_rsg_p1(True, [False, False, False, False, False, False, False, False], False, 'hz run_standby_guard 6')
         self.pt_rsg_p1(True, [True, False, False, True, True, True, True, True], False, 'hz run_standby_guard 7')
+
+    def pt_gnt_p1(self, count: int, index: int, temps: List[float], types: List[int], error: str):
+        """Primitive positive test function. It contains the following steps:
+            - mock print(), glob.glob(), HdZone._get_nth_temp() functions
+            - initialize a Config, Log, Ipmi, and HdZone classes
+            - ASSERT: if _get_nth_temp() returns a different temperature than the expected one
+            - delete all instances
+        """
+        # Mock function for glob.glob().
+        def mocked_glob(file: str, *args, **kwargs):
+            if file.startswith('/sys/class/nvme'):
+                file = my_td.td_dir + file
+            elif file.startswith('/sys/class/scsi_disk'):
+                file = my_td.td_dir + file
+            return original_glob(file, *args, **kwargs)
+
+        my_td = TestData()
+        ipmi_cmd = my_td.create_command_file()
+        hddtemp_cmd = my_td.create_command_file(f'echo "{temps[index]}"')
+        my_td.create_hd_temp_files(count, temp_list=temps, wildchar=False, hd_types=types)
+        hd_names = my_td.create_hd_names(count, hd_types=types)
+        original_glob = glob.glob
+        mock_print = MagicMock()
+        mock_glob = MagicMock(side_effect=mocked_glob)
+        with patch('builtins.print', mock_print), \
+             patch('glob.glob', mock_glob):
+            my_config = configparser.ConfigParser()
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: ipmi_cmd,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
+            }
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: str(count),
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
+                HdZone.CV_HD_ZONE_HDDTEMP_PATH: hddtemp_cmd
+            }
+            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+            my_ipmi = Ipmi(my_log, my_config)
+            my_hdzone = HdZone(my_log, my_ipmi, my_config)
+
+            self.assertEqual(my_hdzone._get_nth_temp(index), temps[index], error)
+        del my_hdzone
+        del my_ipmi
+        del my_log
+        del my_config
+        del my_td
+
+    def test_get_nth_temp(self) -> None:
+        """This is a unit test for function HdZone._get_nth_temp()"""
+
+        # Test valid/expected values.
+        self.pt_gnt_p1(1, 0, [38.5], [TestData.HT_SATA], 'hz _get_nth_temp 1')
+        self.pt_gnt_p1(1, 0, [38.5], [TestData.HT_NVME], 'hz _get_nth_temp 2')
+        self.pt_gnt_p1(1, 0, [38.5], [TestData.HT_SCSI], 'hz _get_nth_temp 3')
+
+        self.pt_gnt_p1(2, 0, [38.5, 40.5], [TestData.HT_SATA, TestData.HT_NVME], 'hz _get_nth_temp 4')
+        self.pt_gnt_p1(2, 1, [38.5, 40.5], [TestData.HT_SATA, TestData.HT_NVME], 'hz _get_nth_temp 5')
+        self.pt_gnt_p1(2, 0, [38.5, 40.5], [TestData.HT_SATA, TestData.HT_SCSI], 'hz _get_nth_temp 6')
+        self.pt_gnt_p1(2, 1, [38.5, 40.5], [TestData.HT_SATA, TestData.HT_SCSI], 'hz _get_nth_temp 7')
+        self.pt_gnt_p1(2, 0, [38.5, 40.5], [TestData.HT_NVME, TestData.HT_SCSI], 'hz _get_nth_temp 8')
+        self.pt_gnt_p1(2, 1, [38.5, 40.5], [TestData.HT_NVME, TestData.HT_SCSI], 'hz _get_nth_temp 9')
+
+        self.pt_gnt_p1(4, 0, [38.5, 40.5, 42.5, 44.5],
+                       [TestData.HT_SATA, TestData.HT_NVME, TestData.HT_SCSI, TestData.HT_SATA],
+                       'hz _get_nth_temp 10')
+        self.pt_gnt_p1(4, 1, [38.5, 40.5, 42.5, 44.5],
+                       [TestData.HT_SATA, TestData.HT_NVME, TestData.HT_SCSI, TestData.HT_SATA],
+                       'hz _get_nth_temp 11')
+        self.pt_gnt_p1(4, 2, [38.5, 40.5, 42.5, 44.5],
+                       [TestData.HT_SATA, TestData.HT_NVME, TestData.HT_SCSI, TestData.HT_SATA],
+                       'hz _get_nth_temp 12')
+        self.pt_gnt_p1(4, 3, [38.5, 40.5, 42.5, 44.5],
+                       [TestData.HT_SATA, TestData.HT_NVME, TestData.HT_SCSI, TestData.HT_SATA],
+                       'hz _get_nth_temp 13')
 
 
 if __name__ == "__main__":

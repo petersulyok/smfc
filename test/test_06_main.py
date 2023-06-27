@@ -87,7 +87,7 @@ class MainTestCase(unittest.TestCase):
         cmd_smart = my_td.create_command_file('echo "ACTIVE"')
         cpu_hwmon_path = my_td.get_cpu_1()
         hd_hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.get_hd_names(8)
+        hd_names = my_td.create_hd_names(8)
         my_config = configparser.ConfigParser()
         my_config[Ipmi.CS_IPMI] = {
             Ipmi.CV_IPMI_COMMAND: cmd_ipmi,

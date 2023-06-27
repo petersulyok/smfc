@@ -5,7 +5,9 @@
 #
 import configparser
 import glob
+import os
 import unittest
+from typing import List
 from unittest.mock import patch, MagicMock
 from test_00_data import TestData
 from smfc import Log, Ipmi, FanController, CpuZone
@@ -275,6 +277,132 @@ class CpuZoneTestCase(unittest.TestCase):
 
         # Test invalid / non-existing hwmon_path.
         self.pt_bhp_n1(1, 'cz build_hwmon_path 4')
+
+    def pt_gnt_p1(self, count: int, index: int, temps: List[float], error: str):
+        """Primitive positive test function. It contains the following steps:
+            - mock print(), subprocesses.run(), glob.glob(), CpuZone._get_nth_temp() functions
+            - initialize a Config, Log, Ipmi, and CpuZone classes
+            - ASSERT: if _get_nth_temp() returns a different temperature than the expected one
+            - delete all instances
+        """
+        # Mock function for glob.glob().
+        def mocked_glob(file: str, *args, **kwargs):
+            if file.startswith('/sys/devices/platform'):
+                file = my_td.td_dir + file
+            return original_glob(file, *args, **kwargs)
+
+        my_td = TestData()
+        command = my_td.create_command_file()
+        if count == 1:
+            my_td.get_cpu_1(temps)
+        elif count == 2:
+            my_td.get_cpu_2(temps)
+        else:
+            my_td.get_cpu_4(temps)
+        original_glob = glob.glob
+        mock_print = MagicMock()
+        mock_subprocess_run = MagicMock()
+        mock_glob = MagicMock(side_effect=mocked_glob)
+        with patch('builtins.print', mock_print), \
+             patch('subprocess.run', mock_subprocess_run), \
+             patch('glob.glob', mock_glob):
+            my_config = configparser.ConfigParser()
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
+            }
+            my_config[CpuZone.CS_CPU_ZONE] = {
+                CpuZone.CV_CPU_ZONE_ENABLED: '1',
+                CpuZone.CV_CPU_ZONE_COUNT: str(count)
+            }
+            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+            my_ipmi = Ipmi(my_log, my_config)
+            my_cpuzone = CpuZone(my_log, my_ipmi, my_config)
+
+            self.assertEqual(my_cpuzone._get_nth_temp(index), temps[index], error)
+        del my_cpuzone
+        del my_ipmi
+        del my_log
+        del my_config
+        del my_td
+
+    def pt_gnt_n1(self, index: int, operation: int, error: str):
+        """Primitive negative test function. It contains the following steps:
+            - mock print(), subprocesses.run(), glob.glob(), CpuZone._get_nth_temp() functions
+            - initialize a Config, Log, Ipmi, and CpuZone classes
+            - ASSERT: if _get_nth_temp() will not raise an exception for different error conditions
+            - delete all instances
+        """
+        hwmon: str
+
+        # Mock function for glob.glob().
+        def mocked_glob(file: str, *args, **kwargs):
+            if file.startswith('/sys/devices/platform'):
+                file = my_td.td_dir + file
+            return original_glob(file, *args, **kwargs)
+
+        my_td = TestData()
+        command = my_td.create_command_file()
+        hwmon = my_td.get_cpu_1()
+        original_glob = glob.glob
+        mock_print = MagicMock()
+        mock_subprocess_run = MagicMock()
+        mock_glob = MagicMock(side_effect=mocked_glob)
+        with patch('builtins.print', mock_print), \
+             patch('subprocess.run', mock_subprocess_run), \
+             patch('glob.glob', mock_glob):
+            my_config = configparser.ConfigParser()
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: command,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
+            }
+            my_config[CpuZone.CS_CPU_ZONE] = {
+                CpuZone.CV_CPU_ZONE_ENABLED: '1',
+                CpuZone.CV_CPU_ZONE_COUNT: '1'
+            }
+            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+            my_ipmi = Ipmi(my_log, my_config)
+            my_cpuzone = CpuZone(my_log, my_ipmi, my_config)
+            # Delete file
+            if operation == 1:
+                hwmon = hwmon.strip()
+                my_td.delete_file(hwmon)
+            # Create invalid numeric input
+            elif operation == 2:
+                os.system('echo "invalid value" >' + hwmon)
+            # Index overflow, do nothing.
+            #else: operation == 3
+                # noop
+            with self.assertRaises(Exception) as cm:
+                my_cpuzone._get_nth_temp(index)
+            self.assertTrue(type(cm.exception) in [IOError, FileNotFoundError, ValueError, IndexError], error)
+        del my_cpuzone
+        del my_ipmi
+        del my_log
+        del my_config
+        del my_td
+
+    def test_get_nth_temp(self) -> None:
+        """This is a unit test for function CpuZone._get_nth_temp()"""
+
+        # Test valid/expected values.
+        self.pt_gnt_p1(1, 0, [38.5], 'cz _get_nth_temp 1')
+        self.pt_gnt_p1(2, 0, [38.5, 40.5], 'cz _get_nth_temp 2')
+        self.pt_gnt_p1(2, 1, [38.5, 40.5], 'cz _get_nth_temp 3')
+        self.pt_gnt_p1(4, 0, [38.5, 40.5, 42.5, 44.5], 'cz _get_nth_temp 4')
+        self.pt_gnt_p1(4, 1, [38.5, 40.5, 42.5, 44.5], 'cz _get_nth_temp 5')
+        self.pt_gnt_p1(4, 2, [38.5, 40.5, 42.5, 44.5], 'cz _get_nth_temp 6')
+        self.pt_gnt_p1(4, 3, [38.5, 40.5, 42.5, 44.5], 'cz _get_nth_temp 7')
+
+        # Test exceptions
+        # 1. invalid hwmon file name
+        self.pt_gnt_n1(0, 1, 'cz _get_nth_temp 8')
+        # 2. invalid numeric value
+        self.pt_gnt_n1(0, 2, 'cz _get_nth_temp 9')
+        # 3. invalid index value
+        self.pt_gnt_n1(3, 3, 'cz _get_nth_temp 10')
 
 
 if __name__ == "__main__":
