@@ -20,16 +20,17 @@ Several smoke tests are provided for `smfc` where the service is executed with d
 
 - the following smoke scripts and configurations are available:  
    
-   | Helper script | CPU configuration | HD configuration | Standby guard |
-   |--|--|--|--|
-   |`run_test_cpu_1.sh`| 1 x CPU | 1 x HD | enabled |
-   |`run_test_cpu_2.sh`| 2 x CPUs | disabled | disabled |
-   |`run_test_cpu_4.sh`| 4 x CPUs | 4 x HDs | enabled |
-   |`run_test_hd_1.sh`| disabled | 1 x HD | enabled |
-   |`run_test_hd_2.sh`| 1 x CPU | 2 x HDs | disabled |
-   |`run_test_hd_4.sh`| 2 x CPUs | 4 x HDs | disabled |
-   |`run_test_hd_8.sh`| 4 x CPUs | 8 x HDs | enabled |
-   |`run_test_const_level.sh`| 1 x CPU (60% constant fan level) | 4 x HDs (55% constant fan level) | enabled |
+   | Helper script             | CPU configuration                | HD configuration                    | Standby guard |
+   |---------------------------|----------------------------------|-------------------------------------|--|
+   | `run_test_cpu_1.sh`       | 1 x CPU                          | 1 x HD                              | enabled |
+   | `run_test_cpu_2.sh`       | 2 x CPUs                         | disabled                            | disabled |
+   | `run_test_cpu_4.sh`       | 4 x CPUs                         | 4 x HDs                             | enabled |
+   | `run_test_hd_1.sh`        | disabled                         | 1 x HD                              | enabled |
+   | `run_test_hd_2.sh`        | 1 x CPU                          | 2 x HDs                             | disabled |
+   | `run_test_hd_4.sh`        | 2 x CPUs                         | 4 x HDs                             | disabled |
+   | `run_test_hd_8.sh`        | 4 x CPUs                         | 8 x HDs                             | enabled |
+   | `run_test_const_level.sh` | 1 x CPU (60% constant fan level) | 4 x HDs (55% constant fan level)    | enabled |
+   | `run_test_scsi.sh`        | 4 x CPU                          | 8 x HDs (SCSI and SATA disks mixed) | enabled |
 
 ## Unit tests  
 All classes and the main function are completely unit tested. The unit tests can be executed with `pytest`:

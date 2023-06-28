@@ -15,7 +15,7 @@ from typing import List, Callable
 
 
 # Program version string
-version_str: str = '2.5.0'
+version_str: str = '3.0.0 beta'
 
 
 class Log:
@@ -315,6 +315,7 @@ class FanController:
     min_level: int          # Minimum fan level (0..100%)
     max_level: int          # Maximum fan level (0..100%)
     hwmon_path: List[str]   # Paths for hwmon files in sysfs
+    hwmon_reserved: set     # Set of reserved hwmon values (excluded from path operations)
 
     # Measured or calculated attributes
     temp_step: float        # A temperature steps value (C)
@@ -328,7 +329,7 @@ class FanController:
 
     def __init__(self, log: Log, ipmi: Ipmi, ipmi_zone: int, name: str, count: int, temp_calc: int, steps: int,
                  sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
-                 max_level: int, hwmon_path: str) -> None:
+                 max_level: int, hwmon_path: str, hwmon_reserved: set) -> None:
         """Initialize the FanController class. Will raise an exception in case of invalid parameters.
 
         Args:
@@ -346,6 +347,7 @@ class FanController:
             min_level (int): minimum fan level value [0..100%]
             max_level (int): maximum fan level value [0..100%]
             hwmon_path (str): multiple path elements in sys/hwmon files (it could be a multi-line string value)
+            hwmon_reserved (set): reserved values in hwmon (excluded from path operations)
         """
         # Save and validate configuration parameters.
         self.log = log
@@ -387,9 +389,11 @@ class FanController:
             elif self.temp_calc == self.CALC_MAX:
                 self.get_temp_func = self.get_max_temp
         # Build hwmon_path list.
+        self.hwmon_reserved = hwmon_reserved
+        self.hwmon_path = []
         self.build_hwmon_path(hwmon_path)
         # Check if temperature can be read successfully.
-        if hwmon_path:
+        if self.hwmon_path:
             self.get_temp_func()
         # Initialize calculated and measured values.
         self.temp_step = (max_temp - min_temp) / steps
@@ -432,77 +436,70 @@ class FanController:
                     if not file_names:
                         raise ValueError(self.ERROR_MSG_FILE_IO.format(self.hwmon_path[i]))
                     self.hwmon_path[i] = file_names[0]
-                if not os.path.isfile(self.hwmon_path[i]):
-                    raise ValueError(self.ERROR_MSG_FILE_IO.format(self.hwmon_path[i]))
+                if self.hwmon_path[i] not in self.hwmon_reserved:
+                    if not os.path.isfile(self.hwmon_path[i]):
+                        raise ValueError(self.ERROR_MSG_FILE_IO.format(self.hwmon_path[i]))
+
+    def _get_nth_temp(self, index: int) -> float:
+        """Get the temperature of the 'nth' element in the hwmon list. This is an empty implementation."""
 
     def get_1_temp(self) -> float:
-        """Get a single temperature of the controlled entities in the IPMI zone. Can raise IOError exception."""
-        value: float    # Float value to calculate the temperature.
+        """Get a single temperature of a controlled entity in the IPMI zone.
 
-        try:
-            with open(self.hwmon_path[0], "r", encoding="UTF-8") as f:
-                value = float(f.read()) / 1000
-        except (IOError, FileNotFoundError) as e:
-            raise e
-        return value
+        Returns:
+            float: single temperature of a controlled entity (C)
+        """
+        return self._get_nth_temp(0)
 
     def get_min_temp(self) -> float:
-        """Get the minimum temperature of the controlled entities in the IPMI zone. Can raise IOError exception.
+        """Get the minimum temperature of multiple controlled entities.
 
-           Returns:
-                float: minimum temperature of controlled entities (C)
+        Returns:
+            float: minimum temperature of the controlled entities (C)
         """
-        minimum: float = 1000.0     # Minimum temperature value
-        value: float                # Float value
+        minimum: float      # Minimum temperature value
+        value: float        # Float value
 
         # Calculate minimum temperature.
-        try:
-            for i in self.hwmon_path:
-                with open(i, "r", encoding="UTF-8") as f:
-                    value = float(f.read()) / 1000
-                    if value < minimum:
-                        minimum = value
-        except (IOError, FileNotFoundError) as e:
-            raise e
+        minimum = 1000.0
+        for i in range(self.count):
+            value = self._get_nth_temp(i)
+            if value < minimum:
+                minimum = value
         return minimum
 
     def get_avg_temp(self):
-        """Get average temperature of the controlled entities in the IPMI zone. Can raise IOError exception.
+        """Get the average temperature of the controlled entities in the IPMI zone.
 
-        Returns:
-            float: average temperature of the controlled entities (C)
+           Returns:
+                float: average temperature of the controlled entities (C)
         """
-        average: float = 0      # Average temperature
-        counter: int = 0        # Value counter
+        average: float      # Average temperature
+        counter: int        # Value counter
 
         # Calculate average temperature.
-        try:
-            for i in self.hwmon_path:
-                with open(i, "r", encoding="UTF-8") as f:
-                    average += float(f.read()) / 1000
-                    counter += 1
-        except (IOError, FileNotFoundError) as e:
-            raise e
+        average = 0.0
+        counter = 0
+        for i in range(self.count):
+            average += self._get_nth_temp(i)
+            counter += 1
         return average / counter
 
     def get_max_temp(self) -> float:
-        """Get the maximum temperature of the controlled entities in the IPMI zone. Can raise IOError exception.
+        """Get the maximum temperature of the controlled entities in the IPMI zone.
 
            Returns:
                 float: maximum temperature of the controlled entities (C)
         """
-        maximum: float = -1.0   # Maximum temperature
-        value: float            # Temperature value
+        maximum: float      # Maximum temperature value
+        value: float        # Float value
 
         # Calculate minimum temperature.
-        try:
-            for i in self.hwmon_path:
-                with open(i, "r", encoding="UTF-8") as f:
-                    value = float(f.read()) / 1000
-                    if value > maximum:
-                        maximum = value
-        except (IOError, FileNotFoundError) as e:
-            raise e
+        maximum = -1.0
+        for i in range(self.count):
+            value = self._get_nth_temp(i)
+            if value > maximum:
+                maximum = value
         return maximum
 
     def set_fan_level(self, level: int) -> None:
@@ -596,15 +593,10 @@ class CpuZone(FanController):
             config (configparser.ConfigParser): reference to the configuration (default=None)
         """
 
-        # Initialize arrays with proper size.
-        count = config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_COUNT, fallback=1)
-        if count <= 0:
-            raise ValueError('count <= 0')
-        self.hwmon_path = [''] * count
-
         # Initialize FanController class.
         super().__init__(
-            log, ipmi, Ipmi.CPU_ZONE, self.CS_CPU_ZONE, count,
+            log, ipmi, Ipmi.CPU_ZONE, self.CS_CPU_ZONE,
+            config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_COUNT, fallback=1),
             config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
             config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_STEPS, fallback=6),
             config[self.CS_CPU_ZONE].getfloat(self.CV_CPU_ZONE_SENSITIVITY, fallback=3.0),
@@ -613,7 +605,8 @@ class CpuZone(FanController):
             config[self.CS_CPU_ZONE].getfloat(self.CV_CPU_ZONE_MAX_TEMP, fallback=60.0),
             config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_MIN_LEVEL, fallback=35),
             config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_MAX_LEVEL, fallback=100),
-            config[self.CS_CPU_ZONE].get(self.CV_CPU_ZONE_HWMON_PATH)
+            config[self.CS_CPU_ZONE].get(self.CV_CPU_ZONE_HWMON_PATH),
+            set()
         )
 
     def build_hwmon_path(self, hwmon_str: str) -> None:
@@ -628,12 +621,36 @@ class CpuZone(FanController):
         # If the hwmon_path string was not specified it will be created automatically.
         else:
             # Construct hwmon_path with the resolution of wildcard characters.
+            self.hwmon_path = []
             for i in range(self.count):
                 path = '/sys/devices/platform/coretemp.' + str(i) + '/hwmon/hwmon*/temp1_input'
                 file_names = glob.glob(path)
                 if not file_names:
                     raise ValueError(self.ERROR_MSG_FILE_IO.format(path))
-                self.hwmon_path[i] = file_names[0]
+                self.hwmon_path.append(file_names[0])
+
+    def _get_nth_temp(self, index: int) -> float:
+        """Get the temperature of the 'nth' element in the hwmon list.
+
+        Args:
+            index (int): index in hwmon list
+
+        Returns:
+            float: temperature value
+
+        Raises:
+            FileNotFoundError:  file not found
+            IOError:            file cannot be opened
+            ValueError:         invalid index
+        """
+        value: float    # Temperature value
+
+        try:
+            with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
+                value = float(f.read()) / 1000
+        except (IOError, FileNotFoundError, ValueError) as e:
+            raise e
+        return value
 
 
 class HdZone(FanController):
@@ -646,6 +663,7 @@ class HdZone(FanController):
     standby_guard_enabled: bool         # Standby guard feature enabled
     standby_hd_limit: int               # Number of HDs in STANDBY state before the full RAID array will go STANDBY
     smartctl_path: str                  # Path for 'smartctl' command
+    hddtemp_path: str                   # Path for 'hddtemp' command
     standby_flag: bool                  # The actual state of the whole HD array
     standby_change_timestamp: float     # Timestamp of the latest change in STANDBY mode
     standby_array_states: List[bool]    # Standby states of HDs
@@ -670,6 +688,10 @@ class HdZone(FanController):
     CV_HD_ZONE_STANDBY_GUARD_ENABLED: str = 'standby_guard_enabled'
     CV_HD_ZONE_STANDBY_HD_LIMIT: str = 'standby_hd_limit'
     CV_HD_ZONE_SMARTCTL_PATH: str = 'smartctl_path'
+    CV_HD_ZONE_HDDTEMP_PATH: str = 'hddtemp_path'
+
+    # Constant for using 'hddtemp'
+    STR_HDD_TEMP: str = 'hddtemp'
 
     def __init__(self, log: Log, ipmi: Ipmi, config: configparser.ConfigParser) -> None:
         """Initialize the HdZone class. Abort in case of configuration errors.
@@ -686,9 +708,6 @@ class HdZone(FanController):
         count = config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_COUNT, fallback=1)
         if count <= 0:
             raise ValueError('count <= 0')
-        # Initialize lista with proper size.
-        self.hd_device_names = [''] * count
-        self.hwmon_path = [''] * count
         # Save and validate further HdZone class specific parameters.
         hd_names = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_HD_NAMES)
         if not hd_names:
@@ -699,6 +718,8 @@ class HdZone(FanController):
             self.hd_device_names = hd_names.split()
         if len(self.hd_device_names) != count:
             raise ValueError(f'Inconsistent count ({count}) and size of hd_names ({len(self.hd_device_names)})')
+        # Read the path of the 'hddtemp' command.
+        self.hddtemp_path = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_HDDTEMP_PATH, '/usr/sbin/hddtemp')
         # Initialize FanController class.
         super().__init__(
             log, ipmi, Ipmi.HD_ZONE, self.CS_HD_ZONE, count,
@@ -710,7 +731,8 @@ class HdZone(FanController):
             config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_MAX_TEMP, fallback=46),
             config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_MIN_LEVEL, fallback=35),
             config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_MAX_LEVEL, fallback=100),
-            config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_HWMON_PATH)
+            config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_HWMON_PATH),
+            {self.STR_HDD_TEMP}
         )
         # Read and validate the configuration of standby guard if enabled.
         self.standby_guard_enabled = config[self.CS_HD_ZONE].getboolean(self.CV_HD_ZONE_STANDBY_GUARD_ENABLED,
@@ -732,6 +754,7 @@ class HdZone(FanController):
             # Set calculated parameters.
             self.standby_change_timestamp = time.monotonic()
             self.standby_flag = n == self.count
+
         # Print configuration in DEBUG log level (or higher).
         if self.log.log_level >= self.log.LOG_CONFIG:
             self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_HD_ZONE_HD_NAMES} = {self.hd_device_names}')
@@ -741,58 +764,104 @@ class HdZone(FanController):
                 self.log.msg(self.log.LOG_CONFIG, f'     {self.CV_HD_ZONE_SMARTCTL_PATH} = {self.smartctl_path}')
             else:
                 self.log.msg(self.log.LOG_CONFIG, '   Standby guard is disabled')
+            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_HD_ZONE_HDDTEMP_PATH} = {self.hddtemp_path}')
 
     def build_hwmon_path(self, hwmon_str: str) -> None:
         """Build hwmon_path[] list for the HD zone."""
-        hwmon_dir: str              # hwmon directory
-        path: str                   # Path string
-        hd_sata_names: List[str]    # SATA HD names
-        sn: str                     # String for a sata name
-        file_names: List[str]       # Result list for glob.glob()
+        disk_name: str          # Disk name
+        search_str: str         # Search string
+        file_names: List[str]   # Result list for glob.glob()
 
-        # If the user specified a hwmon_path= configuration item.
+        # If the user specified hwmon_path= configuration parameter.
         if hwmon_str:
             # Convert the string into a string array (respecting multi-line strings).
             super().build_hwmon_path(hwmon_str)
-        # If the hwmon_path string is not given it will be created automatically.
+
+        # If hwmon_path string has not been specified by the user then it will be constructed.
         else:
-            # Initialize hd_sata_names[] array
-            hd_sata_names = [''] * self.count
-            # Find SATA names for specific hd_names= references.
+
+            # Iterate through each disk.
             for i in range(self.count):
-                if 'by-id' not in self.hd_device_names[i]:
-                    raise ValueError(f'Invalid hd_names={self.hd_device_names[i]}, name is not'
-                                     f'in \'/dev/disk/by-id\' form.')
-                if not os.path.islink(self.hd_device_names[i]):
-                    raise ValueError(f'Invalid hd_names={self.hd_device_names[i]}, the reference is not link.')
-                hd_sata_names[i] = os.path.basename(os.readlink(self.hd_device_names[i]))
-            # Find the proper sys/hwmon files based on SATA names.
-            hwmon_dir = '/sys/class/scsi_disk'
-            for f in os.listdir(hwmon_dir):
-                sn = os.path.join(hwmon_dir, f, 'device/block/sd*')
-                file_names = glob.glob(sn)
-                if not file_names:
-                    raise ValueError(self.ERROR_MSG_FILE_IO.format(sn))
-                sn = os.path.basename(file_names[0])
-                try:
-                    index = hd_sata_names.index(sn)
-                except ValueError:
-                    # It means that we found an unknown SATA name, and we can skip it
-                    # because this disk is not part of the configuration.
-                    continue
-                path = os.path.join(hwmon_dir, f, 'device/hwmon/hwmon*/temp1_input')
-                file_names = glob.glob(path)
-                if not file_names:
-                    raise ValueError(self.ERROR_MSG_FILE_IO.format(path))
-                self.hwmon_path[index] = file_names[0]
+
+                # If the current one is an NVME SSD disk.
+                # NOTE: kernel provides this, no extra modules required
+                if "nvme-" in self.hd_device_names[i]:
+                    disk_name = os.path.basename(os.readlink(self.hd_device_names[i]))
+                    search_str = os.path.join('/sys/class/nvme', disk_name, disk_name + "n1", 'hwmon*/temp1_input')
+                    file_names = glob.glob(search_str)
+                    if not file_names:
+                        raise ValueError(self.ERROR_MSG_FILE_IO.format(search_str))
+                    self.hwmon_path.append(file_names[0])
+
+                # If the current one is a SATA disk.
+                # NOTE: 'drivetemp' kernel module must be loaded otherwise this path does not exist!
+                elif "ata-" in self.hd_device_names[i] or "-SATA" in self.hd_device_names[i]:
+                    disk_name = os.path.basename(os.readlink(self.hd_device_names[i]))
+                    search_str = os.path.join('/sys/class/scsi_disk/*', 'device/block', disk_name)
+                    file_names = glob.glob(search_str)
+                    if not file_names:
+                        raise ValueError(self.ERROR_MSG_FILE_IO.format(search_str))
+                    file_names[0] = file_names[0].replace("/device/block/" + disk_name, "")
+                    search_str = os.path.join(file_names[0], 'device/hwmon/hwmon*/temp1_input')
+                    file_names = glob.glob(search_str)
+                    if not file_names:
+                        raise ValueError(self.ERROR_MSG_FILE_IO.format(search_str))
+                    self.hwmon_path.append(file_names[0])
+
+                # Otherwise we assume it is a SAS/SCSI disk.
+                # 'hddtemp' command will be used to read HD temperature.
+                else:
+                    self.hwmon_path.append(self.STR_HDD_TEMP)
+
             # Check the size of hwmon_path array
             if len(self.hwmon_path) != self.count:
-                raise ValueError(f'Invalid hd_names= parameter, not all hwmon files was found ({self.hwmon_path})')
+                raise ValueError(f'Invalid hd_names= parameter(s), not all hwmon files was found ({self.hwmon_path})')
 
     def callback_func(self) -> None:
         """Call-back function execute standby guard."""
         if self.standby_guard_enabled:
             self.run_standby_guard()
+
+    def _get_nth_temp(self, index: int) -> float:
+        """Get the temperature of the nth element in the hwmon list. This is a specific implementation for HD zone.
+
+        Args:
+            index (int): index in hwmon list
+
+        Returns:
+            float: temperature value
+
+        Raises:
+            FileNotFoundError:  file or command cannot be found
+            IOError:            file cannot be opened
+            ValueError:         invalid temperature value
+            IndexError:         invalid index
+        """
+        r: subprocess.CompletedProcess  # result of the executed process
+        value: float                    # Float value to calculate the temperature.
+
+        # Use 'hddtemp' command for reading HD temperature.
+        if self.hwmon_path[index] == self.STR_HDD_TEMP:
+
+            # Read disk temperature with calling 'hddtemp' command.
+            try:
+                r = subprocess.run([self.hddtemp_path, '-q', '-n', self.hd_device_names[index]],
+                                   check=False, capture_output=True, text=True)
+                if r.returncode != 0:
+                    raise RuntimeError(r.stderr)
+                value = float(r.stdout)
+            except (FileNotFoundError, ValueError, IndexError) as e:
+                raise e
+
+        # Read temperature from HWMON file in sysfs.
+        else:
+            try:
+                with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
+                    value = float(f.read()) / 1000
+            except (IOError, FileNotFoundError, ValueError, IndexError) as e:
+                raise e
+
+        return value
 
     def get_standby_state_str(self) -> str:
         """Get a string representing the power state of the HD array with a character.

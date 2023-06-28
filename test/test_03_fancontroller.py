@@ -28,8 +28,11 @@ class FanControllerTestCase(unittest.TestCase):
         cmd = my_td.create_command_file()
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
+        mock_temp = MagicMock()
+        mock_temp.return_value = 38.5
         with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
+             patch('subprocess.run', mock_subprocess_run), \
+             patch('smfc.FanController._get_nth_temp', mock_temp):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
                 Ipmi.CV_IPMI_COMMAND: cmd,
@@ -39,7 +42,7 @@ class FanControllerTestCase(unittest.TestCase):
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_fc = FanController(my_log, my_ipmi, ipmi_zone, name, count, temp_calc, steps, sensitivity, polling,
-                                  min_temp, max_temp, min_level, max_level, hwmon_path)
+                                  min_temp, max_temp, min_level, max_level, hwmon_path, {})
         self.assertEqual(my_fc.log, my_log, error)
         self.assertEqual(my_fc.ipmi, my_ipmi, error)
         self.assertEqual(my_fc.ipmi_zone, ipmi_zone, error)
@@ -77,8 +80,11 @@ class FanControllerTestCase(unittest.TestCase):
         cmd = my_td.create_command_file()
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
+        mock_temp = MagicMock()
+        mock_temp.return_value = 38.5
         with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
+             patch('subprocess.run', mock_subprocess_run), \
+             patch('smfc.FanController._get_nth_temp', mock_temp):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
                 Ipmi.CV_IPMI_COMMAND: cmd,
@@ -89,7 +95,7 @@ class FanControllerTestCase(unittest.TestCase):
             my_ipmi = Ipmi(my_log, my_config)
             with self.assertRaises(Exception) as cm:
                 FanController(my_log, my_ipmi, ipmi_zone, name, count, temp_calc, steps, sensitivity, polling,
-                              min_temp, max_temp, min_level, max_level, hwmon_path)
+                              min_temp, max_temp, min_level, max_level, hwmon_path, {})
             self.assertEqual(type(cm.exception), ValueError, error)
         del my_ipmi
         del my_log
@@ -190,7 +196,7 @@ class FanControllerTestCase(unittest.TestCase):
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, counter, FanController.CALC_AVG,
-                                  5, 4, 2, 30, 50, 35, 100, None)
+                                  5, 4, 2, 30, 50, 35, 100, None, {})
             my_fc.build_hwmon_path(hwmon_str)
             self.assertEqual(my_fc.hwmon_path, my_td.create_normalized_path_list(hwmon_str), error)
         del my_fc
@@ -221,7 +227,7 @@ class FanControllerTestCase(unittest.TestCase):
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, counter, FanController.CALC_AVG,
-                                  5, 4, 2, 30, 50, 35, 100, None)
+                                  5, 4, 2, 30, 50, 35, 100, None, {})
             with self.assertRaises(ValueError) as cm:
                 my_fc.build_hwmon_path(hwmon_str)
             self.assertEqual(type(cm.exception), ValueError, error)
@@ -257,32 +263,13 @@ class FanControllerTestCase(unittest.TestCase):
             - ASSERT: if get_???_temp() function returns different temperature
             - delete the instances
         """
-        td = TestData()
-        hwmon_path = td.create_cpu_temp_files(count, temp_list=temps)
-        cmd = td.create_command_file()
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_COMMAND: cmd,
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            # get_1_temp() / get_avg_temp()
-            if code in (1, 3):
-                cm = FanController.CALC_AVG
-            # get_min_temp()
-            elif code == 2:
-                cm = FanController.CALC_MIN
-            # get_max_temp()
-            else:  # code == 4:
-                cm = FanController.CALC_MAX
-            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, count, cm, 5,
-                                  4, 2, 30, 50, 35, 100, hwmon_path)
+        f: float    # float value
+
+        my_fc = FanController.__new__(FanController)
+        my_fc.count = count
+        mock_temp = MagicMock()
+        mock_temp.side_effect = temps
+        with patch('smfc.FanController._get_nth_temp', mock_temp):
             if code == 1:
                 f = my_fc.get_1_temp()
             elif code == 2:
@@ -293,58 +280,6 @@ class FanControllerTestCase(unittest.TestCase):
                 f = my_fc.get_max_temp()
             self.assertEqual(f, expected, error)
         del my_fc
-        del my_ipmi
-        del my_log
-        del my_config
-        del td
-
-    def pt_gxt_n1(self, count: int, code: int, temps: List[float], error: str):
-        """Primitive positive test function. It contains the following steps:
-            - mock print(), subprocesses.run() functions
-            - initialize a Config, Log, Ipmi, and FanController classes
-            - ASSERT: if get_???_temp() function will not generate IOError/FileNotFoundError exception
-            - delete the instances
-        """
-        td = TestData()
-        hwmon_path = td.create_cpu_temp_files(count, temp_list=temps)
-        cmd = td.create_command_file()
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_COMMAND: cmd,
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            if code in (1, 3):
-                cm = FanController.CALC_AVG
-            # get_min_temp()
-            elif code == 2:
-                cm = FanController.CALC_MIN
-            # get_max_temp()
-            else:  # code == 4:
-                cm = FanController.CALC_MAX
-            my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, count, cm, 5,
-                                  4, 2, 30, 50, 35, 100, hwmon_path)
-            del td
-            with self.assertRaises(IOError) as cm:
-                if code == 1:
-                    my_fc.get_1_temp()
-                elif code == 2:
-                    my_fc.get_min_temp()
-                elif code == 3:
-                    my_fc.get_avg_temp()
-                else:  # code == 4:
-                    my_fc.get_max_temp()
-            self.assertEqual(type(cm.exception), FileNotFoundError, error)
-        del my_fc
-        del my_ipmi
-        del my_log
-        del my_config
 
     def test_get_xxx_temp(self) -> None:
         """This is a unit test for the next functions:
@@ -355,31 +290,23 @@ class FanControllerTestCase(unittest.TestCase):
         # get_1_temp()
         # Test expected temperature.
         self.pt_gxt_p1(1, 1, [38.5], 38.5, 'fc get_1_temp 1')
-        # Test file read error.
-        self.pt_gxt_n1(1, 1, [38.5], 'fc get_1_temp 2')
 
         # get_min_temp()
         # Test expected temperature
         self.pt_gxt_p1(3, 2, [38.5, 38.5, 38.5], 38.5, 'fc get_min_temp 1')
         self.pt_gxt_p1(3, 2, [38.5, 40.5, 42.5], 38.5, 'fc get_min_temp 2')
-        # Test file read error.
-        self.pt_gxt_n1(2, 2, [38.5, 40.5], 'fc get_min_temp 3')
 
         # get_avg_temp()
         # Test expected temperature
         self.pt_gxt_p1(3, 3, [38.5, 38.5, 38.5], 38.5, 'fc get_avg_temp 1')
         self.pt_gxt_p1(3, 3, [38.5, 40.5, 42.5], 40.5, 'fc get_avg_temp 2')
         self.pt_gxt_p1(8, 3, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 45.0, 'fc get_avg_temp 3')
-        # Test file read error.
-        self.pt_gxt_n1(2, 3, [38.5, 40.5], 'fc get_avg_temp 4')
 
         # get_max_temp()
         # Test expected temperature
         self.pt_gxt_p1(3, 4, [38.5, 38.5, 38.5], 38.5, 'fc get_max_temp 1')
         self.pt_gxt_p1(3, 4, [38.5, 40.5, 42.5], 42.5, 'fc get_max_temp 2')
         self.pt_gxt_p1(8, 4, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 52.0, 'fc get_max_temp 3')
-        # File read error
-        self.pt_gxt_n1(2, 4, [38.5, 40.5], 'fc get_max_temp 4')
 
     def pt_sfl_p1(self, ipmi_zone: int, level: int):
         """Primitive positive test function. It contains the following steps:
@@ -405,7 +332,7 @@ class FanControllerTestCase(unittest.TestCase):
             my_ipmi.set_fan_level = MagicMock(name='set_fan_level')
             my_ipmi.set_fan_level.return_value = Ipmi.SUCCESS
             my_fc = FanController(my_log, my_ipmi, ipmi_zone, CpuZone.CS_CPU_ZONE, 1, FanController.CALC_AVG, 5,
-                                  4, 2, 30, 50, 35, 100, None)
+                                  4, 2, 30, 50, 35, 100, None, {})
             my_fc.set_fan_level(level)
             my_ipmi.set_fan_level.assert_any_call(my_fc.ipmi_zone, level)
         del my_fc
@@ -431,8 +358,11 @@ class FanControllerTestCase(unittest.TestCase):
         cmd = td.create_command_file()
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
+        mock_temp = MagicMock()
+        mock_temp.return_value = temp
         with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
+             patch('subprocess.run', mock_subprocess_run), \
+             patch('smfc.FanController._get_nth_temp', mock_temp):
             my_config = configparser.ConfigParser()
             my_config[Ipmi.CS_IPMI] = {
                 Ipmi.CV_IPMI_COMMAND: cmd,
@@ -442,7 +372,7 @@ class FanControllerTestCase(unittest.TestCase):
             my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 1, 1, steps, sensitivity,
-                                  polling, min_temp, max_temp, min_level, max_level, td.get_cpu_1([temp]))
+                                  polling, min_temp, max_temp, min_level, max_level, td.get_cpu_1([temp]), {})
             my_fc.set_fan_level = MagicMock(name='set_fan_level')
             my_fc.last_time = time.monotonic() - (polling + 1)
             my_fc.last_level = 0
