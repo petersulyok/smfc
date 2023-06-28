@@ -857,9 +857,8 @@ class HdZone(FanController):
         else:
             try:
                 with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
-                    value = float(f.read())
-                    value /= 1000.0
-            except (IOError, FileNotFoundError, IndexError) as e:
+                    value = float(f.read()) / 1000
+            except (IOError, FileNotFoundError, ValueError, IndexError) as e:
                 raise e
 
         return value

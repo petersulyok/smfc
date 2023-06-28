@@ -669,7 +669,7 @@ class HdZoneTestCase(unittest.TestCase):
 
     def pt_gnt_p1(self, count: int, index: int, temps: List[float], types: List[int], error: str):
         """Primitive positive test function. It contains the following steps:
-            - mock print(), glob.glob(), HdZone._get_nth_temp() functions
+            - mock print(), glob.glob() functions
             - initialize a Config, Log, Ipmi, and HdZone classes
             - ASSERT: if _get_nth_temp() returns a different temperature than the expected one
             - delete all instances
@@ -715,6 +715,87 @@ class HdZoneTestCase(unittest.TestCase):
         del my_config
         del my_td
 
+    def pt_gnt_n1(self, operation: int, types: List[int], error: str):
+        """Primitive negative test function. It contains the following steps:
+            - mock print(), glob.glob() functions
+            - initialize a Config, Log, Ipmi, and HdZone classes
+            - ASSERT: if _get_nth_temp() will not raise the expected exception
+            - delete all instances
+        """
+        index: int
+        exception: set[type]
+
+        # Mock function for glob.glob().
+        def mocked_glob(file: str, *args, **kwargs):
+            if file.startswith('/sys/class/nvme'):
+                file = my_td.td_dir + file
+            elif file.startswith('/sys/class/scsi_disk'):
+                file = my_td.td_dir + file
+            return original_glob(file, *args, **kwargs)
+
+        my_td = TestData()
+        ipmi_cmd = my_td.create_command_file()
+        index = 0
+        hddtemp_cmd = my_td.create_command_file('echo "38"')
+
+        # RuntimeError - hddtemp: return value <> 0
+        if operation == 0:
+            hddtemp_cmd = my_td.create_command_file('echo "38"\nexit 2')
+            exception = {RuntimeError}
+        # ValueError - hddtemp: invalid value read from output
+        elif operation == 1:
+            hddtemp_cmd = my_td.create_command_file('echo "invalid value"')
+            exception = {ValueError}
+        # IndexError - hddtemp: index is out of range on hd_device_names[]
+        elif operation == 2:
+            index = 1
+            exception = {IndexError}
+
+        hwmon_path = my_td.create_hd_temp_files(1, hd_types=types)
+        hd_names = my_td.create_hd_names(1, hd_types=types)
+        original_glob = glob.glob
+        mock_print = MagicMock()
+        mock_glob = MagicMock(side_effect=mocked_glob)
+        with patch('builtins.print', mock_print), \
+             patch('glob.glob', mock_glob):
+            my_config = configparser.ConfigParser()
+            my_config[Ipmi.CS_IPMI] = {
+                Ipmi.CV_IPMI_COMMAND: ipmi_cmd,
+                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
+                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
+            }
+            my_config[HdZone.CS_HD_ZONE] = {
+                HdZone.CV_HD_ZONE_ENABLED: '1',
+                HdZone.CV_HD_ZONE_COUNT: '1',
+                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
+                HdZone.CV_HD_ZONE_HDDTEMP_PATH: hddtemp_cmd
+            }
+            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+            my_ipmi = Ipmi(my_log, my_config)
+            hwmon_path = hwmon_path.rstrip()
+
+            # FileNotFoundError/IOError/ValueError - hwmon: hwmon file cannot be opened
+            if operation == 3:
+                my_td.delete_file(hwmon_path)
+                exception = {FileNotFoundError, IOError, ValueError}
+            # ValueError - hwmon: invalid value read from file
+            elif operation == 4:
+                with open(hwmon_path, "w+t", encoding="UTF-8") as f:
+                    f.write(str('invalid value\n'))
+                exception = {ValueError}
+
+            with self.assertRaises(Exception) as cm:
+                my_hdzone = HdZone(my_log, my_ipmi, my_config)
+                if operation == 2:
+                    my_hdzone._get_nth_temp(index)
+                del my_hdzone
+            self.assertTrue(type(cm.exception) in exception, error)
+
+        del my_ipmi
+        del my_log
+        del my_config
+        del my_td
+
     def test_get_nth_temp(self) -> None:
         """This is a unit test for function HdZone._get_nth_temp()"""
 
@@ -742,6 +823,18 @@ class HdZoneTestCase(unittest.TestCase):
         self.pt_gnt_p1(4, 3, [38.5, 40.5, 42.5, 44.5],
                        [TestData.HT_SATA, TestData.HT_NVME, TestData.HT_SCSI, TestData.HT_SATA],
                        'hz _get_nth_temp 13')
+
+        # Test exceptions.
+        # RuntimeError
+        self.pt_gnt_n1(0, [TestData.HT_SCSI], "hz _get_nth_temp 14")
+        # ValueError
+        self.pt_gnt_n1(1, [TestData.HT_SCSI], "hz _get_nth_temp 15")
+        # IndexError
+        self.pt_gnt_n1(2, [TestData.HT_SCSI], "hz _get_nth_temp 16")
+        # FileNotFoundError, IOError, ValueError
+        self.pt_gnt_n1(3, [TestData.HT_SATA], "hz _get_nth_temp 17")
+        # ValueError
+        self.pt_gnt_n1(4, [TestData.HT_SATA], "hz _get_nth_temp 18")
 
 
 if __name__ == "__main__":
