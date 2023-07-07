@@ -36,6 +36,8 @@ This service was planned for Super Micro motherboards installed in computer chas
  - CPU zone (FAN1, FAN2, etc.)
  - HD or peripheral zone (FANA, FANB, etc.) 
 
+Please note: the fan assignment is defined by IPMI and cannot be changed! Although `smfc` service implements a feature (called *Swapped zones*) in order to make the use of the fans more suitable.
+
 In this service a fan control logic is implemented for both zones which can:
 
  1. read the zone's temperature from Linux kernel
@@ -46,7 +48,7 @@ In this service a fan control logic is implemented for both zones which can:
 
 The fan control logic can be enabled and disabled independently per zone. In the zone all fans will have the same rotation speed. The user can configure different temperature calculation method (e.g. minimum, average, maximum temperatures) in case of multiple heat sources in a zone.
 
-#### 1.1 User-defined control function
+#### 2. User-defined control function
 The user-defined parameters (see configuration file below for more details) create a function where a temperature interval is being mapped to a fan level interval.
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/userdefined_control_function.jpg" align="center" width="500">
@@ -63,16 +65,16 @@ With this function the `smfc` can map any new temperature measurement value to a
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output_levels.jpg" align="center" width="500">
 
-Additional notes on changing fan levels:
+In order to avoid/minimize the unnecessary change of fan levels the service employs the following steps:
 
- 1. When the service adjusts the fan rotation speed, it always applies a delay time defined in configuration parameter `[IPMI] fan_level_delay=` in order to let the fan implement the physical change.
- 2. There is also a sensitivity threshold parameter (`sensitivity=`) for temperature changes. If the temperature change is below this value then control logic will not react at all. 
+ 1. When the service adjusts the fan rotation speed then it always applies a delay time defined in configuration parameter `[IPMI] fan_level_delay=` in order to let the fan implement the physical change.
+ 2. There is a sensitivity threshold parameter (`sensitivity=`) for the fan control logic. If the temperature change is below this value then the service will not react at all. 
  3. There configuration parameter `polling=` can also impact the frequency of change of the fan levels. The bigger polling time in a zone the lower frequency of changing of the fan speed.
 
-#### 1.2 Swapped zones
+#### 3. Swapped zones
 In some cases it is useful to swap IPMI zones. In this way the fans `FAN1, FAN2, ...` will cool the HD zone and the fans `FANA, FANB, ...` will cool the CPU zone. This feature could be useful if you need more fans for the HD zone since Super Micro motherboards have more fan connectors in the CPU zone usually. This feature can be enabled with `[IPMI] swapped_zones=True` configuration parameter, in default it is disabled. 
 
-#### 1.3 Standby guard
+#### 4. Standby guard
 For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
 	
  - SATA hard disks are organized into a RAID array
@@ -80,37 +82,37 @@ For HD zone an additional optional feature was implemented, called *Standby guar
 
 This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature we can avoid a situation where the array is partially in standby mode while other members are still active.
 
-#### 1.4 Hard disk compatibility
-The `smfc` service was originally designed for `SATA` hard drives, but now it is also compatible with `NVME` and `SAS/SCSI` disks. The following table summarizes how the temperature is read for different disk types: 
+#### 5. Hard disk compatibility
+The `smfc` service was originally designed for `SATA` hard drives, but from `3.0` version it is also compatible with `NVME` and `SAS/SCSI` disks. The following table summarizes how the temperature is read for different disk types: 
 
-| Disk type  | Temperature source   | Kernel module | Command  |
+| Disk type  | Temperature source   | Kernel module | Command   |
 |------------|----------------------|---------------|-----------|
-| SATA       | Linux kernel (HWMON) | `drivetemp`   | -         |
-| NVME       | Linux kernel (HWMON) | -             | -         |
-| SAS/SCSI   | `hddtemp`            | -             | `hddtemp` |
+| `SATA`       | Linux kernel (HWMON) | `drivetemp`   | -         |
+| `NVME`       | Linux kernel (HWMON) | -             | -         |
+| `SAS/SCSI`   | `hddtemp`            | -             | `hddtemp` |
 
 Some additional notes:
 
 - For `NVME` SSDs no kernel driver will be loaded the kernel itself can handle this disk type
 - For `SATA` disks the `drivetemp` kernel module should be loaded (this is the fastest way to read disk temperature and the kernel module can report the temperature during sleep mode!)
-- For `SAS/SCSI` disks the `hddtemp` linux command will be used to read disk temperature (deamon mode is NOT required)
-- Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported.
+- For `SAS/SCSI` disks the `hddtemp` command will be used to read disk temperature (NO daemon mode is required!)
+- Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported in this case.
 - Before you specify an `NVME` disk in the HD zone please consider fact that they operate on a significantly higher temperature range than the classical disks.
-- The service is classifying the disk types automatically based on the tags (`ata-`, `nvme-` and `scsi-`) in the disk names. For example:
+  - The service is classifying the disk types automatically based on the tags (`ata-`, `nvme-` and `scsi-`) in the disk names. For example:
 	
-	| Disk type    | Sample disk name                                                                                                          |
-	|--------------|---------------------------------------------------------------------------------------------------------------------------|
-	| SATA         | `/dev/disk/by-id/ata-Samsung_SSD_850_EVO_2TB_S2HGNWEG911397Y` `/dev/disk/by-id/scsi-SATA_Samsung_SSD_870_S6PUNX0T715310D` |
-	| NVME         | `/dev/disk/by-id/nvme-WDS100T1X0E-00AFY0_2148GF484214`                                                                   |
-	| SAS/SCSI | `/dev/disk/by-id/scsi-SIBM-ESXS_ST14000NM0288_E_ZHW0XPFH0000C812756F`                                                     |
+      | Disk type  | Sample disk name                                                                                                          |
+      |------------|---------------------------------------------------------------------------------------------------------------------------|
+      | SATA       | `/dev/disk/by-id/ata-Samsung_SSD_850_EVO_2TB_S2HGNWEG911397Y` `/dev/disk/by-id/scsi-SATA_Samsung_SSD_870_S6PUNX0T715310D` |
+      | NVME       | `/dev/disk/by-id/nvme-WDS100T1X0E-00AFY0_2148GF484214`                                                                    |
+      | SAS/SCSI   | `/dev/disk/by-id/scsi-SIBM-ESXS_ST14000NM0288_E_ZHW0XPFH0000C812756F`                                                     |	
 
-### 2. Super Micro compatibility
+### 6. Super Micro compatibility
 This software is compatible with Super Micro X10 and X11 motherboards with a BMC chip (e.g. AST2500) and IPMI functionality. In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employes a BMC chip). The earlier X8 motherboards are not compatible with this software.
 Feel free to create a short feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19) on your compatibility experience.
 
 TODO: Testing and feedback would be needed about the compatibility with Super Micro X12/X13 motherboards.
 
-### 3. IPMI fan control and thresholds
+### 7. IPMI fan control and thresholds
 Many utilities and scripts (created by NAS and home server community) are using `IPMI FULL MODE`. In this mode the IPMI system set fan rotation speed initially to 100% but after then it can be changed freely while it is not reaching the lower and the upper threshold values. If it happens then IPMI will set all fans back to full rotation speed (100%) in the zone. In order to avoid this situation, you should redefine IPMI sensor thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
 
  IPMI defines six sensor thresholds for fans:
@@ -143,9 +145,9 @@ You can read more about:
  - IPMI fan control: [STH Forums](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/) and [TrueNAS Forums](https://www.truenas.com/community/threads/pid-fan-controller-perl-script.50908/)
  - Change IPMI sensors thresholds: [TrueNAS Forums](https://www.truenas.com/community/resources/how-to-change-ipmi-sensor-thresholds-using-ipmitool.35/)
 
-### 4. Power management
+### 8. Power management
 If low noise and low heat generation are important attributes of your Linux box, then you may consider the following chapters.
-#### 4.1 CPU
+#### 8.1 CPU
 Most of the modern CPUs has multiple energy saving features. You can check your BIOS and enable [these features](https://metebalci.com/blog/a-minimum-complete-tutorial-of-cpu-power-management-c-states-and-p-states/) like:
 
  - Intel(R) Speed Shift Technology
@@ -157,7 +159,7 @@ With this setup the CPU will change its base frequency and power consumption dyn
 
 TODO: Recommendation for AMD users.
 
-#### 4.2 SATA hard disks
+#### 8.2 SATA hard disks
 In case of SATA hard disks, you may enable:
 
  - advanced power management
@@ -186,7 +188,7 @@ Important notes:
  1. If you plan to spin down your hard disks or RAID array (i.e. put them to standby mode) you have to set up the configuration parameter `[HD zone] polling=` minimum twice bigger as the `spindown_time` specified here.
  2. In file `/etc/hdparm.conf` you must define HD names in `/dev/disk/by-id/...` form to avoid inconsistency.
 
-### 5. Kernel modules
+### 9. Kernel modules
 We need to load two important Linux kernel modules:
 
  - [`coretemp`](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html): temperature report for Intel(R) CPUs
@@ -201,15 +203,15 @@ Reading file content from `/sys` is the fastest way to get the temperature of th
 
 TODO: Recommendation for AMD users.
 
-### 6. Installation
+### 10. Installation
 For the installation you need a root user. The default installation script `install.sh` will use the following folders:
 
-|File|Installation folder|Description|
-|--|--|--|
-|`smsc.service`|`/etc/systemd/system`|systemd service definition file|
-|`smsc`|`/etc/default`|service command line options|
-|`smsc.py`|`/opt/smfc`|service (python program)|
-|`smsc.conf`|`/opt/smfc`|service configuration file|
+| File           | Installation folder   | Description                     |
+|----------------|-----------------------|---------------------------------|
+| `smsc.service` | `/etc/systemd/system` | systemd service definition file |
+| `smsc`         | `/etc/default`        | service command line options    |
+| `smsc.py`      | `/opt/smfc`           | service (python program)        |
+| `smsc.conf`    | `/opt/smfc`           | service configuration file      |
 
 but you can use freely any other folders too. The service has the following command line options:
 
@@ -225,7 +227,7 @@ but you can use freely any other folders too. The service has the following comm
 
 You may configure logging output and logging level here and these options can be specified in `/etc/default/smfc`in a persistent way.
 
-### 7. Configuration file
+### 11. Configuration file
 Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 
     #  
@@ -335,7 +337,7 @@ Important notes:
  3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is **optional**, and it will be generated automatically. You can use that for testing purpose or if the automatic generation did not work for you. In this case resolution of the wild characters (`?,*`) is still available.
  4. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
 
-### 8. Running of the service
+### 12. Automatic execution of the service
 This `systemd` service can be started and stopped in the standard way. Do not forget to reload `systemd` configuration after a new installation or if you changed the service definition file:
 
 	systemctl daemon-reload
@@ -362,7 +364,7 @@ If you are testing your configuration, you can start `smfc.py` directly in a ter
 	cd /opt
 	sudo smfc.py -o 0 -l 3
 
-### 9. Checking result and monitoring logs
+### 13. Checking result and monitoring logs
 All messages will be logged to the specific output and the specific level.
 With the help of command `journalctl` you can check logs easily. For examples:
 
@@ -374,7 +376,7 @@ With the help of command `journalctl` you can check logs easily. For examples:
 
 		journalctl -b -u smfc
 
-## FAQ
+## 14. FAQ
 
 ### Q: My fans are spinning up and loud. What is wrong?
 Most probably the rotation speed of the fans went above or below of a threshold value
@@ -418,7 +420,7 @@ The configuration is the following:
  - 3 x [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN4) in CPU zone 
  - 2 x [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) fans (FANA, FANB) in HD zone
 
-## References
+## 15. References
 Further readings:
 
  - [\[STH forums\] Reference Material: Supermicro X9/X10/X11 Fan Speed Control](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/)
