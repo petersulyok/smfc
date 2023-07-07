@@ -98,13 +98,13 @@ Some additional notes:
 - For `SAS/SCSI` disks the `hddtemp` command will be used to read disk temperature (NO daemon mode is required!)
 - Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported in this case.
 - Before you specify an `NVME` disk in the HD zone please consider fact that they operate on a significantly higher temperature range than the classical disks.
-  - The service is classifying the disk types automatically based on the tags (`ata-`, `nvme-` and `scsi-`) in the disk names. For example:
+- The service identify the disk type automatically based on the tags (`ata-`, `nvme-` and `scsi-`) in the disk names. For example:
 	
-      | Disk type  | Sample disk name                                                                                                          |
-      |------------|---------------------------------------------------------------------------------------------------------------------------|
-      | SATA       | `/dev/disk/by-id/ata-Samsung_SSD_850_EVO_2TB_S2HGNWEG911397Y` `/dev/disk/by-id/scsi-SATA_Samsung_SSD_870_S6PUNX0T715310D` |
-      | NVME       | `/dev/disk/by-id/nvme-WDS100T1X0E-00AFY0_2148GF484214`                                                                    |
-      | SAS/SCSI   | `/dev/disk/by-id/scsi-SIBM-ESXS_ST14000NM0288_E_ZHW0XPFH0000C812756F`                                                     |	
+    | Disk type  | Sample disk name                                                                                                          |
+    |------------|---------------------------------------------------------------------------------------------------------------------------|
+    | SATA       | `/dev/disk/by-id/ata-Samsung_SSD_850_EVO_2TB_S2HGNWEG911397Y` `/dev/disk/by-id/scsi-SATA_Samsung_SSD_870_S6PUNX0T715310D` |
+    | NVME       | `/dev/disk/by-id/nvme-WDS100T1X0E-00AFY0_2148GF484214`                                                                    |
+    | SAS/SCSI   | `/dev/disk/by-id/scsi-SIBM-ESXS_ST14000NM0288_E_ZHW0XPFH0000C812756F`                                                     |	
 
 ### 6. Super Micro compatibility
 This software is compatible with Super Micro X10 and X11 motherboards with a BMC chip (e.g. AST2500) and IPMI functionality. In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employes a BMC chip). The earlier X8 motherboards are not compatible with this software.
