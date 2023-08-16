@@ -45,10 +45,12 @@ cp ./src/smfc.service /etc/systemd/system/
 chown root:root "$TARGET_DIR/smfc.py" /etc/default/smfc /etc/systemd/system/smfc.service
 
 # Generate a real hd_names= entry in the new 'smfc.conf'.
-hd_name=$(ls -l /dev/disk/by-id/|grep .*ata-.*sda$|tr -s ' '|cut -d' ' -f 9)
-if [ -n "$hd_name" ];
-then
-  sed -i "s|hd_names=|hd_names=/dev/disk/by-id/$hd_name|g" "$TARGET_DIR/smfc.conf"
+if [ "$1" != "--keep-config" ]; then
+  hd_name=$(ls -l /dev/disk/by-id/|grep .*ata-.*sda$|tr -s ' '|cut -d' ' -f 9)
+  if [ -n "$hd_name" ];
+  then
+    sed -i "s|hd_names=|hd_names=/dev/disk/by-id/$hd_name|g" "$TARGET_DIR/smfc.conf"
+  fi
 fi
 
 echo "Installation finished successfully."
