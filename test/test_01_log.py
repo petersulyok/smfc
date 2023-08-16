@@ -24,7 +24,7 @@ class LogTestCase(unittest.TestCase):
         mock_syslog_openlog = MagicMock()
         mock_syslog_syslog = MagicMock()
         mock_print = MagicMock()
-        with patch('builtins.print', mock_print),\
+        with patch('builtins.print', mock_print), \
              patch('syslog.openlog', mock_syslog_openlog), \
              patch('syslog.syslog', mock_syslog_syslog):
             my_log = Log(level, output)
