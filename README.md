@@ -206,11 +206,9 @@ We need to load the following important Linux kernel modules:
 Use `/etc/modules` file for persistent loading of these modules. 
 Here are some sample HWMON file locations for these kernel modules:
 
- - CPU:
-   -    Intel: `/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input`
-   - AMD: `
-/sys/bus/pci/drivers/k10temp/0000*/hwmon/hwmon*/temp1_input`
- - SATA HD: `/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input`
+ - `coretemp`: `/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input`
+ - `k10temp`: `/sys/bus/pci/drivers/k10temp/0000*/hwmon/hwmon*/temp1_input`
+ - `drivetemp`: `/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input`
 
 Notes:
 - `smfc` is able to find the proper HWMON file automatically for Intel(R) CPUs and SATA hard drives, but users of the AMD(R) CPU should specify manually (see `hwmon_path=` parameter in the config file)
