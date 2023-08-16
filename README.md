@@ -12,9 +12,13 @@ Super Micro fan control for Linux (home) servers.
 This is a `systemd service` running on Linux and is able to control fans in CPU and HD zones with the help of IPMI on Super Micro X10/X11 (and some X9) motherboards.
 
 ### 1. Prerequisites
- - a Super Micro X10/X11 motherboard with BMC (i.e. AST2x00) chip
+ - a Super Micro motherboard with a BMC chip (i.e. ASPEED AST2400/2500)
  - Python 3.7+
- - Linux (kernel 5.6+) with `systemd` (`coretemp` and `drivetemp` kernel modules for CPU and hard disk temperatures)
+ - Linux OS with:
+   - `systemd` package
+   - `coretemp` kernel module for Intel(R) CPUs
+   - `k10temp` kernel module for AMD(R) CPUs
+   - `drivetemp` kernel module (kernel version 5.6+ required) modules for SATA hard disks
  - `bash`
  - `ipmitool`
  - optional: `smartmontools` for the *standby guard* feature
@@ -23,7 +27,7 @@ This is a `systemd service` running on Linux and is able to control fans in CPU 
 ### 2. Installation and configuration
  1. Set up the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
- 3. Load kernel modules (`coretemp` and `drivetemp`).
+ 3. Load kernel modules (`coretemp/k10temp` and `drivetemp`).
  4. Install the service with running the script `install.sh`.
  5. Edit the configuration file `/opt/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
  6. Start the `systemd` service
@@ -36,7 +40,7 @@ This service was planned for Super Micro motherboards installed in computer chas
  - CPU zone (FAN1, FAN2, etc.)
  - HD or peripheral zone (FANA, FANB, etc.) 
 
-Please note: the fan assignment is defined by IPMI and cannot be changed! Although `smfc` service implements a feature (called *Swapped zones*) in order to make the use of the fans more suitable.
+Please note: the fan assignment is defined by IPMI and it cannot be changed! On the other hand `smfc` implements a feature, called *Swapped zones*, in order to make the use of the fans more suitable.
 
 In this service a fan control logic is implemented for both zones which can:
 
@@ -97,20 +101,19 @@ Some additional notes:
 - For `SATA` disks the `drivetemp` kernel module should be loaded (this is the fastest way to read disk temperature and the kernel module can report the temperature during sleep mode!)
 - For `SAS/SCSI` disks the `hddtemp` command will be used to read disk temperature (NO daemon mode is required for `hddtemp`!)
 - Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported in this case.
-- Before you specify an `NVME` disk in the HD zone please consider fact that they operate on a significantly higher temperature range than the classical disks.
-- The service can identify the disk type automatically based on the tags (`ata-`, `nvme-` and `scsi-`) in the disk names. For example:
-	
-    | Disk type  | Sample disk name                                                                                                          |
-    |------------|---------------------------------------------------------------------------------------------------------------------------|
-    | SATA       | `/dev/disk/by-id/ata-Samsung_SSD_850_EVO_2TB_S2HGNWEG911397Y` `/dev/disk/by-id/scsi-SATA_Samsung_SSD_870_S6PUNX0T715310D` |
-    | NVME       | `/dev/disk/by-id/nvme-WDS100T1X0E-00AFY0_2148GF484214`                                                                    |
-    | SAS/SCSI   | `/dev/disk/by-id/scsi-SIBM-ESXS_ST14000NM0288_E_ZHW0XPFH0000C812756F`                                                     |	
+- Although `smfc` can handle NVME SSDs, it is NOT RECOMMENDED to include NVME disks in `hd_names=` parameters, because the hard disks and NVME SSDs are operating in quite different temperature zones (e.g. 40 C vs 70 C).
+- The service can identify the disk types automatically based on the tags (`ata-`/`-SATA`, `nvme-` and `scsi-`)
 
 ### 6. Super Micro compatibility
-This software is compatible with Super Micro X10 and X11 motherboards with a BMC chip (e.g. AST2500) and IPMI functionality. In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employes a BMC chip). The earlier X8 motherboards are not compatible with this software.
+Originally this software was designed to work with Super Micro X10 and X11 motherboards with a BMC chip (i.e. ASPEED AST2400/2500) and IPMI functionality. 
+
+In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employ BMC chip). 
+
+The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI_FULL` mode and they cannot control fan levels how it is implemented in `smfc`.
+
 Feel free to create a short feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19) on your compatibility experience.
 
-TODO: Testing and feedback would be needed about the compatibility with Super Micro X12/X13 motherboards.
+TODO: Feedback would be needed about the compatibility with Super Micro X12/X13 motherboards and AST2600 BMC chip.
 
 ### 7. IPMI fan control and thresholds
 Many utilities and scripts (created by NAS and home server community) are using `IPMI FULL MODE`. In this mode the IPMI system set fan rotation speed initially to 100% but after then it can be changed freely while it is not reaching the lower and the upper threshold values. If it happens then IPMI will set all fans back to full rotation speed (100%) in the zone. In order to avoid this situation, you should redefine IPMI sensor thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
@@ -147,17 +150,22 @@ You can read more about:
 
 ### 8. Power management
 If low noise and low heat generation are important attributes of your Linux box, then you may consider the following chapters.
-#### 8.1 CPU
-Most of the modern CPUs has multiple energy saving features. You can check your BIOS and enable [these features](https://metebalci.com/blog/a-minimum-complete-tutorial-of-cpu-power-management-c-states-and-p-states/) like:
 
+#### 8.1 CPU
+Most of the modern CPUs has multiple energy saving features. You can check your BIOS and enable them in order to minimize the heat generation.
+
+Intel(R) CPUs:
  - Intel(R) Speed Shift Technology
  - Intel(R) SpeedStep
  - C-states
  - Boot performance mode
 
-With this setup the CPU will change its base frequency and power consumption dynamically based on the load.
+AMD(R) CPUs:
+ - PowerNow!
+ - Cool\`n\`quiet
+ - Turbo Core
 
-TODO: Recommendation for AMD users.
+With this setup the CPU will change its base frequency and power consumption dynamically based on the load.
 
 #### 8.2 SATA hard disks
 In case of SATA hard disks, you may enable:
@@ -189,19 +197,24 @@ Important notes:
  2. In file `/etc/hdparm.conf` you must define HD names in `/dev/disk/by-id/...` form to avoid inconsistency.
 
 ### 9. Kernel modules
-We need to load two important Linux kernel modules:
+We need to load the following important Linux kernel modules:
 
  - [`coretemp`](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html): temperature report for Intel(R) CPUs
- - [`drivetemp`](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html): temperature report for SATA hard disks (available in kernel 5.6+ versions)
+ - [`k10temp`](https://docs.kernel.org/hwmon/k10temp.html): temperature report for AMD(R) CPUs
+ - [`drivetemp`](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html): temperature report for SATA hard disks (available from kernel 5.6+ version)
 
-Use file `/etc/modules` for persistent loading of these modules. Both modules provide `hwmon` interface in file system `/sys` so we can read the temperatures of CPU and hard disks easily with reading the content of specific files. The service will find the following locations of these files:
+Use `/etc/modules` file for persistent loading of these modules. 
+Here are some sample HWMON file locations for these kernel modules:
 
- - CPU: `/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input`
- - HD: `/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input`
+ - CPU:
+   -    Intel: `/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input`
+   - AMD: `
+/sys/bus/pci/drivers/k10temp/0000*/hwmon/hwmon*/temp1_input`
+ - SATA HD: `/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input`
 
-Reading file content from `/sys` is the fastest way to get the temperature of the CPU and hard disks. The `drivetemp` module has also an additional advantage that it can read temperature of the hard disks even if they are in standby mode. 
-
-TODO: Recommendation for AMD users.
+Notes:
+- `smfc` is able to find the proper HWMON file automatically for Intel(R) CPUs and SATA hard drives, but users of the AMD(R) CPU should specify manually (see `hwmon_path=` parameter in the config file)
+- Reading `drivetemp` module is the fastest way to get the temperature of the hard disks, and it can read temperature of the SATA hard disks even in standby mode, too. 
 
 ### 10. Installation
 For the installation you need a root user. The default installation script `install.sh` will use the following folders:
@@ -230,87 +243,94 @@ You may configure logging output and logging level here and these options can be
 ### 11. Configuration file
 Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 
-    #  
-    #   smfc.conf  
-    #   smfc service configuration parameters  
-    #  
-      
-      
-    [Ipmi]  
-    # Path for ipmitool (str, default=/usr/bin/ipmitool)  
-    command=/usr/bin/ipmitool   
-    # Delay time after changing IPMI fan mode (int, seconds, default=10)  
-    fan_mode_delay=10  
-    # Delay time after changing IPMI fan level (int, seconds, default=2)  
-    fan_level_delay=2  
-	# CPU and HD zones are swapped (bool, default=0).
-	swapped_zones=0      
-      
-    [CPU zone]  
-    # Fan controller enabled (bool, default=0)  
-    enabled=1  
-    # Number of CPUs (int, default=1)  
-    count=1  
-    # Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)  
-    temp_calc=1  
-    # Discrete steps in mapping of temperatures to fan level (int, default=6)  
-    steps=6  
-    # Threshold in temperature change before the fan controller reacts (float, C, default=3.0)  
-    sensitivity=3.0  
-    # Polling time interval for reading temperature (int, sec, default=2)  
-    polling=2  
-    # Minimum CPU temperature (float, C, default=30.0)  
-    min_temp=30.0  
-    # Maximum CPU temperature (float, C, default=60.0)  
-    max_temp=60.0  
-    # Minimum CPU fan level (int, %, default=35)  
-    min_level=35  
-    # Maximum CPU fan level (int, %, default=100)  
-    max_level=100  
-    # Optional parameter, it will be generated automatically (can be used for testing and in special cases).
-    # Path for CPU sys/hwmon/coretemp file(s) (str multi-line list, default=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input)  
-    # hwmon_path=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input  
-    #            /sys/devices/platform/coretemp.1/hwmon/hwmon*/temp1_input  
-      
-      
-    [HD zone]  
-    # Fan controller enabled (bool, default=0)  
-    enabled=1  
-    # Number of HDs (int, default=1)  
-    count=1  
-    # Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)  
-    temp_calc=1  
-    # Discrete steps in mapping of temperatures to fan level (int, default=4)  
-    steps=4  
-    # Threshold in temperature change before the fan controller reacts (float, C, default=2.0)  
-    sensitivity=2.0  
-    # Polling interval for reading temperature (int, sec, default=10)  
-    polling=10  
-    # Minimum HD temperature (float, C, default=32.0)  
-    min_temp=32.0  
-    # Maximum HD temperature (float, C, default=46.0)  
-    max_temp=46.0  
-    # Minimum HD fan level (int, %, default=35)  
-    min_level=35  
-    # Maximum HD fan level (int, %, default=100)  
-    max_level=100  
-    # Names of the HDs (str multi-line list, default=)  
-    # These names MUST BE specified in '/dev/disk/by-id/...'' form!  
-    hd_names=  
-    # Optional parameter, it will be generated automatically (can be used for testing and in special cases).
-    # Path for HD sys/hwmon/drivetemp file(s) (str multi-line list, default=/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input)  
-    # hwmon_path=/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input  
-    #            /sys/class/scsi_disk/1:0:0:0/device/hwmon/hwmon*/temp1_input  
-    # Standby guard feature for RAID arrays (bool, default=0)  
-    standby_guard_enabled=0  
-    # Number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)  
-    standby_hd_limit=1  
-    # Path for 'smartctl' command (str, default=/usr/sbin/smartctl)  
-    smartctl_path=/usr/sbin/smartctl
-
+	#  
+	#   smfc.conf  
+	#   smfc service configuration parameters  
+	#  
+	  
+	  
+	[Ipmi]  
+	# Path for ipmitool (str, default=/usr/bin/ipmitool)  
+	command=/usr/bin/ipmitool   
+	# Delay time after changing IPMI fan mode (int, seconds, default=10)  
+	fan_mode_delay=10  
+	# Delay time after changing IPMI fan level (int, seconds, default=2)  
+	fan_level_delay=2  
+	# CPU and HD zones are swapped (bool, default=0).  
+	swapped_zones=0  
+	  
+	  
+	[CPU zone]  
+	# Fan controller enabled (bool, default=0)  
+	enabled=1  
+	# Number of CPUs (int, default=1)  
+	count=1  
+	# Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)  
+	temp_calc=1  
+	# Discrete steps in mapping of temperatures to fan level (int, default=6)  
+	steps=6  
+	# Threshold in temperature change before the fan controller reacts (float, C, default=3.0)  
+	sensitivity=3.0  
+	# Polling time interval for reading temperature (int, sec, default=2)  
+	polling=2  
+	# Minimum CPU temperature (float, C, default=30.0)  
+	min_temp=30.0  
+	# Maximum CPU temperature (float, C, default=60.0)  
+	max_temp=60.0  
+	# Minimum CPU fan level (int, %, default=35)  
+	min_level=35  
+	# Maximum CPU fan level (int, %, default=100)  
+	max_level=100  
+	# Optional parameter, it will be generated automatically for Intel CPUs and must be specified manually for AMD CPUs.  
+	# Path for CPU sys/hwmon file(s) (str multi-line list, default=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input)  
+	# hwmon_path=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input  
+	#            /sys/devices/platform/coretemp.1/hwmon/hwmon*/temp1_input  
+	# or  
+	# hwmon_path=/sys/bus/pci/drivers/k10temp/0000*/hwmon/hwmon*/temp1_input  
+	  
+	  
+	[HD zone]  
+	# Fan controller enabled (bool, default=0)  
+	enabled=1  
+	# Number of HDs (int, default=1)  
+	count=1  
+	# Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)  
+	temp_calc=1  
+	# Discrete steps in mapping of temperatures to fan level (int, default=4)  
+	steps=4  
+	# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)  
+	sensitivity=2.0  
+	# Polling interval for reading temperature (int, sec, default=10)  
+	polling=10  
+	# Minimum HD temperature (float, C, default=32.0)  
+	min_temp=32.0  
+	# Maximum HD temperature (float, C, default=46.0)  
+	max_temp=46.0  
+	# Minimum HD fan level (int, %, default=35)  
+	min_level=35  
+	# Maximum HD fan level (int, %, default=100)  
+	max_level=100  
+	# Names of the HDs (str multi-line list, default=)  
+	# These names MUST BE specified in '/dev/disk/by-id/...' form!  
+	hd_names=  
+	# Optional parameter, it will be generated automatically based on the disk names.  
+	# List of files in /sys/hwmon file system or 'hddtemp' (str multi-line list, default=)  
+	# hwmon_path=/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input  
+	#            /sys/class/scsi_disk/1:0:0:0/device/hwmon/hwmon*/temp1_input  
+	#            hddtemp  
+	# Standby guard feature for RAID arrays (bool, default=0)  
+	standby_guard_enabled=0  
+	# Number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)  
+	standby_hd_limit=1  
+	# Path for 'smartctl' command (str, default=/usr/sbin/smartctl).  
+	# Required for 'standby guard' feature only  
+	smartctl_path=/usr/sbin/smartctl  
+	# Path for 'hddtemp' command (str, default=/usr/sbin/hddtemp).  
+	# Required for reading of the temperature of SAS/SCSI disks.  
+	hddtemp_path=/usr/sbin/hddtemp
 Important notes:
- 1. `[HD zone} hd_names=`: These names must be specified in `/dev/disk/by-id/...` form. The `/dev/sd?` form is not stable, could be changing after each reboot. This is not part of the default configuration since they are hardware specific, it must be specified manually.
- 2. `[CPU zone] / [HD zone} min_level= / max_level=`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotation speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
+ 1. `[HD zone} hd_names=`: This is a compulsory parameter, its value must be specified in `/dev/disk/by-id/...` form (the `/dev/sda` form is not persistent could be changed after a reboot).
+ 2. `[CPU zone] / [HD zone] min_level= / max_level=`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotation speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
 
 		root:~# cat fan_result.csv
 		Level,FAN1,FAN2,FAN4,FANA,FANB
@@ -334,7 +354,7 @@ Important notes:
 
 	My experience is that Noctua fans in my box are running stable in the 35-100% fan level interval. An additional user experience is (see [issue #12](https://github.com/petersulyok/smfc/issues/12)) when Noctua fans are paired with Ultra Low Noise Adapter the minimum stable fan level could go up to 45% (i.e. 35% is not stable).  
 
- 3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is **optional**, and it will be generated automatically. You can use that for testing purpose or if the automatic generation did not work for you. In this case resolution of the wild characters (`?,*`) is still available.
+ 3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is optional for Intel(R) CPUs and SATA drives (i.e. `smfc` can identify automatically the proper file locations), but must be specified manually for AMD(R) CPUs. In case of SAS/SCSI hard disks (where `drivetemp` cannot be loaded) you can specify `hddtemp` value. You can use wild characters (`?,*`) in this parameter and `smfc` will do the path resolution automatically.
  4. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
 
 ### 12. Automatic execution of the service
