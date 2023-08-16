@@ -29,7 +29,7 @@ cp ./src/smfc.py "$TARGET_DIR/"
 cp ./src/smfc.conf "$TARGET_DIR/"
 cp ./src/smfc /etc/default/
 cp ./src/smfc.service /etc/systemd/system/
-chown root.root "$TARGET_DIR/smfc.py" "$TARGET_DIR/smfc.conf" /etc/default/smfc /etc/systemd/system/smfc.service
+chown root:root "$TARGET_DIR/smfc.py" "$TARGET_DIR/smfc.conf" /etc/default/smfc /etc/systemd/system/smfc.service
 
 # Generate a real hd_names= entry in the new 'smfc.conf'.
 hd_name=$(ls -l /dev/disk/by-id/|grep .*ata-.*sda$|tr -s ' '|cut -d' ' -f 9)
