@@ -65,7 +65,7 @@ The following five parameters will define the function in both zones:
      max_level=
      steps=
 
-With this function the `smfc` can map any new temperature measurement value to a fan level. Changing the fan rotation speed is a very slow process (i.e. it could take seconds depending on fan type and the requested amount of change), so we try to minimize these kinds of actions. Instead of setting fan rotation speed continuously we define discrete fan levels based on `steps=` parameter.
+With the help of this function `smfc` can map any new temperature measurement value to a fan level. Changing the fan rotation speed is a very slow process (i.e. it could take seconds depending on fan type and the requested amount of change), so we try to minimize these kinds of actions. Instead of setting fan rotation speed continuously we define discrete fan levels based on `steps=` parameter.
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output_levels.jpg" align="center" width="500">
 
@@ -422,6 +422,11 @@ You should configure the temperatures and levels with the same value.
 	max_level=60
 
 With this setup there will be a constant 60% fan level in the specific zone. The temperature value is ignored, `steps` parameter is also ignored.
+
+### Q: I receive an error message "Cannot read hwmon*/temp1_input file". What is the problem?
+The problem is that the specific file cannot be found in HWMON system. The potential reasons behind this issue could be:
+ - `drivetemp` driver cannot support your disks (it support only SATA hard disks). In case of SAS/SCSI hard disks you can use `hddtemp` instead of `drivetemp`. See more details in [issue #21](https://github.com/petersulyok/smfc/issues/21).
+ - Maybe you specified the `hwmon_path=` parameter manually and it contains an invalid path. You can correct it.
 
 ### Q: How does the author test/use this service?
 The configuration is the following:
