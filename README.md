@@ -115,7 +115,7 @@ Feel free to create a short feedback in [issue #19](https://github.com/petersuly
 
 TODO: Feedback would be needed about the compatibility with Super Micro X12/X13 motherboards and AST2600 BMC chip.
 
-### 7. IPMI fan control and thresholds
+### 7. IPMI fan control and sensor thresholds
 Many utilities and scripts (created by NAS and home server community) are using `IPMI FULL MODE`. In this mode the IPMI system set fan rotation speed initially to 100% but after then it can be changed freely while it is not reaching the lower and the upper threshold values. If it happens then IPMI will set all fans back to full rotation speed (100%) in the zone. In order to avoid this situation, you should redefine IPMI sensor thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
 
  IPMI defines six sensor thresholds for fans:
@@ -125,6 +125,26 @@ Many utilities and scripts (created by NAS and home server community) are using 
  4. Upper Non-Critical  
  5. Upper Critical  
  6. Upper Non-Recoverable
+
+<img src="https://github.com/petersulyok/smfc/raw/main/doc/ipmi_sensor_threshold.jpg" align="center" width="600">
+
+Here is a real-life example for a [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) fan:
+
+```
+Upper Non-Recoverable = 1800 rpm
+Upper Critical = 1700 rpm
+Upper Non-Critical = 1600 rpm
+Lower Non-Recoverable = 200 rpm
+Lower Critical = 100 rpm
+Lower Non-Critical = 0 rpm
+Max RPM = 1500 rpm
+Min PRM = 300 rpm
+max_level = 100 (i.e. 1500 rpm)
+min_level = 35 (i.e. 500 rpm)
+```
+
+#### 7.1 How to configure your sensor thresholds for IPMI and min/max levels for `smfc`?
+The issue with fans is that they are mechanical and their rotation speed is not perfectly stable (e.g. can fluctuate a bit).
 
 You can redefine the proper thresholds in following way:
 1. Check the specification of your fans and find the minimum and maximum rotation speeds. In case of [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) these are 300 and 1500 rpm.
