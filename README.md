@@ -40,7 +40,7 @@ This service was planned for Super Micro motherboards installed in computer chas
  - CPU zone (FAN1, FAN2, etc.)
  - HD or peripheral zone (FANA, FANB, etc.) 
 
-Please note: the fan assignment is defined by IPMI and it cannot be changed! On the other hand `smfc` implements a feature, called *Swapped zones*, in order to make the use of the fans more suitable.
+Please note: the fan assignment is defined in IPMI, and it cannot be changed! On the other hand `smfc` implements a feature, called *Swapped zones*, in order to make the use of the fans more suitable.
 
 In this service a fan control logic is implemented for both zones which can:
 
@@ -91,9 +91,9 @@ The `smfc` service was originally designed for `SATA` hard drives, but from `3.0
 
 | Disk type  | Temperature source   | Kernel module | Command   |
 |------------|----------------------|---------------|-----------|
-| `SATA`       | Linux kernel (HWMON) | `drivetemp`   | -         |
-| `NVME`       | Linux kernel (HWMON) | -             | -         |
-| `SAS/SCSI`   | `hddtemp`            | -             | `hddtemp` |
+| `SATA`     | Linux kernel (HWMON) | `drivetemp`   | -         |
+| `NVME`     | Linux kernel (HWMON) | -             | -         |
+| `SAS/SCSI` | `hddtemp`            | -             | `hddtemp` |
 
 Some additional notes:
 
@@ -109,22 +109,55 @@ Originally this software was designed to work with Super Micro X10 and X11 mothe
 
 In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employ BMC chip). 
 
-The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI_FULL` mode and they cannot control fan levels how it is implemented in `smfc`.
+The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI_FULL` mode, and they cannot control fan levels how it is implemented in `smfc`.
 
 Feel free to create a short feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19) on your compatibility experience.
 
 TODO: Feedback would be needed about the compatibility with Super Micro X12/X13 motherboards and AST2600 BMC chip.
 
 ### 7. IPMI fan control and sensor thresholds
-Many utilities and scripts (created by NAS and home server community) are using `IPMI FULL MODE`. In this mode the IPMI system set fan rotation speed initially to 100% but after then it can be changed freely while it is not reaching the lower and the upper threshold values. If it happens then IPMI will set all fans back to full rotation speed (100%) in the zone. In order to avoid this situation, you should redefine IPMI sensor thresholds based on your fan specification. On Linux you can display and change several IPMI parameters (like fan mode, fan level, sensor data and thresholds etc.) with the help of `ipmitool`.
+IPMI uses six sensor thresholds to specify the safe and unsafe fan rotation speed intervals (these are RPM values rounded to nearest hundreds):
 
- IPMI defines six sensor thresholds for fans:
- 1. Lower Non-Recoverable  
- 2. Lower Critical  
- 3. Lower Non-Critical
- 4. Upper Non-Critical  
- 5. Upper Critical  
- 6. Upper Non-Recoverable
+```
+Lower Non-Recoverable  
+Lower Critical  
+Lower Non-Critical
+Upper Non-Critical  
+Upper Critical  
+Upper Non-Recoverable
+```
+
+Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control where fan speed can be controlled freely in `[Lower Non-Critical,Upper Non-Critical]` interval but when fan speed oversteps any of the `Non-Recoverable` thresholds, IPMI will generate an _assertion event_ and will set fan speed back to 100% for all fans in the specific zone.
+
+Notes:
+  - Use the following command to display the current IMPI sensor thresholds for fans:
+    ```
+    root@home:~# ipmitool sensor|grep FAN
+    FAN1             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
+    FAN2             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
+    FAN3             | na         |            | na    | na        | na        | na        | na        | na        | na        
+    FAN4             | 400.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
+    FANA             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
+    FANB             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
+    ```
+  - Use the following command to list the assertion events in event log:
+    ```
+    root@home:~# ipmitool sel list
+       1 | 10/19/2023 | 05:15:35 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
+       2 | 10/19/2023 | 05:15:35 PM CEST | Fan #0x46 | Lower Non-recoverable going low  | Asserted
+       3 | 10/19/2023 | 05:15:38 PM CEST | Fan #0x46 | Lower Non-recoverable going low  | Deasserted
+       4 | 10/19/2023 | 05:15:38 PM CEST | Fan #0x46 | Lower Critical going low  | Deasserted
+       5 | 10/19/2023 | 05:20:59 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
+    ```
+  - For fans typically the `Lower` thresholds are critical since they rarely exceed their maximum rotation speed
+
+<span style='color: red;'>Please also consider the fact that fans are mechanical devices, their rotation speed is not stable, it could be fluctuating (depends on the quality of the fans and fan controller circuits of the motherboards), especially around the minimal speed (Min RPM)!.</span>  
+
+In order to avoid the assertion mechanism described here please execute the following steps: 
+
+  1. Check the rotation speed of your fans (Min/Max RPM)
+  2. Define the proper IMPI sensor threshold values above and below your interval of the fan rotation speed
+  3. Define safe `min_level`/`max_level` for `smfc` respecting the variance of the fan rotation speed (it requires some experiments cycles and adjustments) 
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/ipmi_sensor_threshold.jpg" align="center" width="600">
 
@@ -143,25 +176,32 @@ max_level = 100 (i.e. 1500 rpm)
 min_level = 35 (i.e. 500 rpm)
 ```
 
-#### 7.1 How to configure your sensor thresholds for IPMI and min/max levels for `smfc`?
-The issue with fans is that they are mechanical and their rotation speed is not perfectly stable (e.g. can fluctuate a bit).
-
-You can redefine the proper thresholds in following way:
-1. Check the specification of your fans and find the minimum and maximum rotation speeds. In case of [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) these are 300 and 1500 rpm.
-2. Configure the lower thresholds below the minimum fan rotation speed and upper thresholds above the maximum fan rotation speed (e.g., in case of the previous Noctua fan the thresholds are 0, 100, 200, 1600, 1700, 1800).  Edit and run `ipmi/set_ipmi_treshold.sh` to redefine IPMI thresholds. If you install a new BMC firmware on your Super Micro motherboard you have to repeat this step!
-3. Check the configured IPMI thresholds:
-
-		root@home:~# ipmitool sensor
-		...
-		FAN1             | 700.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000
-		FAN2             | 700.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000
-		FAN3             | na         |            | na    | na        | na        | na        | na        | na        | na
-		FAN4             | 600.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000
-		FANA             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000
-		FANB             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000
-		...
-
-**Important**: if you do not see any fans when executing `ipmitool sensors`, you may want to reset the BMC to factory default using the Web UI or using `ipmitool mc reset cold`.
+Further notes:
+  - Use the following commands to specify all six sensor thresholds for FAN1:
+    ```
+    root@home:~# ipmitool sensor thresh
+	sensor thresh <id> <threshold> <setting>
+	   id        : name of the sensor for which threshold is to be set
+	   threshold : which threshold to set
+					 unr = upper non-recoverable
+					 ucr = upper critical
+					 unc = upper non-critical
+					 lnc = lower non-critical
+					 lcr = lower critical
+					 lnr = lower non-recoverable
+	   setting   : the value to set the threshold to
+	
+	sensor thresh <id> lower <lnr> <lcr> <lnc>
+	   Set all lower thresholds at the same time
+	
+	sensor thresh <id> upper <unc> <ucr> <unr>
+	   Set all upper thresholds at the same time
+    root@home:~# ipmitool sensor thresh FAN1 lower 0 100 200
+    root@home:~# ipmitool sensor thresh FAN1 upper 1600 1700 1800
+    ```
+  - You can also edit and run `ipmi/set_ipmi_treshold.sh` to configure all IPMI sensor thresholds.
+  - If you install a new BMC firmware on your Super Micro motherboard you have to configure IPMI thresholds again.
+  - If you do not see fans when executing `ipmitool sensors`, you may want to reset the BMC to factory default using the Web UI or using `ipmitool mc reset cold`.
 
 You can read more about:
 
