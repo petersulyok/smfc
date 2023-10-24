@@ -116,7 +116,7 @@ Feel free to create a short feedback in [issue #19](https://github.com/petersuly
 TODO: Feedback would be needed about the compatibility with Super Micro X12/X13 motherboards and AST2600 BMC chip.
 
 ### 7. IPMI fan control and sensor thresholds
-IPMI uses six sensor thresholds to specify the safe and unsafe fan rotation speed intervals (these are RPM values rounded to nearest hundreds):
+IPMI uses six sensor thresholds to specify the safe and unsafe fan rotation speed intervals (these are RPM values rounded to nearest hundreds, defined for each fan separately):
 
 ```
 Lower Non-Recoverable  
@@ -127,7 +127,7 @@ Upper Critical
 Upper Non-Recoverable
 ```
 
-Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control where fan speed can be controlled freely in `[Lower Non-Critical,Upper Non-Critical]` interval but when fan speed oversteps any of the `Non-Recoverable` thresholds, IPMI will generate an _assertion event_ and will set fan speed back to 100% for all fans in the specific zone.
+Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control where fan speed can be controlled freely in `[Lower Non-Critical, Upper Non-Critical]` interval but when fan speed oversteps any of the `Critical` thresholds, IPMI will generate an _assertion event_ and will set fan speed back to 100% for all fans in the specific zone.
 
 Notes:
   - Use the following command to display the current IMPI sensor thresholds for fans:
@@ -151,7 +151,7 @@ Notes:
     ```
   - For fans typically the `Lower` thresholds are critical since they rarely exceed their maximum rotation speed
 
-<span style='color: red;'>Please also consider the fact that fans are mechanical devices, their rotation speed is not stable, it could be fluctuating (depends on the quality of the fans and fan controller circuits of the motherboards), especially around the minimal speed (Min RPM)!.</span>  
+Please also consider the fact that fans are mechanical devices, their rotation speed is not stable, it could be fluctuating (depending on the quality of the fans and fan controller circuits of the motherboards), especially around the minimal speed (Min RPM)!  
 
 In order to avoid the assertion mechanism described here please execute the following steps: 
 
@@ -179,29 +179,12 @@ min_level = 35 (i.e. 500 rpm)
 Further notes:
   - Use the following commands to specify all six sensor thresholds for FAN1:
     ```
-    root@home:~# ipmitool sensor thresh
-	sensor thresh <id> <threshold> <setting>
-	   id        : name of the sensor for which threshold is to be set
-	   threshold : which threshold to set
-					 unr = upper non-recoverable
-					 ucr = upper critical
-					 unc = upper non-critical
-					 lnc = lower non-critical
-					 lcr = lower critical
-					 lnr = lower non-recoverable
-	   setting   : the value to set the threshold to
-	
-	sensor thresh <id> lower <lnr> <lcr> <lnc>
-	   Set all lower thresholds at the same time
-	
-	sensor thresh <id> upper <unc> <ucr> <unr>
-	   Set all upper thresholds at the same time
     root@home:~# ipmitool sensor thresh FAN1 lower 0 100 200
     root@home:~# ipmitool sensor thresh FAN1 upper 1600 1700 1800
     ```
-  - You can also edit and run `ipmi/set_ipmi_treshold.sh` to configure all IPMI sensor thresholds.
-  - If you install a new BMC firmware on your Super Micro motherboard you have to configure IPMI thresholds again.
-  - If you do not see fans when executing `ipmitool sensors`, you may want to reset the BMC to factory default using the Web UI or using `ipmitool mc reset cold`.
+  - You can also edit and run `ipmi/set_ipmi_treshold.sh` to configure all IPMI sensor thresholds
+  - If you install a new BMC firmware on your Super Micro motherboard you have to configure IPMI thresholds again
+  - If you do not see fans when executing `ipmitool sensors`, you may want to reset the BMC to factory default using the Web UI or using `ipmitool mc reset cold`
 
 You can read more about:
 
