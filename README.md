@@ -127,13 +127,13 @@ Upper Critical
 Upper Non-Recoverable
 ```
 
-Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control, where:
+Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control, where all fans in the zone:
 
-   1. initially, all fans configured to full speed
-   2. then fan speed can be safely configured in `[Lower Critical, Upper Critical]` interval
-   3. if fan speed oversteps any of the `Critical` thresholds then IPMI will generate an _assertion event_ and will set the fan speed back to 100% for all fans in the specific zone (assertions can be viewed in the event log)
+   1. initially configured to full speed (100%)
+   2. then their speed can be safely configured in `[Lower Critical, Upper Critical]` interval
+   3. if any fan speed oversteps either `Lower Critical` or `Upper Critical` threshold then IPMI will generate an _assertion event_ and will set the all fan speeds back to 100% in the zone
 
-Please also consider the fact that fans are mechanical devices, their rotational speed is not stable, it could be fluctuating. In order to avoid IPMI's assertion mechanism described here please follow the next steps: 
+Please also consider the fact that **fans are mechanical devices, their rotational speed is not stable** (it could be fluctuating). In order to avoid IPMI's assertion mechanism described here please follow the next steps: 
 
   1. Per fan: check the minimum and maximum rotational speeds of your fan on its vendor website
   2. Per fan: configure proper IMPI sensor thresholds adjusted to the fan speed interval
