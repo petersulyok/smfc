@@ -127,37 +127,17 @@ Upper Critical
 Upper Non-Recoverable
 ```
 
-Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control where fan speed can be controlled freely in `[Lower Critical, Upper Critical]` interval but when fan speed oversteps any of the `Critical` thresholds, IPMI will generate an _assertion event_ and will set fan speed back to 100% for all fans in the specific zone.
+Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control, where:
 
-Notes:
-  - Use the following command to display the current IMPI sensor thresholds for fans:
-    ```
-    root@home:~# ipmitool sensor|grep FAN
-    FAN1             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
-    FAN2             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
-    FAN3             | na         |            | na    | na        | na        | na        | na        | na        | na        
-    FAN4             | 400.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
-    FANA             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
-    FANB             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
-    ```
-  - Use the following command to list the assertion events in the event log:
-    ```
-    root@home:~# ipmitool sel list
-       1 | 10/19/2023 | 05:15:35 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
-       2 | 10/19/2023 | 05:15:35 PM CEST | Fan #0x46 | Lower Non-recoverable going low  | Asserted
-       3 | 10/19/2023 | 05:15:38 PM CEST | Fan #0x46 | Lower Non-recoverable going low  | Deasserted
-       4 | 10/19/2023 | 05:15:38 PM CEST | Fan #0x46 | Lower Critical going low  | Deasserted
-       5 | 10/19/2023 | 05:20:59 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
-    ```
-  - For fans typically the `Lower` thresholds are critical since they rarely exceed their maximum rotational speed
+   1. initially, all fans configured to full speed
+   2. then fan speed can be safely configured in `[Lower Critical, Upper Critical]` interval
+   3. if fan speed oversteps any of the `Critical` thresholds then IPMI will generate an _assertion event_ and will set the fan speed back to 100% for all fans in the specific zone (assertions can be viewed in the event log)
 
-Please also consider the fact that fans are mechanical devices, their rotational speed is not stable, it could be fluctuating (depending on the quality of the fans and fan controller circuits of the motherboards), especially around the minimal speed (Min RPM)!  
-
-In order to avoid the assertion mechanism described here please execute the following steps: 
+Please also consider the fact that fans are mechanical devices, their rotational speed is not stable, it could be fluctuating. In order to avoid IPMI's assertion mechanism described here please follow the next steps: 
 
   1. Per fan: check the minimum and maximum rotational speeds of your fan on its vendor website
   2. Per fan: configure proper IMPI sensor thresholds adjusted to the fan speed interval
-  3. Per zone: Define safe `min_level`/`max_level` values for `smfc` respecting the variance of the all fans in the IPMI zone (it could take additional iterations and adjustments) 
+  3. Per zone: define safe `min_level`/`max_level` values for `smfc` respecting the variance of the all fans in the IPMI zone (it could take several iterations and adjustments) 
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/ipmi_sensor_threshold.jpg" align="center" width="600">
 
@@ -176,8 +156,27 @@ max_level = 100 (i.e. 1500 rpm)
 min_level = 35 (i.e. 500 rpm)
 ```
 
-Further notes:
-  - Use the following commands to specify all six sensor thresholds for FAN1:
+Notes:
+  - Use the following `ipmitool` command to display the current IMPI sensor thresholds for fans:
+    ```
+    root@home:~# ipmitool sensor|grep FAN
+    FAN1             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
+    FAN2             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
+    FAN3             | na         |            | na    | na        | na        | na        | na        | na        | na        
+    FAN4             | 400.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
+    FANA             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
+    FANB             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
+    ```
+  - Use the following `ipmitool` command to list assertion events:
+    ```
+    root@home:~# ipmitool sel list
+       1 | 10/19/2023 | 05:15:35 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
+       2 | 10/19/2023 | 05:15:35 PM CEST | Fan #0x46 | Lower Non-recoverable going low  | Asserted
+       3 | 10/19/2023 | 05:15:38 PM CEST | Fan #0x46 | Lower Non-recoverable going low  | Deasserted
+       4 | 10/19/2023 | 05:15:38 PM CEST | Fan #0x46 | Lower Critical going low  | Deasserted
+       5 | 10/19/2023 | 05:20:59 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
+    ```
+  - Use the following `ipmitool` commands to specify all six sensor thresholds for FAN1:
     ```
     root@home:~# ipmitool sensor thresh FAN1 lower 0 100 200
     root@home:~# ipmitool sensor thresh FAN1 upper 1600 1700 1800
