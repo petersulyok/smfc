@@ -50,7 +50,7 @@ In this service a fan control logic is implemented for both zones which can:
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.jpg" align="center" width="600">
 
-The fan control logic can be enabled and disabled independently per zone. In the zone all fans will have the same rotation speed. The user can configure different temperature calculation method (e.g. minimum, average, maximum temperatures) in case of multiple heat sources in a zone.
+The fan control logic can be enabled and disabled independently per zone. In the zone all fans will have the same rotational speed. The user can configure different temperature calculation method (e.g. minimum, average, maximum temperatures) in case of multiple heat sources in a zone.
 
 #### 2. User-defined control function
 The user-defined parameters (see configuration file below for more details) create a function where a temperature interval is being mapped to a fan level interval.
@@ -65,13 +65,13 @@ The following five parameters will define the function in both zones:
      max_level=
      steps=
 
-With the help of this function `smfc` can map any new temperature measurement value to a fan level. Changing the fan rotation speed is a very slow process (i.e. it could take seconds depending on fan type and the requested amount of change), so we try to minimize these kinds of actions. Instead of setting fan rotation speed continuously we define discrete fan levels based on `steps=` parameter.
+With the help of this function `smfc` can map any new temperature measurement value to a fan level. Changing the fan rotational speed is a very slow process (i.e. it could take seconds depending on fan type and the requested amount of change), so we try to minimize these kinds of actions. Instead of setting fan rotational speed continuously we define discrete fan levels based on `steps=` parameter.
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output_levels.jpg" align="center" width="500">
 
 In order to avoid/minimize the unnecessary change of fan levels the service employs the following steps:
 
- 1. When the service adjusts the fan rotation speed then it always applies a delay time defined in configuration parameter `[IPMI] fan_level_delay=` in order to let the fan implement the physical change.
+ 1. When the service adjusts the fan rotational speed then it always applies a delay time defined in configuration parameter `[IPMI] fan_level_delay=` in order to let the fan implement the physical change.
  2. There is a sensitivity threshold parameter (`sensitivity=`) for the fan control logic. If the temperature change is below this value then the service will not react at all. 
  3. There configuration parameter `polling=` can also impact the frequency of change of the fan levels. The bigger polling time in a zone the lower frequency of changing of the fan speed.
 
@@ -116,7 +116,7 @@ Feel free to create a short feedback in [issue #19](https://github.com/petersuly
 TODO: Feedback would be needed about the compatibility with Super Micro X12/X13 motherboards and AST2600 BMC chip.
 
 ### 7. IPMI fan control and sensor thresholds
-IPMI uses six sensor thresholds to specify the safe and unsafe fan rotation speed intervals (these are RPM values rounded to nearest hundreds, defined for each fan separately):
+IPMI uses six sensor thresholds to specify the safe and unsafe fan rotational speed intervals (these are RPM values rounded to nearest hundreds, defined for each fan separately):
 
 ```
 Lower Non-Recoverable  
@@ -127,7 +127,7 @@ Upper Critical
 Upper Non-Recoverable
 ```
 
-Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control where fan speed can be controlled freely in `[Lower Non-Critical, Upper Non-Critical]` interval but when fan speed oversteps any of the `Critical` thresholds, IPMI will generate an _assertion event_ and will set fan speed back to 100% for all fans in the specific zone.
+Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control where fan speed can be controlled freely in `[Lower Critical, Upper Critical]` interval but when fan speed oversteps any of the `Critical` thresholds, IPMI will generate an _assertion event_ and will set fan speed back to 100% for all fans in the specific zone.
 
 Notes:
   - Use the following command to display the current IMPI sensor thresholds for fans:
@@ -140,7 +140,7 @@ Notes:
     FANA             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
     FANB             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
     ```
-  - Use the following command to list the assertion events in event log:
+  - Use the following command to list the assertion events in the event log:
     ```
     root@home:~# ipmitool sel list
        1 | 10/19/2023 | 05:15:35 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
@@ -149,19 +149,19 @@ Notes:
        4 | 10/19/2023 | 05:15:38 PM CEST | Fan #0x46 | Lower Critical going low  | Deasserted
        5 | 10/19/2023 | 05:20:59 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
     ```
-  - For fans typically the `Lower` thresholds are critical since they rarely exceed their maximum rotation speed
+  - For fans typically the `Lower` thresholds are critical since they rarely exceed their maximum rotational speed
 
-Please also consider the fact that fans are mechanical devices, their rotation speed is not stable, it could be fluctuating (depending on the quality of the fans and fan controller circuits of the motherboards), especially around the minimal speed (Min RPM)!  
+Please also consider the fact that fans are mechanical devices, their rotational speed is not stable, it could be fluctuating (depending on the quality of the fans and fan controller circuits of the motherboards), especially around the minimal speed (Min RPM)!  
 
 In order to avoid the assertion mechanism described here please execute the following steps: 
 
-  1. Check the rotation speed of your fans (Min/Max RPM)
-  2. Define the proper IMPI sensor threshold values above and below your interval of the fan rotation speed
-  3. Define safe `min_level`/`max_level` for `smfc` respecting the variance of the fan rotation speed (it requires some experiments cycles and adjustments) 
+  1. Per fan: check the minimum and maximum rotational speeds of your fan on its vendor website
+  2. Per fan: configure proper IMPI sensor thresholds adjusted to the fan speed interval
+  3. Per zone: Define safe `min_level`/`max_level` values for `smfc` respecting the variance of the all fans in the IPMI zone (it could take additional iterations and adjustments) 
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/ipmi_sensor_threshold.jpg" align="center" width="600">
 
-Here is a real-life example for a [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) fan:
+Here is a real-life example for a [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) fan:
 
 ```
 Upper Non-Recoverable = 1800 rpm
@@ -185,6 +185,12 @@ Further notes:
   - You can also edit and run `ipmi/set_ipmi_treshold.sh` to configure all IPMI sensor thresholds
   - If you install a new BMC firmware on your Super Micro motherboard you have to configure IPMI thresholds again
   - If you do not see fans when executing `ipmitool sensors`, you may want to reset the BMC to factory default using the Web UI or using `ipmitool mc reset cold`
+  - Noctua specifies the variance of minimum and maximum fan rotational speeds (e.g. see the [specification of Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm/specification)). For example:
+
+    - `Rotational speed (+/- 10%) 1500 RPM`: 1350-1650 RPM interval
+    - `Min. rotational speed @ 20% PWM (+/-20%) 300 RPM`: 240-360 RPM interval
+    
+    Please note that [LNA](https://noctua.at/en/na-src10)/ULNA cables or [Y-cables](https://noctua.at/en/na-syc1) can modify the rotational speed calculations here and the required IPMI sensor thresholds too. 
 
 You can read more about:
 
@@ -371,7 +377,7 @@ Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 	hddtemp_path=/usr/sbin/hddtemp
 Important notes:
  1. `[HD zone} hd_names=`: This is a compulsory parameter, its value must be specified in `/dev/disk/by-id/...` form (the `/dev/sda` form is not persistent could be changed after a reboot).
- 2. `[CPU zone] / [HD zone] min_level= / max_level=`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotation speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
+ 2. `[CPU zone] / [HD zone] min_level= / max_level=`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotational speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
 
 		root:~# cat fan_result.csv
 		Level,FAN1,FAN2,FAN4,FANA,FANB
@@ -440,8 +446,8 @@ With the help of command `journalctl` you can check logs easily. For examples:
 ## 14. FAQ
 
 ### Q: My fans are spinning up and loud. What is wrong?
-Most probably the rotation speed of the fans went above or below of a threshold value
-You can check the current fan rotation speeds:
+Most probably the rotational speed of the fans went above or below of a threshold value
+You can check the current fan rotational speeds:
 
 	ipmitool sdr
 
@@ -454,9 +460,9 @@ and you can also check event log on Super Micro remote web interface (Server Hea
 	Fan(FAN4)	Lower Critical - going low - Assertion
 	Fan(FAN4)	Lower Non-recoverable - going low - Assertion
 
-then you must adjust your configuration (i.e. threshold values) because IPMI switched back to full rotation speed.
+then you must adjust your configuration (i.e. threshold values) because IPMI switched back to full rotational speed.
 
-### Q: I would like to use constant fan rotation speed in one or both zones. How can I configure that?
+### Q: I would like to use constant fan rotational speed in one or both zones. How can I configure that?
 You should configure the temperatures and levels with the same value. 
 
 	min_temp=40
@@ -489,15 +495,25 @@ The configuration is the following:
 ## 15. References
 Further readings:
 
+### Super Micro
+ - [BMC IPMI User's Guide 1.1b (X10/X11/H11)](https://www.supermicro.com/manuals/other/IPMI_Users_Guide.pdf)
+ - [BMC resources](https://www.supermicro.com/en/solutions/management-software/bmc-resources)
+ - [IPMI Utilities](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities)
+ - [IPMICFG download](https://www.supermicro.com/wdl/utility/IPMICFG/)
+ - [IPMICFG User's Guide 1.15 ](https://www.supermicro.com/wdl/utility/IPMICFG/IPMICFG_UserGuide.pdf)
+
+### Forums/blogs
  - [\[STH forums\] Reference Material: Supermicro X9/X10/X11 Fan Speed Control](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/)
  - [\[TrueNAS forums\] How To: Change IPMI Sensor Thresholds using ipmitool](https://www.truenas.com/community/resources/how-to-change-ipmi-sensor-thresholds-using-ipmitool.35/)
  - [\[TrueNAS forums\] Script to control fan speed in response to hard drive temperatures](https://www.truenas.com/community/threads/script-to-control-fan-speed-in-response-to-hard-drive-temperatures.41294/)
  - [\[Pcfe's blog\] Set fan thresholds on my Super Micro H11DSi-NT](https://blog.pcfe.net/hugo/posts/2018-08-14-epyc-ipmi-fans/)
- - [\[Super Micro\] IPMI Utilities](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities)
- - Documentation of [`coretemp`](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html) kernel module
- - Documentation of [`drivetemp`](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) kernel module and its [GitHub project](https://github.com/groeck/drivetemp)
 
-Similar projects:
+### Linux kernel
+ - [coretemp] [documentation](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html)
+ - [drivetemp] [documentation](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) and its [GitHub respository](https://github.com/groeck/drivetemp)
+ - How to install [hddtemp](https://www.cyberciti.biz/tips/howto-monitor-hard-drive-temperature.html) from a source package
+
+### Similar projects
  - [\[GitHub\] Kevin Horton's nas_fan_control](https://github.com/khorton/nas_fan_control)
  - [\[GitHub\] Rob Urban's fork nas_fan control](https://github.com/roburban/nas_fan_control)
  - [\[GitHub\] sretalla's fork nas_fan control](https://github.com/sretalla/nas_fan_control)
