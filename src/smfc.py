@@ -15,7 +15,7 @@ from typing import List, Callable
 
 
 # Program version string
-version_str: str = '3.1.1'
+version_str: str = '3.2.0'
 
 
 class Log:
@@ -557,14 +557,21 @@ class FanController:
             self.last_level = current_level
             self.set_fan_level(current_level)
             self.log.msg(self.log.LOG_INFO, f'{self.name}: new level > {current_temp:.1f}C > '
-                         f'[T:{self.min_temp+(current_gain*self.temp_step)}C/L:{current_level}%]')
+                         f'[T:{self.min_temp+(current_gain*self.temp_step):.1f}C/L:{current_level}%]')
 
     def print_temp_level_mapping(self) -> None:
-        """Print out the uder-defined temperature to level mapping value in log DEBUG level."""
+        """Print out the user-defined temperature to level mapping value in log DEBUG level."""
         self.log.msg(self.log.LOG_CONFIG, '   Temperature to level mapping:')
         for i in range(self.steps + 1):
             self.log.msg(self.log.LOG_CONFIG, f'   {i}. [T:{self.min_temp+(i*self.temp_step):.1f}C - '
                          f'L:{int(self.min_level + (i * self.level_step))}%]')
+
+    def emergency_exit(self) -> None:
+        """This function is called in case of a critical exception, and it switches all fans back to speed 100%
+           before the service terminates in order to avoid system overheating while smfc is not running."""
+        self.ipmi.set_fan_level(Ipmi.CPU_ZONE, 100)
+        self.ipmi.set_fan_level(Ipmi.HD_ZONE, 100)
+        self.log.msg(self.log.LOG_ERROR, 'Emergency funtion switched all fans back to speed 100%!')
 
 
 class CpuZone(FanController):
@@ -649,6 +656,7 @@ class CpuZone(FanController):
             with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
                 value = float(f.read()) / 1000
         except (IOError, FileNotFoundError, ValueError) as e:
+            self.emergency_exit()
             raise e
         return value
 
@@ -848,9 +856,11 @@ class HdZone(FanController):
                 r = subprocess.run([self.hddtemp_path, '-q', '-n', self.hd_device_names[index]],
                                    check=False, capture_output=True, text=True)
                 if r.returncode != 0:
+                    self.emergency_exit()
                     raise RuntimeError(r.stderr)
                 value = float(r.stdout)
             except (FileNotFoundError, ValueError, IndexError) as e:
+                self.emergency_exit()
                 raise e
 
         # Read temperature from HWMON file in sysfs.
@@ -859,6 +869,7 @@ class HdZone(FanController):
                 with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
                     value = float(f.read()) / 1000
             except (IOError, FileNotFoundError, ValueError, IndexError) as e:
+                self.emergency_exit()
                 raise e
 
         return value
