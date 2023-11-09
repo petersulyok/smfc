@@ -968,7 +968,7 @@ class Service:
             self.ipmi.set_fan_level(Ipmi.CPU_ZONE, 100)
             self.ipmi.set_fan_level(Ipmi.HD_ZONE, 100)
             if hasattr(self, "log"):
-                self.log.msg(Log.LOG_ERROR, 'smfc terminated: all fans are switched back to the 100% speed.')
+                self.log.msg(Log.LOG_INFO, 'smfc terminated: all fans are switched back to the 100% speed.')
 
         # Unregister this function.
         atexit.unregister(self.exit_func)
@@ -992,7 +992,7 @@ class Service:
         app_parser.add_argument('-o', type=int, choices=[0, 1, 2], default=2,
                                 help='log output: 0-stdout, 1-stderr, 2-syslog(default)')
         # Note: the argument parser can exit here with the following exit codes:
-        # 0 - help text, version
+        # 0 - printing help or version text
         # 2 - invalid parameter
         parsed_results = app_parser.parse_args()
 
