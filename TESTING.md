@@ -88,7 +88,7 @@ For a more detailed HTML coverage report run this command:
 
 	$ pytest --cov=src --cov=test --cov-report=html
 
-The detailed HTML report will be available in folder `./htmlcov/index.html` with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage result is 98%.  
+The detailed HTML report will be available in folder `./htmlcov/index.html` with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage result is 99%.  
 
 ## Linting
 The code was checked with `pylint` and `flake8`. They can be executed this way:
@@ -105,6 +105,6 @@ A github workflow has been implemented for this project that is executed in case
 The workflow is executed on the following test matrix:
 
  - OS: `ubuntu-latest`
- - Python version: `3.7`, `3.8`, `3.9`, `3.10`, `3.11`
+ - Python version: `3.7`, `3.8`, `3.9`, `3.10`, `3.11`, `3.12` 
  
 > Written with [StackEdit](https://stackedit.io/).
