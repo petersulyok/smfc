@@ -4,6 +4,7 @@
 #   Unit tests for smfc.HdZone() class.
 #
 import configparser
+import random
 import subprocess
 import unittest
 import glob
@@ -96,7 +97,7 @@ class HdZoneTestCase(unittest.TestCase):
 
         my_td = TestData()
         command = my_td.create_command_file()
-        hwmon_path = my_td.get_hd_1()
+        hwmon_path = my_td.get_hd_1w()
         hd_names = my_td.create_hd_names(1)
         original_glob = glob.glob
         mock_print = MagicMock()
@@ -197,7 +198,7 @@ class HdZoneTestCase(unittest.TestCase):
         # Test invalid values:
         # count <= 0
         self.pt_init_n1(0, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.create_hd_names(1),
-                        my_td.get_hd_1(), 'hz init 5')
+                        my_td.get_hd_1(types=[TestData.HT_NVME]), 'hz init 5')
         self.pt_init_n1(-10, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.create_hd_names(1),
                         my_td.get_hd_1(), 'hz init 6')
         # hd_names= not specified
@@ -685,7 +686,7 @@ class HdZoneTestCase(unittest.TestCase):
         my_td = TestData()
         ipmi_cmd = my_td.create_command_file()
         hddtemp_cmd = my_td.create_command_file(f'echo "{temps[index]}"')
-        my_td.create_hd_temp_files(count, temp_list=temps, wildchar=False, hd_types=types)
+        my_td.create_hd_temp_files(count, temp_list=temps, wildchar=random.choice([True, False]), hd_types=types)
         hd_names = my_td.create_hd_names(count, hd_types=types)
         original_glob = glob.glob
         mock_print = MagicMock()
@@ -788,7 +789,6 @@ class HdZoneTestCase(unittest.TestCase):
                 my_hdzone = HdZone(my_log, my_ipmi, my_config)
                 if operation == 2:
                     my_hdzone._get_nth_temp(index)
-                del my_hdzone
             self.assertTrue(type(cm.exception) in exception, error)
 
         del my_ipmi
@@ -834,7 +834,7 @@ class HdZoneTestCase(unittest.TestCase):
         # FileNotFoundError, IOError, ValueError
         self.pt_gnt_n1(3, [TestData.HT_SATA], "hz _get_nth_temp 17")
         # ValueError
-        self.pt_gnt_n1(4, [TestData.HT_SATA], "hz _get_nth_temp 18")
+        self.pt_gnt_n1(4, [TestData.HT_NVME], "hz _get_nth_temp 18")
 
 
 if __name__ == "__main__":
