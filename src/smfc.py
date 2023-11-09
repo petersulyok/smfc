@@ -3,6 +3,7 @@
 #   smfc.py (C) 2020-2023, Peter Sulyok
 #   IPMI fan controller for Super Micro X10/X11 motherboards.
 #
+import atexit
 import argparse
 import configparser
 import glob
@@ -15,7 +16,7 @@ from typing import List, Callable
 
 
 # Program version string
-version_str: str = '3.2.0'
+version_str: str = '3.3.0'
 
 
 class Log:
@@ -566,13 +567,6 @@ class FanController:
             self.log.msg(self.log.LOG_CONFIG, f'   {i}. [T:{self.min_temp+(i*self.temp_step):.1f}C - '
                          f'L:{int(self.min_level + (i * self.level_step))}%]')
 
-    def emergency_exit(self) -> None:
-        """This function is called in case of a critical exception, and it switches all fans back to speed 100%
-           before the service terminates in order to avoid system overheating while smfc is not running."""
-        self.ipmi.set_fan_level(Ipmi.CPU_ZONE, 100)
-        self.ipmi.set_fan_level(Ipmi.HD_ZONE, 100)
-        self.log.msg(self.log.LOG_ERROR, 'Emergency funtion switched all fans back to speed 100%!')
-
 
 class CpuZone(FanController):
     """CPU zone fan control."""
@@ -656,7 +650,6 @@ class CpuZone(FanController):
             with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
                 value = float(f.read()) / 1000
         except (IOError, FileNotFoundError, ValueError) as e:
-            self.emergency_exit()
             raise e
         return value
 
@@ -856,11 +849,9 @@ class HdZone(FanController):
                 r = subprocess.run([self.hddtemp_path, '-q', '-n', self.hd_device_names[index]],
                                    check=False, capture_output=True, text=True)
                 if r.returncode != 0:
-                    self.emergency_exit()
                     raise RuntimeError(r.stderr)
                 value = float(r.stdout)
             except (FileNotFoundError, ValueError, IndexError) as e:
-                self.emergency_exit()
                 raise e
 
         # Read temperature from HWMON file in sysfs.
@@ -869,7 +860,6 @@ class HdZone(FanController):
                 with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
                     value = float(f.read()) / 1000
             except (IOError, FileNotFoundError, ValueError, IndexError) as e:
-                self.emergency_exit()
                 raise e
 
         return value
@@ -959,97 +949,122 @@ class HdZone(FanController):
             self.standby_change_timestamp = cur_time
 
 
-def main():
-    """Main function: starting point of the systemd service."""
-    my_parser: argparse.ArgumentParser      # Instance for an ArgumentParser class
-    my_results: argparse.Namespace          # Results of parsed command line arguments
-    my_config: configparser.ConfigParser    # Instance for a parsed configuration
-    my_log: Log                             # Instance for a Log class
-    my_ipmi: Ipmi                           # Instance for an Ipmi class
-    my_cpu_zone: CpuZone                    # Instance for a CPU Zone fan controller class
-    my_hd_zone: HdZone                      # Instance for an HD Zone fan controller class
-    old_mode: int                           # Old IPMI fan mode
-    cpu_zone_enabled: bool                  # CPU zone fan controller enabled
-    hd_zone_enabled: bool                   # HD zone fan controller enabled
+class Service:
+    """Service class contains all resources/functions for the execution."""
 
-    # Parse the command line arguments.
-    my_parser = argparse.ArgumentParser()
-    my_parser.add_argument('-c', action='store', dest='config_file', default='smfc.conf',
-                           help='configuration file')
-    my_parser.add_argument('-v', action='version', version='%(prog)s ' + version_str)
-    my_parser.add_argument('-l', type=int, choices=[0, 1, 2, 3, 4], default=1,
-                           help='log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG')
-    my_parser.add_argument('-o', type=int, choices=[0, 1, 2], default=2,
-                           help='log output: 0-stdout, 1-stderr, 2-syslog(default)')
-    my_results = my_parser.parse_args()
+    config: configparser.ConfigParser   # Instance for a parsed configuration
+    log: Log                            # Instance for a Log class
+    ipmi: Ipmi                          # Instance for an Ipmi class
+    cpu_zone: CpuZone                   # Instance for a CPU Zone fan controller class
+    hd_zone: HdZone                     # Instance for an HD Zone fan controller class
+    cpu_zone_enabled: bool              # CPU zone fan controller enabled
+    hd_zone_enabled: bool               # HD zone fan controller enabled
 
-    # Create a Log class instance (in theory this cannot fail).
-    try:
-        my_log = Log(my_results.l, my_results.o)
-    except ValueError as e:
-        print(f'ERROR: {e}.', flush=True, file=sys.stdout)
-        sys.exit(5)
+    def exit_func(self) -> None:
+        """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
+           all fans back to rhw default speed 100%, in order to avoid system overheating while `smfc` is not running."""
+        # Configure fans.
+        if hasattr(self, "ipmi"):
+            self.ipmi.set_fan_level(Ipmi.CPU_ZONE, 100)
+            self.ipmi.set_fan_level(Ipmi.HD_ZONE, 100)
+            if hasattr(self, "log"):
+                self.log.msg(Log.LOG_ERROR, 'smfc terminated: all fans are switched back to the 100% speed.')
 
-    if my_log.log_level >= my_log.LOG_CONFIG:
-        my_log.msg(my_log.LOG_CONFIG, 'Command line arguments:')
-        my_log.msg(my_log.LOG_CONFIG, f'   original arguments: {" ".join(sys.argv[:])}')
-        my_log.msg(my_log.LOG_CONFIG, f'   parsed config file = {my_results.config_file}')
-        my_log.msg(my_log.LOG_CONFIG, f'   parsed log level = {my_results.l}')
-        my_log.msg(my_log.LOG_CONFIG, f'   parsed log output = {my_results.o}')
+        # Unregister this function.
+        atexit.unregister(self.exit_func)
 
-    # Parse and load configuration file.
-    my_config = configparser.ConfigParser()
-    if not my_config or not my_config.read(my_results.config_file):
-        my_log.msg(my_log.LOG_ERROR, f'Cannot load configuration file ({my_results.config_file})')
-        sys.exit(6)
-    my_log.msg(my_log.LOG_DEBUG, f'Configuration file ({my_results.config_file}) loaded')
+    def run(self) -> None:
+        """Run function: starting point of the systemd service."""
+        app_parser: argparse.ArgumentParser     # Instance for an ArgumentParser class
+        parsed_results: argparse.Namespace      # Results of parsed command line arguments
+        old_mode: int                           # Old IPMI fan mode
 
-    # Create an Ipmi class instances and set required IPMI fan mode.
-    try:
-        my_ipmi = Ipmi(my_log, my_config)
-        old_mode = my_ipmi.get_fan_mode()
-    except (ValueError, FileNotFoundError) as e:
-        my_log.msg(my_log.LOG_ERROR, f'{e}.')
-        sys.exit(7)
-    my_log.msg(my_log.LOG_DEBUG, f'Old IPMI fan mode = {my_ipmi.get_fan_mode_name(old_mode)}')
-    if old_mode != my_ipmi.FULL_MODE:
-        my_ipmi.set_fan_mode(my_ipmi.FULL_MODE)
-        my_log.msg(my_log.LOG_DEBUG, f'New IPMI fan mode = {my_ipmi.get_fan_mode_name(my_ipmi.FULL_MODE)}')
+        # Register the emergency exit function for service termination.
+        atexit.register(self.exit_func)
 
-    # Create an instance for CPU zone fan controller if enabled.
-    my_cpu_zone = None
-    cpu_zone_enabled = my_config[CpuZone.CS_CPU_ZONE].getboolean(CpuZone.CV_CPU_ZONE_ENABLED, fallback=False)
-    if cpu_zone_enabled:
-        my_log.msg(my_log.LOG_DEBUG, 'CPU zone fan controller enabled')
-        my_cpu_zone = CpuZone(my_log, my_ipmi, my_config)
+        # Parse the command line arguments.
+        app_parser = argparse.ArgumentParser()
+        app_parser.add_argument('-c', action='store', dest='config_file', default='smfc.conf',
+                                help='configuration file')
+        app_parser.add_argument('-v', action='version', version='%(prog)s ' + version_str)
+        app_parser.add_argument('-l', type=int, choices=[0, 1, 2, 3, 4], default=1,
+                                help='log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG')
+        app_parser.add_argument('-o', type=int, choices=[0, 1, 2], default=2,
+                                help='log output: 0-stdout, 1-stderr, 2-syslog(default)')
+        # Note: the argument parser can exit here with the following exit codes:
+        # 0 - help text, version
+        # 2 - invalid parameter
+        parsed_results = app_parser.parse_args()
 
-    # Create an instance for HD zone fan controller if enabled.
-    my_hd_zone = None
-    hd_zone_enabled = my_config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_ENABLED, fallback=False)
-    if hd_zone_enabled:
-        my_log.msg(my_log.LOG_DEBUG, 'HD zone fan controller enabled')
-        my_hd_zone = HdZone(my_log, my_ipmi, my_config)
+        # Create a Log class instance (in theory this cannot fail).
+        try:
+            self.log = Log(parsed_results.l, parsed_results.o)
+        except ValueError as e:
+            print(f'ERROR: {e}.', flush=True, file=sys.stdout)
+            sys.exit(5)
 
-    # Calculate the default sleep time for the main loop.
-    if cpu_zone_enabled and hd_zone_enabled:
-        wait = min(my_cpu_zone.polling, my_hd_zone.polling) / 2
-    elif cpu_zone_enabled and not hd_zone_enabled:
-        wait = my_cpu_zone.polling / 2
-    elif not cpu_zone_enabled and hd_zone_enabled:
-        wait = my_hd_zone.polling / 2
-    else:  # elif not cpu_zone_enabled and not hd_controller_enabled:
-        my_log.msg(my_log.LOG_ERROR, 'None of the fan controllers are enabled, service terminated.')
-        sys.exit(8)
-    my_log.msg(my_log.LOG_DEBUG, f'Main loop wait time = {wait} sec')
+        if self.log.log_level >= Log.LOG_CONFIG:
+            self.log.msg(Log.LOG_CONFIG, 'Command line arguments:')
+            self.log.msg(Log.LOG_CONFIG, f'   original arguments: {" ".join(sys.argv[:])}')
+            self.log.msg(Log.LOG_CONFIG, f'   parsed config file = {parsed_results.config_file}')
+            self.log.msg(Log.LOG_CONFIG, f'   parsed log level = {parsed_results.l}')
+            self.log.msg(Log.LOG_CONFIG, f'   parsed log output = {parsed_results.o}')
 
-    # Main execution loop.
-    while True:
-        if cpu_zone_enabled:
-            my_cpu_zone.run()
-        if hd_zone_enabled:
-            my_hd_zone.run()
-        time.sleep(wait)
+        # Parse and load configuration file.
+        self.config = configparser.ConfigParser()
+        if not self.config or not self.config.read(parsed_results.config_file):
+            self.log.msg(Log.LOG_ERROR, f'Cannot load configuration file ({parsed_results.config_file})')
+            sys.exit(6)
+        self.log.msg(Log.LOG_DEBUG, f'Configuration file ({parsed_results.config_file}) loaded')
+
+        # Create an Ipmi class instances and set required IPMI fan mode.
+        try:
+            self.ipmi = Ipmi(self.log, self.config)
+            old_mode = self.ipmi.get_fan_mode()
+        except (ValueError, FileNotFoundError) as e:
+            self.log.msg(Log.LOG_ERROR, f'{e}.')
+            sys.exit(7)
+        self.log.msg(Log.LOG_DEBUG, f'Old IPMI fan mode = {self.ipmi.get_fan_mode_name(old_mode)}')
+        if old_mode != Ipmi.FULL_MODE:
+            self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
+            self.log.msg(Log.LOG_DEBUG,
+                         f'New IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}')
+
+        # Create an instance for CPU zone fan controller if enabled.
+        # self.cpu_zone = None
+        self.cpu_zone_enabled = self.config[CpuZone.CS_CPU_ZONE].getboolean(CpuZone.CV_CPU_ZONE_ENABLED, fallback=False)
+        if self.cpu_zone_enabled:
+            self.log.msg(Log.LOG_DEBUG, 'CPU zone fan controller enabled')
+            self.cpu_zone = CpuZone(self.log, self.ipmi, self.config)
+
+        # Create an instance for HD zone fan controller if enabled.
+        # self.hd_zone = None
+        self.hd_zone_enabled = self.config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_ENABLED, fallback=False)
+        if self.hd_zone_enabled:
+            self.log.msg(Log.LOG_DEBUG, 'HD zone fan controller enabled')
+            self.hd_zone = HdZone(self.log, self.ipmi, self.config)
+
+        # Calculate the default sleep time for the main loop.
+        if self.cpu_zone_enabled and self.hd_zone_enabled:
+            wait = min(self.cpu_zone.polling, self.hd_zone.polling) / 2
+        elif self.cpu_zone_enabled and not self.hd_zone_enabled:
+            wait = self.cpu_zone.polling / 2
+        elif not self.cpu_zone_enabled and self.hd_zone_enabled:
+            wait = self.hd_zone.polling / 2
+        else:  # elif not cpu_zone_enabled and not hd_controller_enabled:
+            self.log.msg(Log.LOG_ERROR, 'None of the fan controllers are enabled, service terminated.')
+            sys.exit(8)
+        self.log.msg(Log.LOG_DEBUG, f'Main loop wait time = {wait} sec')
+
+        # Main execution loop.
+        while True:
+            if self.cpu_zone_enabled:
+                self.cpu_zone.run()
+            if self.hd_zone_enabled:
+                self.hd_zone.run()
+            time.sleep(wait)
 
 
 if __name__ == '__main__':
-    main()
+    service = Service()
+    service.run()
