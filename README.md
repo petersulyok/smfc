@@ -52,6 +52,8 @@ In this service a fan control logic is implemented for both zones which can:
 
 The fan control logic can be enabled and disabled independently per zone. In the zone all fans will have the same rotational speed. The user can configure different temperature calculation method (e.g. minimum, average, maximum temperatures) in case of multiple heat sources in a zone.
 
+Please note that `smfc` will set all fans back to 100% speed at service termination in order to avoid overheating! 
+
 #### 2. User-defined control function
 The user-defined parameters (see configuration file below for more details) create a function where a temperature interval is being mapped to a fan level interval.
 
