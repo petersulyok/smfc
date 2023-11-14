@@ -149,9 +149,9 @@ Here is a real-life example for a [Noctua NF-F12 PWM](https://noctua.at/en/produ
 Upper Non-Recoverable = 1800 rpm
 Upper Critical = 1700 rpm
 Upper Non-Critical = 1600 rpm
-Lower Non-Recoverable = 200 rpm
+Lower Non-Critical = 200 rpm
 Lower Critical = 100 rpm
-Lower Non-Critical = 0 rpm
+Lower Non-Recoverable = 0 rpm
 Max RPM = 1500 rpm
 Min PRM = 300 rpm
 max_level = 100 (i.e. 1500 rpm)
