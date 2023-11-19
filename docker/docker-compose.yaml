@@ -1,0 +1,18 @@
+version: "2"
+services:
+  smfc:
+    image: petersulyok/smfc
+    container_name: smfc
+    network_mode: none
+    logging:
+        driver: journald
+    privileged: true
+    environment:
+      - SMFC_ARGS=-l 3
+    volumes:
+      - /dev:/dev:ro
+      - /run:/run:ro
+      - /opt/smfc/smfc.conf:/opt/smfc/smfc.conf:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
