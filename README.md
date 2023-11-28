@@ -11,6 +11,8 @@ Super Micro fan control for Linux (home) servers.
 
 This is a `systemd service` running on Linux and is able to control fans in CPU and HD zones with the help of IPMI on Super Micro X10/X11 (and some X9) motherboards.
 
+You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
+
 ### 1. Prerequisites
  - a Super Micro motherboard with a BMC chip (i.e. ASPEED AST2400/2500)
  - Python 3.7+
@@ -40,7 +42,7 @@ This service was planned for Super Micro motherboards installed in computer chas
  - CPU zone (FAN1, FAN2, etc.)
  - HD or peripheral zone (FANA, FANB, etc.) 
 
-Please note: the fan assignment is defined in IPMI, and it cannot be changed! On the other hand `smfc` implements a feature, called *Swapped zones*, in order to make the use of the fans more suitable.
+Please note: the fan assignment to zones is predefined in IPMI, and it cannot be changed! On the other hand `smfc` implements a feature, called *Swapped zones*, in order to make the use of the fans more suitable.
 
 In this service a fan control logic is implemented for both zones which can:
 
