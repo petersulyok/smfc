@@ -2,12 +2,13 @@ FROM alpine:3.18
 
 LABEL org.opencontainers.image.title="smfc"
 LABEL org.opencontainers.image.authors="petersulyok"
-LABEL org.opencontainers.image.desciption="Super Micro fan control for linux servers."
+LABEL org.opencontainers.image.desciption="Super Micro fan control for Linux (home) servers."
 LABEL org.opencontainers.image.url="https://github.com/petersulyok/smfc"
 
 RUN <<EOT
     set -xe
     apk add --no-cache ipmitool python3 smartmontools
+    ln -s /usr/sbin/ipmitool /usr/bin/ipmitool
     apk add --no-cache --virtual .depends git build-base linux-headers automake autoconf gettext-dev
     mkdir /tmp/build/
     cd /tmp/build/
