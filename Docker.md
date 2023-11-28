@@ -65,9 +65,9 @@ services:
 ```
 (sample yaml file can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-compose.yaml)), 
 and container can be started/stopped this way:
-```
-$ docker-compose up -d
-$ docker-compose down
+```commandline
+docker-compose up -d
+docker-compose down
 ```
 
 ## Parameters for `smfc`
@@ -77,6 +77,14 @@ Use the following parameters to configure `smfc`:
 |-------------|----------------------|-----------------------------------------------------------------|
 | `SMFC_ARGS` | environment variable | command-line arguments for `smfc` (only for -o, -l parameters!) |
 | `smfc.conf` | volume (ro)          | configuration file for `smfc`, mapped from host side            |
+
+# Build image locally
+The image can be built locally in the following way:
+```commandline
+git clone https://github.com/petersulyok/smfc.git
+cd smfc
+./docker/docker-build.sh 3.4.0 
+```
 
 # Versions
   - **3.4.0** (2023.11.28): Documentation updated 
