@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-#   docker_start.sh (C) 2023, Peter Sulyok
-#   This script will start `smfc` image in docker.
+#   docker-start.sh (C) 2023, Peter Sulyok
+#   This script will start `smfc` docker image.
 #
 
 docker run \
