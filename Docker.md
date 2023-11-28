@@ -21,24 +21,24 @@ Some further notes:
 ## docker CLI
 The service can be started:
 ```
-$ docker run \
-    -d \
-    --rm \
-    --log-driver=journald \
-    --privileged=true \
-    --name "smfc" \
-    -v /dev:/dev:ro \
-    -v /run:/run:ro \
-    -v /etc/timezone:/etc/timezone:ro
-    -v /etc/localtime:/etc/localtime:ro
-    -v /opt/smfc/smfc.conf:/opt/smfc/smfc.conf:ro \
-    -e SMFC_ARGS="-l 3" \
-    petersulyok/smfc
+docker run \
+  -d \
+  --rm \
+  --log-driver=journald \
+  --privileged=true \
+  --name "smfc" \
+  -v /dev:/dev:ro \
+  -v /run:/run:ro \
+  -v /etc/timezone:/etc/timezone:ro
+  -v /etc/localtime:/etc/localtime:ro
+  -v /opt/smfc/smfc.conf:/opt/smfc/smfc.conf:ro \
+  -e SMFC_ARGS="-l 3" \
+  petersulyok/smfc
 ```
 (sample script can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-start.sh)), 
 and can be terminated:
 ```
-$ docker stop smfc  
+docker stop smfc  
 ```
 
 ## docker-compose (recommended)
@@ -64,7 +64,7 @@ services:
     restart: unless-stopped
 ```
 (sample yaml file can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-compose.yaml)), 
-and container can be started/stopped this way:
+and docker image can be started/stopped this way:
 ```commandline
 docker-compose up -d
 docker-compose down
