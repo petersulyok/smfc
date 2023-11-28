@@ -12,7 +12,7 @@ This image contains the following components:
 Some further notes:
   1. `smfc` will be executed as a simple foreground process here (not as a `systemd` service).
   2. Currently, the image does not require any networking, it is disabled.
-  3. `ipmitool` and `smartcrl` require read-only access to host's `/dev/` and `/run` folders and admin privilege.
+  3. `ipmitool` and `smartctl` require read-only access to host's `/dev/` and `/run` folders and admin privilege.
   4. The `/sys` filesystem can be accessed in the container, but the proper kernel module (i.e. `coretemp`, `k10temp`, or `drivetemp`) needs to be loaded on host side.
   5. The container can send log messages to the host's `journald` daemon (as it is configured in _Usage chapter_), but feel free to configure [other logging drivers](https://docs.docker.com/config/containers/logging/configure/). 
 
