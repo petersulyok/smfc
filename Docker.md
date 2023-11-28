@@ -1,11 +1,25 @@
 # smfc in docker
-This file explains how `smfc` image can be executed in docker environment.
+This is a docker image for `smfc`. Please visit the [GitHub repository](https://github.com/petersulyok/smfc) of `smfc` for more details or for reporting issues.
 
-Visit the [GitHub repository](https://github.com/petersulyok/smfc) of `smfc` for more details or reporting issues.
+# Content
+This image contains the following components: 
+- `Alpine Linux` 3.18
+- `Python` 3.11.6
+- `ipmitool` 1.8.19
+- `smartmontools` 7.3
+- `hddtemp` 0.4.3 (forked here https://github.com/vitlav/hddtemp.git) 
+
+Some further notes:
+  1. `smfc` will be executed as a simple foreground process here (not as a `systemd` service).
+  2. Currently, the image does not require any networking, it is disabled.
+  3. `ipmitool` and `smartcrl` require read-only access to host's `/dev/` and `/run` folders and admin privilege.
+  4. The `/sys` filesystem can be accessed in the container, but the proper kernel module (i.e. `coretemp`, `k10temp`, or `drivetemp`) needs to be loaded on host side.
+  5. The container can send log messages to the host's `journald` daemon (as it is configured in _Usage chapter_), but feel free to configure [other logging drivers](https://docs.docker.com/config/containers/logging/configure/). 
 
 # Usage 
 
 ## docker CLI
+The service can be started:
 ```
 $ docker run \
     -d \
@@ -15,13 +29,20 @@ $ docker run \
     --name "smfc" \
     -v /dev:/dev:ro \
     -v /run:/run:ro \
+    -v /etc/timezone:/etc/timezone:ro
+    -v /etc/localtime:/etc/localtime:ro
     -v /opt/smfc/smfc.conf:/opt/smfc/smfc.conf:ro \
     -e SMFC_ARGS="-l 3" \
     petersulyok/smfc
 ```
-(see this example in `docker/docker-start.sh`)
+(sample script can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-start.sh)), 
+and can be terminated:
+```
+$ docker stop smfc  
+```
 
-## docker-compose
+## docker-compose (recommended)
+`docker-compose` requires this file:
 ```
 version: "2"
 services:
@@ -42,18 +63,21 @@ services:
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
 ```
-(see this example in `docker/docker-compose.yaml`)
+(sample yaml file can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-compose.yaml)), 
+and container can be started/stopped this way:
+```
+$ docker-compose up -d
+$ docker-compose down
+```
 
-## Parameters
+## Parameters for `smfc`
 Use the following parameters to configure `smfc`:
 
-| Parameter   | type                 | function                                             |
-|-------------|----------------------|------------------------------------------------------|
-| `SMFC_ARGS` | environment variable | command-line arguments for `smfc` (-o, -l)           |
-| `smfc.conf` | volume               | configuration file for `smfc`, mapped from host side |
+| Parameter   | type                 | function                                                        |
+|-------------|----------------------|-----------------------------------------------------------------|
+| `SMFC_ARGS` | environment variable | command-line arguments for `smfc` (only for -o, -l parameters!) |
+| `smfc.conf` | volume (ro)          | configuration file for `smfc`, mapped from host side            |
 
-Please also note:
-1. this image should be executed in `privileged` mode with access of `/dev` and `/run` folders
-because of the tools (i.e. `ipmitool`, `smartctl` and `hddtemp`)
-2. `smfc` log messages are forwarded to the host's `journald` daemon. Feel free to use a different [log driver](https://docs.docker.com/config/containers/logging/configure/) for docker.
-
+# Versions
+  - **3.4.0** (2023.11.28): Documentation updated 
+  - **3.3.0** (2023.11.19): Initial release
