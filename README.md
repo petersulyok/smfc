@@ -9,12 +9,12 @@ Super Micro fan control for Linux (home) servers.
 
 ## TL;DR
 
-This is a `systemd service` running on Linux and is able to control fans in CPU and HD zones with the help of IPMI on Super Micro X10/X11 (and some X9) motherboards.
+This is a `systemd service` running on Linux and is able to control fans in CPU and HD zones with the help of IPMI on Super Micro X10-X13 (and some X9) motherboards.
 
 You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
 
 ### 1. Prerequisites
- - a Super Micro motherboard with a BMC chip (i.e. ASPEED AST2400/2500)
+ - a Super Micro motherboard with a BMC chip (i.e. ASPEED AST2400/2500/2600)
  - Python 3.7+
  - Linux OS with:
    - `systemd` package
@@ -115,9 +115,11 @@ In case of X9 motherboards the compatibility is not guaranteed, it depends on th
 
 The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI_FULL` mode, and they cannot control fan levels how it is implemented in `smfc`.
 
+X13 motherboards (with AST2600 BMC chips) seem to be compatible with smfc (see mode details in [issue #33](https://github.com/petersulyok/smfc/issues/33) about an X13SAE-F motherboard).
+Fan control and `IPMI_FULL` mode are working properly. The only difference is in using thresholds, AST2600 implements only `Lower Critical` threshold, so setting up thresholds is different in this case.  
+
 Feel free to create a short feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19) on your compatibility experience.
 
-TODO: Feedback would be needed about the compatibility with Super Micro X12/X13 motherboards and AST2600 BMC chip.
 
 ### 7. IPMI fan control and sensor thresholds
 IPMI uses six sensor thresholds to specify the safe and unsafe fan rotational speed intervals (these are RPM values rounded to nearest hundreds, defined for each fan separately):
