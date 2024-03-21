@@ -129,63 +129,63 @@ class TestData:
         return new_list
 
     def get_cpu_1(self, temperatures: List[float] = None) -> str:
-        """Generate hwmon files for 1 CPU."""
+        """Generates hwmon files for 1 CPU."""
         return self.create_cpu_temp_files(1, temp_list=temperatures, wildchar=False)
 
     def get_cpu_1w(self, temperatures: List[float] = None) -> str:
-        """Generate hwmon files with wild characters for 1 CPU."""
+        """Generates hwmon files with wild characters for 1 CPU."""
         return self.create_cpu_temp_files(1, temp_list=temperatures, wildchar=True)
 
     def get_cpu_2(self, temperatures: List[float] = None) -> str:
-        """Generate hwmon files for 2 CPUs."""
+        """Generates hwmon files for 2 CPUs."""
         return self.create_cpu_temp_files(2, temp_list=temperatures, wildchar=False)
 
     def get_cpu_2w(self, temperatures: List[float] = None) -> str:
-        """Generate hwmon files with wild characters for 2 CPUs."""
+        """Generates hwmon files with wild characters for 2 CPUs."""
         return self.create_cpu_temp_files(2, temp_list=temperatures, wildchar=True)
 
     def get_cpu_4(self, temperatures: List[float] = None) -> str:
-        """Generate hwmon files for 4 CPUs."""
+        """Generates hwmon files for 4 CPUs."""
         return self.create_cpu_temp_files(4, temp_list=temperatures, wildchar=False)
 
     def get_cpu_4w(self, temperatures: List[float] = None) -> str:
-        """Generate hwmon files with wild characters for 4 CPUs."""
+        """Generates hwmon files with wild characters for 4 CPUs."""
         return self.create_cpu_temp_files(4, temp_list=temperatures, wildchar=True)
 
     def get_hd_1(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generate hwmon files for 1 HD."""
+        """Generates hwmon files for 1 HD."""
         return self.create_hd_temp_files(1, temp_list=temperatures, wildchar=False, hd_types=types)
 
     def get_hd_1w(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generate hwmon files with wild characters for 1 HD."""
+        """Generates hwmon files with wild characters for 1 HD."""
         return self.create_hd_temp_files(1, temp_list=temperatures, wildchar=True, hd_types=types)
 
     def get_hd_2(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generate hwmon files for 2 HDs."""
+        """Generates hwmon files for 2 HDs."""
         return self.create_hd_temp_files(2, temp_list=temperatures, wildchar=False, hd_types=types)
 
     def get_hd_2w(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generate hwmon files with wild characters for 2 HDs."""
+        """Generates hwmon files with wild characters for 2 HDs."""
         return self.create_hd_temp_files(2, temp_list=temperatures, wildchar=True, hd_types=types)
 
     def get_hd_4(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generate hwmon files for 4 HDs."""
+        """Generates hwmon files for 4 HDs."""
         return self.create_hd_temp_files(4, temp_list=temperatures, wildchar=False, hd_types=types)
 
     def get_hd_4w(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generate hwmon files with wild characters for 4 HDs."""
+        """Generates hwmon files with wild characters for 4 HDs."""
         return self.create_hd_temp_files(4, temp_list=temperatures, wildchar=True, hd_types=types)
 
     def get_hd_8(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generate hwmon files for 8 HDs."""
+        """Generates hwmon files for 8 HDs."""
         return self.create_hd_temp_files(8, temp_list=temperatures, wildchar=False, hd_types=types)
 
     def get_hd_8w(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generate hwmon files with wild characters for 8 HDs."""
+        """Generates hwmon files with wild characters for 8 HDs."""
         return self.create_hd_temp_files(8, temp_list=temperatures, wildchar=True, hd_types=types)
 
     def create_hd_names(self, count: int, hd_types: List[int] = None) -> str:
-        """Generate hd_names= list concatenated in a string."""
+        """Generates hd_names= list concatenated in a string."""
 
         def get_random_str(count: int) -> str:
             rnd_str: str = ''
@@ -259,7 +259,7 @@ class TestData:
 
     @staticmethod
     def normalize_path(old_list: List[str]) -> List[str]:
-        """Normalize the path in a List[str]"""
+        """Normalizes the path in a List[str]"""
         new_list: List[str] = []
         for ol in old_list:
             fn = glob.glob(ol)
@@ -268,7 +268,7 @@ class TestData:
 
     @staticmethod
     def create_path_list(hwmon_str: str) -> List[str]:
-        """Create a path List[str] with splitting the input string based on its content."""
+        """Creates a path List[str] with splitting the input string based on its content."""
         new_list: List[str]
         # Convert the string into a string array (respecting multi-line strings).
         if "\n" in hwmon_str:
@@ -279,18 +279,18 @@ class TestData:
 
     @staticmethod
     def create_normalized_path_list(hwmon_str: str) -> List[str]:
-        """Create path List[str] with normalization."""
+        """Creates path List[str] with normalization."""
         return TestData.normalize_path(TestData.create_path_list(hwmon_str))
 
     def create_config_file(self, my_config: configparser.ConfigParser) -> str:
-        """Create a config file. """
+        """Creates a config file. """
         h, name = tempfile.mkstemp(prefix='config', suffix='.conf', dir=self.td_dir)
         with os.fdopen(h, "w+t") as f:
             my_config.write(f)
         return name
 
     def create_command_file(self, content: str = 'echo OK') -> str:
-        """Create an executable bash script. """
+        """Creates an executable bash script. """
         h, name = tempfile.mkstemp(suffix='.sh', dir=self.td_dir)
         with os.fdopen(h, "w+t") as f:
             f.write(str('#!/bin/bash\n'))
@@ -300,11 +300,11 @@ class TestData:
 
     @staticmethod
     def delete_file(path: str) -> None:
-        """Delete a specified file."""
+        """Deletes the specified file."""
         os.remove(path)
 
     def create_ipmi_command(self) -> str:
-        """Create a bash script emulating ipmitool."""
+        """Creates a bash script emulating ipmitool."""
         return self.create_command_file("""
 # ipmitool emulation
 
@@ -332,3 +332,10 @@ if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x01" ]] 
 	exit 0
 fi
 """)
+
+    def create_text_file(self, content: str) -> str:
+        """Creates a text file with the specified content."""
+        h, name = tempfile.mkstemp(prefix='text', suffix='.txt', dir=self.td_dir)
+        with os.fdopen(h, "w+t") as f:
+            f.write(content)
+        return name

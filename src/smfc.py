@@ -452,6 +452,7 @@ class FanController:
         """
         return self._get_nth_temp(0)
 
+    # pylint: disable=R1730
     def get_min_temp(self) -> float:
         """Get the minimum temperature of multiple controlled entities.
 
@@ -486,6 +487,7 @@ class FanController:
             counter += 1
         return average / counter
 
+    # pylint: disable=R1731
     def get_max_temp(self) -> float:
         """Get the maximum temperature of the controlled entities in the IPMI zone.
 
@@ -973,8 +975,79 @@ class Service:
         # Unregister this function.
         atexit.unregister(self.exit_func)
 
+    def check_dependencies(self) -> str:
+        """Check run-time dependencies of smfc:
+
+              - ipmitool command
+              - if CPU zone enabled: coretemp or k10temp kernel module
+              - if HD zone enabled: drivetemp kernel module or hddtemp command
+
+        Returns:
+            (str): error string:
+
+                - empty: dependencies are OK
+                - otherwise: the error message
+
+        """
+        path: str
+
+        # Check if ipmitool command is available.
+        path = self.config[Ipmi.CS_IPMI].get(Ipmi.CV_IPMI_COMMAND, '/usr/bin/ipmitool')
+        if not os.path.exists(path):
+            return f"ERROR: ipmitool command cannot be found {path}!"
+
+        # Load list of kernel modules.
+        with open("/proc/modules", "rt", encoding="utf-8") as file:
+            modules = file.read()
+
+        # Check kernel modules for CPUs
+        if self.cpu_zone_enabled:
+            if "coretemp" not in modules and "k10temp" not in modules:
+                return "ERROR: coretemp or k10temp kernel module is not loaded!"
+
+        # Check dependencies for disks
+        if self.hd_zone_enabled:
+            check_hddtemp: bool = False
+            check_drivetemp: bool = False
+            hwmon_path: List[str] = []
+
+            # Scan HWMON configuration for dependencies.
+            hwmon_str = self.config[HdZone.CS_HD_ZONE].get(HdZone.CV_HD_ZONE_HWMON_PATH)
+            if "\n" in hwmon_str:
+                hwmon_path = hwmon_str.splitlines()
+            else:
+                hwmon_path = hwmon_str.split()
+            if hwmon_path:
+                for path in hwmon_path:
+                    if path == HdZone.STR_HDD_TEMP:
+                        check_hddtemp = True
+                    else:
+                        check_drivetemp = True
+            else:
+                check_drivetemp = True
+
+            # Check if drivetemp kernel module is loaded
+            if check_drivetemp:
+                if "drivetemp" not in modules:
+                    return "ERROR: drivetemp kernel module is not loaded!"
+
+            # Check if hddtemp command is available
+            if check_hddtemp:
+                path = self.config[HdZone.CS_HD_ZONE].get(HdZone.CV_HD_ZONE_HDDTEMP_PATH, '/usr/sbin/hddtemp')
+                if not os.path.exists(path):
+                    return f"ERROR: hddtemp command cannot be found {path}!"
+
+            # Optional: check if smartctl command is available.
+            if self.config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED, False):
+                path = self.config[HdZone.CS_HD_ZONE].get(HdZone.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/hddtemp')
+                if not os.path.exists(path):
+                    return f"ERROR: smartctl command cannot be found {path}!"
+
+        # All required run-time dependencies seems to be available.
+        return ""
+
     def run(self) -> None:
-        """Run function: starting point of the systemd service."""
+        """Run function: main execution function of the systemd service."""
         app_parser: argparse.ArgumentParser     # Instance for an ArgumentParser class
         parsed_results: argparse.Namespace      # Results of parsed command line arguments
         old_mode: int                           # Old IPMI fan mode
@@ -1015,7 +1088,15 @@ class Service:
         if not self.config or not self.config.read(parsed_results.config_file):
             self.log.msg(Log.LOG_ERROR, f'Cannot load configuration file ({parsed_results.config_file})')
             sys.exit(6)
+        self.cpu_zone_enabled = self.config[CpuZone.CS_CPU_ZONE].getboolean(CpuZone.CV_CPU_ZONE_ENABLED, fallback=False)
+        self.hd_zone_enabled = self.config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_ENABLED, fallback=False)
         self.log.msg(Log.LOG_DEBUG, f'Configuration file ({parsed_results.config_file}) loaded')
+
+        # Check run-time dependencies (commands, kernel modules).
+        error_msg = self.check_dependencies()
+        if error_msg:
+            self.log.msg(Log.LOG_ERROR, error_msg)
+            sys.exit(4)
 
         # Create an Ipmi class instances and set required IPMI fan mode.
         try:
@@ -1032,14 +1113,12 @@ class Service:
 
         # Create an instance for CPU zone fan controller if enabled.
         # self.cpu_zone = None
-        self.cpu_zone_enabled = self.config[CpuZone.CS_CPU_ZONE].getboolean(CpuZone.CV_CPU_ZONE_ENABLED, fallback=False)
         if self.cpu_zone_enabled:
             self.log.msg(Log.LOG_DEBUG, 'CPU zone fan controller enabled')
             self.cpu_zone = CpuZone(self.log, self.ipmi, self.config)
 
         # Create an instance for HD zone fan controller if enabled.
         # self.hd_zone = None
-        self.hd_zone_enabled = self.config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_ENABLED, fallback=False)
         if self.hd_zone_enabled:
             self.log.msg(Log.LOG_DEBUG, 'HD zone fan controller enabled')
             self.hd_zone = HdZone(self.log, self.ipmi, self.config)
