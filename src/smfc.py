@@ -1013,10 +1013,11 @@ class Service:
 
             # Scan HWMON configuration for dependencies.
             hwmon_str = self.config[HdZone.CS_HD_ZONE].get(HdZone.CV_HD_ZONE_HWMON_PATH)
-            if "\n" in hwmon_str:
-                hwmon_path = hwmon_str.splitlines()
-            else:
-                hwmon_path = hwmon_str.split()
+            if hwmon_str:
+                if "\n" in hwmon_str:
+                    hwmon_path = hwmon_str.splitlines()
+                else:
+                    hwmon_path = hwmon_str.split()
             if hwmon_path:
                 for path in hwmon_path:
                     if path == HdZone.STR_HDD_TEMP:
