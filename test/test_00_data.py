@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-#   test_00_data.py (C) 2022-2023, Peter Sulyok
+#   test_00_data.py (C) 2022-2024, Peter Sulyok
 #   Test data handling class for unit tests.
 #
 import configparser

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-#   test_06_service.py (C) 2021-2023, Peter Sulyok
+#   test_06_service.py (C) 2021-2024, Peter Sulyok
 #   Unit tests for smfc.Service() class.
 #
 import configparser

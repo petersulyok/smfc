@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#   set_ipmi_fan_mode.sh (C) 2021-2023, Peter Sulyok
+#   set_ipmi_fan_mode.sh (C) 2021-2024, Peter Sulyok
 #   This script will setup IPMI fan mode.
 #   Read more here: https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/
 #

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#   install.sh (C) 2021-2023, Peter Sulyok
+#   install.sh (C) 2021-2024, Peter Sulyok
 #   Installation script for smfc service.
 #
 

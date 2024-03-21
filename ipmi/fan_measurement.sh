@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#   fan_measurement.sh (C) 2021-2023, Peter Sulyok
+#   fan_measurement.sh (C) 2021-2024, Peter Sulyok
 #   This script will measure the rotation speed belongs to different IPMI fan level.
 #   Results will be stored in 'fan_result.cvs'.
 #

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-#   test_02_ipmi.py (C) 2021-2023, Peter Sulyok
+#   test_02_ipmi.py (C) 2021-2024, Peter Sulyok
 #   Unit tests for smfc.Ipmi() class.
 #
 

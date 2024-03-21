@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#   run_test_hd_4.sh (C) 2021-2023 Peter Sulyok
+#   run_test_hd_4.sh (C) 2021-2024 Peter Sulyok
 #   This script will run smoke test: HD 4 configuration.
 #
 

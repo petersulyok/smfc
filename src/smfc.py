@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-#   smfc.py (C) 2020-2023, Peter Sulyok
+#   smfc.py (C) 2020-2024, Peter Sulyok
 #   IPMI fan controller for Super Micro X10/X11 motherboards.
 #
 import atexit
@@ -16,7 +16,7 @@ from typing import List, Callable
 
 
 # Program version string
-version_str: str = '3.4.0'
+version_str: str = '3.5.0'
 
 
 class Log:

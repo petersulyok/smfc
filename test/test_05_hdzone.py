@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-#   test_05_hdzone.py (C) 2021-2023, Peter Sulyok
+#   test_05_hdzone.py (C) 2021-2024, Peter Sulyok
 #   Unit tests for smfc.HdZone() class.
 #
 import configparser
