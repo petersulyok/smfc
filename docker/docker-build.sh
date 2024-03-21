@@ -13,4 +13,4 @@ fi
 version=$1
 docker build . -t petersulyok/smfc:$version --label "org.opencontainers.image.version=$version" -f Dockerfile
 docker tag petersulyok/smfc:$version petersulyok/smfc:latest
-docker push petersulyok/smfc
+docker push petersulyok/smfc --all-tags
