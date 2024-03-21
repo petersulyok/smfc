@@ -406,11 +406,14 @@ class ServiceTestCase(unittest.TestCase):
         mock_time_sleep = MagicMock()
         mock_time_sleep.side_effect = self.mocked_sleep
         mock_exit_func = MagicMock()
+        mock_check_dependecies = MagicMock()
+        mock_check_dependecies.return_value = ""
         self.sleep_counter = 0
         with patch('builtins.print', mock_print), \
              patch('argparse.ArgumentParser._print_message', mock_parser_print_help), \
              patch('time.sleep', mock_time_sleep), \
-             patch('smfc.Service.exit_func', mock_exit_func):
+             patch('smfc.Service.exit_func', mock_exit_func), \
+             patch('smfc.Service.check_dependencies', mock_check_dependecies):
             sys.argv = ('smfc.py -o 0 -c ' + conf_file).split()
             service = Service()
             with self.assertRaises(SystemExit) as cm:
