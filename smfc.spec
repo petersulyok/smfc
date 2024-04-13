@@ -1,61 +1,78 @@
 %global forgeurl https://github.com/petersulyok/smfc
-
-Version: 3.5.0
-
+%global tag smfc-3.5.0-1
 %forgemeta
 
 Name:    smfc
+Version: 3.5.0
 Release: 1%{?dist}
 Summary: Super Micro Fan Control
 
 License: GPL-3.0-or-later
-URL:	 %{forgeurl}
+URL:     %{forgeurl}
 Source:  %{forgesource}
 
-Requires: systemd
-Requires: python3 >= 3.7
-Requires: bash
-Requires: ipmitool
+Requires:   ipmitool
+Requires:   python3-smfc
 Recommends: smartmontools
 Recommends: hddtemp
 
-BuildRequires: systemd
 BuildRequires: systemd-rpm-macros
 BuildArch:     noarch
 
-%description
-systemd service to control fans in CPU and HD zones with the help of IPMI on Super Micro X10-X13 (and some X9) motherboards.
+%global _description %{expand:
+systemd service to control fans in CPU and HD zones with the help of IPMI on
+Super Micro X10-X13 (and some X9) motherboards.}
+
+%description %_description
+
+%package -n python3-%{name}
+Summary: Python 3 bindings for the smfc library
+BuildRequires: python3-devel
+
+%global _python_module_description %{expand:
+Python 3 bindings for the smfc library.}
+
+%description -n python3-smfc %_python_module_description
 
 %prep
 %forgesetup
 
-%build
-# not needed, just copying files
+%generate_buildrequires -n python3-smfc
+%pyproject_buildrequires
+
+%build -n python3-smfc
+%pyproject_wheel
 
 %install
-mkdir -p %{buildroot}/opt/smfc
-install -m 755 src/smfc.py %{buildroot}/opt/smfc/smfc.py
-install -m 644 src/smfc.conf %{buildroot}/opt/smfc/smfc.conf
-mkdir -p %{buildroot}/%{_sysconfdir}/default
-install -m 644 src/smfc %{buildroot}/%{_sysconfdir}/default/smfc
-mkdir -p %{buildroot}/%{_unitdir}
-install -m 644 src/smfc.service %{buildroot}/%{_unitdir}/smfc.service
-mkdir -p %{buildroot}/%{_presetdir}
-install -m 644 src/smfc.preset %{buildroot}/%{_presetdir}/90-smfc.preset
+%pyproject_install
+%pyproject_save_files smfc
+install -Dm 644 resources/smfc.conf %{buildroot}%{_sysconfdir}/smfc/smfc.conf
+install -Dm 644 resources/smfc %{buildroot}%{_sysconfdir}/default/smfc
+install -Dm 644 systemd/smfc.service %{buildroot}%{_unitdir}/smfc.service
+install -Dm 644 systemd/smfc.preset %{buildroot}%{_presetdir}/90-smfc.preset
+install -Dm 644 systemd/modules-load.conf %{buildroot}%{_modulesloaddir}/smfc.conf
 
-%check
-# not needed, just copying files
+%check -n python3-smfc
+%pytest
 
 %files
-/opt/smfc/smfc.py
-%config(noreplace) /opt/smfc/smfc.conf
-%config(noreplace) /etc/default/smfc
-/usr/lib/systemd/system/smfc.service
-/usr/lib/systemd/system-preset/90-smfc.preset
+%{_bindir}/smfc
+%config(noreplace) %{_sysconfdir}/smfc/smfc.conf
+%config(noreplace) %{_sysconfdir}/default/smfc
+%{_unitdir}/smfc.service
+%{_presetdir}/90-smfc.preset
+%{_modulesloaddir}/smfc.conf
+%doc README.md
+%license LICENSE
+
+%files -n python3-smfc
+%{python3_sitelib}/smfc/
+%{python3_sitelib}/smfc-%{version}.dist-info/
 %doc README.md
 %license LICENSE
 
 %post
+%{_bindir}/systemctl restart systemd-modules-load.service
 %systemd_post smfc.service
 
 %preun
@@ -65,6 +82,3 @@ install -m 644 src/smfc.preset %{buildroot}/%{_presetdir}/90-smfc.preset
 %systemd_postun_with_restart smfc.service
 
 %changelog
-* Wed Apr 03 2024 Ewout van Mansom <ewout@vanmansom.name> 3.5.0-1
-- new package built with tito
-

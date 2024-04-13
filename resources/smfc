@@ -3,4 +3,4 @@
 #
 
 # Startup options for the service
-OPTIONS="-c /opt/smfc/smfc.conf -l 3"
+OPTIONS="-c /etc/smfc/smfc.conf -l 3"
