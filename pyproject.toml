@@ -1,6 +1,49 @@
+[build-system]
+requires = ["setuptools", "pytest"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smfc"
+description = "Super Micro Fan Control for Linux"
+readme = "README.md"
+version = "3.5.0"
+authors = [
+    { name = "Peter Sulyok", email = "peter@sulyok.net" }
+]
+requires-python = ">=3.8"
+keywords = ["supermicro", "linux", "daemon", "fancontrol"]
+license = {file = "LICENSE"}
+dependencies = []
+classifiers = [
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: System :: Hardware",
+    "Development Status :: 5 - Production/Stable"
+]
+
+[project.urls]
+Homepage = "https://github.com/petersulyok/smfc"
+Changelog = "https://github.com/petersulyok/smfc/releases"
+Issues = "https://github.com/petersulyok/smfc/issues"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
+
+[project.scripts]
+smfc = "smfc.cmd:main"
+
+[tool.setuptools]
+packages = ["smfc"]
+
 # pytest options
 [tool.pytest.ini_options]
-pythonpath = "src"
 filterwarnings = [ "default", "ignore::pytest.PytestCollectionWarning"]
 
 # flake8 options

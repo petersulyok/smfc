@@ -5,7 +5,7 @@ After=syslog.target
 [Service]
 Type=simple
 EnvironmentFile=-/etc/default/smfc
-ExecStart=/opt/smfc/smfc.py $OPTIONS
+ExecStart=/usr/bin/smfc $OPTIONS
 
 [Install]
 WantedBy=multi-user.target

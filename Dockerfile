@@ -29,7 +29,7 @@ RUN <<EOT
     apk del .depends
 EOT
 
-WORKDIR /opt/smfc
+WORKDIR /etc/smfc
 ADD --chmod=755 src/smfc.py smfc.py
 
-CMD /opt/smfc/smfc.py -c /opt/smfc/smfc.conf $SMFC_ARGS
+CMD /usr/bin/smfc -c /etc/smfc/smfc.conf $SMFC_ARGS

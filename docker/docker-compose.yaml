@@ -12,7 +12,7 @@ services:
     volumes:
       - /dev:/dev:ro
       - /run:/run:ro
-      - /opt/smfc/smfc.conf:/opt/smfc/smfc.conf:ro
+      - /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
