@@ -559,8 +559,7 @@ class FanController:
         if current_level != self.last_level:
             self.last_level = current_level
             self.set_fan_level(current_level)
-            self.log.msg(self.log.LOG_INFO, f'{self.name}: new level > {current_temp:.1f}C > '
-                         f'[T:{self.min_temp+(current_gain*self.temp_step):.1f}C/L:{current_level}%]')
+            self.log.msg(self.log.LOG_INFO, f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C')
 
     def print_temp_level_mapping(self) -> None:
         """Print out the user-defined temperature to level mapping value in log DEBUG level."""
