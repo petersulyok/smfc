@@ -80,7 +80,10 @@ In order to avoid/minimize the unnecessary change of fan levels the service empl
  3. The configuration parameter `polling=` defines the frequency of reading zone's temperature. The bigger polling time in a zone the lower frequency of fan speed change.
 
 #### 3. Swapped zones
-In some cases it is useful to swap IPMI zones. In this way the fans `FAN1, FAN2, ...` will cool the HD zone and the fans `FANA, FANB, ...` will cool the CPU zone. This feature could be useful if you need more fans for the HD zone since Super Micro motherboards have more fan connectors in the CPU zone usually. This feature can be enabled with `[IPMI] swapped_zones=True` configuration parameter, in default it is disabled. 
+This feature is useful if you need more fans for the HD zone since Super Micro motherboards have more fan connectors in the CPU zone, typically. 
+Enabling this feature will connect fans `FAN1, FAN2, ...` to the HD zone and fans `FANA, FANB, ...` to the CPU zone. The feature can be enabled with `[IPMI] swapped_zones=True` configuration parameter, in default it is disabled.
+
+**Please note:** when you enable this feature your task is only to swap fan connectors between zones on your motherboard, the rest of the configuration file will not be impacted (i.e. the zone sections will remain the same).
 
 #### 4. Standby guard
 For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
@@ -105,7 +108,7 @@ Some additional notes:
 - For `SATA` disks the `drivetemp` kernel module should be loaded (this is the fastest way to read disk temperature and the kernel module can report the temperature during sleep mode!)
 - For `SAS/SCSI` disks the `hddtemp` command will be used to read disk temperature (NO daemon mode is required for `hddtemp`!)
 - Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported in this case.
-- Although `smfc` can handle NVME SSDs, it is NOT RECOMMENDED to include NVME disks in `hd_names=` parameters, because the hard disks and NVME SSDs are operating in quite different temperature zones (e.g. 40 C vs 70 C).
+- Although `smfc` can handle NVME SSDs, it is NOT RECOMMENDED to mix NVME SSD and SATA/SCSI disks in `hd_names=` parameters, because they are operating in quite different temperature intervals (e.g. 30-40C vs 40-80C).
 - The service can identify the disk types automatically based on the tags (`ata-`/`-SATA`, `nvme-` and `scsi-`)
 
 ### 6. Super Micro compatibility
@@ -122,7 +125,7 @@ Feel free to create a short feedback in [issue #19](https://github.com/petersuly
 
 
 ### 7. IPMI fan control and sensor thresholds
-IPMI uses six sensor thresholds to specify the safe and unsafe fan rotational speed intervals (these are RPM values rounded to nearest hundreds, defined for each fan separately):
+On Super Micro X10-X11 motherboards IPMI uses six sensor thresholds to specify the safe and unsafe fan rotational speed intervals (these are RPM values rounded to nearest hundreds, defined for each fan separately):
 
 ```
 Lower Non-Recoverable  
@@ -132,6 +135,14 @@ Upper Non-Critical
 Upper Critical  
 Upper Non-Recoverable
 ```
+
+but newer Super Micro X13 motherboards (with AST2600 BMC chip) have only one sensor threshold:
+
+```
+Lower Critical  
+```
+
+Originally, this chapter was created Super Micro X10-X11 motherboards, but can be easily adopted to X13 motherboards as well (see more details in #33).
 
 Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control, where all fans in the zone:
 
@@ -450,22 +461,25 @@ With the help of command `journalctl` you can check logs easily. For examples:
 
 ## 14. FAQ
 
-### Q: My fans are spinning up and loud. What is wrong?
-Most probably the rotational speed of the fans went above or below of a threshold value
+### Q: My fans are spinning up and loud. What's wrong?
+Most probably the rotational speed of a fan went above or below of a IPMI threshold and IPMI switched back that zone to full rotational speed.
 You can check the current fan rotational speeds:
 
 	ipmitool sdr
 
-and you can also check event log on Super Micro remote web interface (Server Health > Health Event log). If you see Assertions log messages for fans:
+and you can also check IPMI event log and list assertion events:
 
-	Fan(FAN1)	Lower Critical - going low - Assertion
-	Fan(FAN1)	Lower Non-recoverable - going low - Assertion
-	Fan(FAN1)	Lower Non-recoverable - going low - Deassertion
-	Fan(FAN1)	Lower Critical - going low - Deassertion
-	Fan(FAN4)	Lower Critical - going low - Assertion
-	Fan(FAN4)	Lower Non-recoverable - going low - Assertion
+```
+root@home:~# ipmitool sel list
+   1 | 10/19/2023 | 05:15:35 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
+   2 | 10/19/2023 | 05:15:35 PM CEST | Fan #0x46 | Lower Non-recoverable going low  | Asserted
+   3 | 10/19/2023 | 05:15:38 PM CEST | Fan #0x46 | Lower Non-recoverable going low  | Deasserted
+   4 | 10/19/2023 | 05:15:38 PM CEST | Fan #0x46 | Lower Critical going low  | Deasserted
+   5 | 10/19/2023 | 05:20:59 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
+```
 
-then you must adjust your configuration (i.e. threshold values) because IPMI switched back to full rotational speed.
+If the problematic fan (causing the alert) is identified then you must adjust its threshold. This process could take several adjustment cycle. Be patent :)
+You may read [this chapter](https://github.com/petersulyok/smfc#7-ipmi-fan-control-and-sensor-thresholds) for more details. 
 
 ### Q: I would like to use constant fan rotational speed in one or both zones. How can I configure that?
 You should configure the temperatures and levels with the same value. 
