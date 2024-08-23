@@ -3,8 +3,8 @@ This is a docker image for `smfc`. Please visit the [GitHub repository](https://
 
 # Content
 This image contains the following components: 
-- `Alpine Linux` 3.19
-- `Python` 3.11.8
+- `Alpine Linux` 3.20
+- `Python` 3.12.3
 - `ipmitool` 1.8.19
 - `smartmontools` 7.4
 - `hddtemp` 0.4.3 (forked here https://github.com/vitlav/hddtemp.git) 
@@ -87,6 +87,7 @@ cd smfc
 ```
 
 # Versions
+  - **3.5.1** (2024.08.23): Updated to smfc version 3.5.1 and alpine 3.20
   - **3.5.0** (2024.03.21): Updated to smfc version 3.5.0 and alpine 3.19
   - **3.4.0** (2023.11.28): Documentation updated 
   - **3.3.0** (2023.11.19): Initial release
