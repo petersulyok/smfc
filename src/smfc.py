@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 #
 #   smfc.py (C) 2020-2024, Peter Sulyok
-#   IPMI fan controller for Super Micro X10/X11 motherboards.
+#   IPMI fan controller for Super Micro X10-X13 motherboards.
 #
 import atexit
 import argparse
