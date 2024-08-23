@@ -39,10 +39,10 @@ You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
 ## Details
 ### 1. How does it work?
 This service was planned for Super Micro motherboards installed in computer chassis with two independent cooling systems employing separate fans. In IPMI terms these are called:
- - CPU zone (FAN1, FAN2, etc.)
- - HD or peripheral zone (FANA, FANB, etc.) 
+ - CPU zone with fans: FAN1, FAN2, ...
+ - HD or peripheral zone with fans: FANA, FANB, ... 
 
-Please note: the fan assignment to zones is predefined in IPMI, and it cannot be changed! On the other hand `smfc` implements a feature, called *Swapped zones*, in order to make the use of the fans more suitable.
+Please note: the fan assignment to zones is predefined in IPMI, and it cannot be changed! On the other hand `smfc` implements a feature, called [*Swapped zones*](https://github.com/petersulyok/smfc?tab=readme-ov-file#3-swapped-zones), in order to make the use of the fans more suitable.
 
 In this service a fan control logic is implemented for both zones which can:
 
