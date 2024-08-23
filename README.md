@@ -30,11 +30,12 @@ You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
  1. Set up the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`).
- 4. Install the service with running the script `install.sh`.
- 5. Edit the configuration file `/opt/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
- 6. Start the `systemd` service
- 7. Check results in system log
- 8. Leave a feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19)
+ 4. Add distro specific repository for smfc.
+ 5. Install the service using your package manager.
+ 6. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
+ 7. Start the `systemd` service
+ 8. Check results in system log
+ 9. Leave a feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19)
 
 ## Details
 ### 1. How does it work?
@@ -275,13 +276,13 @@ For the installation you need a root user. The default installation script `inst
 |----------------|-----------------------|---------------------------------|
 | `smsc.service` | `/etc/systemd/system` | systemd service definition file |
 | `smsc`         | `/etc/default`        | service command line options    |
-| `smsc.py`      | `/opt/smfc`           | service (python program)        |
-| `smsc.conf`    | `/opt/smfc`           | service configuration file      |
+| `smsc.py`      | `/etc/smfc`           | service (python program)        |
+| `smsc.conf`    | `/etc/smfc`           | service configuration file      |
 
 but you can use freely any other folders too. The service has the following command line options:
 
-	root@home:~/opt/smfc# ./smfc.py --help
-	usage: smfc.py [-h] [-c CONFIG_FILE] [-v] [-l {0,1,2,3,4}] [-o {0,1,2}]
+	root@home:~/etc/smfc# smfc --help
+	usage: smfc [-h] [-c CONFIG_FILE] [-v] [-l {0,1,2,3,4}] [-o {0,1,2}]
 	
 	optional arguments:
   		-h, --help      show this help message and exit
@@ -293,7 +294,7 @@ but you can use freely any other folders too. The service has the following comm
 You may configure logging output and logging level here and these options can be specified in `/etc/default/smfc`in a persistent way.
 
 ### 11. Configuration file
-Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
+Edit `/etc/smfc/smfc.conf` and specify your configuration parameters here:
 
 	#  
 	#   smfc.conf  
@@ -420,21 +421,20 @@ This `systemd` service can be started and stopped in the standard way. Do not fo
 	● smfc.service - Super Micro Fan Control
 	     Loaded: loaded (/etc/systemd/system/smfc.service; enabled; vendor preset: enabled)
 	     Active: active (running) since Fri 2021-09-17 23:28:10 CEST; 1 day 19h ago
-	   Main PID: 1064180 (smfc.py)
+	   Main PID: 1064180 (smfc)
 	      Tasks: 1 (limit: 38371)
 	     Memory: 7.4M
 	        CPU: 41.917s
 	     CGroup: /system.slice/smfc.service
-	             └─1064180 /usr/bin/python3 /opt/smfc/smfc.py -c /opt/smfc/smfc.conf -l 2
+	             └─1064180 /usr/bin/python3 /usr/bin/smfc -c /etc/smfc/smfc.conf -l 2
 
 	Sep 19 17:12:39 home smfc.service[1064180]: CPU zone: new level > 39.0C > [T:40.0C/L:61%]
 	Sep 19 17:12:42 home smfc.service[1064180]: CPU zone: new level > 33.0C > [T:35.0C/L:48%]
 	Sep 19 17:48:14 home smfc.service[1064180]: CPU zone: new level > 38.0C > [T:40.0C/L:61%]
 
-If you are testing your configuration, you can start `smfc.py` directly in a terminal. Logging to the standard output and debug log level are useful in this case:
+If you are testing your configuration, you can start `smfc` directly in a terminal. Logging to the standard output and debug log level are useful in this case:
 
-	cd /opt
-	sudo smfc.py -o 0 -l 3
+	sudo smfc -o 0 -l 3
 
 ### 13. Checking result and monitoring logs
 All messages will be logged to the specific output and the specific level.
