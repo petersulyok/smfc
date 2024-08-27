@@ -1,12 +1,12 @@
 [build-system]
-requires = ["setuptools", "pytest"]
+requires = ["setuptools>=61.0", "pytest"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "smfc"
 description = "Super Micro Fan Control for Linux"
 readme = "README.md"
-version = "3.5.0"
+version = "3.5.1"
 authors = [
     { name = "Peter Sulyok", email = "peter@sulyok.net" }
 ]
@@ -20,22 +20,19 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: POSIX :: Linux",
     "Topic :: System :: Hardware",
     "Development Status :: 5 - Production/Stable"
 ]
-
 [project.urls]
 Homepage = "https://github.com/petersulyok/smfc"
 Changelog = "https://github.com/petersulyok/smfc/releases"
 Issues = "https://github.com/petersulyok/smfc/issues"
-
 [project.optional-dependencies]
 test = [
     "pytest",
 ]
-
 [project.scripts]
 smfc = "smfc.cmd:main"
 
@@ -45,26 +42,6 @@ packages = ["smfc"]
 # pytest options
 [tool.pytest.ini_options]
 filterwarnings = [ "default", "ignore::pytest.PytestCollectionWarning"]
-
-# flake8 options
-[tool.flake8]
-exclude = [
-    "doc", "htmlcov", ".git", "__pycache__", ".pytest_cache", ".vscode", ".idea", "venv*", ".venv*"
-]
-max-line-length = 120
-count = true
-show-source = true
-statistics = true
-per-file-ignores = [
-    # closing bracket does not match indentation of opening bracket's line
-    "test_03_fancontroller.py: E123",
-    # undefined name
-    "test_04_cpuzone.py: F821",
-    "test_05_hdzone.py: F821",
-    # indentation contains tabs
-    # indentation contains mixed spaces and tabs
-    "test_00_data.py: W191, E101"
-    ]
 
 # coverage options
 [tool.coverage.report]
@@ -76,7 +53,8 @@ exclude_lines = [
 
 # pylint options
 [tool.pylint.'MASTER']
-init-hook='import sys; sys.path.append("."); sys.path.append("./src"); sys.path.append("./test")'
+init-hook='import sys; sys.path.append("."); sys.path.append("./smfc"); sys.path.append("./test")'
+max-line-length=120
 
 [tool.pylint.'MESSAGES CONTROL']
 disable= [
@@ -85,3 +63,5 @@ disable= [
     "pointless-string-statement", "duplicate-code", "unsubscriptable-object", "too-many-lines",
     "assignment-from-no-return", "protected-access", "no-member"
     ]
+
+# End.

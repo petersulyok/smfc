@@ -1,10 +1,15 @@
-from typing import Callable
-
+#
+#   log.py (C) 2020-2024, Peter Sulyok
+#   smfc package: Super Micro fan control for Linux (home) servers.
+#   smfc.Log() class implementation.
+#
 import sys
 import syslog
+from typing import Callable
+
 
 class Log:
-    """Log class. This class can send log messages considering different log levels and different outputs"""
+    """Log class implementation. It can send log messages considering different log levels and different outputs."""
 
     # Configuration parameters.
     log_level: int                      # Log level
@@ -118,3 +123,5 @@ class Log:
             if level <= self.log_level:
                 print(f'{self.level_to_str(level)}: {msg}', flush=True, file=sys.stderr)
 
+
+# End.

@@ -1,11 +1,17 @@
-import subprocess
+#
+#   ipmi.py (C) 2020-2024, Peter Sulyok
+#   smfc package: Super Micro fan control for Linux (home) servers.
+#   smfc.Ipmi() class implementation.
+#
 import configparser
+import subprocess
 import time
 
-from .logger import Log
+from .log import Log
+
 
 class Ipmi:
-    """IPMI interface class. It can set/get modes of IPMI fan zones and can set IPMI fan levels using ipmitool."""
+    """IPMI class implementation. It can set/get fan modes of IPMI zones and can set IPMI fan levels using ipmitool."""
 
     log: Log                            # Reference to a Log class instance
     command: str                        # Full path for ipmitool command.
@@ -158,3 +164,5 @@ class Ipmi:
         # Give time for IPMI and fans to spin up/down.
         time.sleep(self.fan_level_delay)
 
+
+# End.

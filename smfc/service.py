@@ -1,18 +1,25 @@
-from typing import List
-
-import configparser
-import atexit
+#
+#   service.py (C) 2020-2024, Peter Sulyok
+#   smfc package: Super Micro fan control for Linux (home) servers.
+#   smfc.Service() class implementation.
+#
 import argparse
+import atexit
+import configparser
 import os
 import sys
 import time
+from typing import List
 
-from .logger import Log
-from .bmc import Ipmi
-from .zones import CpuZone, HdZone
+from .cpuzone import CpuZone
+from .hdzone import HdZone
+from .ipmi import Ipmi
+from .log import Log
+
 
 # Program version string
-version_str: str = '3.5.0'
+version_str: str = '3.5.1'
+
 
 class Service:
     """Service class contains all resources/functions for the execution."""
@@ -207,3 +214,5 @@ class Service:
                 self.hd_zone.run()
             time.sleep(wait)
 
+
+# End.

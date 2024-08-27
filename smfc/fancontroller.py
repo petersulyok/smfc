@@ -1,11 +1,16 @@
-from typing import List, Callable
-
-import time
+#
+#   fancontroller.py (C) 2020-2024, Peter Sulyok
+#   smfc package: Super Micro fan control for Linux (home) servers.
+#   smfc.FanController() class implementation.
+#
 import glob
 import os
+import time
+from typing import List, Callable
 
-from .logger import Log
-from .bmc import Ipmi
+from .ipmi import Ipmi
+from .log import Log
+
 
 class FanController:
     """Generic fan controller class for an IPMI zone."""
@@ -276,8 +281,7 @@ class FanController:
         if current_level != self.last_level:
             self.last_level = current_level
             self.set_fan_level(current_level)
-            self.log.msg(self.log.LOG_INFO, f'{self.name}: new level > {current_temp:.1f}C > '
-                         f'[T:{self.min_temp+(current_gain*self.temp_step):.1f}C/L:{current_level}%]')
+            self.log.msg(self.log.LOG_INFO, f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C')
 
     def print_temp_level_mapping(self) -> None:
         """Print out the user-defined temperature to level mapping value in log DEBUG level."""
@@ -286,3 +290,5 @@ class FanController:
             self.log.msg(self.log.LOG_CONFIG, f'   {i}. [T:{self.min_temp+(i*self.temp_step):.1f}C - '
                          f'L:{int(self.min_level + (i * self.level_step))}%]')
 
+
+# End.
