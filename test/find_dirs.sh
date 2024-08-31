@@ -1,24 +1,16 @@
-# Find source and test directories and prepare smoke test and unit test execution.
+# Check `smfc` program and the test directory.
 
-# Case 1: we are in root project directory.
-src_dir=./src
-if [ -d "$src_dir" ]; then
-    export PYTHONPATH=$PYTHONPATH:$src_dir
-    test_dir=./test
-else
-    # Case 2: we are in src directory.
-    if [ -f "./smfc.py" ]; then
-        src_dir=.
-        test_dir=../test
-    else
-        # Case 3: we are in test directory.
-        if [ -d "bin" ]; then
-            src_dir=../src
-            export PYTHONPATH=$PYTHONPATH:$src_dir
-            test_dir=.
-        else
-            echo "ERROR: Test cannot be executed from an unknown folder."
-            exit -1
-        fi
-    fi
+# Check if `smfc` command is available
+c=$(command -v smfc|echo $?)
+if [ "$c" != "0" ]; then
+    echo "ERROR: smfc cannot be executed."
+    echo "       (pip install -e .)"
+    exit -1
+fi
+
+# Check if `test` directory exists.
+test_dir=./test
+if [ ! -d "$test_dir" ]; then
+    echo "ERROR: Test cannot be executed from an unknown folder."
+    exit -1
 fi
