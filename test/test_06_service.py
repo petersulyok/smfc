@@ -203,7 +203,7 @@ class ServiceTestCase(unittest.TestCase):
         mock_parser_print_help = MagicMock()
         with patch('builtins.print', mock_print), \
              patch('argparse.ArgumentParser._print_message', mock_parser_print_help):
-            sys.argv = ('smfc.py ' + command_line).split()
+            sys.argv = ('smfc ' + command_line).split()
             service = Service()
             with self.assertRaises(SystemExit) as cm:
                 service.run()
@@ -244,7 +244,7 @@ class ServiceTestCase(unittest.TestCase):
              patch('argparse.ArgumentParser._print_message', mock_parser_print_help), \
              patch('smfc.Service.exit_func', mock_exit_func), \
              patch('smfc.Service.check_dependencies', mock_check_dependencies):
-            sys.argv = ('smfc.py -o 0 -c ' + conf_file).split()
+            sys.argv = ('smfc -o 0 -c ' + conf_file).split()
             service = Service()
             with self.assertRaises(SystemExit) as cm:
                 service.run()
@@ -338,7 +338,7 @@ class ServiceTestCase(unittest.TestCase):
              patch('argparse.ArgumentParser._print_message', mock_parser_print_help), \
              patch('smfc.Service.exit_func', mock_exit_func), \
              patch('smfc.Service.check_dependencies', mock_check_dependecies):
-            sys.argv = ('smfc.py -o 0 -c ' + conf_file).split()
+            sys.argv = ('smfc -o 0 -c ' + conf_file).split()
             service = Service()
             with self.assertRaises(SystemExit) as cm:
                 service.run()
@@ -414,7 +414,7 @@ class ServiceTestCase(unittest.TestCase):
              patch('time.sleep', mock_time_sleep), \
              patch('smfc.Service.exit_func', mock_exit_func), \
              patch('smfc.Service.check_dependencies', mock_check_dependecies):
-            sys.argv = ('smfc.py -o 0 -c ' + conf_file).split()
+            sys.argv = ('smfc -o 0 -c ' + conf_file).split()
             service = Service()
             with self.assertRaises(SystemExit) as cm:
                 service.run()
@@ -461,3 +461,5 @@ class ServiceTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# End.

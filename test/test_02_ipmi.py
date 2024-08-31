@@ -395,3 +395,5 @@ class IpmiTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# End.

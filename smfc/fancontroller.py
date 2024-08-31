@@ -257,31 +257,30 @@ class FanController:
 
         # Step 1: check the elapsed time.
         current_time = time.monotonic()
-        if current_time - self.last_time < self.polling:
-            return
-        self.last_time = current_time
-        # Step 2: read temperature and sensitivity gap.
-        self.callback_func()
-        current_temp = self.get_temp_func()
-        self.log.msg(self.log.LOG_DEBUG, f'{self.name}: new temperature > {current_temp:.1f}C')
-        if abs(current_temp - self.last_temp) < self.sensitivity:
-            return
-        self.last_temp = current_temp
-        # Step 3: calculate gain and fan level.
-        if current_temp <= self.min_temp:
-            current_gain = 0
-            current_level = self.min_level
-        elif current_temp >= self.max_temp:
-            current_gain = self.steps
-            current_level = self.max_level
-        else:
-            current_gain = int(round((current_temp - self.min_temp) / self.temp_step))
-            current_level = int(round(float(current_gain) * self.level_step)) + self.min_level
-        # Step 4: the new fan level will be set and logged.
-        if current_level != self.last_level:
-            self.last_level = current_level
-            self.set_fan_level(current_level)
-            self.log.msg(self.log.LOG_INFO, f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C')
+        if current_time - self.last_time >= self.polling:
+            self.last_time = current_time
+            # Step 2: read temperature and sensitivity gap.
+            self.callback_func()
+            current_temp = self.get_temp_func()
+            self.log.msg(self.log.LOG_DEBUG, f'{self.name}: new temperature > {current_temp:.1f}C')
+            if abs(current_temp - self.last_temp) < self.sensitivity:
+                return
+            self.last_temp = current_temp
+            # Step 3: calculate gain and fan level.
+            if current_temp <= self.min_temp:
+                current_gain = 0
+                current_level = self.min_level
+            elif current_temp >= self.max_temp:
+                current_gain = self.steps
+                current_level = self.max_level
+            else:
+                current_gain = int(round((current_temp - self.min_temp) / self.temp_step))
+                current_level = int(round(float(current_gain) * self.level_step)) + self.min_level
+            # Step 4: the new fan level will be set and logged.
+            if current_level != self.last_level:
+                self.last_level = current_level
+                self.set_fan_level(current_level)
+                self.log.msg(self.log.LOG_INFO, f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C')
 
     def print_temp_level_mapping(self) -> None:
         """Print out the user-defined temperature to level mapping value in log DEBUG level."""

@@ -7,7 +7,7 @@ from .service import Service
 
 
 def main() -> None:
-    """Entry point of `smfc` program."""
+    """Entry point of the `smfc` service."""
     service = Service()
     service.run()
 

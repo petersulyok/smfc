@@ -8,9 +8,9 @@ from .fancontroller import FanController
 from .cpuzone import CpuZone
 from .hdzone import HdZone
 from .service import Service
+from .cmd import main
 
-
-__all__ = [ "Log", "Ipmi", "FanController", "CpuZone", "HdZone", "Service"]
+__all__ = [ "Log", "Ipmi", "FanController", "CpuZone", "HdZone", "Service", "main"]
 
 
 # End.

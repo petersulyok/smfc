@@ -339,3 +339,5 @@ fi
         with os.fdopen(h, "w+t") as f:
             f.write(content)
         return name
+
+# End.
