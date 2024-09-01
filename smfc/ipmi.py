@@ -164,5 +164,4 @@ class Ipmi:
         # Give time for IPMI and fans to spin up/down.
         time.sleep(self.fan_level_delay)
 
-
 # End.

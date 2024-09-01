@@ -268,10 +268,8 @@ class FanController:
             self.last_temp = current_temp
             # Step 3: calculate gain and fan level.
             if current_temp <= self.min_temp:
-                current_gain = 0
                 current_level = self.min_level
             elif current_temp >= self.max_temp:
-                current_gain = self.steps
                 current_level = self.max_level
             else:
                 current_gain = int(round((current_temp - self.min_temp) / self.temp_step))
@@ -288,6 +286,5 @@ class FanController:
         for i in range(self.steps + 1):
             self.log.msg(self.log.LOG_CONFIG, f'   {i}. [T:{self.min_temp+(i*self.temp_step):.1f}C - '
                          f'L:{int(self.min_level + (i * self.level_step))}%]')
-
 
 # End.

@@ -97,5 +97,4 @@ class CpuZone(FanController):
             raise e
         return value
 
-
 # End.

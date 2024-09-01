@@ -12,5 +12,4 @@ from .cmd import main
 
 __all__ = [ "Log", "Ipmi", "FanController", "CpuZone", "HdZone", "Service", "main"]
 
-
 # End.

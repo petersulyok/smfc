@@ -309,5 +309,4 @@ class HdZone(FanController):
             self.standby_flag = False
             self.standby_change_timestamp = cur_time
 
-
 # End.

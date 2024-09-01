@@ -123,5 +123,4 @@ class Log:
             if level <= self.log_level:
                 print(f'{self.level_to_str(level)}: {msg}', flush=True, file=sys.stderr)
 
-
 # End.
