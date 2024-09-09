@@ -1,6 +1,6 @@
-flake8
-flake8-pyproject
-coverage
-pylint
-pytest
-pytest-cov
+build<=1.0.3
+twine<=4.0.2
+coverage<=7.4.0
+pytest<=7.4.4
+pytest-cov<=4.1.0
+pylint<=3.0.3
