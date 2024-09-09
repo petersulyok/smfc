@@ -10,9 +10,6 @@ from .hdzone import HdZone
 from .service import Service
 from .cmd import main
 
-# Program version string
-version_str: str = "4.0.0-beta1"
-
 __all__ = [ "Log", "Ipmi", "FanController", "CpuZone", "HdZone", "Service", "main"]
 
 # End.

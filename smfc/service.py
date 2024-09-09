@@ -9,6 +9,7 @@ import configparser
 import os
 import sys
 import time
+from importlib.metadata import version
 from typing import List
 
 from .cpuzone import CpuZone
@@ -126,7 +127,7 @@ class Service:
         app_parser = argparse.ArgumentParser()
         app_parser.add_argument('-c', action='store', dest='config_file', default='smfc.conf',
                                 help='configuration file')
-        app_parser.add_argument('-v', action='version', version='%(prog)s ' + version_str)
+        app_parser.add_argument('-v', action='version', version='%(prog)s ' + version("smfc"))
         app_parser.add_argument('-l', type=int, choices=[0, 1, 2, 3, 4], default=1,
                                 help='log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG')
         app_parser.add_argument('-o', type=int, choices=[0, 1, 2], default=2,
