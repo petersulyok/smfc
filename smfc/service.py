@@ -17,10 +17,6 @@ from .ipmi import Ipmi
 from .log import Log
 
 
-# Program version string
-version_str: str = '3.5.1'
-
-
 class Service:
     """Service class contains all resources/functions for the execution."""
 
