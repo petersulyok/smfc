@@ -135,4 +135,4 @@ dmypy.json
 .vscode
 
 # Tito
-.tito
+.tito/
