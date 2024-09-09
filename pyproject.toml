@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "smfc"
 description = "Super Micro Fan Control for Linux"
 readme = "README.md"
-version = "3.5.1"
+version = "4.0.0-beta1"
 authors = [
     { name = "Peter Sulyok", email = "peter@sulyok.net" }
 ]
@@ -23,7 +23,7 @@ classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: POSIX :: Linux",
     "Topic :: System :: Hardware",
-    "Development Status :: 5 - Production/Stable"
+    "Development Status :: 4 - Beta"
 ]
 [project.urls]
 Homepage = "https://github.com/petersulyok/smfc"
