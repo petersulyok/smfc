@@ -53,7 +53,6 @@ exclude_lines = [
 
 # pylint options
 [tool.pylint.'MASTER']
-init-hook='import sys; sys.path.append("."); sys.path.append("./smfc"); sys.path.append("./test")'
 max-line-length=120
 
 [tool.pylint.'MESSAGES CONTROL']
