@@ -16,6 +16,7 @@ Requires: systemd
 Requires: python3 >= 3.7
 Requires: bash
 Requires: ipmitool
+Requires: python3-pyudev
 Recommends: smartmontools
 Recommends: hddtemp
 

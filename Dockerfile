@@ -7,7 +7,7 @@ LABEL org.opencontainers.image.url="https://github.com/petersulyok/smfc"
 
 RUN <<EOT
     set -xe
-    apk add --no-cache ipmitool python3 smartmontools
+    apk add --no-cache ipmitool python3 smartmontools py3-udev
     ln -s /usr/sbin/ipmitool /usr/bin/ipmitool
     apk add --no-cache --virtual .depends git build-base linux-headers automake autoconf gettext-dev
     mkdir /tmp/build/

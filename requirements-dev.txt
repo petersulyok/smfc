@@ -4,3 +4,4 @@ coverage
 pylint
 pytest
 pytest-cov
+pyudev
