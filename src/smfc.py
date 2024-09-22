@@ -803,24 +803,9 @@ class HdZone(FanController):
 
                 # If the current one is an NVME SSD disk.
                 # NOTE: kernel provides this, no extra modules required
-                if "nvme-" in self.hd_device_names[i]:
+                if "nvme-" in self.hd_device_names[i] or "ata-" in self.hd_device_names[i] or "-SATA" in self.hd_device_names[i]:
                     block_dev = Devices.from_device_file(self.udev_context, self.hd_device_names[i])
                     self.hwmon_path.append(self.get_tempinput(block_dev.parent))
-
-                # If the current one is a SATA disk.
-                # NOTE: 'drivetemp' kernel module must be loaded otherwise this path does not exist!
-                elif "ata-" in self.hd_device_names[i] or "-SATA" in self.hd_device_names[i]:
-                    disk_name = os.path.basename(os.readlink(self.hd_device_names[i]))
-                    search_str = os.path.join('/sys/class/scsi_disk/*', 'device/block', disk_name)
-                    file_names = glob.glob(search_str)
-                    if not file_names:
-                        raise ValueError(self.ERROR_MSG_FILE_IO.format(search_str))
-                    file_names[0] = file_names[0].replace("/device/block/" + disk_name, "")
-                    search_str = os.path.join(file_names[0], 'device/hwmon/hwmon*/temp1_input')
-                    file_names = glob.glob(search_str)
-                    if not file_names:
-                        raise ValueError(self.ERROR_MSG_FILE_IO.format(search_str))
-                    self.hwmon_path.append(file_names[0])
 
                 # Otherwise we assume it is a SAS/SCSI disk.
                 # 'hddtemp' command will be used to read HD temperature.
