@@ -803,12 +803,8 @@ class HdZone(FanController):
                 # If the current one is an NVME SSD disk.
                 # NOTE: kernel provides this, no extra modules required
                 if "nvme-" in self.hd_device_names[i]:
-                    disk_name = os.path.basename(os.readlink(self.hd_device_names[i]))
-                    search_str = os.path.join('/sys/class/nvme/nvme*', disk_name, 'device/hwmon*/temp1_input')
-                    file_names = glob.glob(search_str)
-                    if not file_names:
-                        raise ValueError(self.ERROR_MSG_FILE_IO.format(search_str))
-                    self.hwmon_path.append(file_names[0])
+                    block_dev = Devices.from_device_file(self.udev_context, self.hd_device_names[i])
+                    self.hwmon_path.append(self.get_tempinput(block_dev.parent))
 
                 # If the current one is a SATA disk.
                 # NOTE: 'drivetemp' kernel module must be loaded otherwise this path does not exist!
