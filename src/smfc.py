@@ -634,16 +634,17 @@ class CpuZone(FanController):
         if hwmon_str:
             # Convert the string into a list of path.
             super().build_hwmon_path(hwmon_str)
-        # If the hwmon_path string was not specified it will be created automatically.
+        # If the hwmon_path string was not specified it will be created automatically. We assume either Intel (using coretemp) or AMD (using k10temp) CPUs
         else:
-            # Construct hwmon_path with the resolution of wildcard characters.
-            self.hwmon_path = []
-            for i in range(self.count):
-                path = '/sys/devices/platform/coretemp.' + str(i) + '/hwmon/hwmon*/temp1_input'
-                file_names = glob.glob(path)
-                if not file_names:
-                    raise ValueError(self.ERROR_MSG_FILE_IO.format(path))
-                self.hwmon_path.append(file_names[0])
+            for dev_filter in [{'MODALIAS':'platform:coretemp'}, {'DRIVER':'k10temp'}]:
+                hwmon_path = [self.get_tempinput(dev) for dev in self.udev_context.list_devices(**dev_filter)]
+                if hwmon_path:
+                    break
+            if not hwmon_path:
+                self.log.msg(Log.LOG_ERROR, 'No explicit hwmon_path was configured, and automatic detection failed to find any devices using the coretemp or k10temp modules')
+                sys.exit(6)
+            self.hwmon_path = hwmon_path
+            self.count = len(hwmon_path)
 
     def _get_nth_temp(self, index: int) -> float:
         """Get the temperature of the 'nth' element in the hwmon list.

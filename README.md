@@ -284,7 +284,7 @@ Here are some sample HWMON file locations for these kernel modules:
  - `drivetemp`: `/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input`
 
 Notes:
-- `smfc` is able to find the proper HWMON file automatically for Intel(R) CPUs and SATA hard drives, but users of the AMD(R) CPU should specify manually (see `hwmon_path=` parameter in the config file)
+- `smfc` is able to find the proper HWMON file automatically for Intel(R) CPUs, AMD(R) CPUs, SATA drives, or NVMe drives, but users may also specify the files manually (see `hwmon_path=` parameter in the config file)
 - Reading `drivetemp` module is the fastest way to get the temperature of the hard disks, and it can read temperature of the SATA hard disks even in standby mode, too. 
 
 ### 10. Installation
@@ -344,6 +344,7 @@ swapped_zones=0
 # Fan controller enabled (bool, default=0)
 enabled=1
 # Number of CPUs (int, default=1)
+# If hwmon_path is not specified (i.e., if CPU detection is automatic), then the value of count is overridden by the detected number of sockets.
 count=1
 # Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
@@ -361,11 +362,11 @@ max_temp=60.0
 min_level=35
 # Maximum CPU fan level (int, %, default=100)
 max_level=100
-# Path for CPU sys/hwmon file(s) (str multi-line list, default=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input)
-# It will be automatically generated for Intel CPUs:
+# Path for CPU sys/hwmon file(s) (str multi-line list, default="")
+# It will be automatically generated if not specified:
 # hwmon_path=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input
 #            /sys/devices/platform/coretemp.1/hwmon/hwmon*/temp1_input
-# and must be specified for AMD CPUs:
+# or
 # hwmon_path=/sys/bus/pci/drivers/k10temp/0000*/hwmon/hwmon*/temp1_input
 
 [HD zone]
@@ -436,7 +437,7 @@ Important notes:
 
 	My experience is that Noctua fans in my box are running stable in the 35-100% fan level interval. An additional user experience is (see [issue #12](https://github.com/petersulyok/smfc/issues/12)) when Noctua fans are paired with Ultra Low Noise Adapter the minimum stable fan level could go up to 45% (i.e. 35% is not stable).  
 
- 3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is optional for Intel(R) CPUs and SATA drives (i.e. `smfc` can identify automatically the proper file locations), but must be specified manually for AMD(R) CPUs. In case of SAS/SCSI hard disks (where `drivetemp` cannot be loaded) you can specify `hddtemp` value. You can use wild characters (`?,*`) in this parameter and `smfc` will do the path resolution automatically.
+ 3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is optional for Intel(R) CPUs, AMD(R) CPUs, SATA drives, and NVME drives (i.e., `smfc` can automatically identify the proper file locations), but may also be specified manually for special use cases. In case of SAS/SCSI hard disks (where `drivetemp` cannot be loaded) you can specify `hddtemp` value. You can use wild characters (`?,*`) in this parameter and `smfc` will do the path resolution automatically.
  4. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
 
 ### 12. Automatic execution of the service
