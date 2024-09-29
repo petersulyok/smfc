@@ -1,9 +1,9 @@
 %global forgeurl https://github.com/petersulyok/smfc
-%global tag smfc-3.5.0-1
+%global tag smfc-3.5.1-1
 %forgemeta
 
 Name:    smfc
-Version: 3.5.1
+Version: 3.5.2
 Release: 1%{?dist}
 Summary: Super Micro Fan Control
 
@@ -82,6 +82,14 @@ install -Dm 644 systemd/modules-load.conf %{buildroot}%{_modulesloaddir}/smfc.co
 %systemd_postun_with_restart smfc.service
 
 %changelog
+* Sun Sep 29 2024 petersulyok <petersulyok@giantf.home.sulyok.net> 3.5.2-1
+- 3.5.1
+
+
+* Sun Sep 29 2024 petersulyok <petersulyok@giantf.home.sulyok.net>
+- 3.5.0 build
+
+
 * Sun Sep 29 2024 petersulyok <petersulyok@giantf.home.sulyok.net> 3.5.1-1
 - new package built with tito
 
