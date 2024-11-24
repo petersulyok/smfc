@@ -105,6 +105,6 @@ A github workflow has been implemented for this project that is executed in case
 The workflow is executed on the following test matrix:
 
  - OS: `ubuntu-latest`
- - Python version: `3.7`, `3.8`, `3.9`, `3.10`, `3.11`, `3.12` 
+ - Python version: `3.8`, `3.9`, `3.10`, `3.11`, `3.12`, `3.13`  
  
 > Written with [StackEdit](https://stackedit.io/).

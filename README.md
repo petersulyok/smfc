@@ -15,7 +15,7 @@ You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
 
 ### 1. Prerequisites
  - a Super Micro motherboard with a BMC chip (i.e. ASPEED AST2400/2500/2600)
- - Python 3.7+
+ - Python 3.8+
  - Linux OS with:
    - `systemd` package
    - `coretemp` kernel module for Intel(R) CPUs
