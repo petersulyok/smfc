@@ -101,7 +101,7 @@ class TestData:
             # NVME disk type.
             elif hd_types[i] == self.HT_NVME:
                 new_dir = self.td_dir + '/sys/class/nvme/'
-                new_path = new_dir + "nvme" + str(nvme_counter) + '/' + "nvme" + str(nvme_counter) + 'n1'
+                new_path = new_dir + "nvme" + str(nvme_counter) + '/' + "nvme" + str(nvme_counter) + 'n1/device'
                 os.makedirs(new_path, exist_ok=True)
 
                 real_path = new_path + '/hwmon' + str(i) + '/'
@@ -238,7 +238,7 @@ class TestData:
                     f.write(str(' '))
                 # Create a link with device name.
                 dev_name = os.path.join(dev_dir, 'nvme-Samsung_SSD_870_PRO_1TB_' + get_random_str(8))
-                os.symlink('../../nvme' + str(nvme_counter), dev_name)
+                os.symlink('../../nvme' + str(nvme_counter) + 'n1', dev_name)
                 hd_names = hd_names + dev_name + separator
                 nvme_counter += 1
 
