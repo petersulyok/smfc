@@ -789,7 +789,7 @@ class HdZone(FanController):
                 # NOTE: kernel provides this, no extra modules required
                 if "nvme-" in self.hd_device_names[i]:
                     disk_name = os.path.basename(os.readlink(self.hd_device_names[i]))
-                    search_str = os.path.join('/sys/class/nvme', disk_name, disk_name + "n1", 'hwmon*/temp1_input')
+                    search_str = os.path.join('/sys/class/nvme/nvme*', disk_name, 'device/hwmon*/temp1_input')
                     file_names = glob.glob(search_str)
                     if not file_names:
                         raise ValueError(self.ERROR_MSG_FILE_IO.format(search_str))
