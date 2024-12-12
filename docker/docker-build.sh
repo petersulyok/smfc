@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #   docker-build.sh (C) 2023-2024, Peter Sulyok
-#   This script will build `smfc` image.
+#   This script will build `smfc` docker image.
 #
 set -e
 if [ "$1" == "" ];
@@ -11,6 +11,5 @@ then
    exit 1
 fi
 version=$1
-docker build . -t petersulyok/smfc:$version --label "org.opencontainers.image.version=$version" -f Dockerfile
+docker build . --debug -t petersulyok/smfc:$version --label "org.opencontainers.image.version=$version" -f Dockerfile
 docker tag petersulyok/smfc:$version petersulyok/smfc:latest
-docker push petersulyok/smfc --all-tags
