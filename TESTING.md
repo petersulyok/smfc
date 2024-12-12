@@ -5,7 +5,7 @@ Notes:
   
  - All test related content can be found in `test` folder
  - Only `python3` and `bash` are required for the execution of the tests (was tested on Linux, MacOSX)  
- - commands `ipmitool` and `smartctl`are substituted by shell scripts, so they are not required for test execution
+ - commands `ipmitool` and `smartctl` are substituted by shell scripts, so they are not required for test execution
 - installation of required Python test tools can be done with `pip`:  
 
 	`$ pip install -r requirements-dev.txt`
@@ -21,16 +21,17 @@ Several smoke tests are provided for `smfc` where the service is executed with d
 - the following smoke scripts and configurations are available:  
    
    | Helper script             | CPU configuration                | HD configuration                    | Standby guard |
-   |---------------------------|----------------------------------|-------------------------------------|--|
-   | `run_test_cpu_1.sh`       | 1 x CPU                          | 1 x HD                              | enabled |
-   | `run_test_cpu_2.sh`       | 2 x CPUs                         | disabled                            | disabled |
-   | `run_test_cpu_4.sh`       | 4 x CPUs                         | 4 x HDs                             | enabled |
-   | `run_test_hd_1.sh`        | disabled                         | 1 x HD                              | enabled |
-   | `run_test_hd_2.sh`        | 1 x CPU                          | 2 x HDs                             | disabled |
-   | `run_test_hd_4.sh`        | 2 x CPUs                         | 4 x HDs                             | disabled |
-   | `run_test_hd_8.sh`        | 4 x CPUs                         | 8 x HDs                             | enabled |
-   | `run_test_const_level.sh` | 1 x CPU (60% constant fan level) | 4 x HDs (55% constant fan level)    | enabled |
-   | `run_test_scsi.sh`        | 4 x CPU                          | 8 x HDs (SCSI and SATA disks mixed) | enabled |
+   |---------------------------|----------------------------------|-------------------------------------|---------------|
+   | `run_test_cpu_1.sh`       | 1 x CPU                          | 1 x HD                              | enabled       |
+   | `run_test_cpu_2.sh`       | 2 x CPUs                         | disabled                            | disabled      |
+   | `run_test_cpu_4.sh`       | 4 x CPUs                         | 4 x HDs                             | enabled       |
+   | `run_test_hd_1.sh`        | disabled                         | 1 x HD                              | enabled       |
+   | `run_test_hd_2.sh`        | 1 x CPU                          | 2 x HDs                             | disabled      |
+   | `run_test_hd_4.sh`        | 2 x CPUs                         | 4 x HDs                             | disabled      |
+   | `run_test_hd_8.sh`        | 4 x CPUs                         | 8 x HDs                             | enabled       |
+   | `run_test_const_level.sh` | 1 x CPU (60% constant fan level) | 4 x HDs (55% constant fan level)    | enabled       |
+   | `run_test_scsi.sh`        | 4 x CPU                          | 8 x HDs (SCSI and SATA disks mixed) | enabled       |
+   | `run_test_nvme.sh`        | 1 x CPU                          | 2 x NVME SSDs                       | disabled      |
 
 ## Unit tests  
 All classes and the main function are completely unit tested. The unit tests can be executed with `pytest`:
@@ -91,20 +92,19 @@ For a more detailed HTML coverage report run this command:
 The detailed HTML report will be available in folder `./htmlcov/index.html` with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage result is 99%.  
 
 ## Linting
-The code was checked with `pylint` and `flake8`. They can be executed this way:
+The code was checked with `pylint`. This linter can be executed this way:
 
 	pylint src/*.py test/*.py
-	flake8
 
 ## Github workflow
 A github workflow has been implemented for this project that is executed in case of push and pull request operations. The workflow contains the following steps:
 
- - lint with `flake8` and `pylint`
+ - lint with `pylint`
  - unit test with `pytest` (coverage measurement is also included)
 
 The workflow is executed on the following test matrix:
 
  - OS: `ubuntu-latest`
- - Python version: `3.8`, `3.9`, `3.10`, `3.11`, `3.12`, `3.13`  
+ - Python version: `3.9`, `3.10`, `3.11`, `3.12`, `3.13`  
  
 > Written with [StackEdit](https://stackedit.io/).
