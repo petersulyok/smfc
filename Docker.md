@@ -3,7 +3,7 @@ This is a docker image for `smfc`. Please visit the [GitHub repository](https://
 
 # Content
 This image contains the following components: 
-- `Alpine Linux` 3.21.0
+- `Alpine Linux` 3.20.3
 - `Python` 3.12.8
 - `ipmitool` 1.8.19
 - `smartmontools` 7.4
@@ -87,7 +87,7 @@ cd smfc
 ```
 
 # Versions
-  - **3.6.0** (2024.12.12): Updated to smfc version 3.6.0 and alpine 3.21
+  - **3.6.0** (2024.12.12): Updated to smfc version 3.6.0 and alpine 3.20.3
   - **3.5.1** (2024.08.23): Updated to smfc version 3.5.1 and alpine 3.20
   - **3.5.0** (2024.03.21): Updated to smfc version 3.5.0 and alpine 3.19
   - **3.4.0** (2023.11.28): Documentation updated 
