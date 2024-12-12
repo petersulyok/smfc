@@ -15,16 +15,15 @@ You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
 
 ### 1. Prerequisites
  - a Super Micro motherboard with a BMC chip (i.e. ASPEED AST2400/2500/2600)
- - Python 3.8+
+ - Python 3.9-3.13
  - Linux OS with:
    - `systemd` package
-   - `coretemp` kernel module for Intel(R) CPUs
-   - `k10temp` kernel module for AMD(R) CPUs
-   - `drivetemp` kernel module (kernel version 5.6+ required) modules for SATA hard disks
+   - `coretemp` or `k10temp` kernel module for Intel or AMD CPUs
+   - `drivetemp` kernel module (kernel version 5.6+ required) modules for SATA HDDs/SSDs
  - `bash`
  - `ipmitool`
  - optional: `smartmontools` for the *standby guard* feature
- - optional: `hddtemp` for the SAS/SCSI disks
+ - optional: `hddtemp` for SAS/SCSI disks
 
 ### 2. Installation and configuration
  1. Set up the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
