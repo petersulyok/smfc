@@ -2,18 +2,22 @@
 #
 #   hddtemp.sh (C) 2025, Peter Sulyok
 #   This script will emulate hddtemp command (with the help of `smartctl`) if it is not available.
-#   The expected way of use:
+#   The expected way of use (based on the way how smfc.py is calling hddtemp):
 #
-#       $ hddtemp -q -n /dev/sda
+#       $ hddtemp.sh -q -n /dev/sda
 #       27
 #
 
-# Check first two parameters.
-if [ $1 != "-q" ];
+# Check first two compulsory parameters.
+if [ "$1" != "-q" ];
 then
     exit 1
 fi
-if [ $2 != "-n" ];
+if [ "$2" != "-n" ];
+then
+    exit 1
+fi
+if [ "$3" == "" ];
 then
     exit 1
 fi
