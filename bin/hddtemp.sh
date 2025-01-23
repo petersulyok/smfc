@@ -2,7 +2,8 @@
 #
 #   hddtemp.sh (C) 2025, Peter Sulyok
 #   This script will emulate hddtemp command (with the help of `smartctl`) if it is not available.
-#   The expected way of use (how smfc.py os calling hddtemp):
+#   The expected way of use:
+#
 #       $ hddtemp -q -n /dev/sda
 #       27
 #
