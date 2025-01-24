@@ -23,7 +23,7 @@ then
 fi
 
 # Read disk temperature with `smartctl` command.
-hdd_temp=$(smartctl -a $3|grep Temp|tr -s " "|cut -d" " -f 10)
+hdd_temp=$(smartctl -a $3|grep -m 1 Temp|tr -s " "|cut -d" " -f 10)
 rv=$?
 
 # Print the temperature out.
