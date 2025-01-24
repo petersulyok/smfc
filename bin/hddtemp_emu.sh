@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 #   hddtemp_emu.sh (C) 2025, Peter Sulyok
 #   This script will emulate hddtemp command (with the help of `smartctl`).
