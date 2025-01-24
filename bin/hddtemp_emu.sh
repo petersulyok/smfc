@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-#   hddtemp.sh (C) 2025, Peter Sulyok
-#   This script will emulate hddtemp command (with the help of `smartctl`) if it is not available.
-#   The expected way of use (based on the way how smfc.py is calling hddtemp):
+#   hddtemp_emu.sh (C) 2025, Peter Sulyok
+#   This script will emulate hddtemp command (with the help of `smartctl`).
+#   The expected use (based on the way how smfc.py is calling hddtemp):
 #
-#       $ hddtemp.sh -q -n /dev/sda
+#       $ hddtemp_emu.sh -q -n /dev/sda
 #       27
 #
 
