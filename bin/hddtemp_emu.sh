@@ -17,7 +17,7 @@ if [ "$2" != "-n" ];
 then
     exit 1
 fi
-if [ "$3" == "" ];
+if [ "$3" = "" ];
 then
     exit 1
 fi
