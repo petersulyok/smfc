@@ -109,14 +109,14 @@ Some additional notes:
 - Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported in this case.
 - Although `smfc` can handle NVME SSDs, it is NOT RECOMMENDED to mix NVME SSD and SATA/SCSI disks in `hd_names=` parameters, because they are operating in quite different temperature intervals (e.g. 30-40C vs 40-80C).
 - The service can identify the disk types automatically based on the tags (`ata-`/`-SATA`, `nvme-` and `scsi-`)
-- `hddtemp` command is not actively developed anymore. If it is not available in your Linux there is a workaround for this case. Please use the provided `./bin/hddtemp_emu.sh` script instead of `hddtemp` command and configure `hwmon_path=` with hddtemp as many times as you need in your config file:
+- `hddtemp` command is not actively developed anymore. If it is not available on your Linux distribution, there is a workaround for that. Please use `./bin/hddtemp_emu.sh` script in the `hddtemp_path=` configuration parmater and configure `hwmon_path=` with `hddtemp` keyword as many times as you need:
     
     ```
     [HD zone]
     ...
     hwmon_path=hddtemp hddtemp ...
     ...
-    hddtemp_path=..../hddtemp_emu.sh
+    hddtemp_path=/opt/smfc/hddtemp_emu.sh
     ``` 
 
 ### 6. Super Micro compatibility
@@ -288,16 +288,22 @@ Notes:
 - Reading `drivetemp` module is the fastest way to get the temperature of the hard disks, and it can read temperature of the SATA hard disks even in standby mode, too. 
 
 ### 10. Installation
-For the installation you need a root user. The default installation script `install.sh` will use the following folders:
+For the installation you need a root user. Download and extract a release file or clone the git repository first.
+Then use the installation script `install.sh`, or copy the following files manually:
 
-| File           | Installation folder   | Description                     |
-|----------------|-----------------------|---------------------------------|
-| `smsc.service` | `/etc/systemd/system` | systemd service definition file |
-| `smsc`         | `/etc/default`        | service command line options    |
-| `smsc.py`      | `/opt/smfc`           | service (python program)        |
-| `smsc.conf`    | `/opt/smfc`           | service configuration file      |
+| File             | Installation folder   | Description                            |
+|------------------|-----------------------|----------------------------------------|
+| `smsc.service`   | `/etc/systemd/system` | systemd service definition file        |
+| `smsc`           | `/etc/default`        | service command line options           |
+| `smsc.py`        | `/opt/smfc`           | service (python program)               |
+| `smsc.conf`      | `/opt/smfc`           | service configuration file             |
+| `hddtemp_emu.sh` | `/opt/smfc`           | `hddtemp` emulation script (optional)  |
 
-but you can use freely any other folders too. The service has the following command line options:
+Notes:
+  - any target folder can be used instead of `/opt`
+  - `install.sh` will add all of your disks to your new `smfc.conf`, please remove the unnecessary itesm 
+
+The service has the following command line options:
 
 	root@home:~/opt/smfc# ./smfc.py --help
 	usage: smfc.py [-h] [-c CONFIG_FILE] [-v] [-l {0,1,2,3,4}] [-o {0,1,2}]
