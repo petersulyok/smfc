@@ -109,7 +109,7 @@ Some additional notes:
 - Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported in this case.
 - Although `smfc` can handle NVME SSDs, it is NOT RECOMMENDED to mix NVME SSD and SATA/SCSI disks in `hd_names=` parameters, because they are operating in quite different temperature intervals (e.g. 30-40C vs 40-80C).
 - The service can identify the disk types automatically based on the tags (`ata-`/`-SATA`, `nvme-` and `scsi-`)
-- `hddtemp` command is not actively developed anymore. If it is not available on your Linux distribution, there is a workaround for that. Please use `./bin/hddtemp_emu.sh` script in the `hddtemp_path=` configuration parmater and configure `hwmon_path=` with `hddtemp` keyword as many times as you need:
+- `hddtemp` command is not actively developed anymore. If it is not available on your Linux distribution, there is a workaround for that. Please use `./bin/hddtemp_emu.sh` script in the `hddtemp_path=` configuration parameter and configure `hwmon_path=` with `hddtemp` keyword as many times as you need:
     
     ```
     [HD zone]
