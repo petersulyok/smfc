@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#   docker-build.sh (C) 2023-2024, Peter Sulyok
+#   docker-build.sh (C) 2023-2025, Peter Sulyok
 #   This script will build `smfc` docker image.
 #
 set -e
