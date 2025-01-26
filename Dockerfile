@@ -1,4 +1,4 @@
-FROM alpine:3.20.3
+FROM alpine:3.20.5
 
 LABEL org.opencontainers.image.title="smfc"
 LABEL org.opencontainers.image.authors="petersulyok"
@@ -31,5 +31,7 @@ EOT
 
 WORKDIR /opt/smfc
 ADD --chmod=755 src/smfc.py smfc.py
+ADD --chmod=755 bin/hddtemp_emu.sh hddtemp_emu.sh
+ADD --chmod=755 docker/entrypoint.sh entrypoint.sh
 
-CMD /opt/smfc/smfc.py -c /opt/smfc/smfc.conf $SMFC_ARGS
+ENTRYPOINT ["/opt/smfc/entrypoint.sh"]
