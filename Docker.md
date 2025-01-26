@@ -3,18 +3,19 @@ This is a docker image for `smfc`. Please visit the [GitHub repository](https://
 
 # Content
 This image contains the following components: 
-- `Alpine Linux` 3.20.3
+- `Alpine Linux` 3.20.5
 - `Python` 3.12.8
 - `ipmitool` 1.8.19
 - `smartmontools` 7.4
-- `hddtemp` 0.4.3 (forked here https://github.com/vitlav/hddtemp.git) 
+- `hddtemp` 0.4.3 (this fork used here: https://github.com/vitlav/hddtemp.git) 
 
 Some further notes:
   1. `smfc` will be executed as a simple foreground process here (not as a `systemd` service).
   2. Currently, the image does not require any networking, it is disabled.
   3. `ipmitool` and `smartctl` require read-only access to host's `/dev/` and `/run` folders and admin privilege.
   4. The `/sys` filesystem can be accessed in the container, but the proper kernel module (i.e. `coretemp`, `k10temp`, or `drivetemp`) needs to be loaded on host side.
-  5. The container can send log messages to the host's `journald` daemon (as it is configured in _Usage chapter_), but feel free to configure [other logging drivers](https://docs.docker.com/config/containers/logging/configure/). 
+  5. The container can send log messages to the host's `journald` daemon (as it is configured in _Usage chapter_), but feel free to configure [other logging drivers](https://docs.docker.com/config/containers/logging/configure/).
+  6. `/opt/smfc/hddtemp_emu.sh`  script is also available in docker. 
 
 # Usage 
 
@@ -87,6 +88,7 @@ cd smfc
 ```
 
 # Versions
+  - **3.7.0** (2025.01.26): Updated to smfc version 3.7.0 and alpine 3.20.5 
   - **3.6.0** (2024.12.12): Updated to smfc version 3.6.0 and alpine 3.20.3
   - **3.5.1** (2024.08.23): Updated to smfc version 3.5.1 and alpine 3.20
   - **3.5.0** (2024.03.21): Updated to smfc version 3.5.0 and alpine 3.19
