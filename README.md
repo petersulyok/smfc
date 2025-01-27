@@ -320,91 +320,96 @@ You may configure logging output and logging level here and these options can be
 ### 11. Configuration file
 Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 
-	#  
-	#   smfc.conf  
-	#   smfc service configuration parameters  
-	#  
-	  
-	  
-	[Ipmi]  
-	# Path for ipmitool (str, default=/usr/bin/ipmitool)  
-	command=/usr/bin/ipmitool   
-	# Delay time after changing IPMI fan mode (int, seconds, default=10)  
-	fan_mode_delay=10  
-	# Delay time after changing IPMI fan level (int, seconds, default=2)  
-	fan_level_delay=2  
-	# CPU and HD zones are swapped (bool, default=0).  
-	swapped_zones=0  
-	  
-	  
-	[CPU zone]  
-	# Fan controller enabled (bool, default=0)  
-	enabled=1  
-	# Number of CPUs (int, default=1)  
-	count=1  
-	# Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)  
-	temp_calc=1  
-	# Discrete steps in mapping of temperatures to fan level (int, default=6)  
-	steps=6  
-	# Threshold in temperature change before the fan controller reacts (float, C, default=3.0)  
-	sensitivity=3.0  
-	# Polling time interval for reading temperature (int, sec, default=2)  
-	polling=2  
-	# Minimum CPU temperature (float, C, default=30.0)  
-	min_temp=30.0  
-	# Maximum CPU temperature (float, C, default=60.0)  
-	max_temp=60.0  
-	# Minimum CPU fan level (int, %, default=35)  
-	min_level=35  
-	# Maximum CPU fan level (int, %, default=100)  
-	max_level=100  
-	# Optional parameter, it will be generated automatically for Intel CPUs and must be specified manually for AMD CPUs.  
-	# Path for CPU sys/hwmon file(s) (str multi-line list, default=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input)  
-	# hwmon_path=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input  
-	#            /sys/devices/platform/coretemp.1/hwmon/hwmon*/temp1_input  
-	# or  
-	# hwmon_path=/sys/bus/pci/drivers/k10temp/0000*/hwmon/hwmon*/temp1_input  
-	  
-	  
-	[HD zone]  
-	# Fan controller enabled (bool, default=0)  
-	enabled=1  
-	# Number of HDs (int, default=1)  
-	count=1  
-	# Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)  
-	temp_calc=1  
-	# Discrete steps in mapping of temperatures to fan level (int, default=4)  
-	steps=4  
-	# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)  
-	sensitivity=2.0  
-	# Polling interval for reading temperature (int, sec, default=10)  
-	polling=10  
-	# Minimum HD temperature (float, C, default=32.0)  
-	min_temp=32.0  
-	# Maximum HD temperature (float, C, default=46.0)  
-	max_temp=46.0  
-	# Minimum HD fan level (int, %, default=35)  
-	min_level=35  
-	# Maximum HD fan level (int, %, default=100)  
-	max_level=100  
-	# Names of the HDs (str multi-line list, default=)  
-	# These names MUST BE specified in '/dev/disk/by-id/...' form!  
-	hd_names=  
-	# Optional parameter, it will be generated automatically based on the disk names.  
-	# List of files in /sys/hwmon file system or 'hddtemp' (str multi-line list, default=)  
-	# hwmon_path=/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input  
-	#            /sys/class/scsi_disk/1:0:0:0/device/hwmon/hwmon*/temp1_input  
-	#            hddtemp  
-	# Standby guard feature for RAID arrays (bool, default=0)  
-	standby_guard_enabled=0  
-	# Number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)  
-	standby_hd_limit=1  
-	# Path for 'smartctl' command (str, default=/usr/sbin/smartctl).  
-	# Required for 'standby guard' feature only  
-	smartctl_path=/usr/sbin/smartctl  
-	# Path for 'hddtemp' command (str, default=/usr/sbin/hddtemp).  
-	# Required for reading of the temperature of SAS/SCSI disks.  
-	hddtemp_path=/usr/sbin/hddtemp
+```
+#
+#   smfc.conf (C) 2020-2025, Peter Sulyok
+#   smfc service configuration parameters
+#
+#   Please read the documentation here: https://github.com/petersulyok/smfc
+#
+
+[Ipmi]
+# Path for ipmitool (str, default=/usr/bin/ipmitool)
+command=/usr/bin/ipmitool 
+# Delay time after changing IPMI fan mode (int, seconds, default=10)
+fan_mode_delay=10
+# Delay time after changing IPMI fan level (int, seconds, default=2)
+fan_level_delay=2
+# The fans in CPU and HD zones are swapped, read more details here:
+# https://github.com/petersulyok/smfc?tab=readme-ov-file#3-swapped-zones
+# (bool, default=0).
+swapped_zones=0
+
+[CPU zone]
+# Fan controller enabled (bool, default=0)
+enabled=1
+# Number of CPUs (int, default=1)
+count=1
+# Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
+temp_calc=1
+# Discrete steps in mapping of temperatures to fan level (int, default=6)
+steps=6
+# Threshold in temperature change before the fan controller reacts (float, C, default=3.0)
+sensitivity=3.0
+# Polling time interval for reading temperature (int, sec, default=2)
+polling=2
+# Minimum CPU temperature (float, C, default=30.0)
+min_temp=30.0
+# Maximum CPU temperature (float, C, default=60.0)
+max_temp=60.0
+# Minimum CPU fan level (int, %, default=35)
+min_level=35
+# Maximum CPU fan level (int, %, default=100)
+max_level=100
+# Path for CPU sys/hwmon file(s) (str multi-line list, default=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input)
+# It will be automatically generated for Intel CPUs:
+# hwmon_path=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input
+#            /sys/devices/platform/coretemp.1/hwmon/hwmon*/temp1_input
+# and must be specified for AMD CPUs:
+# hwmon_path=/sys/bus/pci/drivers/k10temp/0000*/hwmon/hwmon*/temp1_input
+
+[HD zone]
+# Fan controller enabled (bool, default=0)
+enabled=1
+# Number of HDs (int, default=1)
+count=1
+# Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
+temp_calc=1
+# Discrete steps in mapping of temperatures to fan level (int, default=4)
+steps=4
+# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
+sensitivity=2.0
+# Polling interval for reading temperature (int, sec, default=10)
+polling=10
+# Minimum HD temperature (float, C, default=32.0)
+min_temp=32.0
+# Maximum HD temperature (float, C, default=46.0)
+max_temp=46.0
+# Minimum HD fan level (int, %, default=35)
+min_level=35
+# Maximum HD fan level (int, %, default=100)
+max_level=100
+# Names of the HDs (str multi-line list, default=)
+# These names MUST BE specified in '/dev/disk/by-id/...' form!
+hd_names=
+# List of files in /sys/hwmon file system or 'hddtemp' (str multi-line list, default=)
+# It will be automatically generated for SATA disks based on the disk names.
+# Use `hddtemp` keyword for SCSI disk or for other disks incompatible with `drivetemp` module.
+# hwmon_path=/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input
+#            /sys/class/scsi_disk/1:0:0:0/device/hwmon/hwmon*/temp1_input
+#            hddtemp
+# Standby guard feature for RAID arrays (bool, default=0)
+standby_guard_enabled=0
+# Number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)
+standby_hd_limit=1
+# Path for 'smartctl' command (str, default=/usr/sbin/smartctl).
+# Required for 'standby guard' feature only
+smartctl_path=/usr/sbin/smartctl
+# Path for 'hddtemp' command (str, default=/usr/sbin/hddtemp).
+# Required for reading of the temperature of SAS/SCSI disks.
+# 'hddtemp_emu.sh' script could also be used here if 'hddtemp' is not available.
+hddtemp_path=/usr/sbin/hddtemp
+```
 Important notes:
  1. `[HD zone} hd_names=`: This is a compulsory parameter, its value must be specified in `/dev/disk/by-id/...` form (the `/dev/sda` form is not persistent could be changed after a reboot).
  2. `[CPU zone] / [HD zone] min_level= / max_level=`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotational speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
@@ -437,24 +442,26 @@ Important notes:
 ### 12. Automatic execution of the service
 This `systemd` service can be started and stopped in the standard way. Do not forget to reload `systemd` configuration after a new installation or if you changed the service definition file:
 
-	systemctl daemon-reload
-	systemctl start smfc.service
-	systemctl stop smfc.service
-	systemctl restart smfc.service
-	systemctl status smfc.service
-	● smfc.service - Super Micro Fan Control
-	     Loaded: loaded (/etc/systemd/system/smfc.service; enabled; vendor preset: enabled)
-	     Active: active (running) since Fri 2021-09-17 23:28:10 CEST; 1 day 19h ago
-	   Main PID: 1064180 (smfc.py)
-	      Tasks: 1 (limit: 38371)
-	     Memory: 7.4M
-	        CPU: 41.917s
-	     CGroup: /system.slice/smfc.service
-	             └─1064180 /usr/bin/python3 /opt/smfc/smfc.py -c /opt/smfc/smfc.conf -l 2
+```
+systemctl daemon-reload
+systemctl start smfc.service
+systemctl stop smfc.service
+systemctl restart smfc.service
+systemctl status smfc.service
+● smfc.service - Super Micro Fan Control
+     Loaded: loaded (/etc/systemd/system/smfc.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2025-01-27 00:55:26 CET; 8h ago
+   Main PID: 33361 (smfc.py)
+      Tasks: 1 (limit: 76963)
+     Memory: 8.1M
+        CPU: 21.388s
+     CGroup: /system.slice/smfc.service
+             └─33361 /usr/bin/python3 /opt/smfc/smfc.py -c /opt/smfc/smfc.conf -l 3
 
-	Sep 19 17:12:39 home smfc.service[1064180]: CPU zone: new level > 39.0C > [T:40.0C/L:61%]
-	Sep 19 17:12:42 home smfc.service[1064180]: CPU zone: new level > 33.0C > [T:35.0C/L:48%]
-	Sep 19 17:48:14 home smfc.service[1064180]: CPU zone: new level > 38.0C > [T:40.0C/L:61%]
+Jan 27 09:10:44 nas smfc.service[33361]: CPU zone: new fan level > 48%/37.0C
+Jan 27 09:10:48 nas smfc.service[33361]: CPU zone: new fan level > 35%/29.0C
+Jan 27 09:10:54 nas smfc.service[33361]: CPU zone: new fan level > 48%/35.0C
+```
 
 If you are testing your configuration, you can start `smfc.py` directly in a terminal. Logging to the standard output and debug log level are useful in this case:
 
