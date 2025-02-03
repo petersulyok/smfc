@@ -35,6 +35,8 @@ You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
  7. Check results in system log
  8. Leave a feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19)
 
+Feel free to visit [Discussion](https://github.com/petersulyok/smfc/discussions) and ask your questions or share your experinces related to this project.
+
 ## Details
 ### 1. How does it work?
 This service was planned for Super Micro motherboards installed in computer chassis with two independent cooling systems employing separate fans. In IPMI terms these are called:
