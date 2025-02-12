@@ -12,12 +12,11 @@ import subprocess
 import sys
 import syslog
 import time
-from os.path import split
 from typing import List, Callable
 
 
 # Program version string
-version_str: str = '3.7.0'
+version_str: str = '3.8.0'
 
 
 class Log:

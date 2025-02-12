@@ -71,8 +71,8 @@ class IpmiTestCase(unittest.TestCase):
             Ipmi.CV_IPMI_FAN_LEVEL_DELAY: str(level_delay),
             Ipmi.CV_IPMI_SWAPPED_ZONES: str(swapped)
         }
-        if remote_pars != None:
-            my_config[Ipmi.CS_IPMI].__setattr__(Ipmi.CV_IPMI_REMOTE_PARAMETERS, remote_pars)
+        if remote_pars is not None:
+            my_config.set(Ipmi.CS_IPMI, Ipmi.CV_IPMI_REMOTE_PARAMETERS, remote_pars)
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         with self.assertRaises(Exception) as cm:
             Ipmi(my_log, my_config)
