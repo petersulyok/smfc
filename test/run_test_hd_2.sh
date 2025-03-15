@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#   run_test_hd_2.sh (C) 2021-2024 Peter Sulyok
+#   run_test_hd_2.sh (C) 2021-2025 Peter Sulyok
 #   This script will run smoke test: HD 2 configuration.
 #
 

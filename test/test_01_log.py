@@ -1,6 +1,6 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 #
-#   test_01_log.py (C) 2021-2024, Peter Sulyok
+#   test_01_log.py (C) 2021-2025, Peter Sulyok
 #   Unit test for smfc.Log() class.
 #
 

@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-#   run_test_const_level.sh (C) 2021-2024 Peter Sulyok
+#   run_test_const_level.sh (C) 2021-2025 Peter Sulyok
 #   This script will run smoke test: constant level configuration.
 #
 

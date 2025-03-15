@@ -1,4 +1,12 @@
-coverage
-pylint
-pytest
-pytest-cov
+# Requirements for development:
+#
+# - coverage
+# - pylint
+# - pytest
+# - pytest-cov
+#
+# pip freeze with python 3.9.21
+coverage==7.6.12
+pylint==3.3.5
+pytest==8.3.5
+pytest-cov==6.0.0

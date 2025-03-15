@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#   run_test_nvme.sh (C) 2021-2024 Peter Sulyok
+#   run_test_nvme.sh (C) 2021-2025 Peter Sulyok
 #   This script will run smoke test: NVME disk configuration.
 #
 

@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-#   ipmi_bmc_reset.sh (C) 2024, Peter Sulyok
+#   ipmi_bmc_reset.sh (C) 2025, Peter Sulyok
 #   This script will send cold reset to BMC chip and will measure required time for the operation.
 #
 

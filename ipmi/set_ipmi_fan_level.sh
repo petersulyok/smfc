@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-#   set_ipmi_fan_level.sh (C) 2021-2024, Peter Sulyok
+#   set_ipmi_fan_level.sh (C) 2021-2025, Peter Sulyok
 #   This script will setup fan level in a specified IPMI zone.
 #
 
