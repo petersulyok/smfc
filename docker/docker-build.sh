@@ -3,13 +3,15 @@
 #   docker-build.sh (C) 2023-2025, Peter Sulyok
 #   This script will build `smfc` docker image.
 #
-set -e
-if [ "$1" == "" ];
+
+if [ -z "$1" ];
 then
-   echo "Usage: docker-build.sh version"
-   echo "Example: docker-build.sh 3.4.0"
-   exit 1
+    echo "Usage: docker-build.sh version [version]"
+    echo "Example: docker-build.sh 3.4.0 latest"
+    exit 1
 fi
-version=$1
-docker build . --debug -t petersulyok/smfc:$version --label "org.opencontainers.image.version=$version" -f Dockerfile
-docker tag petersulyok/smfc:$version petersulyok/smfc:latest
+docker image build . --debug -t petersulyok/smfc:$1 --label "org.opencontainers.image.version=$1" -f Dockerfile
+if [ -n "$2" ];
+then
+    docker image tag petersulyok/smfc:$1 petersulyok/smfc:$2
+fi
