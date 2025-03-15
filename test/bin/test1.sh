@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ipmitool emulation
 
 if [[ $1 = "sdr" ]] ; then
@@ -7,7 +7,7 @@ fi
 
 # IPMI get fan mode (raw 0x30 0x45 0x00)
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x45" && $4 = "0x00" ]] ; then
-  r=$((1 + (RANDOM % 4)))
+  r=$((RANDOM % 4))
   if [[ "$r" -eq "3" ]] ; then
     r=1
   fi
