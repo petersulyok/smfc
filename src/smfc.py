@@ -14,6 +14,7 @@ import syslog
 import time
 from typing import List, Callable
 
+from pyudev import Context, Devices, Device
 
 # Program version string
 version_str: str = '3.8.0'
@@ -321,6 +322,7 @@ class FanController:
 
     # Configuration parameters
     log: Log                # Reference to a Log class instance
+    udev_context: Context   # Reference to a udev database connection (instance of Context from pyudev)
     ipmi: Ipmi              # Reference to an Ipmi class instance
     ipmi_zone: int          # IPMI zone identifier
     name: str               # Name of the controller
@@ -346,13 +348,14 @@ class FanController:
     # Function variable for selected temperature calculation method
     get_temp_func: Callable[[], float]
 
-    def __init__(self, log: Log, ipmi: Ipmi, ipmi_zone: int, name: str, count: int, temp_calc: int, steps: int,
+    def __init__(self, log: Log, udev_context: Context, ipmi: Ipmi, ipmi_zone: int, name: str, count: int, temp_calc: int, steps: int,
                  sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
                  max_level: int, hwmon_path: str, hwmon_reserved: set) -> None:
         """Initialize the FanController class. Will raise an exception in case of invalid parameters.
 
         Args:
             log (Log): reference to a Log class instance
+            udev_context (Context): reference to a udev database connection (instance of Context from pyudev)
             ipmi (Ipmi): reference to an Ipmi class instance
             ipmi_zone (int): IPMI zone identifier
             name (str): name of the controller
@@ -370,6 +373,7 @@ class FanController:
         """
         # Save and validate configuration parameters.
         self.log = log
+        self.udev_context = udev_context
         self.ipmi = ipmi
         self.ipmi_zone = ipmi_zone
         if self.ipmi_zone not in {Ipmi.CPU_ZONE, Ipmi.HD_ZONE}:
@@ -435,6 +439,15 @@ class FanController:
             self.log.msg(self.log.LOG_CONFIG, f'   max_level = {self.max_level}')
             self.log.msg(self.log.LOG_CONFIG, f'   hwmon_path = {self.hwmon_path}')
             self.print_temp_level_mapping()
+
+    def get_tempinput(self, parent_dev: Device) -> None:
+        """A helper function to get the temp1_input attribute path of a given parent device's associated hwmon
+
+        Raises:
+            ValueError: if parent_dev does not have exactly one hwmon device in its subtree
+        """
+        [hwmon_dev] = self.udev_context.list_devices(subsystem='hwmon', parent=parent_dev)
+        return os.path.join(hwmon_dev.sys_path, 'temp1_input')
 
     def build_hwmon_path(self, hwmon_str: str) -> None:
         """Build hwmon_path[] list for the specific zone."""
@@ -606,18 +619,19 @@ class CpuZone(FanController):
     CV_CPU_ZONE_MAX_LEVEL: str = 'max_level'
     CV_CPU_ZONE_HWMON_PATH: str = 'hwmon_path'
 
-    def __init__(self, log: Log, ipmi: Ipmi, config: configparser.ConfigParser) -> None:
+    def __init__(self, log: Log, udev_context: Context, ipmi: Ipmi, config: configparser.ConfigParser) -> None:
         """Initialize the CpuZone class and raise exception in case of invalid configuration.
 
         Args:
             log (Log): reference to a Log class instance
+            udev_context (Context): reference to a udev database connection (instance of Context from pyudev)
             ipmi (Ipmi): reference to an Ipmi class instance
             config (configparser.ConfigParser): reference to the configuration (default=None)
         """
 
         # Initialize FanController class.
         super().__init__(
-            log, ipmi, Ipmi.CPU_ZONE, self.CS_CPU_ZONE,
+            log, udev_context, ipmi, Ipmi.CPU_ZONE, self.CS_CPU_ZONE,
             config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_COUNT, fallback=1),
             config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
             config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_STEPS, fallback=6),
@@ -640,16 +654,17 @@ class CpuZone(FanController):
         if hwmon_str:
             # Convert the string into a list of path.
             super().build_hwmon_path(hwmon_str)
-        # If the hwmon_path string was not specified it will be created automatically.
+        # If the hwmon_path string was not specified it will be created automatically. We assume either Intel (using coretemp) or AMD (using k10temp) CPUs
         else:
-            # Construct hwmon_path with the resolution of wildcard characters.
-            self.hwmon_path = []
-            for i in range(self.count):
-                path = '/sys/devices/platform/coretemp.' + str(i) + '/hwmon/hwmon*/temp1_input'
-                file_names = glob.glob(path)
-                if not file_names:
-                    raise ValueError(self.ERROR_MSG_FILE_IO.format(path))
-                self.hwmon_path.append(file_names[0])
+            for dev_filter in [{'MODALIAS':'platform:coretemp'}, {'DRIVER':'k10temp'}]:
+                hwmon_path = [self.get_tempinput(dev) for dev in self.udev_context.list_devices(**dev_filter)]
+                if hwmon_path:
+                    break
+            if not hwmon_path:
+                self.log.msg(Log.LOG_ERROR, 'No explicit hwmon_path was configured, and automatic detection failed to find any devices using the coretemp or k10temp modules')
+                sys.exit(6)
+            self.hwmon_path = hwmon_path
+            self.count = len(hwmon_path)
 
     def _get_nth_temp(self, index: int) -> float:
         """Get the temperature of the 'nth' element in the hwmon list.
@@ -715,11 +730,12 @@ class HdZone(FanController):
     # Constant for using 'hddtemp'
     STR_HDD_TEMP: str = 'hddtemp'
 
-    def __init__(self, log: Log, ipmi: Ipmi, config: configparser.ConfigParser) -> None:
+    def __init__(self, log: Log, udev_context: Context, ipmi: Ipmi, config: configparser.ConfigParser) -> None:
         """Initialize the HdZone class. Abort in case of configuration errors.
 
         Args:
             log (Log): reference to a Log class instance
+            udev_context (Context): reference to a udev database connection (instance of Context from pyudev)
             ipmi (Ipmi): reference to an Ipmi class instance
             config (configparser.ConfigParser): reference to the configuration (default=None)
         """
@@ -744,7 +760,7 @@ class HdZone(FanController):
         self.hddtemp_path = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_HDDTEMP_PATH, '/usr/sbin/hddtemp')
         # Initialize FanController class.
         super().__init__(
-            log, ipmi, Ipmi.HD_ZONE, self.CS_HD_ZONE, count,
+            log, udev_context, ipmi, Ipmi.HD_ZONE, self.CS_HD_ZONE, count,
             config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
             config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_STEPS, fallback=4),
             config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_SENSITIVITY, fallback=2),
@@ -807,28 +823,9 @@ class HdZone(FanController):
 
                 # If the current one is an NVME SSD disk.
                 # NOTE: kernel provides this, no extra modules required
-                if "nvme-" in self.hd_device_names[i]:
-                    disk_name = os.path.basename(os.readlink(self.hd_device_names[i]))
-                    search_str = os.path.join('/sys/class/nvme/nvme*', disk_name, 'device/hwmon*/temp1_input')
-                    file_names = glob.glob(search_str)
-                    if not file_names:
-                        raise ValueError(self.ERROR_MSG_FILE_IO.format(search_str))
-                    self.hwmon_path.append(file_names[0])
-
-                # If the current one is a SATA disk.
-                # NOTE: 'drivetemp' kernel module must be loaded otherwise this path does not exist!
-                elif "ata-" in self.hd_device_names[i] or "-SATA" in self.hd_device_names[i]:
-                    disk_name = os.path.basename(os.readlink(self.hd_device_names[i]))
-                    search_str = os.path.join('/sys/class/scsi_disk/*', 'device/block', disk_name)
-                    file_names = glob.glob(search_str)
-                    if not file_names:
-                        raise ValueError(self.ERROR_MSG_FILE_IO.format(search_str))
-                    file_names[0] = file_names[0].replace("/device/block/" + disk_name, "")
-                    search_str = os.path.join(file_names[0], 'device/hwmon/hwmon*/temp1_input')
-                    file_names = glob.glob(search_str)
-                    if not file_names:
-                        raise ValueError(self.ERROR_MSG_FILE_IO.format(search_str))
-                    self.hwmon_path.append(file_names[0])
+                if "nvme-" in self.hd_device_names[i] or "ata-" in self.hd_device_names[i] or "-SATA" in self.hd_device_names[i]:
+                    block_dev = Devices.from_device_file(self.udev_context, self.hd_device_names[i])
+                    self.hwmon_path.append(self.get_tempinput(block_dev.parent))
 
                 # Otherwise we assume it is a SAS/SCSI disk.
                 # 'hddtemp' command will be used to read HD temperature.
@@ -975,6 +972,7 @@ class Service:
 
     config: configparser.ConfigParser   # Instance for a parsed configuration
     log: Log                            # Instance for a Log class
+    udev_context: Context               # Reference to a udev database connection (instance of Context from pyudev)
     ipmi: Ipmi                          # Instance for an Ipmi class
     cpu_zone: CpuZone                   # Instance for a CPU Zone fan controller class
     hd_zone: HdZone                     # Instance for an HD Zone fan controller class
@@ -1131,17 +1129,24 @@ class Service:
             self.log.msg(Log.LOG_DEBUG,
                          f'New IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}')
 
+        # Initialize connection to udev database
+        try:
+            self.udev_context = Context()
+        except ImportError as e:
+            self.log.msg(Log.LOG_ERROR, f'Could not interface with libudev. Check your installation: {e}.')
+            sys.exit(7)
+
         # Create an instance for CPU zone fan controller if enabled.
         # self.cpu_zone = None
         if self.cpu_zone_enabled:
             self.log.msg(Log.LOG_DEBUG, 'CPU zone fan controller enabled')
-            self.cpu_zone = CpuZone(self.log, self.ipmi, self.config)
+            self.cpu_zone = CpuZone(self.log, self.udev_context, self.ipmi, self.config)
 
         # Create an instance for HD zone fan controller if enabled.
         # self.hd_zone = None
         if self.hd_zone_enabled:
             self.log.msg(Log.LOG_DEBUG, 'HD zone fan controller enabled')
-            self.hd_zone = HdZone(self.log, self.ipmi, self.config)
+            self.hd_zone = HdZone(self.log, self.udev_context, self.ipmi, self.config)
 
         # Calculate the default sleep time for the main loop.
         if self.cpu_zone_enabled and self.hd_zone_enabled:
