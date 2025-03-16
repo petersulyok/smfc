@@ -131,7 +131,7 @@ The earlier X8 motherboards are NOT compatible with this software. They do not i
 X13 motherboards (with AST2600 BMC chips) seem to be compatible with smfc (see mode details in [issue #33](https://github.com/petersulyok/smfc/issues/33) about an X13SAE-F motherboard).
 Fan control and `IPMI_FULL` mode are working properly. The only difference is in using thresholds, AST2600 implements only `Lower Critical` threshold, so setting up thresholds is different in this case.  
 
-Feel free to create a short feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19) on your compatibility experience.
+Feel free to create a short feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55) on your compatibility experience.
 
 
 ### 7. IPMI fan control and sensor thresholds
