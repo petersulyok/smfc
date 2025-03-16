@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # hddtemp emulation script
 
 # hddtemp -q -n /dev/sd?

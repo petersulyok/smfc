@@ -1,33 +1,67 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-#   fan_measurement.sh (C) 2021-2024, Peter Sulyok
+#   fan_measurement.sh (C) 2021-2025, Peter Sulyok
 #   This script will measure the rotation speed belongs to different IPMI fan level.
 #   Results will be stored in 'fan_result.cvs'.
 #
 
 # This script must be executed by root.
-if [ "$EUID" -ne 0 ]
-then
+if [ "$EUID" -ne 0 ]; then
     echo "ERROR: Please run as root"
-    exit -1
+    exit 1
 fi
 
-# Start measurement in 100-20 IPMI fan level interval.
-echo "Level,FAN1,FAN2,FAN3,FAN4,FANA,FANB" > fan_result.csv
+output_file="fan_result.csv"
+
+# get list of fans
+fan_data=$(ipmitool sdr list | grep FAN)
+
+# double check list isn't empty
+if [ -z "$fan_data" ]; then
+    echo "No fan data found."
+    exit 1
+fi
+
+# get actual fan names since they can differ
+fan_names=($(echo "$fan_data" | awk '{print $1}'))
+
+# write CSV header
+{
+    echo -n "Level"
+    for fan_name in "${fan_names[@]}"; do
+        echo -n ",$fan_name"
+    done
+    echo
+} > "$output_file"
+
 echo "IPMI fan level measurement:"
-for i in 100 95 90 85 80 75 70 65 60 55 50 45 40 35 30 25 20;
-do
-    ./set_ipmi_fan_level.sh cpu $i >/dev/nul
-    ./set_ipmi_fan_level.sh hd $i >/dev/nul
+
+# Start measurement in 100-20 IPMI fan level interval.
+for i in 100 95 90 85 80 75 70 65 60 55 50 45 40 35 30 25 20; do
+    ./set_ipmi_fan_level.sh cpu $i >/dev/null
+    ./set_ipmi_fan_level.sh hd $i >/dev/null
     sleep 6
+
     ipmitool sdr > sensor_data.txt
-    fan1=$(cat sensor_data.txt | grep FAN1 | awk '{ print $3}')
-    fan2=$(cat sensor_data.txt | grep FAN2 | awk '{ print $3}')
-    fan3=$(cat sensor_data.txt | grep FAN3 | awk '{ print $3}')
-    fan4=$(cat sensor_data.txt | grep FAN4 | awk '{ print $3}')
-    fanA=$(cat sensor_data.txt | grep FANA | awk '{ print $3}')
-    fanB=$(cat sensor_data.txt | grep FANB | awk '{ print $3}')
-    echo "$i,$fan1,$fan2,$fan3,$fan4,$fanA,$fanB" >> fan_result.csv
+
+    fan_speeds=()
+    for fan_name in "${fan_names[@]}"; do
+        speed=$(grep "$fan_name" sensor_data.txt | awk '{print $3}')
+        fan_speeds+=("$speed")
+    done
+
+    # write results to CSV file
+    {
+        echo -n "$i"
+        for speed in "${fan_speeds[@]}"; do
+            echo -n ",$speed"
+        done
+        echo
+    } >> "$output_file"
+
     echo "Fan level: $i% done"
 done
+
 rm sensor_data.txt
+
+echo "Fan speeds have been written to $output_file"

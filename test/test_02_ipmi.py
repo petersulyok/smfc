@@ -1,6 +1,6 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 #
-#   test_02_ipmi.py (C) 2021-2024, Peter Sulyok
+#   test_02_ipmi.py (C) 2021-2025, Peter Sulyok
 #   Unit tests for smfc.Ipmi() class.
 #
 
@@ -16,7 +16,7 @@ from smfc import Log, Ipmi
 class IpmiTestCase(unittest.TestCase):
     """Unit test class for smfc.Ipmi() class"""
 
-    def pt_init_p1(self, mode_delay: int, level_delay: int, swapped: bool, error: str):
+    def pt_init_p1(self, mode_delay: int, level_delay: int, swapped: bool, remote_pars: str, error: str):
         """This is a primitive positive test function. It contains the following steps:
             - create a shell script for IPMI command parameter
             - mock print() function
@@ -35,7 +35,8 @@ class IpmiTestCase(unittest.TestCase):
                 Ipmi.CV_IPMI_COMMAND: command,
                 Ipmi.CV_IPMI_FAN_MODE_DELAY: str(mode_delay),
                 Ipmi.CV_IPMI_FAN_LEVEL_DELAY: str(level_delay),
-                Ipmi.CV_IPMI_SWAPPED_ZONES: str(swapped)
+                Ipmi.CV_IPMI_SWAPPED_ZONES: str(swapped),
+                Ipmi.CV_IPMI_REMOTE_PARAMETERS: remote_pars
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -43,13 +44,14 @@ class IpmiTestCase(unittest.TestCase):
         self.assertEqual(my_ipmi.fan_mode_delay, mode_delay, error)
         self.assertEqual(my_ipmi.fan_level_delay, level_delay, error)
         self.assertEqual(my_ipmi.swapped_zones, swapped, error)
-        self.assertEqual(mock_print.call_count, 3 + 5)  # Log-3, Ipmi-5
+        self.assertEqual(my_ipmi.remote_parameters, remote_pars, error)
+        self.assertEqual(mock_print.call_count, 3 + 6)  # Log-3, Ipmi-6
         del my_ipmi
         del my_log
         del my_config
         del my_td
 
-    def pt_init_n1(self, cmd_exists: bool, mode_delay: int, level_delay: int, swapped: int,
+    def pt_init_n1(self, cmd_exists: bool, mode_delay: int, level_delay: int, swapped: int, remote_pars: str,
                    exception: Any, error: str) -> None:
         """Primitive negative test function. It contains the following steps:
             - create a shell script depending on flag need_to_create
@@ -69,6 +71,8 @@ class IpmiTestCase(unittest.TestCase):
             Ipmi.CV_IPMI_FAN_LEVEL_DELAY: str(level_delay),
             Ipmi.CV_IPMI_SWAPPED_ZONES: str(swapped)
         }
+        if remote_pars is not None:
+            my_config.set(Ipmi.CS_IPMI, Ipmi.CV_IPMI_REMOTE_PARAMETERS, remote_pars)
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         with self.assertRaises(Exception) as cm:
             Ipmi(my_log, my_config)
@@ -81,14 +85,15 @@ class IpmiTestCase(unittest.TestCase):
         """This is a unit test for function Ipmi.__init__()"""
 
         # Test valid parameters.
-        self.pt_init_p1(10, 2, False, 'ipmi init 1')
+        self.pt_init_p1(10, 2, False, '-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1',
+                        'ipmi init 1')
 
         # Test raising exception on invalid parameters.
-        self.pt_init_n1(True, -1, 2, 0, ValueError, 'ipmi init 2')
-        self.pt_init_n1(True, 10, -2, 0, ValueError, 'ipmi init 3')
-        self.pt_init_n1(True, 10, 2, -1, ValueError, 'ipmi init 4')
-        self.pt_init_n1(True, 10, 2, 3, ValueError, 'ipmi init 5')
-        self.pt_init_n1(False, 10, 2, 0, FileNotFoundError, 'ipmi init 6')
+        self.pt_init_n1(True, -1, 2, 0, None, ValueError, 'ipmi init 2')
+        self.pt_init_n1(True, 10, -2, 0, '', ValueError, 'ipmi init 3')
+        self.pt_init_n1(True, 10, 2, -1, '-I landplus', ValueError, 'ipmi init 4')
+        self.pt_init_n1(True, 10, 2, 3, None, ValueError, 'ipmi init 5')
+        self.pt_init_n1(False, 10, 2, 0, '', FileNotFoundError, 'ipmi init 6')
 
     def pt_gfm_p1(self, expected_mode: int, error: str) -> None:
         """Primitive positive test function. It contains the following steps:
@@ -108,7 +113,8 @@ class IpmiTestCase(unittest.TestCase):
                 Ipmi.CV_IPMI_COMMAND: command,
                 Ipmi.CV_IPMI_FAN_MODE_DELAY: '10',
                 Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '2',
-                Ipmi.CV_IPMI_SWAPPED_ZONES: '0'
+                Ipmi.CV_IPMI_SWAPPED_ZONES: '0',
+                Ipmi.CV_IPMI_REMOTE_PARAMETERS: '-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1'
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -135,7 +141,8 @@ class IpmiTestCase(unittest.TestCase):
             Ipmi.CV_IPMI_COMMAND: command,
             Ipmi.CV_IPMI_FAN_MODE_DELAY: '10',
             Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '2',
-            Ipmi.CV_IPMI_SWAPPED_ZONES: '0'
+            Ipmi.CV_IPMI_SWAPPED_ZONES: '0',
+            Ipmi.CV_IPMI_REMOTE_PARAMETERS: '-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1'
         }
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, my_config)
@@ -180,7 +187,8 @@ class IpmiTestCase(unittest.TestCase):
                 Ipmi.CV_IPMI_COMMAND: command,
                 Ipmi.CV_IPMI_FAN_MODE_DELAY: '1',
                 Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '2',
-                Ipmi.CV_IPMI_SWAPPED_ZONES: '0'
+                Ipmi.CV_IPMI_SWAPPED_ZONES: '0',
+                Ipmi.CV_IPMI_REMOTE_PARAMETERS: '-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1'
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
@@ -213,19 +221,23 @@ class IpmiTestCase(unittest.TestCase):
         my_td = TestData()
         command = my_td.create_command_file()
         my_config = configparser.ConfigParser()
+        remote_parms = '-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1'
         my_config[Ipmi.CS_IPMI] = {
             Ipmi.CV_IPMI_COMMAND: command,
             Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
             Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '1',
-            Ipmi.CV_IPMI_SWAPPED_ZONES: '0'
+            Ipmi.CV_IPMI_SWAPPED_ZONES: '0',
+            Ipmi.CV_IPMI_REMOTE_PARAMETERS: remote_parms
         }
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, my_config)
         mock_subprocess_run = MagicMock()
         with patch('subprocess.run', mock_subprocess_run):
             my_ipmi.set_fan_mode(fan_mode)
-        mock_subprocess_run.assert_called_with([command, 'raw', '0x30', '0x45', '0x01', str(fan_mode)],
-                                               check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        args = [command]
+        args.extend(remote_parms.split())
+        args.extend(['raw', '0x30', '0x45', '0x01', str(fan_mode)])
+        mock_subprocess_run.assert_called_with(args, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         del my_ipmi
         del my_log
         del my_config
@@ -286,6 +298,7 @@ class IpmiTestCase(unittest.TestCase):
         command = my_td.create_command_file()
         mock_print = MagicMock()
         mock_subprocess_run = MagicMock()
+        remote_parms='-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1'
         with patch('builtins.print', mock_print), \
                 patch('subprocess.run', mock_subprocess_run):
             my_config = configparser.ConfigParser()
@@ -293,16 +306,18 @@ class IpmiTestCase(unittest.TestCase):
                 Ipmi.CV_IPMI_COMMAND: command,
                 Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
                 Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0',
-                Ipmi.CV_IPMI_SWAPPED_ZONES: str(swapped)
+                Ipmi.CV_IPMI_SWAPPED_ZONES: str(swapped),
+                Ipmi.CV_IPMI_REMOTE_PARAMETERS: remote_parms
             }
             my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
             my_ipmi = Ipmi(my_log, my_config)
             my_ipmi.set_fan_level(zone, level)
             if swapped:
                 zone = 1 - zone
-            mock_subprocess_run.assert_called_with([command, 'raw', '0x30', '0x70', '0x66', '0x01',
-                                                    str(zone), str(level)],
-                                                   check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            args = [command]
+            args.extend(remote_parms.split())
+            args.extend(['raw', '0x30', '0x70', '0x66', '0x01', str(zone), str(level)])
+            mock_subprocess_run.assert_called_with(args, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             del my_ipmi
             del my_log
             del my_config

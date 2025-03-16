@@ -1,4 +1,4 @@
-FROM alpine:3.20.5
+FROM alpine:3.20.6
 
 LABEL org.opencontainers.image.title="smfc"
 LABEL org.opencontainers.image.authors="petersulyok"
@@ -15,8 +15,10 @@ RUN <<EOT
     wget -O hddtemp.db.1 http://download.savannah.nongnu.org/releases/hddtemp/hddtemp.db
     wget -O hddtemp.db.2 https://gitweb.gentoo.org/repo/gentoo.git/plain/app-admin/hddtemp/files/hddgentoo.db
     cat hddtemp.db.1 hddtemp.db.2 > /usr/share/misc/hddtemp.db
-    wget "https://savannah.gnu.org/cgi-bin/viewcvs/*checkout*/config/config/config.guess"
-    wget "https://savannah.gnu.org/cgi-bin/viewcvs/*checkout*/config/config/config.sub"
+    #wget "https://savannah.gnu.org/cgi-bin/viewcvs/*checkout*/config/config/config.guess"
+    wget https://github.com/guzu/hddtemp/blob/master/config.guess
+    #wget "https://savannah.gnu.org/cgi-bin/viewcvs/*checkout*/config/config/config.sub"
+    wget "https://github.com/guzu/hddtemp/blob/master/config.sub"
     git clone https://github.com/vitlav/hddtemp.git
     cd hddtemp/
     autoreconf -vif

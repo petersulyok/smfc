@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # smartctl emulation script
 
 # smartctl -i -n standby /dev/sd?

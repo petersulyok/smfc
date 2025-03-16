@@ -1,6 +1,6 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 #
-#   test_06_service.py (C) 2021-2024, Peter Sulyok
+#   test_06_service.py (C) 2021-2025, Peter Sulyok
 #   Unit tests for smfc.Service() class.
 #
 import configparser
@@ -359,7 +359,9 @@ class ServiceTestCase(unittest.TestCase):
             - The main loop will be executed 3 times then exit
         """
         my_td = TestData()
-        cmd_ipmi = my_td.create_ipmi_command()
+        #cmd_ipmi = my_td.create_ipmi_command()
+        # Force mode initial fan mode 0 for setting new FULL mode during the test.
+        cmd_ipmi = my_td.create_command_file('echo "0"')
         cmd_smart = my_td.create_command_file('echo "ACTIVE"')
         cpu_hwmon_path = my_td.get_cpu_1()
         hd_hwmon_path = my_td.get_hd_8()

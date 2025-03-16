@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 #
 #   smfc.py (C) 2020-2025, Peter Sulyok
 #   IPMI fan controller for Super Micro X10-X13 motherboards.
@@ -17,7 +17,7 @@ from typing import List, Callable
 from pyudev import Context, Devices, Device
 
 # Program version string
-version_str: str = '3.7.0'
+version_str: str = '3.8.0'
 
 
 class Log:
@@ -144,6 +144,7 @@ class Ipmi:
     fan_mode_delay: float               # Delay time after execution of IPMI set fan mode function
     fan_level_delay: float              # Delay time after execution of IPMI set fan level function
     swapped_zones: bool                 # CPU and HD zones are swapped
+    remote_parameters: str              # Remote IPMI parameters.
 
     # Constant values for IPMI fan modes:
     STANDARD_MODE: int = 0
@@ -165,6 +166,7 @@ class Ipmi:
     CV_IPMI_FAN_MODE_DELAY: str = 'fan_mode_delay'
     CV_IPMI_FAN_LEVEL_DELAY: str = 'fan_level_delay'
     CV_IPMI_SWAPPED_ZONES: str = 'swapped_zones'
+    CV_IPMI_REMOTE_PARAMETERS: str = 'remote_parameters'
 
     def __init__(self, log: Log, config: configparser.ConfigParser) -> None:
         """Initialize the Ipmi class with a log class and with a configuration class.
@@ -179,6 +181,7 @@ class Ipmi:
         self.fan_mode_delay = config[self.CS_IPMI].getint(self.CV_IPMI_FAN_MODE_DELAY, fallback=10)
         self.fan_level_delay = config[self.CS_IPMI].getint(self.CV_IPMI_FAN_LEVEL_DELAY, fallback=2)
         self.swapped_zones = config[self.CS_IPMI].getboolean(self.CV_IPMI_SWAPPED_ZONES, fallback=False)
+        self.remote_parameters = config[self.CS_IPMI].get(self.CV_IPMI_REMOTE_PARAMETERS, fallback='')
 
         # Validate configuration
         # Check 1: a valid command can be executed successfully.
@@ -199,6 +202,7 @@ class Ipmi:
             self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_FAN_MODE_DELAY} = {self.fan_mode_delay}')
             self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_FAN_LEVEL_DELAY} = {self.fan_level_delay}')
             self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_SWAPPED_ZONES} = {self.swapped_zones}')
+            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_REMOTE_PARAMETERS} = {self.remote_parameters}')
 
     def get_fan_mode(self) -> int:
         """Get the current IPMI fan mode.
@@ -213,12 +217,16 @@ class Ipmi:
                 or motherboards)
         """
         r: subprocess.CompletedProcess  # result of the executed process
+        arguments: List[str]            # Command arguments
         m: int                          # fan mode
 
         # Read the current IPMI fan mode.
         try:
-            r = subprocess.run([self.command, 'raw', '0x30', '0x45', '0x00'],
-                               check=False, capture_output=True, text=True)
+            arguments = [self.command]
+            if self.remote_parameters:
+                arguments.extend(self.remote_parameters.split())
+            arguments.extend(['raw', '0x30', '0x45', '0x00'])
+            r = subprocess.run(arguments, check=False, capture_output=True, text=True)
             if r.returncode != 0:
                 raise RuntimeError(r.stderr)
             m = int(r.stdout)
@@ -253,13 +261,18 @@ class Ipmi:
         Args:
             mode (int): fan mode (STANDARD_MODE, FULL_MODE, OPTIMAL_MODE, HEAVY_IO_MODE)
         """
+        arguments: List[str]    # Command arguments
+
         # Validate mode parameter.
         if mode not in {self.STANDARD_MODE, self.FULL_MODE, self.OPTIMAL_MODE, self.HEAVY_IO_MODE}:
             raise ValueError(f'Invalid fan mode value ({mode}).')
         # Call ipmitool command and set the new IPMI fan mode.
         try:
-            subprocess.run([self.command, 'raw', '0x30', '0x45', '0x01', str(mode)],
-                           check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            arguments = [self.command]
+            if self.remote_parameters:
+                arguments.extend(self.remote_parameters.split())
+            arguments.extend(['raw', '0x30', '0x45', '0x01', str(mode)])
+            subprocess.run(arguments, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except FileNotFoundError as e:
             raise e
         # Give time for IPMI system/fans to apply changes in the new fan mode.
@@ -272,6 +285,8 @@ class Ipmi:
             zone (int): fan zone (CPU_ZONE, HD_ZONE)
             level (int): fan level in % (0-100)
         """
+        arguments: List[str]  # Command arguments
+
         # Validate zone parameter
         if zone not in {self.CPU_ZONE, self.HD_ZONE}:
             raise ValueError(f'Invalid value: zone ({zone}).')
@@ -283,8 +298,11 @@ class Ipmi:
             raise ValueError(f'Invalid value: level ({level}).')
         # Set the new IPMI fan level in the specific zone
         try:
-            subprocess.run([self.command, 'raw', '0x30', '0x70', '0x66', '0x01', str(zone), str(level)],
-                           check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            arguments = [self.command]
+            if self.remote_parameters:
+                arguments.extend(self.remote_parameters.split())
+            arguments.extend(['raw', '0x30', '0x70', '0x66', '0x01', str(zone), str(level)])
+            subprocess.run(arguments, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except FileNotFoundError as e:
             raise e
         # Give time for IPMI and fans to spin up/down.
@@ -548,31 +566,33 @@ class FanController:
 
         # Step 1: check the elapsed time.
         current_time = time.monotonic()
-        if current_time - self.last_time < self.polling:
-            return
-        self.last_time = current_time
-        # Step 2: read temperature and sensitivity gap.
-        self.callback_func()
-        current_temp = self.get_temp_func()
-        self.log.msg(self.log.LOG_DEBUG, f'{self.name}: new temperature > {current_temp:.1f}C')
-        if abs(current_temp - self.last_temp) < self.sensitivity:
-            return
-        self.last_temp = current_temp
-        # Step 3: calculate gain and fan level.
-        if current_temp <= self.min_temp:
-            current_gain = 0
-            current_level = self.min_level
-        elif current_temp >= self.max_temp:
-            current_gain = self.steps
-            current_level = self.max_level
-        else:
-            current_gain = int(round((current_temp - self.min_temp) / self.temp_step))
-            current_level = int(round(float(current_gain) * self.level_step)) + self.min_level
-        # Step 4: the new fan level will be set and logged.
-        if current_level != self.last_level:
-            self.last_level = current_level
-            self.set_fan_level(current_level)
-            self.log.msg(self.log.LOG_INFO, f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C')
+        if current_time - self.last_time >= self.polling:
+            self.last_time = current_time
+
+            # Step 2: read temperature and sensitivity gap.
+            self.callback_func()
+            current_temp = self.get_temp_func()
+            self.log.msg(self.log.LOG_DEBUG, f'{self.name}: new temperature > {current_temp:.1f}C')
+            if abs(current_temp - self.last_temp) < self.sensitivity:
+                return
+            self.last_temp = current_temp
+
+            # Step 3: calculate gain and fan level.
+            if current_temp <= self.min_temp:
+                current_gain = 0
+                current_level = self.min_level
+            elif current_temp >= self.max_temp:
+                current_gain = self.steps
+                current_level = self.max_level
+            else:
+                current_gain = int(round((current_temp - self.min_temp) / self.temp_step))
+                current_level = int(round(float(current_gain) * self.level_step)) + self.min_level
+
+            # Step 4: the new fan level will be set and logged.
+            if current_level != self.last_level:
+                self.last_level = current_level
+                self.set_fan_level(current_level)
+                self.log.msg(self.log.LOG_INFO, f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C')
 
     def print_temp_level_mapping(self) -> None:
         """Print out the user-defined temperature to level mapping value in log DEBUG level."""

@@ -33,7 +33,9 @@ You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
  5. Edit the configuration file `/opt/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
  6. Start the `systemd` service
  7. Check results in system log
- 8. Leave a feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19)
+ 8. Leave a feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
+
+Feel free to visit [Discussions](https://github.com/petersulyok/smfc/discussions) and raise your questions or share your experinces related to this project.
 
 ## Details
 ### 1. How does it work?
@@ -129,7 +131,7 @@ The earlier X8 motherboards are NOT compatible with this software. They do not i
 X13 motherboards (with AST2600 BMC chips) seem to be compatible with smfc (see mode details in [issue #33](https://github.com/petersulyok/smfc/issues/33) about an X13SAE-F motherboard).
 Fan control and `IPMI_FULL` mode are working properly. The only difference is in using thresholds, AST2600 implements only `Lower Critical` threshold, so setting up thresholds is different in this case.  
 
-Feel free to create a short feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19) on your compatibility experience.
+Feel free to create a short feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55) on your compatibility experience.
 
 
 ### 7. IPMI fan control and sensor thresholds
@@ -339,6 +341,8 @@ fan_level_delay=2
 # https://github.com/petersulyok/smfc?tab=readme-ov-file#3-swapped-zones
 # (bool, default=0).
 swapped_zones=0
+# IPMI parameters for remote access (HOST is the BMC network address).
+#remote_parameters=-U USERNAME -P PASSWORD -H HOST
 
 [CPU zone]
 # Fan controller enabled (bool, default=0)
@@ -438,7 +442,8 @@ Important notes:
 	My experience is that Noctua fans in my box are running stable in the 35-100% fan level interval. An additional user experience is (see [issue #12](https://github.com/petersulyok/smfc/issues/12)) when Noctua fans are paired with Ultra Low Noise Adapter the minimum stable fan level could go up to 45% (i.e. 35% is not stable).  
 
  3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is optional for Intel(R) CPUs, AMD(R) CPUs, SATA drives, and NVME drives (i.e., `smfc` can automatically identify the proper file locations), but may also be specified manually for special use cases. In case of SAS/SCSI hard disks (where `drivetemp` cannot be loaded) you can specify `hddtemp` value. You can use wild characters (`?,*`) in this parameter and `smfc` will do the path resolution automatically.
- 4. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
+ 4. `[Ipmi] remote_parameters=`: if you run `smfc` in a Virtual Machine (e.g. you run TrueNAS Scale in a Proxmox VM with direct access on controller or HDDs) you would like to access IPMI remotely on your host. With this parameter your can specify IPMI remote parameters added to each IPMI calls (see [issue #27](https://github.com/petersulyok/smfc/issues/27)). Please note that the host address here is the BMC network address (not the VM host address). 
+ 5. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
 
 ### 12. Automatic execution of the service
 This `systemd` service can be started and stopped in the standard way. Do not forget to reload `systemd` configuration after a new installation or if you changed the service definition file:
