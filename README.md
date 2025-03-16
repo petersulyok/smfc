@@ -33,7 +33,7 @@ You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
  5. Edit the configuration file `/opt/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
  6. Start the `systemd` service
  7. Check results in system log
- 8. Leave a feedback in [issue #19](https://github.com/petersulyok/smfc/issues/19)
+ 8. Leave a feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
 
 Feel free to visit [Discussions](https://github.com/petersulyok/smfc/discussions) and raise your questions or share your experinces related to this project.
 
