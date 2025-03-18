@@ -7,6 +7,8 @@
 
 Super Micro fan control for Linux (home) servers.
 
+WARNING: Please download a release (instead of cloning the repo), there is an ongoing refactoring on the main branch.
+
 ## TL;DR
 
 This is a `systemd service` running on Linux and is able to control fans in CPU and HD zones with the help of IPMI on Super Micro X10-X13 (and some X9) motherboards.
