@@ -446,11 +446,12 @@ class FanController:
 
         Returns:
             Device: HWMON device
-
-        Raises:
-            ValueError: if parent_dev does not have exactly one hwmon device in its subtree
         """
-        [hwmon_device] = udevc.list_devices(subsystem='hwmon', parent=parent_dev)
+        try:
+            [hwmon_device] = udevc.list_devices(subsystem='hwmon', parent=parent_dev)
+        except ValueError as e:
+            # if parent_dev does not have exactly one hwmon device in its subtree
+            hwmon_device = None
         return hwmon_device
 
     def _get_nth_temp(self, index: int) -> float:
