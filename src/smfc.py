@@ -756,6 +756,8 @@ class HdZone(FanController):
         # Read and validate the configuration of standby guard if enabled.
         self.standby_guard_enabled = config[self.CS_HD_ZONE].getboolean(self.CV_HD_ZONE_STANDBY_GUARD_ENABLED,
                                                                         fallback=False)
+        self.smartctl_path = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
+
         if self.count == 1:
             self.log.msg(self.log.LOG_INFO, '   WARNING: Standby guard is disabled ([HD zone] count=1')
             self.standby_guard_enabled = False
@@ -767,7 +769,6 @@ class HdZone(FanController):
                 raise ValueError('standby_hd_limit < 0')
             if self.standby_hd_limit > self.count:
                 raise ValueError('standby_hd_limit > count')
-            self.smartctl_path = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
             # Get the current power state of the HD array.
             n = self.check_standby_state()
             # Set calculated parameters.
