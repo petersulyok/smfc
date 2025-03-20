@@ -814,7 +814,6 @@ class HdZone(FanController):
             # Read disk temperature from `smartctl` command.
             pySMART.SMARTCTL.options = []
             pySMART.SMARTCTL.smartctl_path = self.smartctl_path
-            pySMART.SMARTCTL.sudo = True
             sd = pySMART.Device(self.hd_device_names[index])
             value = sd.temperature
             if not value:
