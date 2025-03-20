@@ -13,6 +13,8 @@ import syslog
 import time
 from typing import List, Callable
 from pyudev import Context, Devices, Device, DeviceNotFoundByFileError
+import pySMART
+
 
 # Program version string
 version_str: str = '4.0.0 beta'
@@ -618,7 +620,7 @@ class CpuZone(FanController):
         for dev_filter in [{'MODALIAS':'platform:coretemp'}, {'DRIVER':'k10temp'}]:
             try:
                 self.hwmon_dev = [self.get_hwmon_dev(udevc, dev) for dev in udevc.list_devices(**dev_filter)]
-            except(ValueError) as e:
+            except ValueError as e:
                 raise e
             # If we found results.
             if len(self.hwmon_dev):
@@ -803,26 +805,25 @@ class HdZone(FanController):
         """
         value: float                    # Float value to calculate the temperature.
         b: bytes
+        sd: pySMART.Device
 
-        # Use 'smartctl' command for reading temperature.
+        # Read temperature with `smartctl` command.
         if self.hwmon_dev[index] is None:
 
-            """
-            # Read disk temperature with calling 'hddtemp' command.
-            try:
-                r = subprocess.run([self.hddtemp_path, '-q', '-n', self.hd_device_names[index]],
-                                   check=False, capture_output=True, text=True)
-                if r.returncode != 0:
-                    raise RuntimeError(r.stderr)
-                value = float(r.stdout)
-            except (FileNotFoundError, ValueError, IndexError) as e:
-                raise e
-            """
+            # Read disk temperature from `smartctl` command.
+            pySMART.SMARTCTL.options = []
+            pySMART.SMARTCTL.smartctl_path = self.smartctl_path
+            pySMART.SMARTCTL.sudo = True
+            sd = pySMART.Device(self.hd_device_names[index])
+            value = sd.temperature
+            if not value:
+                raise ValueError(f'ERROR: smartctl cannot read temperature from device {self.hd_device_names[index]}.')
 
-        # Read temperature from HWMON device.
+        # Read temperature from a HWMON device.
         else:
             b = bytes(self.hwmon_dev[index].attributes.get('temp1_input'))
             value = float(b.decode('utf-8'))/1000.0
+
         return value
 
     def get_standby_state_str(self) -> str:
