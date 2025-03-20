@@ -12,10 +12,7 @@ import sys
 import syslog
 import time
 from typing import List, Callable
-
-from exceptiongroup import catch
 from pyudev import Context, Devices, Device, DeviceNotFoundByFileError
-import pySMART
 
 # Program version string
 version_str: str = '4.0.0 beta'
