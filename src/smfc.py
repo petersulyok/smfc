@@ -617,7 +617,7 @@ class CpuZone(FanController):
         # We are looking for either Intel (coretemp) or AMD (k10temp) CPUs.
         for dev_filter in [{'MODALIAS':'platform:coretemp'}, {'DRIVER':'k10temp'}]:
             try:
-                self.hwmon_dev = [self.get_hwmon_dev(self.udevc, dev) for dev in self.udevc.list_devices(**dev_filter)]
+                self.hwmon_dev = [self.get_hwmon_dev(udevc, dev) for dev in udevc.list_devices(**dev_filter)]
             except(ValueError) as e:
                 raise e
             # If we found results.
