@@ -7,7 +7,7 @@
 
 Super Micro fan control for Linux (home) servers.
 
-WARNING: Please download a release (instead of cloning the repo), there is an ongoing refactoring on the main branch.
+${{\color{red}\textsf{WARNING: Please download a release (instead of cloning the repo), there is an ongoing refactoring on the main branch.}}}\$
 
 ## TL;DR
 
