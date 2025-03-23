@@ -46,14 +46,14 @@ class Service:
         """Check run-time dependencies of smfc:
 
               - ipmitool command
-              - if CPU zone enabled: coretemp or k10temp kernel module
-              - if HD zone enabled: drivetemp kernel module or hddtemp command
+              - if CPU zone enabled: `coretemp` or `k10temp` kernel module
+              - if HD zone enabled: `drivetemp` kernel module or `smartctl` command
 
         Returns:
             (str): error string:
 
                 - empty: dependencies are OK
-                - otherwise: the error message
+                - otherwise: error message
 
         """
         path: str

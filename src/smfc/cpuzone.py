@@ -40,14 +40,14 @@ class CpuZone(FanController):
             ValueError: multiple hwmon devices reported, one expected
             RuntimeError: No HWMON device found for CPU(s)
         """
+        count: int  # CPU count.
 
         # Build the list of paths for hwmon devices.
-        self.udevc = udevc
         self.hwmon_path = []
         # We are looking for either Intel (coretemp) or AMD (k10temp) CPUs.
         for dev_filter in [{'MODALIAS':'platform:coretemp'}, {'DRIVER':'k10temp'}]:
             try:
-                self.hwmon_path = [self.get_hwmon_path(dev) for dev in self.udevc.list_devices(**dev_filter)]
+                self.hwmon_path = [self.get_hwmon_path(udevc, dev) for dev in udevc.list_devices(**dev_filter)]
             except ValueError as e:
                 raise e
             # If we found results.
@@ -55,12 +55,12 @@ class CpuZone(FanController):
                 break
         if not self.hwmon_path:
             raise RuntimeError('pyudev: No HWMON device(s) can be found for CPU.')
-        # Set count.
-        self.count = len(self.hwmon_path)
+        # Calculate count.
+        count = len(self.hwmon_path)
 
         # Initialize FanController class.
         super().__init__(
-            log, ipmi, Ipmi.CPU_ZONE, self.CS_CPU_ZONE,
+            log, ipmi, Ipmi.CPU_ZONE, self.CS_CPU_ZONE, count,
             config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
             config[self.CS_CPU_ZONE].getint(self.CV_CPU_ZONE_STEPS, fallback=6),
             config[self.CS_CPU_ZONE].getfloat(self.CV_CPU_ZONE_SENSITIVITY, fallback=3.0),

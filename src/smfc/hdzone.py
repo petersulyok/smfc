@@ -56,6 +56,7 @@ class HdZone(FanController):
             ValueError: Parameter `hd_names=` is not specified in the configuration
         """
         hd_names: str   # String for hd_names=
+        count: int      # HDD count.
 
         # Save and validate HdZone class specific parameters.
         hd_names = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_HD_NAMES)
@@ -66,27 +67,23 @@ class HdZone(FanController):
         else:
             self.hd_device_names = hd_names.split()
         # Set count.
-        self.count = len(self.hd_device_names)
+        count = len(self.hd_device_names)
 
         # Iterate through each disk.
-        self.udevc = udevc
         self.hwmon_path=[]
-        for i in range(self.count):
+        for i in range(count):
             # Find udev device based on device name.
             try:
-                block_dev = Devices.from_device_file(self.udevc, self.hd_device_names[i])
+                block_dev = Devices.from_device_file(udevc, self.hd_device_names[i])
             except DeviceNotFoundByFileError:
                 raise ValueError(f'ERROR: {self.hd_device_names[i]} cannot be accessed.') \
                     from DeviceNotFoundByFileError
             # Add the hwmon path string for NVME/SATA/HDD disks or '' for SAS/SCSI disks.
-            self.hwmon_path.append(self.get_hwmon_path(block_dev.parent))
-
-        # Save path for `smartctl` command.
-        self.smartctl_path = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
+            self.hwmon_path.append(self.get_hwmon_path(udevc, block_dev.parent))
 
         # Initialize FanController class.
         super().__init__(
-            log, ipmi, Ipmi.HD_ZONE, self.CS_HD_ZONE,
+            log, ipmi, Ipmi.HD_ZONE, self.CS_HD_ZONE, count,
             config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
             config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_STEPS, fallback=4),
             config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_SENSITIVITY, fallback=2),
@@ -96,6 +93,9 @@ class HdZone(FanController):
             config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_MIN_LEVEL, fallback=35),
             config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_MAX_LEVEL, fallback=100)
         )
+
+        # Save path for `smartctl` command.
+        self.smartctl_path = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
 
         # Read and validate the configuration of standby guard if enabled.
         self.standby_guard_enabled = config[self.CS_HD_ZONE].getboolean(self.CV_HD_ZONE_STANDBY_GUARD_ENABLED,
@@ -171,6 +171,7 @@ class HdZone(FanController):
                         found = True
                         break
 
+                    # pylint: disable=C0301
                     # ATA/SATA type of temperature reporting:
                     # `190 Airflow_Temperature_Cel 0x0032   075   045   000    Old_age   Always       -       25`
                     # `194 Temperature_Celsius     0x0002   232   232   000    Old_age   Always       -       28 (Min/Max 17/45)`
@@ -182,7 +183,7 @@ class HdZone(FanController):
 
                 # If we did not find any matching temperature pattern.
                 if not found:
-                    raise ValueError(f'smartctl output: Temperature value cannot be found!')
+                    raise ValueError('smartctl output: Temperature value cannot be found!')
 
             except (FileNotFoundError, ValueError, IndexError) as e:
                 raise e
@@ -232,15 +233,14 @@ class HdZone(FanController):
     def go_standby_state(self):
         """Put active HDs to STANDBY state in the array (based on the actual state of 'standby_states').
         """
-        r: subprocess.CompletedProcess      # Result of the executed process.
 
         # Iterate through HDs list
         for i in range(self.count):
             # if the HD is ACTIVE
             if not self.standby_array_states[i]:
                 # then move it to STANDBY state
-                r = subprocess.run([self.smartctl_path, '-s', 'standby,now', self.hd_device_names[i]],
-                                   check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run([self.smartctl_path, '-s', 'standby,now', self.hd_device_names[i]],
+                               check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 self.standby_array_states[i] = True
 
     def run_standby_guard(self):

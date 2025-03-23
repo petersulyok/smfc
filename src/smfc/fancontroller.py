@@ -21,7 +21,6 @@ class FanController:
 
     # Configuration parameters
     log: Log                # Reference to a Log class instance
-    udevc: Context          # Reference to an udev database connection (instance of Context from pyudev)
     ipmi: Ipmi              # Reference to an Ipmi class instance
     ipmi_zone: int          # IPMI zone identifier
     name: str               # Name of the controller
@@ -46,8 +45,8 @@ class FanController:
     # Function variable for selected temperature calculation method
     get_temp_func: Callable[[], float]
 
-    def __init__(self, log: Log, ipmi: Ipmi, ipmi_zone: int, name: str, temp_calc: int, steps: int,
-                 sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
+    def __init__(self, log: Log, ipmi: Ipmi, ipmi_zone: int, name: str, count: int, temp_calc: int,
+                 steps: int, sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
                  max_level: int) -> None:
         """Initialize the FanController class. Will raise an exception in case of invalid parameters.
 
@@ -65,7 +64,7 @@ class FanController:
             min_level (int): minimum fan level value [0..100%]
             max_level (int): maximum fan level value [0..100%]
         Raises:
-            ValueError: invalid inpuit parameter
+            ValueError: invalid input parameter
 
         """
         # Save and validate configuration parameters.
@@ -75,6 +74,9 @@ class FanController:
         if self.ipmi_zone not in {Ipmi.CPU_ZONE, Ipmi.HD_ZONE}:
             raise ValueError('invalid value: ipmi_zone')
         self.name = name
+        self.count = count
+        if self.count <= 0:
+            raise ValueError('count <= 0')
         self.temp_calc = temp_calc
         if self.temp_calc not in {self.CALC_MIN, self.CALC_AVG, self.CALC_MAX}:
             raise ValueError('invalid value: temp_calc')
@@ -105,9 +107,6 @@ class FanController:
                 self.get_temp_func = self.get_min_temp
             elif self.temp_calc == self.CALC_MAX:
                 self.get_temp_func = self.get_max_temp
-        # Check if temperature can be read successfully.
-        if self.hwmon_path:
-            self.get_temp_func()
         # Initialize calculated values.
         self.temp_step = (max_temp - min_temp) / steps
         self.level_step = (max_level - min_level) / steps
@@ -136,17 +135,19 @@ class FanController:
             self.log.msg(self.log.LOG_CONFIG, f'   hwmon_path = {result}')
             self.print_temp_level_mapping()
 
-    def get_hwmon_path(self, parent_dev: Device) -> str:
+    @staticmethod
+    def get_hwmon_path(udevc: Context, parent_dev: Device) -> str:
         """A helper function to get HWMON path of a given parent device's associated hwmon
 
         Args:
+            udevc (Context): pyudev Context
             parent_dev (Device): parent device
 
         Returns:
             str: path for a HWMON device
         """
         try:
-            [hwmon_device] = self.udevc.list_devices(subsystem='hwmon', parent=parent_dev)
+            [hwmon_device] = udevc.list_devices(subsystem='hwmon', parent=parent_dev)
         except ValueError:
             # If parent_dev has zero (or more?) hwmon device in its subtree
             hwmon_device = None
@@ -163,7 +164,6 @@ class FanController:
         """
         return self._get_nth_temp(0)
 
-    # pylint: disable=R1730
     def get_min_temp(self) -> float:
         """Get the minimum temperature of multiple controlled entities.
 
