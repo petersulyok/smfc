@@ -43,7 +43,7 @@ class CpuZone(FanController):
 
         # Build the list of paths for hwmon devices.
         self.udevc = udevc
-        self.hwmon_dev = []
+        self.hwmon_path = []
         # We are looking for either Intel (coretemp) or AMD (k10temp) CPUs.
         for dev_filter in [{'MODALIAS':'platform:coretemp'}, {'DRIVER':'k10temp'}]:
             try:
@@ -51,12 +51,12 @@ class CpuZone(FanController):
             except ValueError as e:
                 raise e
             # If we found results.
-            if self.hwmon_dev:
+            if self.hwmon_path:
                 break
-        if not self.hwmon_dev:
+        if not self.hwmon_path:
             raise RuntimeError('pyudev: No HWMON device(s) can be found for CPU.')
         # Set count.
-        self.count = len(self.hwmon_dev)
+        self.count = len(self.hwmon_path)
 
         # Initialize FanController class.
         super().__init__(

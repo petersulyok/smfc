@@ -73,7 +73,7 @@ class HdZone(FanController):
 
         # Iterate through each disk.
         self.udevc = udevc
-        self.hwmon_dev=[]
+        self.hwmon_path=[]
         for i in range(self.count):
             # Find udev device based on device name.
             try:
