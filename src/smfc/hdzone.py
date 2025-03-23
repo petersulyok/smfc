@@ -7,10 +7,7 @@ import configparser
 import subprocess
 import time
 from typing import List
-
-import pySMART
 from pyudev import Context, Devices, DeviceNotFoundByFileError
-
 from smfc.fancontroller import FanController
 from smfc.ipmi import Ipmi
 from smfc.log import Log
@@ -31,7 +28,7 @@ class HdZone(FanController):
     standby_array_states: List[bool]    # Standby states of HDs
 
     # Error message.
-    ERROR_MSG_SMARTCTL: str = 'Unknown smartctl return value {}'
+    ERROR_MSG_SMARTCTL: str = 'smartctl error ({err_no}): {err_msg}.'
 
     # Constant values for the configuration parameters.
     CS_HD_ZONE: str = 'HD zone'
@@ -54,7 +51,7 @@ class HdZone(FanController):
 
         Args:
             log (Log): reference to a Log class instance
-            udevc (Context): reference to a udev database connection (instance of Context from pyudev)
+            udevc (Context): reference to an udev database connection (instance of Context from pyudev)
             ipmi (Ipmi): reference to an Ipmi class instance
             config (configparser.ConfigParser): reference to the configuration (default=None)
 
@@ -75,26 +72,24 @@ class HdZone(FanController):
         self.count = len(self.hd_device_names)
 
         # Iterate through each disk.
+        self.udevc = udevc
         self.hwmon_dev=[]
         for i in range(self.count):
             # Find udev device based on device name.
             try:
-                block_dev = Devices.from_device_file(udevc, self.hd_device_names[i])
+                block_dev = Devices.from_device_file(self.udevc, self.hd_device_names[i])
             except DeviceNotFoundByFileError:
                 raise ValueError(f'ERROR: {self.hd_device_names[i]} cannot be accessed.') \
                     from DeviceNotFoundByFileError
+            # Add the hwmon path string for NVME/SATA/HDD disks or '' for SAS/SCSI disks.
+            self.hwmon_path.append(self.get_hwmon_path(block_dev.parent))
 
-            # Add hwmon device for NVME/SATA/HDD disks or None for SAS/SCSI disks.
-            try:
-                self.hwmon_dev.append(self.get_hwmon_dev(udevc, block_dev.parent))
-            except ValueError as e:
-                raise e
         # Save path for `smartctl` command.
         self.smartctl_path = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
 
         # Initialize FanController class.
         super().__init__(
-            log, udevc, ipmi, Ipmi.HD_ZONE, self.CS_HD_ZONE,
+            log, ipmi, Ipmi.HD_ZONE, self.CS_HD_ZONE,
             config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
             config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_STEPS, fallback=4),
             config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_SENSITIVITY, fallback=2),
@@ -141,7 +136,7 @@ class HdZone(FanController):
             self.run_standby_guard()
 
     def _get_nth_temp(self, index: int) -> float:
-        """Get the temperature of the `nth` element in the hwmon list. This is a specific implementation for HD zone.
+        """Get the temperature of the nth element in the hwmon list. This is a specific implementation for HD zone.
 
         Args:
             index (int): index in hwmon list
@@ -155,26 +150,56 @@ class HdZone(FanController):
             ValueError:         invalid temperature value
             IndexError:         invalid index
         """
-        value: float        # Float value to calculate the temperature.
-        sd: pySMART.Device  # pySMART device.
+        value: float = -1.0     # Float value to calculate the temperature.
 
-        # Read temperature with `smartctl` command.
-        if self.hwmon_dev[index] is None:
+        # Use 'smartctl' command for reading HD temperature in case of empty HWMON path.
+        if not self.hwmon_path[index]:
+            r: subprocess.CompletedProcess  # result of the executed process
+            lines: List[str]  # Output lines.
+            found: bool  # Temperature value was found.
 
-            # Read disk temperature from `smartctl` command.
-            pySMART.SMARTCTL.options = []
-            pySMART.SMARTCTL.smartctl_path = self.smartctl_path
-            sd = pySMART.Device(self.hd_device_names[index])
-            value = sd.temperature
-            if not value:
-                raise ValueError(f'ERROR: smartctl cannot read temperature from device {self.hd_device_names[index]}.')
+            # Read disk temperature with calling `smartctl -a /dev/...` command.
+            try:
+                r = subprocess.run([self.smartctl_path, '-a', self.hd_device_names[index]],
+                                   check=False, capture_output=True, text=True)
+                if r.returncode != 0:
+                    raise RuntimeError(self.ERROR_MSG_SMARTCTL.format(err_no=r.returncode, err_msg=r.stderr))
 
-        # Read temperature from a HWMON device.
+                # Parse the output of smartctl.
+                lines = str(r.stdout).splitlines()
+                found = False
+                for l in lines:
+
+                    # SCSI type of temperature reporting:
+                    # `Current Drive Temperature:     37 C`
+                    if 'Current Drive Temperature' in l:
+                        value = float(l.split(':')[-1].strip().split()[0])
+                        found = True
+                        break
+
+                    # ATA/SATA type of temperature reporting:
+                    # `190 Airflow_Temperature_Cel 0x0032   075   045   000    Old_age   Always       -       25`
+                    # `194 Temperature_Celsius     0x0002   232   232   000    Old_age   Always       -       28 (Min/Max 17/45)`
+                    if 'Temperature' in l:
+                        s = l.split()
+                        value = float(s[9])
+                        found = True
+                        break
+
+                # If we did not find any matching temperature pattern.
+                if not found:
+                    raise ValueError(f'smartctl output: Temperature value cannot be found!')
+
+            except (FileNotFoundError, ValueError, IndexError) as e:
+                raise e
+
+        # Read temperature from HWMON file in sysfs.
         else:
-            b: bytes    # Byte buffer for reading temperature.
-
-            b = bytes(self.hwmon_dev[index].attributes.get('temp1_input'))
-            value = float(b.decode('utf-8'))/1000.0
+            try:
+                with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
+                    value = float(f.read()) / 1000
+            except (IOError, FileNotFoundError, ValueError, IndexError) as e:
+                raise e
 
         return value
 
@@ -207,7 +232,7 @@ class HdZone(FanController):
             r = subprocess.run([self.smartctl_path, '-i', '-n', 'standby', self.hd_device_names[i]],
                                check=False, capture_output=True, text=True)
             if r.returncode not in {0, 2}:
-                raise ValueError(self.ERROR_MSG_SMARTCTL.format(r.returncode))
+                raise ValueError(self.ERROR_MSG_SMARTCTL.format(err_no=r.returncode, err_msg=r.stderr))
             if str(r.stdout).find("STANDBY") != -1:
                 self.standby_array_states[i] = True
         return self.standby_array_states.count(True)
@@ -225,7 +250,7 @@ class HdZone(FanController):
                 r = subprocess.run([self.smartctl_path, '-s', 'standby,now', self.hd_device_names[i]],
                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 if r.returncode != 0:
-                    raise ValueError(self.ERROR_MSG_SMARTCTL.format(r.returncode))
+                    raise ValueError(self.ERROR_MSG_SMARTCTL.format(err_no=r.returncode, err_msg=r.stderr))
                 self.standby_array_states[i] = True
 
     def run_standby_guard(self):
@@ -248,8 +273,9 @@ class HdZone(FanController):
         # Step 2: check if the array is going to STANDBY state.
         if not self.standby_flag and hds_in_standby >= self.standby_hd_limit:
             minutes = (cur_time - self.standby_change_timestamp) / float(3600)
-            self.log.msg(self.log.LOG_INFO, f'Standby guard: Change ACTIVE to STANDBY after {minutes:.1f} hour(s)'
-                         f'[{self.get_standby_state_str()}]')
+            self.log.msg(self.log.LOG_INFO,
+                        f'Standby guard: Status change ACTIVE > STANDBY (after {minutes:.1f} hours, '
+                         f'{self.get_standby_state_str()})')
             self.go_standby_state()
             self.standby_flag = True
             self.standby_change_timestamp = cur_time
@@ -257,8 +283,9 @@ class HdZone(FanController):
         # Step 3: check if the array is waking up.
         elif self.standby_flag and hds_in_standby < self.count:
             minutes = (cur_time - self.standby_change_timestamp) / float(3600)
-            self.log.msg(self.log.LOG_INFO, f'Standby guard: Change STANDBY to ACTIVE after {minutes:.1f} hour(s)'
-                         f'[{self.get_standby_state_str()}]')
+            self.log.msg(self.log.LOG_INFO,
+                        f'Standby guard: Status change STANDBY > ACTIVE (after {minutes:.1f} hours, '
+                         f'{self.get_standby_state_str()})')
             self.standby_flag = False
             self.standby_change_timestamp = cur_time
 

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "pytest", "pylint"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -35,13 +35,18 @@ Changelog = "https://github.com/petersulyok/smfc/releases"
 Issues = "https://github.com/petersulyok/smfc/issues"
 [project.optional-dependencies]
 test = [
-    "pytest",
+    "coverage==7.6.12",
+    "pytest==8.3.5",
+    "pytest-cov==6.0.0",
+    "pylint==3.3.5"
 ]
+
 [project.scripts]
-smfc = "smfc:main"
+smfc = "smfc.cmd:main"
 
 [tool.setuptools]
-packages = ["src"]
+packages = ["smfc"]
+package-dir = {"" = "src"}
 
 # pytest options
 [tool.pytest.ini_options]
@@ -63,8 +68,6 @@ max-line-length=120
 
 [tool.pylint.'MESSAGES CONTROL']
 disable= [
-    "too-many-branches", "too-many-instance-attributes", "too-many-statements", "too-many-arguments",
-    "too-many-locals", "too-many-public-methods", "invalid-name", "line-too-long", "missing-module-docstring",
-    "pointless-string-statement", "duplicate-code", "unsubscriptable-object", "too-many-lines",
-    "assignment-from-no-return", "protected-access", "no-member", "too-many-positional-arguments"
+    "missing-module-docstring", "too-many-instance-attributes", "too-many-arguments", "too-many-positional-arguments",
+    "too-many-locals", "too-many-branches", "too-many-statements", "assignment-from-no-return"
     ]

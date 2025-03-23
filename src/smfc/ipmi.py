@@ -7,19 +7,18 @@ import configparser
 import subprocess
 import time
 from typing import List
-
 from smfc.log import Log
 
 
 class Ipmi:
-    """IPMI interface class. It can set/get modes of IPMI fan zones and can set IPMI fan levels using ipmitool."""
+    """IPMI interface class can set/get IPMI fan mode, and can set IPMI fan level using ipmitool."""
 
-    log: Log                            # Reference to a Log class instance
-    command: str                        # Full path for ipmitool command.
-    fan_mode_delay: float               # Delay time after execution of IPMI set fan mode function
-    fan_level_delay: float              # Delay time after execution of IPMI set fan level function
-    swapped_zones: bool                 # CPU and HD zones are swapped
-    remote_parameters: str              # Remote IPMI parameters.
+    log: Log                    # Reference to a Log class instance
+    command: str                # Full path for ipmitool command.
+    fan_mode_delay: float       # Delay time after execution of IPMI set fan mode function
+    fan_level_delay: float      # Delay time after execution of IPMI set fan level function
+    swapped_zones: bool         # CPU and HD zones are swapped
+    remote_parameters: str      # Remote IPMI parameters.
 
     # Constant values for IPMI fan modes:
     STANDARD_MODE: int = 0
@@ -49,6 +48,9 @@ class Ipmi:
         Args:
             log (Log): Log class
             config (configparser.ConfigParser): configuration values
+        Raises:
+            ValueError: invalid input parameters
+            FileNotFoundError: ipmitool command not found
         """
         # Set default or read from configuration
         self.log = log
@@ -77,18 +79,18 @@ class Ipmi:
             self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_FAN_MODE_DELAY} = {self.fan_mode_delay}')
             self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_FAN_LEVEL_DELAY} = {self.fan_level_delay}')
             self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_SWAPPED_ZONES} = {self.swapped_zones}')
-            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_REMOTE_PARAMETERS} = {self.remote_parameters}')
+            if self.remote_parameters:
+                self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_REMOTE_PARAMETERS} = {self.remote_parameters}')
 
     def get_fan_mode(self) -> int:
         """Get the current IPMI fan mode.
 
         Returns:
             int: fan mode (ERROR, STANDARD_MODE, FULL_MODE, OPTIMAL_MODE, HEAVY_IO_MODE)
-
         Raises:
             FileNotFoundError: ipmitool command cannot be found
             ValueError: output of the ipmitool cannot be interpreted/converted
-            RuntimeError: ipmitool execution problem in IPMI (e.g. non-root user, incompatible IPMI systems
+            RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI systems
                 or motherboards)
         """
         r: subprocess.CompletedProcess  # result of the executed process
@@ -103,7 +105,7 @@ class Ipmi:
             arguments.extend(['raw', '0x30', '0x45', '0x00'])
             r = subprocess.run(arguments, check=False, capture_output=True, text=True)
             if r.returncode != 0:
-                raise RuntimeError(r.stderr)
+                raise RuntimeError(f'ipmitool error ({r.returncode}): {r.stderr}')
             m = int(r.stdout)
         except (FileNotFoundError, ValueError) as e:
             raise e
@@ -117,7 +119,7 @@ class Ipmi:
         Returns:
             str: name of the fan mode ('ERROR', 'STANDARD MODE', 'FULL MODE', 'OPTIMAL MODE', 'HEAVY IO MODE')
         """
-        fan_mode_name: str              # Name of the fan mode
+        fan_mode_name: str  # Name of the fan mode
 
         fan_mode_name = 'ERROR'
         if mode == self.STANDARD_MODE:
@@ -135,6 +137,9 @@ class Ipmi:
 
         Args:
             mode (int): fan mode (STANDARD_MODE, FULL_MODE, OPTIMAL_MODE, HEAVY_IO_MODE)
+        Raises:
+            FileNotFoundError: ipmitool command cannot be found
+            ValueError: invalid input parameter
         """
         arguments: List[str]    # Command arguments
 
@@ -159,6 +164,9 @@ class Ipmi:
         Args:
             zone (int): fan zone (CPU_ZONE, HD_ZONE)
             level (int): fan level in % (0-100)
+        Raises:
+            FileNotFoundError: ipmitool command cannot be found
+            ValueError: invalid input parameter
         """
         arguments: List[str]  # Command arguments
 

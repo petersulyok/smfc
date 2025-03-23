@@ -9,7 +9,7 @@ from typing import Callable
 
 
 class Log:
-    """Log class. This class can send log messages considering different log levels and different outputs"""
+    """Log class. This class can send log messages considering different log levels and different log outputs."""
 
     # Configuration parameters.
     log_level: int                      # Log level
@@ -34,6 +34,8 @@ class Log:
         Args:
             log_level (int): user defined log level (LOG_NONE, LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             log_output (int): user defined log output (LOG_STDOUT, LOG_STDERR, LOG_SYSLOG)
+        Raises:
+            ValueError: invalid input parameters
         """
         # Setup log configuration.
         if log_level not in {self.LOG_NONE, self.LOG_ERROR, self.LOG_CONFIG, self.LOG_INFO, self.LOG_DEBUG}:
