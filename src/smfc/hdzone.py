@@ -27,9 +27,6 @@ class HdZone(FanController):
     standby_change_timestamp: float     # Timestamp of the latest change in STANDBY mode
     standby_array_states: List[bool]    # Standby states of HDs
 
-    # Error message.
-    ERROR_MSG_SMARTCTL: str = 'smartctl error ({err_no}): {err_msg}.'
-
     # Constant values for the configuration parameters.
     CS_HD_ZONE: str = 'HD zone'
     CV_HD_ZONE_ENABLED: str = 'enabled'
@@ -162,9 +159,6 @@ class HdZone(FanController):
             try:
                 r = subprocess.run([self.smartctl_path, '-a', self.hd_device_names[index]],
                                    check=False, capture_output=True, text=True)
-                if r.returncode not in {0, 2}:
-                    raise RuntimeError(self.ERROR_MSG_SMARTCTL.format(err_no=r.returncode, err_msg=r.stderr))
-
                 # Parse the output of smartctl.
                 lines = str(r.stdout).splitlines()
                 found = False
@@ -231,8 +225,6 @@ class HdZone(FanController):
             self.standby_array_states[i] = False
             r = subprocess.run([self.smartctl_path, '-i', '-n', 'standby', self.hd_device_names[i]],
                                check=False, capture_output=True, text=True)
-            if r.returncode not in {0, 2}:
-                raise ValueError(self.ERROR_MSG_SMARTCTL.format(err_no=r.returncode, err_msg=r.stderr))
             if str(r.stdout).find("STANDBY") != -1:
                 self.standby_array_states[i] = True
         return self.standby_array_states.count(True)
@@ -249,8 +241,6 @@ class HdZone(FanController):
                 # then move it to STANDBY state
                 r = subprocess.run([self.smartctl_path, '-s', 'standby,now', self.hd_device_names[i]],
                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                if r.returncode not in {0, 2}:
-                    raise ValueError(self.ERROR_MSG_SMARTCTL.format(err_no=r.returncode, err_msg=r.stderr))
                 self.standby_array_states[i] = True
 
     def run_standby_guard(self):
