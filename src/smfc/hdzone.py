@@ -175,6 +175,7 @@ class HdZone(FanController):
                     # ATA/SATA type of temperature reporting:
                     # `190 Airflow_Temperature_Cel 0x0032   075   045   000    Old_age   Always       -       25`
                     # `194 Temperature_Celsius     0x0002   232   232   000    Old_age   Always       -       28 (Min/Max 17/45)`
+                    # pylint: enable=C0301
                     if 'Temperature' in l:
                         s = l.split()
                         value = float(s[9])
@@ -228,6 +229,7 @@ class HdZone(FanController):
                                check=False, capture_output=True, text=True)
             if str(r.stdout).find("STANDBY") != -1:
                 self.standby_array_states[i] = True
+        self.log.msg(self.log.LOG_DEBUG, 'Standby guard: current state is {self.get_standby_state_str()}.')
         return self.standby_array_states.count(True)
 
     def go_standby_state(self):
