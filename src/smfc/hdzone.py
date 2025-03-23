@@ -162,7 +162,7 @@ class HdZone(FanController):
             try:
                 r = subprocess.run([self.smartctl_path, '-a', self.hd_device_names[index]],
                                    check=False, capture_output=True, text=True)
-                if r.returncode != 0:
+                if r.returncode not in {0, 2}:
                     raise RuntimeError(self.ERROR_MSG_SMARTCTL.format(err_no=r.returncode, err_msg=r.stderr))
 
                 # Parse the output of smartctl.
@@ -249,7 +249,7 @@ class HdZone(FanController):
                 # then move it to STANDBY state
                 r = subprocess.run([self.smartctl_path, '-s', 'standby,now', self.hd_device_names[i]],
                                    check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                if r.returncode != 0:
+                if r.returncode not in {0, 2}:
                     raise ValueError(self.ERROR_MSG_SMARTCTL.format(err_no=r.returncode, err_msg=r.stderr))
                 self.standby_array_states[i] = True
 

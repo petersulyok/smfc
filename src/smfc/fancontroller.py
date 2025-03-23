@@ -239,7 +239,7 @@ class FanController:
 
         # Step 1: check the elapsed time.
         current_time = time.monotonic()
-        if current_time - self.last_time >= self.polling:
+        if (current_time - self.last_time) >= self.polling:
             self.last_time = current_time
 
             # Step 2: read temperature and sensitivity gap.
