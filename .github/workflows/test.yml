@@ -19,7 +19,7 @@ jobs:
         include:
           - coverage: true
             os: "ubuntu-latest"
-            python-version: "3.12"
+            python-version: "3.13"
 
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
           pip install .
       - name: Lint pylint
         run: |
-          pylint src/smfc/*.py test/*.py
+          pylint src test
       - name: Test with pytest
         run: |
           pytest

@@ -13,10 +13,8 @@ import pytest
 import pyudev
 from mock import MagicMock
 from pytest_mock import MockerFixture
-
-from test_00_data import TestData, MockDevices, factory_mockdevice
 from smfc import Log, Ipmi, FanController, HdZone
-
+from .test_00_data import TestData, MockDevices, factory_mockdevice
 
 class TestHdZone:
     """Unit test class for smfc.HdZone() class"""
@@ -87,7 +85,7 @@ class TestHdZone:
         del my_td
 
     @pytest.mark.parametrize("error", [
-        ('HdZone.__init__() 5')
+        'HdZone.__init__() 5'
     ])
     def test_init_p2(self, mocker: MockerFixture, error: str):
         """Positive unit test for HdZone.__init__() method. It contains the following steps:

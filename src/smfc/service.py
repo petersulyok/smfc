@@ -148,6 +148,7 @@ class Service:
 
         # Log command line parameters.
         if self.log.log_level >= Log.LOG_CONFIG:
+            self.log.msg(Log.LOG_CONFIG, f'Smfc version {version("smfc")} started')
             self.log.msg(Log.LOG_CONFIG, 'Command line arguments:')
             self.log.msg(Log.LOG_CONFIG, f'   original arguments: {" ".join(sys.argv[:])}')
             self.log.msg(Log.LOG_CONFIG, f'   parsed config file = {parsed_results.config_file}')

@@ -14,9 +14,7 @@ requires-python = ">=3.9, <4"
 keywords = ["supermicro", "linux", "daemon", "fancontrol"]
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
-dependencies = [
-    "pyudev==0.24.3"
-]
+dependencies = ["pyudev==0.24.3"]
 classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -60,12 +58,10 @@ filterwarnings = [ "default", "ignore::pytest.PytestCollectionWarning"]
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
-    "unittest.main()"
     ]
 
 # pylint options
-[tool.pylint.'MASTER']
-init-hook='import sys; sys.path.append("."); sys.path.append("./src"); sys.path.append("./test")'
+[tool.pylint.main]
 max-line-length=120
 
 [tool.pylint.'MESSAGES CONTROL']

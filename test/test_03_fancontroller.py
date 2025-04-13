@@ -9,9 +9,8 @@ import pytest
 import pyudev
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from test_00_data import MockDevice, MockContext
 from smfc import FanController, Log, Ipmi, CpuZone, HdZone
-
+from .test_00_data import MockDevice, MockContext
 
 class TestFanController:
     """Unit test class for smfc.FanController() class"""
@@ -161,7 +160,7 @@ class TestFanController:
         """Primitive positive test function. It contains the following steps:
             - mock FanController._get_nth_temp() function
             - initialize an empty FanController class
-            - ASSERT: if get_xxx_temp() functions return different temperature from expected
+            - ASSERT: if get_xxx_temp() functions return different from expected temperature
         """
         t: float    # temperature
 

@@ -11,9 +11,8 @@ import pytest
 from pyudev import Context
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from test_00_data import TestData, MockedContextError, MockedContextGood
 from smfc import Log, Ipmi, CpuZone, HdZone, Service, FanController
-
+from .test_00_data import TestData, MockedContextError, MockedContextGood
 
 class TestService:
     """Unit test for smfc.Service() class"""

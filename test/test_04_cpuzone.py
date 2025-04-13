@@ -10,9 +10,8 @@ import pyudev
 import pytest
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from test_00_data import TestData
 from smfc import Log, Ipmi, FanController, CpuZone
-
+from .test_00_data import TestData
 
 class TestCpuZone:
     """Unit test class for smfc.CpuZone() class"""

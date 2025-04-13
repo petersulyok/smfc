@@ -9,9 +9,8 @@ from configparser import ConfigParser
 import pytest
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from test_00_data import TestData
 from smfc import Log, Ipmi
-
+from .test_00_data import TestData
 
 class TestIpmi:
     """Unit test class for smfc.Ipmi() class"""
