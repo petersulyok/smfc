@@ -45,17 +45,13 @@ class TestLog:
         mocker.patch('syslog.syslog', mock_syslog_syslog)
         my_log = Log(level, output)
         assert my_log.log_level == level, error
-        if my_log.log_output != Log.LOG_SYSLOG and my_log.log_level == Log.LOG_DEBUG:
-            assert mock_print.call_count == 3, error
+        assert my_log.log_output == output, error
         if my_log.log_output is Log.LOG_STDOUT:
             assert my_log.msg == my_log.msg_to_stdout, error
         elif my_log.log_output is Log.LOG_STDERR:
             assert my_log.msg == my_log.msg_to_stderr, error
         elif my_log.log_output == Log.LOG_SYSLOG:
-            if my_log.log_level == Log.LOG_DEBUG:
-                assert mock_syslog_syslog.call_count == 3, error
-            if my_log.log_level != Log.LOG_NONE:
-                mock_syslog_openlog.assert_called()
+            assert my_log.msg == my_log.msg_to_syslog, error
 
     @pytest.mark.parametrize("level, output, error", [
         (100, Log.LOG_STDOUT, "Log.__init__() 16"),
@@ -214,8 +210,6 @@ class TestLog:
         mocker.patch('syslog.syslog', mock_syslog_syslog)
         my_log = Log(level, output)
         my_log.msg(msg_level, "This is a test log message.")
-        if my_log.log_level >= Log.LOG_CONFIG:
-            count += 3
         if output == Log.LOG_STDOUT:
             assert mock_print.call_count == count, error
         elif output == Log.LOG_STDERR:

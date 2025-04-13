@@ -51,12 +51,6 @@ class Log:
             self.msg = self.msg_to_syslog
             syslog.openlog('smfc.service', facility=syslog.LOG_DAEMON)
 
-        # Print the configuration out at DEBUG log level.
-        if self.log_level >= Log.LOG_CONFIG:
-            self.msg(Log.LOG_CONFIG, 'Logging was initialized with:')
-            self.msg(Log.LOG_CONFIG, f'   log_level = {self.log_level}')
-            self.msg(Log.LOG_CONFIG, f'   log_output = {self.log_output}')
-
     @staticmethod
     def map_to_syslog(level: int) -> int:
         """Map log level to syslog values.

@@ -47,7 +47,7 @@ class TestIpmi:
         assert my_ipmi.fan_level_delay == level_delay, error
         assert my_ipmi.swapped_zones == swapped, error
         assert my_ipmi.remote_parameters == remote_pars, error
-        assert mock_print.call_count == 3+6, error  # Log-3, Ipmi-6
+        assert mock_print.call_count == 6, error  # Ipmi-6
         assert my_ipmi.sudo == sudo, error
         del my_td
 
