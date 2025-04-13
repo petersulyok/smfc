@@ -6,7 +6,6 @@
 import subprocess
 import time
 from configparser import ConfigParser
-from sys import stderr
 from typing import List
 from pyudev import Context, Devices, DeviceNotFoundByFileError
 from smfc.fancontroller import FanController
