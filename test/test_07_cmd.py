@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 #
-#   fancontroller.py (C) 2020-2025, Peter Sulyok
-#   smfc package: Super Micro fan control for Linux (home) servers.
-#   smfc.main function implementation.
+#   test_07_cmd.py (C) 2021-2025, Peter Sulyok
+#   Unit tests for smfc.cmd() class.
 #
 from mock import MagicMock
 from pytest_mock import MockerFixture
@@ -19,7 +18,6 @@ class TestMain:
         mocker.patch('smfc.Service.run', mock_service_run)
         main()
         mock_service_run.assert_called_once()
-
 # pylint: enable=too-few-public-methods
 
 
