@@ -113,7 +113,7 @@ class Ipmi:
             arguments.extend(args)
             r = subprocess.run(arguments, check=False, capture_output=True, text=True)
             # Check error code.
-            if self.sudo and r.returncode != 0:
+            if self.sudo and 'sudo' in r.stderr and r.returncode != 0:
                 raise RuntimeError(f'sudo error ({r.returncode}): {r.stderr}.')
             if r.returncode != 0:
                 raise RuntimeError(f'ipmitool error ({r.returncode}): {r.stderr}.')

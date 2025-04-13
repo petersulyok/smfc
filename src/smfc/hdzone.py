@@ -6,6 +6,7 @@
 import subprocess
 import time
 from configparser import ConfigParser
+from sys import stderr
 from typing import List
 from pyudev import Context, Devices, DeviceNotFoundByFileError
 from smfc.fancontroller import FanController
@@ -156,7 +157,7 @@ class HdZone(FanController):
             args.extend(arguments)
             r = subprocess.run(args, check=False, capture_output=True, text=True)
             # In case if sudo return code report execution problem (for smartctl it could be any SMART error)
-            if self.sudo and r.returncode != 0:
+            if self.sudo and 'sudo' in r.stderr and r.returncode != 0:
                 raise RuntimeError(f'sudo error ({r.returncode}): {r.stderr}!')
         except FileNotFoundError as e:
             raise e
