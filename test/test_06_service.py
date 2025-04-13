@@ -45,7 +45,7 @@ class TestService:
         if ipmi:
             assert mock_ipmi_set_fan_level.call_count == 2, error
             if log:
-                assert mock_log_msg.call_count == 4, error # Log.__init__ 3 + Service.exit_func() 1
+                assert mock_log_msg.call_count == 1, error
 
     @pytest.mark.parametrize("module_list, cpuzone, hdzone, standby, error", [
         ("something\ncoretemp\n",           True,  False, False, "Service.check_dependencies() 1"),
