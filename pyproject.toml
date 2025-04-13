@@ -38,6 +38,8 @@ test = [
     "coverage==7.6.12",
     "pytest==8.3.5",
     "pytest-cov==6.0.0",
+    "pytest-mock == 3.14.0",
+    "mock == 5.2.0",
     "pylint==3.3.5"
 ]
 
@@ -51,6 +53,7 @@ package-dir = {"" = "src"}
 # pytest options
 [tool.pytest.ini_options]
 pythonpath = "src"
+mock_use_standalone_module = true
 filterwarnings = [ "default", "ignore::pytest.PytestCollectionWarning"]
 
 # coverage options
@@ -69,5 +72,5 @@ max-line-length=120
 [tool.pylint.'MESSAGES CONTROL']
 disable= [
     "missing-module-docstring", "too-many-instance-attributes", "too-many-arguments", "too-many-positional-arguments",
-    "too-many-locals", "too-many-branches", "too-many-statements", "assignment-from-no-return"
+    "too-many-locals", "too-many-branches", "too-many-statements", "assignment-from-no-return", "too-many-public-methods"
     ]

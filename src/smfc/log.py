@@ -30,7 +30,6 @@ class Log:
 
     def __init__(self, log_level: int, log_output: int) -> None:
         """Initialize Log class with log output and log level.
-
         Args:
             log_level (int): user defined log level (LOG_NONE, LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             log_output (int): user defined log output (LOG_STDOUT, LOG_STDERR, LOG_SYSLOG)
@@ -38,79 +37,77 @@ class Log:
             ValueError: invalid input parameters
         """
         # Setup log configuration.
-        if log_level not in {self.LOG_NONE, self.LOG_ERROR, self.LOG_CONFIG, self.LOG_INFO, self.LOG_DEBUG}:
+        if log_level not in {Log.LOG_NONE, Log.LOG_ERROR, Log.LOG_CONFIG, Log.LOG_INFO, Log.LOG_DEBUG}:
             raise ValueError(f'Invalid log level value ({log_level})')
         self.log_level = log_level
-        if log_output not in {self.LOG_STDOUT, self.LOG_STDERR, self.LOG_SYSLOG}:
+        if log_output not in {Log.LOG_STDOUT, Log.LOG_STDERR, Log.LOG_SYSLOG}:
             raise ValueError(f'Invalid log output value ({log_output})')
         self.log_output = log_output
-        if self.log_output == self.LOG_STDOUT:
+        if self.log_output == Log.LOG_STDOUT:
             self.msg = self.msg_to_stdout
-        elif self.log_output == self.LOG_STDERR:
+        elif self.log_output == Log.LOG_STDERR:
             self.msg = self.msg_to_stderr
         else:
             self.msg = self.msg_to_syslog
             syslog.openlog('smfc.service', facility=syslog.LOG_DAEMON)
 
         # Print the configuration out at DEBUG log level.
-        if self.log_level >= self.LOG_CONFIG:
-            self.msg(Log.LOG_CONFIG, 'Logging module was initialized with:')
+        if self.log_level >= Log.LOG_CONFIG:
+            self.msg(Log.LOG_CONFIG, 'Logging was initialized with:')
             self.msg(Log.LOG_CONFIG, f'   log_level = {self.log_level}')
             self.msg(Log.LOG_CONFIG, f'   log_output = {self.log_output}')
 
-    def map_to_syslog(self, level: int) -> int:
+    @staticmethod
+    def map_to_syslog(level: int) -> int:
         """Map log level to syslog values.
-
             Args:
                 level (int): log level (LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             Returns:
                 int: syslog log level
             """
         syslog_level = syslog.LOG_ERR
-        if level in (self.LOG_CONFIG, self.LOG_INFO):
+        if level in (Log.LOG_CONFIG, Log.LOG_INFO):
             syslog_level = syslog.LOG_INFO
-        elif level == self.LOG_DEBUG:
+        elif level == Log.LOG_DEBUG:
             syslog_level = syslog.LOG_DEBUG
         return syslog_level
 
-    def level_to_str(self, level: int) -> str:
+    @staticmethod
+    def level_to_str(level: int) -> str:
         """Convert a log level to a string.
-
             Args:
                 level (int): log level (LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             Returns:
                 str: log level string
             """
         string = 'NONE'
-        if level == self.LOG_ERROR:
+        if level == Log.LOG_ERROR:
             string = 'ERROR'
-        if level == self.LOG_CONFIG:
+        if level == Log.LOG_CONFIG:
             string = 'CONFIG'
-        if level == self.LOG_INFO:
+        if level == Log.LOG_INFO:
             string = 'INFO'
-        elif level == self.LOG_DEBUG:
+        elif level == Log.LOG_DEBUG:
             string = 'DEBUG'
         return string
 
     def msg_to_syslog(self, level: int, msg: str) -> None:
         """Print a log message to syslog.
-
         Args:
             level (int): log level (LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             msg (str): log message
         """
-        if level is not self.LOG_NONE:
+        if level is not Log.LOG_NONE:
             if level <= self.log_level:
                 syslog.syslog(self.map_to_syslog(level), msg)
 
     def msg_to_stdout(self, level: int, msg: str) -> None:
         """Print a log message to stdout.
-
         Args:
             level (int): log level (LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             msg (str):  log message
         """
-        if level is not self.LOG_NONE:
+        if level is not Log.LOG_NONE:
             if level <= self.log_level:
                 print(f'{self.level_to_str(level)}: {msg}', flush=True, file=sys.stdout)
 
@@ -121,7 +118,7 @@ class Log:
             level (int): log level (LOG_ERROR, LOG_CONFIG, LOG_INFO, LOG_DEBUG)
             msg (str):  log message
         """
-        if level is not self.LOG_NONE:
+        if level is not Log.LOG_NONE:
             if level <= self.log_level:
                 print(f'{self.level_to_str(level)}: {msg}', flush=True, file=sys.stderr)
 

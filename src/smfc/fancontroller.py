@@ -49,12 +49,12 @@ class FanController:
                  steps: int, sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
                  max_level: int) -> None:
         """Initialize the FanController class. Will raise an exception in case of invalid parameters.
-
         Args:
             log (Log): reference to a Log class instance
             ipmi (Ipmi): reference to an Ipmi class instance
             ipmi_zone (int): IPMI zone identifier
             name (str): name of the controller
+            count (int): number of devices
             temp_calc (int): calculation of temperature
             steps (int): discrete steps in temperatures and fan levels
             sensitivity (float): temperature change to activate fan controller (C)
@@ -65,7 +65,6 @@ class FanController:
             max_level (int): maximum fan level value [0..100%]
         Raises:
             ValueError: invalid input parameter
-
         """
         # Save and validate configuration parameters.
         self.log = log
@@ -107,6 +106,11 @@ class FanController:
                 self.get_temp_func = self.get_min_temp
             elif self.temp_calc == self.CALC_MAX:
                 self.get_temp_func = self.get_max_temp
+
+        # Try to read device temperature (at this point hwmon_path[] list must be prepared by a child class).
+        # If there is any problem with reading temperature, the program will stop here with an exception.
+        self.get_temp_func()
+
         # Initialize calculated values.
         self.temp_step = (max_temp - min_temp) / steps
         self.level_step = (max_level - min_level) / steps
@@ -114,25 +118,23 @@ class FanController:
         self.last_level = 0
         self.last_time = time.monotonic() - (polling + 1)
         # Print configuration at DEBUG log level.
-        if self.log.log_level >= self.log.LOG_CONFIG:
-            self.log.msg(self.log.LOG_CONFIG, f'{self.name} fan controller was initialized with:')
-            self.log.msg(self.log.LOG_CONFIG, f'   ipmi zone = {self.ipmi_zone}')
-            self.log.msg(self.log.LOG_CONFIG, f'   count = {self.count}')
-            self.log.msg(self.log.LOG_CONFIG, f'   temp_calc = {self.temp_calc}')
-            self.log.msg(self.log.LOG_CONFIG, f'   steps = {self.steps}')
-            self.log.msg(self.log.LOG_CONFIG, f'   sensitivity = {self.sensitivity}')
-            self.log.msg(self.log.LOG_CONFIG, f'   polling = {self.polling}')
-            self.log.msg(self.log.LOG_CONFIG, f'   min_temp = {self.min_temp}')
-            self.log.msg(self.log.LOG_CONFIG, f'   max_temp = {self.max_temp}')
-            self.log.msg(self.log.LOG_CONFIG, f'   min_level = {self.min_level}')
-            self.log.msg(self.log.LOG_CONFIG, f'   max_level = {self.max_level}')
+        if self.log.log_level >= Log.LOG_CONFIG:
+            self.log.msg(Log.LOG_CONFIG, f'{self.name} fan controller was initialized with:')
+            self.log.msg(Log.LOG_CONFIG, f'   ipmi zone = {self.ipmi_zone}')
+            self.log.msg(Log.LOG_CONFIG, f'   count = {self.count}')
+            self.log.msg(Log.LOG_CONFIG, f'   temp_calc = {self.temp_calc}')
+            self.log.msg(Log.LOG_CONFIG, f'   steps = {self.steps}')
+            self.log.msg(Log.LOG_CONFIG, f'   sensitivity = {self.sensitivity}')
+            self.log.msg(Log.LOG_CONFIG, f'   polling = {self.polling}')
+            self.log.msg(Log.LOG_CONFIG, f'   min_temp = {self.min_temp}')
+            self.log.msg(Log.LOG_CONFIG, f'   max_temp = {self.max_temp}')
+            self.log.msg(Log.LOG_CONFIG, f'   min_level = {self.min_level}')
+            self.log.msg(Log.LOG_CONFIG, f'   max_level = {self.max_level}')
             result=[]
-            for d in self.hwmon_path:
-                if d:
-                    result.append(d)
-                else:
-                    result.append('smartctl')
-            self.log.msg(self.log.LOG_CONFIG, f'   hwmon_path = {result}')
+            if hasattr(self, 'hwmon_path'):
+                for d in self.hwmon_path:
+                    result.append(d if d else 'smartctl')
+            self.log.msg(Log.LOG_CONFIG, f'   hwmon_path = {result}')
             self.print_temp_level_mapping()
 
     @staticmethod
@@ -142,7 +144,6 @@ class FanController:
         Args:
             udevc (Context): pyudev Context
             parent_dev (Device): parent device
-
         Returns:
             str: path for a HWMON device
         """
@@ -210,14 +211,12 @@ class FanController:
         return maximum
 
     def set_fan_level(self, level: int) -> None:
-        """Set the new fan level in an IPMI zone. Can raise exception (ValueError).
+        """Set the new fan level in the IPMI zone of the controller.
 
         Args:
             level (int): new fan level [0..100]
-        Returns:
-            int: result (Ipmi.SUCCESS, Ipmi.ERROR)
         """
-        return self.ipmi.set_fan_level(self.ipmi_zone, level)
+        self.ipmi.set_fan_level(self.ipmi_zone, level)
 
     def callback_func(self) -> None:
         """Call-back function for a child class."""
@@ -245,7 +244,7 @@ class FanController:
             # Step 2: read temperature and sensitivity gap.
             self.callback_func()
             current_temp = self.get_temp_func()
-            self.log.msg(self.log.LOG_DEBUG, f'{self.name}: new temperature > {current_temp:.1f}C')
+            self.log.msg(Log.LOG_DEBUG, f'{self.name}: new temperature > {current_temp:.1f}C')
             if abs(current_temp - self.last_temp) >= self.sensitivity:
                 self.last_temp = current_temp
 
@@ -262,14 +261,13 @@ class FanController:
                 if current_level != self.last_level:
                     self.last_level = current_level
                     self.set_fan_level(current_level)
-                    self.log.msg(self.log.LOG_INFO,
-                                 f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C')
+                    self.log.msg(Log.LOG_INFO, f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C')
 
     def print_temp_level_mapping(self) -> None:
         """Print out the user-defined temperature to level mapping value in log DEBUG level."""
-        self.log.msg(self.log.LOG_CONFIG, '   User-defined control function:')
+        self.log.msg(Log.LOG_CONFIG, '   User-defined control function:')
         for i in range(self.steps + 1):
-            self.log.msg(self.log.LOG_CONFIG, f'   {i}. [T:{self.min_temp+(i*self.temp_step):.1f}C - '
+            self.log.msg(Log.LOG_CONFIG, f'   {i}. [T:{self.min_temp+(i*self.temp_step):.1f}C - '
                          f'L:{int(self.min_level + (i * self.level_step))}%]')
 
 # End.

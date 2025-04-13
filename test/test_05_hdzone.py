@@ -3,839 +3,564 @@
 #   test_05_hdzone.py (C) 2021-2025, Peter Sulyok
 #   Unit tests for smfc.HdZone() class.
 #
-import configparser
 import random
 import subprocess
-import unittest
-import glob
-from typing import List
-from unittest.mock import patch, MagicMock
-from test_00_data import TestData
+import os
+import time
+from configparser import ConfigParser
+from typing import List, Any
+import pytest
+import pyudev
+from mock import MagicMock
+from pytest_mock import MockerFixture
+
+from test_00_data import TestData, MockDevices, factory_mockdevice
 from smfc import Log, Ipmi, FanController, HdZone
 
 
-class HdZoneTestCase(unittest.TestCase):
+class TestHdZone:
     """Unit test class for smfc.HdZone() class"""
 
-    def pt_init_p1(self, count: int, temp_calc: int, steps: int, sensitivity: float, polling: float,
-                   min_temp: float, max_temp: float, min_level: int, max_level: int, sb_limit: int,
-                   hwmon_path: str, error: str):
-        """Primitive positive test function. It contains the following steps:
-            - mock print() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - ASSERT: if the class attributes contain different values that were passed to __init__
-            - delete the instances
+    @pytest.mark.parametrize("count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, "
+                             "max_level, sb_limit, sudo, error", [
+        # Test valid parameters (hd=1 case is not tested because it turns off standby guard).
+        (1, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, True,  'HdZone.__init__() 1'),
+        (2, FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 2, False, 'HdZone.__init__() 2'),
+        (4, FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 4, True,  'HdZone.__init__() 3'),
+        (8, FanController.CALC_MAX, 4, 2, 2, 32, 48, 35, 100, 6, False, 'HdZone.__init__() 4')
+    ])
+    def test_init_p1(self, mocker: MockerFixture, count: int, temp_calc: int, steps: int, sensitivity: float,
+                 polling: float, min_temp: float, max_temp: float, min_level: int, max_level: int, sb_limit: int,
+                 sudo: bool, error: str):
+        """Positive unit test for HdZone.__init__() method. It contains the following steps:
+            - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path()
+            - initialize a Config, Log, Context, Ipmi, and HdZone classes
+            - ASSERT: if the HdZone class attributes different from values passed to __init__
         """
         my_td = TestData()
-        cmd_ipmi = my_td.create_command_file('echo " 01"')
         cmd_smart = my_td.create_command_file('echo "ACTIVE"')
-        cmd_hddtemp = my_td.create_command_file('echo "39"')
-        hd_names = my_td.create_hd_names(count)
+        my_td.create_hd_data(count)
         mock_print = MagicMock()
-        with patch('builtins.print', mock_print):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_COMMAND: cmd_ipmi,
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: str(count),
-                HdZone.CV_HD_ZONE_TEMP_CALC: str(temp_calc),
-                HdZone.CV_HD_ZONE_STEPS: str(steps),
-                HdZone.CV_HD_ZONE_SENSITIVITY: str(sensitivity),
-                HdZone.CV_HD_ZONE_POLLING: str(polling),
-                HdZone.CV_HD_ZONE_MIN_TEMP: str(min_temp),
-                HdZone.CV_HD_ZONE_MAX_TEMP: str(max_temp),
-                HdZone.CV_HD_ZONE_MIN_LEVEL: str(min_level),
-                HdZone.CV_HD_ZONE_MAX_LEVEL: str(max_level),
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
-                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
-                HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: str(sb_limit),
-                HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart,
-                HdZone.CV_HD_ZONE_HDDTEMP_PATH: cmd_hddtemp
-            }
-            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-        self.assertEqual(my_hdzone.ipmi_zone, Ipmi.HD_ZONE, error)
-        self.assertEqual(my_hdzone.name, "HD zone", error)
-        self.assertEqual(my_hdzone.count, count, error)
-        self.assertEqual(my_hdzone.temp_calc, temp_calc, error)
-        self.assertEqual(my_hdzone.steps, steps, error)
-        self.assertEqual(my_hdzone.sensitivity, sensitivity, error)
-        self.assertEqual(my_hdzone.polling, polling, error)
-        self.assertEqual(my_hdzone.min_temp, min_temp, error)
-        self.assertEqual(my_hdzone.max_temp, max_temp, error)
-        self.assertEqual(my_hdzone.min_level, min_level, error)
-        self.assertEqual(my_hdzone.max_level, max_level, error)
-        self.assertEqual(my_hdzone.hd_device_names, my_td.create_normalized_path_list(hd_names), error)
-        self.assertEqual(my_hdzone.hwmon_path, my_td.create_normalized_path_list(hwmon_path), error)
-        self.assertEqual(my_hdzone.standby_hd_limit, sb_limit, error)
-        self.assertEqual(my_hdzone.smartctl_path, cmd_smart, error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
+        mocker.patch('builtins.print', mock_print)
+        mocker.patch.object(pyudev.Device, '__new__', new_callable=factory_mockdevice)
+        mocker.patch('pyudev.Devices.from_device_file', MockDevices.from_device_file)
+        mock_fancontroller_gethwmonpath = MagicMock(side_effect=my_td.hd_files)
+        mocker.patch('smfc.FanController.get_hwmon_path', mock_fancontroller_gethwmonpath)
+        my_config = ConfigParser()
+        my_config[HdZone.CS_HD_ZONE] = {
+            HdZone.CV_HD_ZONE_ENABLED: '1',
+            HdZone.CV_HD_ZONE_TEMP_CALC: str(temp_calc),
+            HdZone.CV_HD_ZONE_STEPS: str(steps),
+            HdZone.CV_HD_ZONE_SENSITIVITY: str(sensitivity),
+            HdZone.CV_HD_ZONE_POLLING: str(polling),
+            HdZone.CV_HD_ZONE_MIN_TEMP: str(min_temp),
+            HdZone.CV_HD_ZONE_MAX_TEMP: str(max_temp),
+            HdZone.CV_HD_ZONE_MIN_LEVEL: str(min_level),
+            HdZone.CV_HD_ZONE_MAX_LEVEL: str(max_level),
+            HdZone.CV_HD_ZONE_HD_NAMES: my_td.hd_names,
+            HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart,
+            HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
+            HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: str(sb_limit)
+        }
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        my_udevc = pyudev.Context.__new__(pyudev.Context)
+        my_hdzone = HdZone(my_log, my_udevc, my_ipmi, my_config, sudo)
+        assert my_hdzone.ipmi_zone == Ipmi.HD_ZONE, error
+        assert my_hdzone.name == HdZone.CS_HD_ZONE, error
+        assert my_hdzone.count == count, error
+        assert my_hdzone.sudo == sudo, error
+        assert my_hdzone.temp_calc == temp_calc, error
+        assert my_hdzone.steps == steps, error
+        assert my_hdzone.sensitivity == sensitivity, error
+        assert my_hdzone.polling == polling, error
+        assert my_hdzone.min_temp == min_temp, error
+        assert my_hdzone.max_temp == max_temp, error
+        assert my_hdzone.min_level == min_level, error
+        assert my_hdzone.max_level == max_level, error
+        assert my_hdzone.hd_device_names == my_td.hd_name_list, error
+        assert my_hdzone.smartctl_path == cmd_smart, error
+        assert my_hdzone.hwmon_path == my_td.hd_files, error
+        if count > 1:
+            assert my_hdzone.standby_hd_limit == sb_limit, error
+            assert my_hdzone.standby_guard_enabled is True, error
         del my_td
 
-    def pt_init_p2(self, error: str):
-        """Primitive positive test function. It contains the following steps:
-            - mock print(), subprocesses.run(), glob.glob() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - ASSERT: if the class attributes contain different values than default configuration values
-            - delete all instances
+    @pytest.mark.parametrize("error", [
+        ('HdZone.__init__() 5')
+    ])
+    def test_init_p2(self, mocker: MockerFixture, error: str):
+        """Positive unit test for HdZone.__init__() method. It contains the following steps:
+            - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path()
+            - initialize a Config, Log, Context, Ipmi, and HdZone classes
+            - ASSERT: if the HdZone class attributes different from the default configuration values
         """
-
-        # Mock function for glob.glob().
-        def mocked_glob(file: str, *args, **kwargs):
-            if file.startswith('/sys/class/scsi_disk'):
-                file = my_td.td_dir + file
-            return original_glob(file, *args, **kwargs)
-
         my_td = TestData()
-        command = my_td.create_command_file()
-        hwmon_path = my_td.get_hd_1w()
-        hd_names = my_td.create_hd_names(1)
-        original_glob = glob.glob
+        count = 4
+        my_td.create_hd_data(count)
         mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_glob = MagicMock(side_effect=mocked_glob)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run), \
-             patch('glob.glob', mock_glob):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_COMMAND: command,
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names
-            }
-            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            self.assertEqual(my_hdzone.count, 1, error)
-            self.assertEqual(my_hdzone.temp_calc, FanController.CALC_AVG, error)
-            self.assertEqual(my_hdzone.steps, 4, error)
-            self.assertEqual(my_hdzone.sensitivity, 2, error)
-            self.assertEqual(my_hdzone.polling, 10, error)
-            self.assertEqual(my_hdzone.min_temp, 32, error)
-            self.assertEqual(my_hdzone.max_temp, 46, error)
-            self.assertEqual(my_hdzone.min_level, 35, error)
-            self.assertEqual(my_hdzone.max_level, 100, error)
-            self.assertEqual(my_hdzone.hd_device_names, my_td.create_normalized_path_list(hd_names), error)
-            self.assertEqual(my_hdzone.hwmon_path, my_td.create_normalized_path_list(hwmon_path), error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
+        mocker.patch('builtins.print', mock_print)
+        mocker.patch.object(pyudev.Device, '__new__', new_callable=factory_mockdevice)
+        mocker.patch('pyudev.Devices.from_device_file', MockDevices.from_device_file)
+        mock_fancontroller_gethwmonpath = MagicMock(side_effect=my_td.hd_files)
+        mocker.patch('smfc.FanController.get_hwmon_path', mock_fancontroller_gethwmonpath)
+        my_config = ConfigParser()
+        my_config[HdZone.CS_HD_ZONE] = {
+            HdZone.CV_HD_ZONE_ENABLED: '1',
+            HdZone.CV_HD_ZONE_HD_NAMES: my_td.hd_names
+        }
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        my_udevc = pyudev.Context.__new__(pyudev.Context)
+        my_hdzone = HdZone(my_log, my_udevc, my_ipmi, my_config, False)
+        assert my_hdzone.count == count, error
+        assert my_hdzone.sudo is False
+        assert my_hdzone.temp_calc == FanController.CALC_AVG, error
+        assert my_hdzone.steps == 4, error
+        assert my_hdzone.sensitivity == 2, error
+        assert my_hdzone.polling == 10, error
+        assert my_hdzone.min_temp == 32, error
+        assert my_hdzone.max_temp == 46, error
+        assert my_hdzone.min_level == 35, error
+        assert my_hdzone.max_level == 100, error
+        assert my_hdzone.hd_device_names == my_td.hd_name_list, error
+        assert my_hdzone.smartctl_path == '/usr/sbin/smartctl', error
+        assert my_hdzone.hwmon_path == my_td.hd_files, error
         del my_td
 
-    def pt_init_n1(self, count: int, temp_calc: int, steps: int, sensitivity: float, polling: float,
-                   min_temp: float, max_temp: float, min_level: int, max_level: int, sb_limit: int,
-                   hd_names: str, hwmon_path: str, error: str):
-        """Primitive negative test function. It contains the following steps:
-            - mock print() function
+    @pytest.mark.parametrize(
+        "count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, sb_limit, error", [
+        # hd_names= not specified (count = 0)
+        (0,     FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2,  'HdZone.__init__() 6'),
+        # standby_hd_limit < 0
+        (2,     FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, -1, 'HdZone.__init__() 7'),
+        # standby_hd_limit > count
+        (2,     FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4,  'HdZone.__init__() 8'),
+        # Invalid device name (count == 100)
+        (100,   FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4,  'HdZone.__init__() 9')
+    ])
+    def test_init_n1(self, mocker: MockerFixture, count: int, temp_calc: int, steps: int, sensitivity: float,
+                     polling: float, min_temp: float, max_temp: float, min_level: int, max_level: int, sb_limit: int,
+                     error: str):
+        """Negative unit test for HdZone.__init__() method. It contains the following steps:
+            - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path()
             - initialize a Config, Log, Ipmi, and HdZone classes
             - ASSERT: if no assertion is raised for invalid values at initialization
-            - delete the instances
         """
         my_td = TestData()
-        cmd_ipmi = my_td.create_command_file('echo " 01"')
         cmd_smart = my_td.create_command_file('echo "ACTIVE"')
-        mock_print = MagicMock()
-        with patch('builtins.print', mock_print):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_COMMAND: cmd_ipmi,
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: str(count),
-                HdZone.CV_HD_ZONE_TEMP_CALC: str(temp_calc),
-                HdZone.CV_HD_ZONE_STEPS: str(steps),
-                HdZone.CV_HD_ZONE_SENSITIVITY: str(sensitivity),
-                HdZone.CV_HD_ZONE_POLLING: str(polling),
-                HdZone.CV_HD_ZONE_MIN_TEMP: str(min_temp),
-                HdZone.CV_HD_ZONE_MAX_TEMP: str(max_temp),
-                HdZone.CV_HD_ZONE_MIN_LEVEL: str(min_level),
-                HdZone.CV_HD_ZONE_MAX_LEVEL: str(max_level),
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
-                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
-                HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: str(sb_limit),
-                HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart
-            }
-            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            with self.assertRaises(Exception) as cm:
-                HdZone(my_log, my_ipmi, my_config)
-            self.assertEqual(type(cm.exception), ValueError, error)
-        del my_ipmi
-        del my_log
-        del my_config
-        del my_td
-
-    def test_init(self) -> None:
-        """This is a unit test for function HdZone.__init__()"""
-        my_td = TestData()
-
-        # Test valid parameters (hd=1 case is not tested because it turns off standby guard).
-        self.pt_init_p1(2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.get_hd_2(), 'hz init 1')
-        self.pt_init_p1(4, FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 4, my_td.get_hd_4(), 'hz init 2')
-        self.pt_init_p1(8, FanController.CALC_MAX, 4, 2, 2, 32, 48, 35, 100, 6, my_td.get_hd_8(), 'hz init 3')
-
-        # Test default configuration values.
-        self.pt_init_p2('hz init 4')
-
-        # Test invalid values:
-        # count <= 0
-        self.pt_init_n1(0, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.create_hd_names(1),
-                        my_td.get_hd_1(types=[TestData.HT_NVME]), 'hz init 5')
-        self.pt_init_n1(-10, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.create_hd_names(1),
-                        my_td.get_hd_1(), 'hz init 6')
-        # hd_names= not specified
-        self.pt_init_n1(1, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, '',
-                        my_td.get_hd_1(), 'hz init 7')
-        # len(hd_names) != count
-        self.pt_init_n1(2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, my_td.create_hd_names(1),
-                        my_td.get_hd_2(), 'hz init 8')
-        # standby_limit < 0
-        self.pt_init_n1(2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, -1, my_td.create_hd_names(2),
-                        my_td.get_hd_2(), 'hz init 9')
-        # standby_limit > count
-        self.pt_init_n1(2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4, my_td.create_hd_names(2),
-                        my_td.get_hd_2(), 'hz init 10')
-
-    def pt_bhp_p1(self, count: int, error: str):
-        """Primitive positive test function. It contains the following steps:
-            - mock print(), subprocesses.run(), glob.glob() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - ASSERT: if build_hwmon_path() will not create the expected list
-            - delete all instances
-        """
-
-        # Mock function for glob.glob().
-        def mocked_glob(file: str, *args, **kwargs):
-            if file.startswith('/sys/class/scsi_disk'):
-                file = my_td.td_dir + file
-            return original_glob(file, *args, **kwargs)
-
-        my_td = TestData()
-        command = my_td.create_command_file()
-        if count == 1:
-            hwmon_path = my_td.get_hd_1()
-        elif count == 2:
-            hwmon_path = my_td.get_hd_2()
-        elif count == 4:
-            hwmon_path = my_td.get_hd_4()
+        if count == 100:
+            my_td.create_hd_data(1)
+            my_td.hd_names='raise\n'
         else:
-            hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.create_hd_names(count)
-        original_glob = glob.glob
+            my_td.create_hd_data(count)
         mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_glob = MagicMock(side_effect=mocked_glob)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run), \
-             patch('glob.glob', mock_glob):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_COMMAND: command,
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: str(count),
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names
-            }
-            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            self.assertEqual(my_hdzone.hwmon_path, my_td.create_normalized_path_list(hwmon_path), error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
+        mocker.patch('builtins.print', mock_print)
+        mocker.patch.object(pyudev.Device, '__new__', new_callable=factory_mockdevice)
+        mocker.patch('pyudev.Devices.from_device_file', MockDevices.from_device_file)
+        mock_fancontroller_gethwmonpath = MagicMock(side_effect=my_td.hd_files)
+        mocker.patch('smfc.FanController.get_hwmon_path', mock_fancontroller_gethwmonpath)
+        my_config = ConfigParser()
+        my_config[HdZone.CS_HD_ZONE] = {
+            HdZone.CV_HD_ZONE_ENABLED: '1',
+            HdZone.CV_HD_ZONE_TEMP_CALC: str(temp_calc),
+            HdZone.CV_HD_ZONE_STEPS: str(steps),
+            HdZone.CV_HD_ZONE_SENSITIVITY: str(sensitivity),
+            HdZone.CV_HD_ZONE_POLLING: str(polling),
+            HdZone.CV_HD_ZONE_MIN_TEMP: str(min_temp),
+            HdZone.CV_HD_ZONE_MAX_TEMP: str(max_temp),
+            HdZone.CV_HD_ZONE_MIN_LEVEL: str(min_level),
+            HdZone.CV_HD_ZONE_MAX_LEVEL: str(max_level),
+            HdZone.CV_HD_ZONE_HD_NAMES: my_td.hd_names,
+            HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart,
+            HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
+            HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: str(sb_limit)
+        }
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        my_udevc = pyudev.Context.__new__(pyudev.Context)
+        with pytest.raises(Exception) as cm:
+            HdZone(my_log, my_udevc, my_ipmi, my_config, False)
+        assert cm.type == ValueError, error
         del my_td
 
-    def pt_bhp_n1(self, count: int, error: str):
+    #pylint: disable=protected-access
+    @pytest.mark.parametrize("args, sudo, error", [
+        (['-a', '/dev/sda'],                    True,  'HdZone._exec_smartctl() 1'),
+        (['-a', '/dev/sda'],                    False, 'HdZone._exec_smartctl() 2'),
+        (['-i', '-n', 'standby', '/dev/sda'],   True,  'HdZone._exec_smartctl() 3'),
+        (['-i', '-n', 'standby', '/dev/sda'],   False, 'HdZone._exec_smartctl() 4'),
+        (['-s', '/dev/sda'],                    True,  'HdZone._exec_smartctl() 5'),
+        (['-s', '/dev/sda'],                    False, 'HdZone._exec_smartctl() 6')
+    ])
+    def test_exec_smartctl_p(self, mocker: MockerFixture, args:List[str], sudo: bool, error: str):
+        """Positive unit test for HdZone._exec_smartctl() method. It contains the following steps:
+            - mock subprocess.run() function
+            - initialize an empty HdZone class
+            - call HdZone._exec_smartctl() method
+            - ASSERT: if subprocess.run() called different from specified argument list
+        """
+        expected_args: List[str]
+
+        my_hdzone = HdZone.__new__(HdZone)
+        my_hdzone.smartctl_path = 'smartctl'
+        my_hdzone.sudo = sudo
+        mock_subprocess_run = MagicMock()
+        mock_subprocess_run.return_value=subprocess.CompletedProcess([], returncode=0, stdout='', stderr='')
+        mocker.patch('subprocess.run', mock_subprocess_run)
+        my_hdzone._exec_smartctl(args)
+        expected_args = []
+        if sudo:
+            expected_args.append('sudo')
+        expected_args.append(my_hdzone.smartctl_path)
+        expected_args.extend(args)
+        mock_subprocess_run.assert_called_with(expected_args, capture_output=True, check=False, text=True)
+        assert mock_subprocess_run.call_count == 1, error
+
+    #pylint: disable=R0801
+    @pytest.mark.parametrize("smartctl_command, sudo, rc, exception, error", [
+        # The real subprocess.run() executed (without sudo)
+        ('/nonexistent/command', False, 0, FileNotFoundError, 'HdZone._exec_smartctl() 7'),
+        # The mocked subprocess.run() executed and returns non-zero return code
+        ('',                     True,  1, RuntimeError,      'HdZone._exec_smartctl() 8')
+    ])
+    def test_exec_smartctl_n(self, mocker: MockerFixture, smartctl_command, sudo: bool, rc: int, exception: Any,
+                             error: str):
+        """Negative unit test for HdZone._exec_smartctl() method. It contains the following steps:
+            - mock subprocess.run() function if needed
+            - initialize an empty HdZone class
+            - call HdZone._exec_smartctl() method
+            - ASSERT: if no assertion was raised
+        """
+        if rc:
+            mock_subprocess_run = MagicMock()
+            mocker.patch('subprocess.run', mock_subprocess_run)
+            mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=rc, stderr='ERROR')
+        my_hdzone = HdZone.__new__(HdZone)
+        my_hdzone.smartctl_path = smartctl_command
+        my_hdzone.sudo = sudo
+        with pytest.raises(Exception) as cm:
+            my_hdzone._exec_smartctl(['-a', '/dev/sda'])
+        assert cm.type == exception, error
+    # pylint: enable=R0801
+
+    @pytest.mark.parametrize("count, temperatures, error", [
+        (1, [32],                               'HdZone._get_nth_temp() 1'),
+        (2, [33, 34],                           'HdZone._get_nth_temp() 2'),
+        (4, [33, 34, 35, 38],                   'HdZone._get_nth_temp() 3'),
+        (8, [33, 34, 35, 38, 36, 37, 31, 30],   'HdZone._get_nth_temp() 4')
+    ])
+    def test_get_ntf_temp_p1(self, mocker: MockerFixture, count: int, temperatures: List[float], error: str):
+        """Positive unit test for HdZone._get_nth_temp() method. It contains the following steps:
+            - mock print() function
+            - initialize an empty HdZone class
+            - ASSERT: if the read temperature (from HWMON) is different from the expected value
+        """
+        my_td = TestData()
+        my_td.create_hd_data(count, temperatures)
+        my_hdzone = HdZone.__new__(HdZone)
+        my_hdzone.hwmon_path = my_td.hd_files
+        mock_print = MagicMock()
+        mocker.patch('builtins.print', mock_print)
+        for i in range(count):
+            temp = my_hdzone._get_nth_temp(i)
+            assert temp == temperatures[i], error
+        del my_td
+
+    @pytest.mark.parametrize("count, temperatures, error", [
+        (1, [32],                               'HdZone._get_nth_temp() 5'),
+        (2, [33, 34],                           'HdZone._get_nth_temp() 6'),
+        (4, [33, 34, 35, 38],                   'HdZone._get_nth_temp() 7'),
+        (8, [33, 34, 35, 38, 36, 37, 31, 30],   'HdZone._get_nth_temp() 8')
+    ])
+    def test_get_nth_temp_p2(self, mocker: MockerFixture, count: int, temperatures: List[float], error: str):
+        """Positive unit test for HdZone._get_nth_temp() method. It contains the following steps:
+            - mock print(), subprocess.run() functions
+            - initialize an empty HdZone class
+            - ASSERT: if the read temperature (from smartctl) is different from the expected value
+        """
+        #pylint: disable=line-too-long
+        smartctl_output = [
+            # SCSI disks
+            "smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.1.0-32-amd64] (local build)\n"
+            "Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org\n"
+            "\n"
+            "Current Drive Temperature:     XX C\n",
+
+            # SATA SMART attributes 1
+            "smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.1.0-32-amd64] (local build)\n"
+            "Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org\n"
+            "\n"
+            "190 Airflow_Temperature_Cel 0x0032   075   045   000    Old_age   Always       -       XX\n",
+
+            # SATA SMART attributes 2
+            "smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.1.0-32-amd64] (local build)\n"
+            "Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org\n"
+            "\n"
+            "194 Temperature_Celsius     0x0002   232   232   000    Old_age   Always       -       XX (Min/Max 17/45)\n"
+        ]
+        # pylint: enable=line-too-long
+        my_td = TestData()
+        my_td.create_hd_data(count, temperatures)
+        my_hdzone = HdZone.__new__(HdZone)
+        my_hdzone.hwmon_path = my_td.hd_name_list
+        my_hdzone.hd_device_names = my_td.hd_name_list
+        my_hdzone.hwmon_path = [''] * count
+        my_hdzone.sudo=False
+        my_hdzone.smartctl_path = '/usr/sbin/smartctl'
+        mock_exec_smartclt = MagicMock()
+        mock_exec_smartclt.return_value = subprocess.CompletedProcess([], returncode=0, stdout=smartctl_output)
+        mocker.patch('smfc.HdZone._exec_smartctl', mock_exec_smartclt)
+        for i in range(count):
+            s = smartctl_output[random.randint(0, 2)].replace('XX', str(temperatures[i]))
+            mock_exec_smartclt.return_value = subprocess.CompletedProcess([], returncode=0, stdout=s)
+            assert my_hdzone._get_nth_temp(i) == temperatures[i], error
+        del my_hdzone
+        del my_td
+
+    @pytest.mark.parametrize("operation, exception, error", [
+        # 0. hwmon - FileNotFoundError
+        (0, FileNotFoundError,  'HdZone._get_nth_temp() 9'),
+        # 1. hwmon - IndexError
+        (1, IndexError,         'HdZone._get_nth_temp() 10'),
+        # 2. hwmon - ValueError
+        (2, ValueError,         'HdZone._get_nth_temp() 11'),
+        # 3. smartctl - FileNotFoundError
+        (3, FileNotFoundError,  'HdZone._get_nth_temp() 12'),
+        # 4. smartctl - IndexError
+        (4, IndexError,         'HdZone._get_nth_temp() 13'),
+        # 5. smartctl - ValueError
+        (5, ValueError,         'HdZone._get_nth_temp() 14')
+    ])
+    def test_get_nth_temp_n1(self, mocker: MockerFixture, operation: int, exception: Any, error: str):
         """Primitive negative test function. It contains the following steps:
-            - mock print(), subprocesses.run(), glob.glob() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - ASSERT: if build_hwmon_path() will not raise ValueError exception for invalid values
-            - delete all instances
+            - mock print(), subprocess.run() functions
+            - initialize an empty HdZone class
+            - call HdZone._get_nth_temp()
+            - ASSERT: if no assertion raised
         """
-
-        # Mock function for glob.glob().
-        def mocked_glob(file: str, *args, **kwargs):
-            if file.startswith('/sys/class/scsi_disk'):
-                if 'block' in file:
-                    file = my_td.td_dir + file
-            if "temp1_input" in file:
-                return None     # Invalid filename generated here!
-            return original_glob(file, *args, **kwargs)
-
-        my_td = TestData()
-        command = my_td.create_command_file()
-        hd_names = my_td.create_hd_names(count)
-        my_td.get_hd_1()
-        original_glob = glob.glob
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_glob = MagicMock(side_effect=mocked_glob)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run), \
-             patch('glob.glob', mock_glob):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_COMMAND: command,
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: str(count),
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names
-            }
-            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            with self.assertRaises(ValueError) as cm:
-                # build_hwmon_path() will be called from __init__(), no need to call it directly
-                HdZone(my_log, my_ipmi, my_config)
-            self.assertEqual(type(cm.exception), ValueError, error)
-        del my_ipmi
-        del my_log
-        del my_config
-        del my_td
-
-    def test_build_hwmon_path(self) -> None:
-        """This is a unit test for function HdZone.build_hwmon_path()"""
-
-        # Test expected values.
-        self.pt_bhp_p1(1, 'hz build_hwmon_path 1')
-        self.pt_bhp_p1(2, 'hz build_hwmon_path 2')
-        self.pt_bhp_p1(4, 'hz build_hwmon_path 3')
-        self.pt_bhp_p1(8, 'hz build_hwmon_path 4')
-
-        # Test invalid hwmon_path values.
-        self.pt_bhp_n1(1, 'hz build_hwmon_path 5')
-
-    def pt_gsss_p1(self, states: List[bool], result: str, error: str):
-        """Primitive positive test function. It contains the following steps:
-            - mock print(), subprocesses.run() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - calls HdZone.get_standby_state_str()
-            - ASSERT: if the result is different from the internal power state
-            - delete all instances
-        """
-        my_td = TestData()
-        hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.create_hd_names(8)
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: '8',
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
-                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1'
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            my_hdzone.standby_array_states = states
-        self.assertEqual(my_hdzone.get_standby_state_str(), result, error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
-        del my_td
-
-    def test_get_standby_state_str(self) -> None:
-        """This is a unit test for function HdZone.get_standby_state_str()"""
-        self.pt_gsss_p1([True, True, True, True, True, True, True, True],
-                        'SSSSSSSS', 'hz get_standby_state_str 1')
-        self.pt_gsss_p1([False, False, False, False, False, False, False, False],
-                        'AAAAAAAA', 'hz get_standby_state_str 2')
-        self.pt_gsss_p1([True, False, False, False, False, False, False, False],
-                        'SAAAAAAA', 'hz get_standby_state_str 3')
-        self.pt_gsss_p1([False, True, False, False, False, False, False, False],
-                        'ASAAAAAA', 'hz get_standby_state_str 4')
-        self.pt_gsss_p1([False, False, True, False, False, False, False, False],
-                        'AASAAAAA', 'hz get_standby_state_str 5')
-        self.pt_gsss_p1([False, False, False, True, False, False, False, False],
-                        'AAASAAAA', 'hz get_standby_state_str 6')
-        self.pt_gsss_p1([False, False, False, False, True, False, False, False],
-                        'AAAASAAA', 'hz get_standby_state_str 7')
-        self.pt_gsss_p1([False, False, False, False, False, True, False, False],
-                        'AAAAASAA', 'hz get_standby_state_str 8')
-        self.pt_gsss_p1([False, False, False, False, False, False, True, False],
-                        'AAAAAASA', 'hz get_standby_state_str 9')
-        self.pt_gsss_p1([False, False, False, False, False, False, False, True],
-                        'AAAAAAAS', 'hz get_standby_state_str 10')
-
-    def pt_css_p1(self, states: List[bool], in_standby: int, error: str):
-        """Primitive positive test function. It contains the following steps:
-            - mock print(), subprocesses.run() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - calls HdZone.check_standby_state()
-            - ASSERT: if result is different from input parameters
-            - delete all instances
-        """
-        results: List[subprocess.CompletedProcess]
-
-        my_td = TestData()
-        hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.create_hd_names(8)
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: '8',
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
-                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1'
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            results = [None, None, None, None, None, None, None, None]
-            for i in range(my_hdzone.count):
-                if states[i]:
-                    results[i] = subprocess.CompletedProcess([], returncode=2, stdout='STANDBY')
-                else:
-                    results[i] = subprocess.CompletedProcess([], returncode=0, stdout='ACTIVE')
-            mock_subprocess_run.side_effect = iter(results)
-            my_hdzone.standby_array_states = states
-            self.assertEqual(my_hdzone.check_standby_state(), in_standby, error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
-        del my_td
-
-    def pt_css_n1(self, error: str):
-        """Primitive negative test function. It contains the following steps:
-            - mock print(), subprocesses.run() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - calls HdZone.check_standby_state()
-            - ASSERT: if assert will not be raised for an unknown return code of 'smartctl'
-            - delete all instances
-        """
-        my_td = TestData()
-        # We need count > 1 not to turn off Standby guard.
-        hwmon_path = my_td.get_hd_2()
-        hd_names = my_td.create_hd_names(2)
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: '2',
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
-                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1'
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            mock_subprocess_run.side_effect = [subprocess.CompletedProcess([], returncode=4, stdout='STANDBY'),
-                                               subprocess.CompletedProcess([], returncode=2, stdout='STANDBY')
-                                               ]
-            my_hdzone.standby_array_states = [False, True]
-            with self.assertRaises(Exception) as cm:
-                my_hdzone.check_standby_state()
-            self.assertEqual(type(cm.exception), ValueError, error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
-        del my_td
-
-    def test_check_standby_state(self) -> None:
-        """This is a unit test for function Hd.check_standby_state()"""
-
-        # Test expected states.
-        self.pt_css_p1([True, True, True, True, True, True, True, True], 8, 'hz check_standby_state 1')
-        self.pt_css_p1([False, True, True, True, True, True, True, True], 7, 'hz check_standby_state 2')
-        self.pt_css_p1([True, False, True, True, True, True, True, True], 7, 'hz check_standby_state 3')
-        self.pt_css_p1([True, True, False, True, True, True, True, True], 7, 'hz check_standby_state 4')
-        self.pt_css_p1([True, True, True, False, True, True, True, True], 7, 'hz check_standby_state 5')
-        self.pt_css_p1([True, True, True, True, False, True, True, True], 7, 'hz check_standby_state 6')
-        self.pt_css_p1([True, True, True, True, True, False, True, True], 7, 'hz check_standby_state 7')
-        self.pt_css_p1([True, True, True, True, True, True, False, True], 7, 'hz check_standby_state 8')
-        self.pt_css_p1([True, True, True, True, True, True, True, False], 7, 'hz check_standby_state 9')
-        self.pt_css_p1([True, False, True, True, True, True, True, False], 6, 'hz check_standby_state 10')
-        self.pt_css_p1([True, False, True, True, False, True, True, False], 5, 'hz check_standby_state 11')
-        self.pt_css_p1([False, False, True, True, False, True, True, False], 4, 'hz check_standby_state 12')
-        self.pt_css_p1([False, False, True, False, False, True, True, False], 3, 'hz check_standby_state 13')
-        self.pt_css_p1([False, False, True, False, False, True, False, False], 2, 'hz check_standby_state 14')
-        self.pt_css_p1([False, False, False, False, False, True, False, False], 1, 'hz check_standby_state 15')
-        self.pt_css_p1([False, False, False, False, False, False, False, False], 0, 'hz check_standby_state 16')
-
-        # Test raised exception.
-        self.pt_css_n1('hz check_standby_state 17')
-
-    def pt_gss_p1(self, states: List[bool], count: int, error: str):
-        """Primitive positive test function. It contains the following steps:
-            - mock print(), subprocesses.run() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - calls HdZone.go_standby_state()
-            - ASSERT: if the subprocess.run() called with wrong parameters and array state is not in fully standby
-            - delete the instances
-        """
-        my_td = TestData()
-        hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.create_hd_names(8)
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: '8',
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
-                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            my_hdzone.standby_array_states = states
-            mock_subprocess_run.reset_mock()
-            my_hdzone.go_standby_state()
-            self.assertEqual(mock_subprocess_run.call_count, count, error)
-            self.assertEqual([True, True, True, True, True, True, True, True], my_hdzone.standby_array_states, error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
-        del my_td
-
-    def pt_gss_n1(self, error: str):
-        """Primitive negative test function. It contains the following steps:
-            - mock print(), subprocesses.run() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - calls HdZone.go_standby_state()
-            - ASSERT: if exception will not be raised after a not zero return code
-            - delete the instances
-        """
-        my_td = TestData()
-        # We need count > 1 not to turn off Standby guard.
-        hwmon_path = my_td.get_hd_2()
-        hd_names = my_td.create_hd_names(2)
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: '2',
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
-                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            mock_subprocess_run.side_effect = [subprocess.CompletedProcess([], returncode=4),
-                                               subprocess.CompletedProcess([], returncode=2)
-                                               ]
-            my_hdzone.standby_array_states = [False, True]
-            with self.assertRaises(Exception) as cm:
-                my_hdzone.go_standby_state()
-            self.assertEqual(type(cm.exception), ValueError, error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
-        del my_td
-
-    def test_go_standby_state(self) -> None:
-        """This is a unit test for function HdZone.go_standby_state()"""
-
-        # Test expected values.
-        self.pt_gss_p1([False, False, False, False, False, False, False, False], 8, 'hz go_standby_state 1')
-        self.pt_gss_p1([True, False, False, False, False, False, False, False], 7, 'hz go_standby_state 2')
-        self.pt_gss_p1([True, True, False, False, False, False, False, False], 6, 'hz go_standby_state 3')
-        self.pt_gss_p1([True, True, True, False, False, False, False, False], 5, 'hz go_standby_state 4')
-        self.pt_gss_p1([True, True, True, True, False, False, False, False], 4, 'hz go_standby_state 5')
-        self.pt_gss_p1([True, True, True, True, True, False, False, False], 3, 'hz go_standby_state 6')
-        self.pt_gss_p1([True, True, True, True, True, True, False, False], 2, 'hz go_standby_state 7')
-        self.pt_gss_p1([True, True, True, True, True, True, True, False], 1, 'hz go_standby_state 8')
-        self.pt_gss_p1([True, True, True, True, True, True, True, True], 0, 'hz go_standby_state 9')
-
-        # Test exception taised.
-        self.pt_gss_n1('hz go_standby_state 10')
-
-    def pt_rsg_p1(self, old_state: bool, states: List[bool], new_state: bool, error: str):
-        """Primitive positive test function. It contains the following steps:
-            - mock print(), subprocesses.run() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - calls HdZone.run_standby_guard()
-            - ASSERT: if the expected standby_flag is different
-            - delete all instances
-        """
-        my_td = TestData()
-        hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.create_hd_names(8)
-        mock_print = MagicMock()
-        mock_subprocess_run = MagicMock()
-        mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0)
-        with patch('builtins.print', mock_print), \
-             patch('subprocess.run', mock_subprocess_run):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: '8',
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-                HdZone.CV_HD_ZONE_HWMON_PATH: hwmon_path,
-                HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1'
-            }
-            my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-            my_hdzone.go_standby_state = MagicMock(name='go_standby_state')
-            my_hdzone.check_standby_state = MagicMock(name='check_standby_state')
-            my_hdzone.check_standby_state.return_value = states.count(True)
-            my_hdzone.standby_array_states = states
-            my_hdzone.standby_flag = old_state
-            my_hdzone.run_standby_guard()
-            self.assertEqual(my_hdzone.standby_flag, new_state, error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
-
-    def test_run_standby_guard(self) -> None:
-        """This is a unit test for function HdZone.run_standby_guard()"""
-        # 1. No state changes.
-        self.pt_rsg_p1(False, [False, False, False, False, False, False, False, False], False, 'hz run_standby_guard 1')
-        self.pt_rsg_p1(True, [True, True, True, True, True, True, True, True], True, 'hz run_standby_guard 2')
-        # 2. change from ACTIVE to STANDBY.
-        self.pt_rsg_p1(False, [False, True, False, False, False, False, False, False], True, 'hz run_standby_guard 3')
-        self.pt_rsg_p1(False, [False, True, False, True, False, False, False, False], True, 'hz run_standby_guard 4')
-        self.pt_rsg_p1(False, [True, True, True, True, True, True, True, True], True, 'hz run_standby_guard 5')
-        # 3. change from STANDBY to ACTIVE.
-        self.pt_rsg_p1(True, [False, False, False, False, False, False, False, False], False, 'hz run_standby_guard 6')
-        self.pt_rsg_p1(True, [True, False, False, True, True, True, True, True], False, 'hz run_standby_guard 7')
-
-    def pt_gnt_p1(self, count: int, index: int, temps: List[float], types: List[int], error: str):
-        """Primitive positive test function. It contains the following steps:
-            - mock print(), glob.glob() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - ASSERT: if _get_nth_temp() returns a different temperature than the expected one
-            - delete all instances
-        """
-        # Mock function for glob.glob().
-        def mocked_glob(file: str, *args, **kwargs):
-            if file.startswith('/sys/class/nvme'):
-                file = my_td.td_dir + file
-            elif file.startswith('/sys/class/scsi_disk'):
-                file = my_td.td_dir + file
-            return original_glob(file, *args, **kwargs)
-
-        my_td = TestData()
-        ipmi_cmd = my_td.create_command_file()
-        hddtemp_cmd = my_td.create_command_file(f'echo "{temps[index]}"')
-        my_td.create_hd_temp_files(count, temp_list=temps, wildchar=random.choice([True, False]), hd_types=types)
-        hd_names = my_td.create_hd_names(count, hd_types=types)
-        original_glob = glob.glob
-        mock_print = MagicMock()
-        mock_glob = MagicMock(side_effect=mocked_glob)
-        with patch('builtins.print', mock_print), \
-             patch('glob.glob', mock_glob):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_COMMAND: ipmi_cmd,
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: str(count),
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-                HdZone.CV_HD_ZONE_HDDTEMP_PATH: hddtemp_cmd
-            }
-            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            my_hdzone = HdZone(my_log, my_ipmi, my_config)
-
-            self.assertEqual(my_hdzone._get_nth_temp(index), temps[index], error)
-        del my_hdzone
-        del my_ipmi
-        del my_log
-        del my_config
-        del my_td
-
-    def pt_gnt_n1(self, operation: int, types: List[int], error: str):
-        """Primitive negative test function. It contains the following steps:
-            - mock print(), glob.glob() functions
-            - initialize a Config, Log, Ipmi, and HdZone classes
-            - ASSERT: if _get_nth_temp() will not raise the expected exception
-            - delete all instances
-        """
-        index: int
-        exception: set[type]
-
-        # Mock function for glob.glob().
-        def mocked_glob(file: str, *args, **kwargs):
-            if file.startswith('/sys/class/nvme'):
-                file = my_td.td_dir + file
-            elif file.startswith('/sys/class/scsi_disk'):
-                file = my_td.td_dir + file
-            return original_glob(file, *args, **kwargs)
-
-        my_td = TestData()
-        ipmi_cmd = my_td.create_command_file()
         index = 0
-        hddtemp_cmd = my_td.create_command_file('echo "38"')
-
-        # RuntimeError - hddtemp: return value <> 0
+        my_td = TestData()
+        my_td.create_hd_data(1, [32])
+        my_hdzone = HdZone.__new__(HdZone)
+        my_hdzone.hwmon_path = my_td.hd_files
+        my_hdzone.hd_device_names = my_td.hd_name_list
+        my_hdzone.count = 1
+        my_hdzone.sudo = False
+        # FileNotFoundError: invalid file name with hwmon
         if operation == 0:
-            hddtemp_cmd = my_td.create_command_file('echo "38"\nexit 2')
-            exception = {RuntimeError}
-        # ValueError - hddtemp: invalid value read from output
+            my_hdzone.hwmon_path[0] = '/tmp/non_existent_dir/non_existent_file'
+        # IndexError: index error with hwmon
         elif operation == 1:
-            hddtemp_cmd = my_td.create_command_file('echo "invalid value"')
-            exception = {ValueError}
-        # IndexError - hddtemp: index is out of range on hd_device_names[]
+            index = 1000
+        # ValueError: invalid temperature with hwmon
         elif operation == 2:
-            index = 1
-            exception = {IndexError}
+            os.system('echo "invalid value" >'+my_hdzone.hwmon_path[0])
+        # FileNotFoundError: invalid file name with smartctl
+        elif operation == 3:
+            my_hdzone.hwmon_path[0] = ''
+            my_hdzone.smartctl_path = '/tmp/non_existent_dir/non_existent_file'
+        # IndexError: index error with smartctl
+        elif operation == 4:
+            my_hdzone.hwmon_path[0] = ''
+            index = 1000
+        # ValueError: temperature not found in smartctl's output
+        elif operation == 5:
+            my_hdzone.hwmon_path[0] = ''
+            my_hdzone.smartctl_path = '/usr/sbin/smartctl'
+            mock_subprocess_run = MagicMock()
+            mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0,
+                                                                           stdout='invalid\ninvalid\ninvalid\n')
+            mocker.patch('subprocess.run', mock_subprocess_run)
+        with pytest.raises(Exception) as cm:
+            my_hdzone._get_nth_temp(index)
+        assert cm.type == exception, error
+        del my_td
+    #pylint: enable=protected-access
 
-        hwmon_path = my_td.create_hd_temp_files(1, hd_types=types)
-        hd_names = my_td.create_hd_names(1, hd_types=types)
-        original_glob = glob.glob
+    @pytest.mark.parametrize("states, result, error", [
+        ([True, True, True, True, True, True, True, True],         'SSSSSSSS', 'hz get_standby_state_str 1'),
+        ([False, False, False, False, False, False, False, False], 'AAAAAAAA', 'hz get_standby_state_str 2'),
+        ([True, False, False, False, False, False, False, False],  'SAAAAAAA', 'hz get_standby_state_str 3'),
+        ([False, True, False, False, False, False, False, False],  'ASAAAAAA', 'hz get_standby_state_str 4'),
+        ([False, False, True, False, False, False, False, False],  'AASAAAAA', 'hz get_standby_state_str 5'),
+        ([False, False, False, True, False, False, False, False],  'AAASAAAA', 'hz get_standby_state_str 6'),
+        ([False, False, False, False, True, False, False, False],  'AAAASAAA', 'hz get_standby_state_str 7'),
+        ([False, False, False, False, False, True, False, False],  'AAAAASAA', 'hz get_standby_state_str 8'),
+        ([False, False, False, False, False, False, True, False],  'AAAAAASA', 'hz get_standby_state_str 9'),
+        ([False, False, False, False, False, False, False, True],  'AAAAAAAS', 'hz get_standby_state_str 10')
+    ])
+    def test_get_standby_state_str(self, states: List[bool], result: str, error: str):
+        """Positive unit test for HdZone.get_standby_state_str() method. It contains the following steps:
+            - initialize an empty HdZone class
+            - calls HdZone.get_standby_state_str()
+            - ASSERT: if HdZone.get_standby_state_str() returns different from expected result
+        """
+        my_hdzone = HdZone.__new__(HdZone)
+        my_hdzone.count = 8
+        my_hdzone.standby_array_states = states
+        assert my_hdzone.get_standby_state_str() == result, error
+        del my_hdzone
+
+    @pytest.mark.parametrize("states, in_standby, error", [
+        ([True, True, True, True, True, True, True, True],          8, 'HdZone.check_standby_state() 1'),
+        ([False, True, True, True, True, True, True, True],         7, 'HdZone.check_standby_state() 2'),
+        ([True, False, True, True, True, True, True, True],         7, 'HdZone.check_standby_state() 3'),
+        ([True, True, False, True, True, True, True, True],         7, 'HdZone.check_standby_state() 4'),
+        ([True, True, True, False, True, True, True, True],         7, 'HdZone.check_standby_state() 5'),
+        ([True, True, True, True, False, True, True, True],         7, 'HdZone.check_standby_state() 6'),
+        ([True, True, True, True, True, False, True, True],         7, 'HdZone.check_standby_state() 7'),
+        ([True, True, True, True, True, True, False, True],         7, 'HdZone.check_standby_state() 8'),
+        ([True, True, True, True, True, True, True, False],         7, 'HdZone.check_standby_state() 9'),
+        ([True, False, True, True, True, True, True, False],        6, 'HdZone.check_standby_state() 10'),
+        ([True, False, True, True, False, True, True, False],       5, 'HdZone.check_standby_state() 11'),
+        ([False, False, True, True, False, True, True, False],      4, 'HdZone.check_standby_state() 12'),
+        ([False, False, True, False, False, True, True, False],     3, 'HdZone.check_standby_state() 13'),
+        ([False, False, True, False, False, True, False, False],    2, 'HdZone.check_standby_state() 14'),
+        ([False, False, False, False, False, True, False, False],   1, 'HdZone.check_standby_state() 15'),
+        ([False, False, False, False, False, False, False, False],  0, 'HdZone.check_standby_state() 16')
+    ])
+    def test_check_standby_state(self, mocker:MockerFixture, states: List[bool], in_standby: int, error: str):
+        """Positive unit test for HdZone.check_standby_state() method. It contains the following steps:
+            - mock print(), HdZone._exec_smartctl() functions
+            - initialize an empty HdZone classes
+            - call HdZone.check_standby_state()
+            - ASSERT: if result is different from the expected one
+        """
+        smartctl_output = [
+
+            # Device in STANDBY mode.
+            "smartctl 7.2 2020-12-30 r5155 [x86_64-linux-5.10.0-0.bpo.5-amd64] (local build)\n"
+            "Copyright (C) 2002-20, Bruce Allen, Christian Franke, www.smartmontools.org\n"
+            "\n"
+            "Device is in STANDBY mode, exit(2)\n",
+
+            # Device is ACTIVE.
+            "smartctl 7.2 2020-12-30 r5155 [x86_64-linux-5.10.0-0.bpo.5-amd64] (local build)\n"
+            "Copyright (C) 2002-20, Bruce Allen, Christian Franke, www.smartmontools.org\n"
+            "\n"
+            "=== START OF INFORMATION SECTION ===\n"
+            "Model Family:     Samsung based SSDs\n"
+            "Device Model:     Samsung SSD 870 QVO 8TB\n"
+            "Serial Number:    S5SSNG0NB01828M\n"
+            "LU WWN Device Id: 5 002538 f70b0ee2f\n"
+            "Firmware Version: SVQ01B6Q\n"
+            "User Capacity:    8,001,563,222,016 bytes [8.00 TB]\n"
+            "Sector Size:      512 bytes logical/physical\n"
+            "Rotation Rate:    Solid State Device\n"
+            "Form Factor:      2.5 inches\n"
+            "TRIM Command:     Available, deterministic, zeroed\n"
+            "Device is:        In smartctl database [for details use: -P show]\n"
+            "ATA Version is:   ACS-4 T13/BSR INCITS 529 revision 5\n"
+            "SATA Version is:  SATA 3.3, 6.0 Gb/s (current: 6.0 Gb/s)\n"
+            "Local Time is:    Sat May 15 14:26:26 2021 CEST\n"
+            "SMART support is: Available - device has SMART capability.\n"
+            "SMART support is: Enabled\n"
+            "Power mode is:    ACTIVE or IDLE\n"
+            "\n"
+        ]
+        results: List[subprocess.CompletedProcess] = []
+
+        count = 8
+        for i in range(count):
+            results.append(subprocess.CompletedProcess([], returncode=0, stdout=smartctl_output[0 if states[i] else 1]))
+        my_td = TestData()
+        my_td.create_hd_data(count)
+        my_hdzone = HdZone.__new__(HdZone)
+        my_hdzone.count = count
+        my_hdzone.sudo=False
+        my_hdzone.hd_device_names = my_td.hd_name_list
+        my_hdzone.hwmon_path = [''] * count
+        my_hdzone.smartctl_path = '/usr/sbin/smartctl'
         mock_print = MagicMock()
-        mock_glob = MagicMock(side_effect=mocked_glob)
-        with patch('builtins.print', mock_print), \
-             patch('glob.glob', mock_glob):
-            my_config = configparser.ConfigParser()
-            my_config[Ipmi.CS_IPMI] = {
-                Ipmi.CV_IPMI_COMMAND: ipmi_cmd,
-                Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-                Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
-            }
-            my_config[HdZone.CS_HD_ZONE] = {
-                HdZone.CV_HD_ZONE_ENABLED: '1',
-                HdZone.CV_HD_ZONE_COUNT: '1',
-                HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-                HdZone.CV_HD_ZONE_HDDTEMP_PATH: hddtemp_cmd
-            }
-            my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-            my_ipmi = Ipmi(my_log, my_config)
-            hwmon_path = hwmon_path.rstrip()
-
-            # FileNotFoundError/IOError/ValueError - hwmon: hwmon file cannot be opened
-            if operation == 3:
-                my_td.delete_file(hwmon_path)
-                exception = {FileNotFoundError, IOError, ValueError}
-            # ValueError - hwmon: invalid value read from file
-            elif operation == 4:
-                with open(hwmon_path, "w+t", encoding="UTF-8") as f:
-                    f.write(str('invalid value\n'))
-                exception = {ValueError}
-
-            with self.assertRaises(Exception) as cm:
-                my_hdzone = HdZone(my_log, my_ipmi, my_config)
-                if operation == 2:
-                    my_hdzone._get_nth_temp(index)
-            self.assertTrue(type(cm.exception) in exception, error)
-
-        del my_ipmi
-        del my_log
-        del my_config
+        mocker.patch('builtins.print', mock_print)
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_hdzone.log = my_log
+        my_hdzone.standby_array_states = [True] * count
+        mock_hdzone_exec_smartclt = MagicMock()
+        mock_hdzone_exec_smartclt.side_effect = iter(results)
+        mocker.patch('smfc.HdZone._exec_smartctl', mock_hdzone_exec_smartclt)
+        assert my_hdzone.check_standby_state() == in_standby, error
         del my_td
 
-    def test_get_nth_temp(self) -> None:
-        """This is a unit test for function HdZone._get_nth_temp()"""
+    @pytest.mark.parametrize("states, count, error", [
+        ([False, False, False, False, False, False, False, False],  8, 'HdZone.go_standby_state() 1'),
+        ([True, False, False, False, False, False, False, False],   7, 'HdZone.go_standby_state() 2'),
+        ([True, True, False, False, False, False, False, False],    6, 'HdZone.go_standby_state() 3'),
+        ([True, True, True, False, False, False, False, False],     5, 'HdZone.go_standby_state() 4'),
+        ([True, True, True, True, False, False, False, False],      4, 'HdZone.go_standby_state() 5'),
+        ([True, True, True, True, True, False, False, False],       3, 'HdZone.go_standby_state() 6'),
+        ([True, True, True, True, True, True, False, False],        2, 'HdZone.go_standby_state() 7'),
+        ([True, True, True, True, True, True, True, False],         1, 'HdZone.go_standby_state() 8'),
+        ([True, True, True, True, True, True, True, True],          0, 'HdZone.go_standby_state() 9')
+    ])
+    def test_go_standby_state(self, mocker: MockerFixture, states: List[bool], count: int, error: str):
+        """Positive unit test for HdZone.go_standby_state() method. It contains the following steps:
+            - mock HdZone._exec_smartctl() function
+            - initialize an empty HdZone classes
+            - calls HdZone.go_standby_state()
+            - ASSERT: if the array state is not in fully standby
+        """
+        my_td = TestData()
+        my_td.create_hd_data(8)
+        my_hdzone = HdZone.__new__(HdZone)
+        my_hdzone.count = 8
+        my_hdzone.sudo = False
+        my_hdzone.hd_device_names = my_td.hd_name_list
+        my_hdzone.smartctl_path = '/usr/sbin/smartctl'
+        my_hdzone.standby_array_states = states
+        mock_exec_smartctl = MagicMock()
+        mock_exec_smartctl.return_value = subprocess.CompletedProcess([], returncode=0)
+        mocker.patch('smfc.HdZone._exec_smartctl', mock_exec_smartctl)
+        my_hdzone.go_standby_state()
+        assert mock_exec_smartctl.call_count == count, error
+        assert my_hdzone.standby_array_states == [True, True, True, True, True, True, True, True], error
+        del my_td
 
-        # Test valid/expected values.
-        self.pt_gnt_p1(1, 0, [38.5], [TestData.HT_SATA], 'hz _get_nth_temp 1')
-        self.pt_gnt_p1(1, 0, [38.5], [TestData.HT_NVME], 'hz _get_nth_temp 2')
-        self.pt_gnt_p1(1, 0, [38.5], [TestData.HT_SCSI], 'hz _get_nth_temp 3')
+    @pytest.mark.parametrize("old_state, states, new_state, error", [
+        # 1. No state changes.
+        (False, [False, False, False, False, False, False, False, False],   False, 'HdZone.run_standby_guard() 1'),
+        (True,  [True, True, True, True, True, True, True, True],           True,  'HdZone.run_standby_guard() 2'),
+        # 2. change from ACTIVE to STANDBY.
+        (False, [False, True, False, False, False, False, False, False],    True,  'HdZone.run_standby_guard() 3'),
+        (False, [False, True, False, True, False, False, False, False],     True,  'HdZone.run_standby_guard() 4'),
+        (False, [True, True, True, True, True, True, True, True],           True,  'HdZone.run_standby_guard() 5'),
+        # 3. change from STANDBY to ACTIVE.
+        (True,  [False, False, False, False, False, False, False, False],   False, 'HdZone.run_standby_guard() 6'),
+        (True,  [True, False, False, True, True, True, True, True],         False, 'HdZone.run_standby_guard() 7')
+    ])
+    def test_run_standby_guard(self, mocker:MockerFixture, old_state: bool, states: List[bool], new_state: bool,
+                               error: str):
+        """Positive unit test for HdZone.run_standby_guard() method. It contains the following steps:
+            - mock HdZone._exec_smartctl() function
+            - initialize a Log and an empty HdZone classes
+            - calls HdZone.run_standby_guard()
+            - ASSERT: if the expected standby_flags are different
+        """
+        my_td = TestData()
+        my_td.create_hd_data(8)
+        my_hdzone = HdZone.__new__(HdZone)
+        my_hdzone.count = 8
+        my_hdzone.hd_device_names = my_td.hd_name_list
+        my_hdzone.smartctl_path = '/usr/sbin/smartctl'
+        mock_print = MagicMock()
+        mocker.patch('builtins.print', mock_print)
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_hdzone.log = my_log
+        my_hdzone.go_standby_state = MagicMock(name='go_standby_state')
+        my_hdzone.check_standby_state = MagicMock(name='check_standby_state')
+        my_hdzone.check_standby_state.return_value = states.count(True)
+        my_hdzone.standby_array_states = states
+        my_hdzone.standby_flag = old_state
+        my_hdzone.standby_hd_limit = 1
+        my_hdzone.standby_change_timestamp = time.monotonic()
+        mock_exec_smartctl = MagicMock()
+        mock_exec_smartctl.return_value = subprocess.CompletedProcess([], returncode=0)
+        mocker.patch('smfc.HdZone._exec_smartctl', mock_exec_smartctl)
+        my_hdzone.run_standby_guard()
+        assert my_hdzone.standby_flag == new_state, error
+        del my_hdzone
+        del my_td
 
-        self.pt_gnt_p1(2, 0, [38.5, 40.5], [TestData.HT_SATA, TestData.HT_NVME], 'hz _get_nth_temp 4')
-        self.pt_gnt_p1(2, 1, [38.5, 40.5], [TestData.HT_SATA, TestData.HT_NVME], 'hz _get_nth_temp 5')
-        self.pt_gnt_p1(2, 0, [38.5, 40.5], [TestData.HT_SATA, TestData.HT_SCSI], 'hz _get_nth_temp 6')
-        self.pt_gnt_p1(2, 1, [38.5, 40.5], [TestData.HT_SATA, TestData.HT_SCSI], 'hz _get_nth_temp 7')
-        self.pt_gnt_p1(2, 0, [38.5, 40.5], [TestData.HT_NVME, TestData.HT_SCSI], 'hz _get_nth_temp 8')
-        self.pt_gnt_p1(2, 1, [38.5, 40.5], [TestData.HT_NVME, TestData.HT_SCSI], 'hz _get_nth_temp 9')
 
-        self.pt_gnt_p1(4, 0, [38.5, 40.5, 42.5, 44.5],
-                       [TestData.HT_SATA, TestData.HT_NVME, TestData.HT_SCSI, TestData.HT_SATA],
-                       'hz _get_nth_temp 10')
-        self.pt_gnt_p1(4, 1, [38.5, 40.5, 42.5, 44.5],
-                       [TestData.HT_SATA, TestData.HT_NVME, TestData.HT_SCSI, TestData.HT_SATA],
-                       'hz _get_nth_temp 11')
-        self.pt_gnt_p1(4, 2, [38.5, 40.5, 42.5, 44.5],
-                       [TestData.HT_SATA, TestData.HT_NVME, TestData.HT_SCSI, TestData.HT_SATA],
-                       'hz _get_nth_temp 12')
-        self.pt_gnt_p1(4, 3, [38.5, 40.5, 42.5, 44.5],
-                       [TestData.HT_SATA, TestData.HT_NVME, TestData.HT_SCSI, TestData.HT_SATA],
-                       'hz _get_nth_temp 13')
-
-        # Test exceptions.
-        # RuntimeError
-        self.pt_gnt_n1(0, [TestData.HT_SCSI], "hz _get_nth_temp 14")
-        # ValueError
-        self.pt_gnt_n1(1, [TestData.HT_SCSI], "hz _get_nth_temp 15")
-        # IndexError
-        self.pt_gnt_n1(2, [TestData.HT_SCSI], "hz _get_nth_temp 16")
-        # FileNotFoundError, IOError, ValueError
-        self.pt_gnt_n1(3, [TestData.HT_SATA], "hz _get_nth_temp 17")
-        # ValueError
-        self.pt_gnt_n1(4, [TestData.HT_NVME], "hz _get_nth_temp 18")
-
-
-if __name__ == "__main__":
-    unittest.main()
+# End.

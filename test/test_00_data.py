@@ -4,23 +4,23 @@
 #   Test data handling class for unit tests.
 #
 import configparser
-import glob
 import os
 import random
 import shutil
 import tempfile
 from typing import List
+from pyudev import DeviceNotFoundByFileError
 
 
 class TestData:
     """Class for test data handling."""
 
-    td_dir: str = ''    # Test data directory
+    td_dir: str = ''                    # Test data directory
+    cpu_files: List[str] = []           # CPU hwmon files
 
-    # HD types
-    HT_NVME: int = 0
-    HT_SATA: int = 1
-    HT_SCSI: int = 2
+    hd_names: str                       # HD names in configuration parameter form
+    hd_name_list: List[str] = []        # HD names in a list
+    hd_files: List[str] = []            # HD hwmon files
 
     def __init__(self):
         """Initialize the class. It creates a temporary directory."""
@@ -30,257 +30,48 @@ class TestData:
         """It deletes the temporary directory with is all content."""
         shutil.rmtree(self.td_dir)
 
-    def create_cpu_temp_files(self, count: int, temp_list: List[float] = None, wildchar: bool = False) -> str:
+    def create_cpu_data(self, count: int, temp_list: List[float] = None) -> None:
         """Generic method to create temporary test data files (similarly to hwmon naming convention and content)."""
-        new_list: str = ''
-        new_dir: str
-        new_path: str
+        hwmon_file: str
 
-        new_dir = self.td_dir + '/sys/devices/platform/'
+        self.cpu_files = []
         for i in range(count):
-            new_path = new_dir + 'coretemp.' + str(i) + '/'
-            os.makedirs(new_path, exist_ok=True)
-            real_path = new_path + 'hwmon/hwmon' + str(i) + '/'
-            if wildchar:
-                list_path = new_path + 'hwmon/hwmon*/'
-            else:
-                list_path = real_path
-            os.makedirs(real_path, exist_ok=True)
-            real_name = real_path + 'temp1_input'
-            list_name = list_path + 'temp1_input'
-            with open(real_name, "w+t", encoding="UTF-8") as f:
+            hwmon_file = os.path.join(self.td_dir, 'cpu', 'coretemp.' + str(i), 'hwmon')
+            os.makedirs(hwmon_file, exist_ok=True)
+            hwmon_file = os.path.join(hwmon_file, 'temp1_input')
+            with open(hwmon_file, "w+t", encoding="UTF-8") as f:
                 if temp_list:
                     v = temp_list[i]
                 else:
                     v = random.uniform(30.0, 60.0)
                 f.write(str(v * 1000))
-            new_list = new_list + list_name + '\n'
-        return new_list
+            self.cpu_files.append(hwmon_file)
 
-    def create_hd_temp_files(self, count: int, temp_list: List[float] = None, wildchar: bool = False,
-                             hd_types: List[int] = None) -> str:
+    def create_hd_data(self, count: int, temp_list: List[float] = None) -> None:
         """Generic method to create temporary test data files (similarly to hwmon naming convention and content)."""
-        letters: list[str] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']
-        new_list: str = ''
-        new_dir: str
-        new_path: str
-        sata_counter: int = 0
-        nvme_counter: int = 0
+        letters: List[str] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q' ]
+        hwmon_path: str
+        disk_name: str
 
-        # If no disk types are specified then the default type is SATA.
-        if not hd_types:
-            hd_types = [self.HT_SATA] * count
-
-        # Create test data for different disk types.
+        self.hd_names = ''
+        self.hd_name_list = []
+        self.hd_files = []
+        separator = random.choice([' ', '\n'])
         for i in range(count):
-
-            # ATA/SATA disk type.
-            if hd_types[i] == self.HT_SATA:
-                new_dir = self.td_dir + '/sys/class/scsi_disk/'
-                new_path = new_dir + str(i) + ':0:0:0/device/'
-                os.makedirs(new_path, exist_ok=True)
-                os.makedirs(new_path + 'block/sd' + letters[sata_counter], exist_ok=True)
-                real_path = new_path + 'hwmon/hwmon' + str(i) + '/'
-                if wildchar:
-                    list_path = new_path + 'hwmon/hwmon*/'
+            disk_name = '/dev/sd' + letters[i]
+            self.hd_names += disk_name + separator
+            self.hd_name_list.append(disk_name)
+            hwmon_path = os.path.join(self.td_dir, 'disks', str(i)+':0:0:0', 'hwmon')
+            os.makedirs(hwmon_path, exist_ok=True)
+            hwmon_path = os.path.join(hwmon_path, 'temp1_input')
+            with open(hwmon_path, "w+t", encoding="UTF-8") as f:
+                if temp_list:
+                    v = temp_list[i]
                 else:
-                    list_path = real_path
-                os.makedirs(real_path, exist_ok=True)
-                real_name = real_path + 'temp1_input'
-                list_name = list_path + 'temp1_input'
-                with open(real_name, "w+t", encoding="UTF-8") as f:
-                    if temp_list:
-                        v = temp_list[i]
-                    else:
-                        v = random.uniform(32.0, 45.0)
-                    v *= 1000
-                    f.write(f"{v:.1f}")
-                new_list = new_list + list_name + '\n'
-                sata_counter += 1
-
-            # NVME disk type.
-            elif hd_types[i] == self.HT_NVME:
-                new_dir = self.td_dir + '/sys/class/nvme/'
-                new_path = new_dir + "nvme" + str(nvme_counter) + '/' + "nvme" + str(nvme_counter) + 'n1/device'
-                os.makedirs(new_path, exist_ok=True)
-
-                real_path = new_path + '/hwmon' + str(i) + '/'
-                if wildchar:
-                    list_path = new_path + '/hwmon*/'
-                else:
-                    list_path = real_path
-                os.makedirs(real_path, exist_ok=True)
-                real_name = real_path + 'temp1_input'
-                list_name = list_path + 'temp1_input'
-                with open(real_name, "w+t", encoding="UTF-8") as f:
-                    if temp_list:
-                        v = temp_list[i]
-                    else:
-                        v = random.uniform(45.0, 75.0)
-                    v *= 1000
-                    f.write(f"{v:.1f}")
-                new_list = new_list + list_name + '\n'
-                nvme_counter += 1
-
-            # SAS/SCSI disk
-            elif hd_types[i] == self.HT_SCSI:
-                new_list = new_list + "hddtemp" + '\n'
-
-        return new_list
-
-    def get_cpu_1(self, temperatures: List[float] = None) -> str:
-        """Generates hwmon files for 1 CPU."""
-        return self.create_cpu_temp_files(1, temp_list=temperatures, wildchar=False)
-
-    def get_cpu_1w(self, temperatures: List[float] = None) -> str:
-        """Generates hwmon files with wild characters for 1 CPU."""
-        return self.create_cpu_temp_files(1, temp_list=temperatures, wildchar=True)
-
-    def get_cpu_2(self, temperatures: List[float] = None) -> str:
-        """Generates hwmon files for 2 CPUs."""
-        return self.create_cpu_temp_files(2, temp_list=temperatures, wildchar=False)
-
-    def get_cpu_2w(self, temperatures: List[float] = None) -> str:
-        """Generates hwmon files with wild characters for 2 CPUs."""
-        return self.create_cpu_temp_files(2, temp_list=temperatures, wildchar=True)
-
-    def get_cpu_4(self, temperatures: List[float] = None) -> str:
-        """Generates hwmon files for 4 CPUs."""
-        return self.create_cpu_temp_files(4, temp_list=temperatures, wildchar=False)
-
-    def get_cpu_4w(self, temperatures: List[float] = None) -> str:
-        """Generates hwmon files with wild characters for 4 CPUs."""
-        return self.create_cpu_temp_files(4, temp_list=temperatures, wildchar=True)
-
-    def get_hd_1(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generates hwmon files for 1 HD."""
-        return self.create_hd_temp_files(1, temp_list=temperatures, wildchar=False, hd_types=types)
-
-    def get_hd_1w(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generates hwmon files with wild characters for 1 HD."""
-        return self.create_hd_temp_files(1, temp_list=temperatures, wildchar=True, hd_types=types)
-
-    def get_hd_2(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generates hwmon files for 2 HDs."""
-        return self.create_hd_temp_files(2, temp_list=temperatures, wildchar=False, hd_types=types)
-
-    def get_hd_2w(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generates hwmon files with wild characters for 2 HDs."""
-        return self.create_hd_temp_files(2, temp_list=temperatures, wildchar=True, hd_types=types)
-
-    def get_hd_4(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generates hwmon files for 4 HDs."""
-        return self.create_hd_temp_files(4, temp_list=temperatures, wildchar=False, hd_types=types)
-
-    def get_hd_4w(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generates hwmon files with wild characters for 4 HDs."""
-        return self.create_hd_temp_files(4, temp_list=temperatures, wildchar=True, hd_types=types)
-
-    def get_hd_8(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generates hwmon files for 8 HDs."""
-        return self.create_hd_temp_files(8, temp_list=temperatures, wildchar=False, hd_types=types)
-
-    def get_hd_8w(self, temperatures: List[float] = None, types: List[int] = None) -> str:
-        """Generates hwmon files with wild characters for 8 HDs."""
-        return self.create_hd_temp_files(8, temp_list=temperatures, wildchar=True, hd_types=types)
-
-    def create_hd_names(self, count: int, hd_types: List[int] = None) -> str:
-        """Generates hd_names= list concatenated in a string."""
-
-        def get_random_str(count: int) -> str:
-            rnd_str: str = ''
-            i: int = 0
-            while i < count:
-                rnd_str = rnd_str + random.choice('0123456789ABCDEF')
-                i += 1
-            return rnd_str
-
-        letters: list[str] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']
-        hd_names: str = ''
-        dev_dir: str
-        dev_name: str
-        sata_counter: int = 0
-        nvme_counter: int = 0
-        scsi_counter: int = 0
-
-        # Create root folder for disks.
-        dev_dir = os.path.join(self.td_dir, 'dev/disk/by-id/')
-        separator = ' '
-        if random.randint(1, 2) % 2 == 0:
-            separator = '\n'
-        os.makedirs(dev_dir, exist_ok=True)
-
-        # If no disk types are specified then the default type is SATA.
-        if not hd_types:
-            hd_types = [self.HT_SATA] * count
-
-        for i in range(count):
-
-            # SATA disk type
-            if hd_types[i] == self.HT_SATA:
-
-                # Create /dev/sd? file.
-                sdx_name = os.path.join(self.td_dir, 'dev', 'sd' + letters[sata_counter])
-                with open(sdx_name, 'w+t', encoding="UTF-8") as f:
-                    f.write(str(' '))
-                # Create a link with device name.
-                dev_name = os.path.join(dev_dir, 'ata-HD_HD1100XOI-' + get_random_str(8))
-                os.symlink('../../sd' + letters[sata_counter], dev_name)
-                hd_names = hd_names + dev_name + separator
-                sata_counter += 1
-
-            # NVME disk type
-            elif hd_types[i] == self.HT_NVME:
-
-                # Create /dev/nvme? file.
-                sdx_name = os.path.join(self.td_dir, 'dev', 'nvme' + str(nvme_counter))
-                with open(sdx_name, 'w+t', encoding="UTF-8") as f:
-                    f.write(str(' '))
-                # Create a link with device name.
-                dev_name = os.path.join(dev_dir, 'nvme-Samsung_SSD_870_PRO_1TB_' + get_random_str(8))
-                os.symlink('../../nvme' + str(nvme_counter) + 'n1', dev_name)
-                hd_names = hd_names + dev_name + separator
-                nvme_counter += 1
-
-            # SAS/SCSI disk type
-            elif hd_types[i] == self.HT_SCSI:
-
-                # Create /dev/sg? file.
-                sgx_name = os.path.join(self.td_dir, 'dev', 'sg' + letters[scsi_counter])
-                with open(sgx_name, 'w+t', encoding="UTF-8") as f:
-                    f.write(str(' '))
-                # Create a link with device name.
-                dev_name = os.path.join(dev_dir, 'scsi-IBM_ST1100YOI_' + get_random_str(8))
-                os.symlink('../../sg' + letters[scsi_counter], dev_name)
-                hd_names = hd_names + dev_name + separator
-                scsi_counter += 1
-
-        return hd_names
-
-    @staticmethod
-    def normalize_path(old_list: List[str]) -> List[str]:
-        """Normalizes the path in a List[str]"""
-        new_list: List[str] = []
-        for ol in old_list:
-            fn = glob.glob(ol)
-            new_list.append(fn[0])
-        return new_list
-
-    @staticmethod
-    def create_path_list(hwmon_str: str) -> List[str]:
-        """Creates a path List[str] with splitting the input string based on its content."""
-        new_list: List[str]
-        # Convert the string into a string array (respecting multi-line strings).
-        if "\n" in hwmon_str:
-            new_list = hwmon_str.splitlines()
-        else:
-            new_list = hwmon_str.split()
-        return new_list
-
-    @staticmethod
-    def create_normalized_path_list(hwmon_str: str) -> List[str]:
-        """Creates path List[str] with normalization."""
-        return TestData.normalize_path(TestData.create_path_list(hwmon_str))
+                    v = random.uniform(32.0, 45.0)
+                v *= 1000
+                f.write(f"{v:.0f}")
+            self.hd_files.append(hwmon_path)
 
     def create_config_file(self, my_config: configparser.ConfigParser) -> str:
         """Creates a config file. """
@@ -331,7 +122,77 @@ fi
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x01" ]] ; then
 	exit 0
 fi
-""")
+        """)
+
+    def create_smart_command(self) -> str:
+        """Creates a shell script emulating `smartctl`."""
+        return self.create_command_file("""
+# smartctl emulation script.
+
+# Print header
+cat << EOF
+smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.1.0-32-amd64] (local build)
+Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org
+
+EOF
+
+# smartctl -a /dev/sd?
+if [[ $1 = "-a" ]] ; then
+    r=$((RANDOM % 3))	
+    case "$r" in 
+        "0")
+            echo "Current Drive Temperature:     37 C" ;;
+        "1")
+            echo "190 Airflow_Temperature_Cel 0x0032   075   045   000    Old_age   Always       -       25" ;;
+        "2")
+            echo "194 Temperature_Celsius     0x0002   232   232   000    Old_age   Always       -       28 (Min/Max 17/45)" ;;
+    esac
+fi
+
+# smartctl -i -n standby /dev/sd?
+if [[ $1 = "-i" && $2 = "-n" && $3 = "standby" ]] ; then
+    r=$((RANDOM % 2))	
+    case "$r" in 
+        "0")
+            cat << EOF
+=== START OF INFORMATION SECTION ===
+Model Family:     Samsung based SSDs
+Device Model:     Samsung SSD 870 QVO 8TB
+Serial Number:    S5SSNG1NB01829M
+LU WWN Device Id: 5 002538 f70b0ee2f
+Firmware Version: SVQ01B6Q
+User Capacity:    8,001,563,222,016 bytes [8.00 TB]
+Sector Size:      512 bytes logical/physical
+Rotation Rate:    Solid State Device
+Form Factor:      2.5 inches
+TRIM Command:     Available, deterministic, zeroed
+Device is:        In smartctl database [for details use: -P show]
+ATA Version is:   ACS-4 T13/BSR INCITS 529 revision 5
+SATA Version is:  SATA 3.3, 6.0 Gb/s (current: 6.0 Gb/s)
+Local Time is:    Sat May 15 14:26:26 2021 CEST
+SMART support is: Available - device has SMART capability.
+SMART support is: Enabled
+Power mode is:    ACTIVE or IDLE
+EOF
+            r=0 ;;
+            
+        "1")
+            cat << EOF
+Device is in STANDBY mode, exit(2)
+EOF
+            r=2 ;;            
+    esac
+    exit $r
+fi
+
+# smartctl -s standby,now /dev/sd?
+if [[ $1 = "-s" && $2 = "standby,now" ]] ; then
+    echo "Device placed in STANDBY mode"
+    exit 0  
+fi
+
+exit 0"""
+        )
 
     def create_text_file(self, content: str) -> str:
         """Creates a text file with the specified content."""
@@ -339,3 +200,74 @@ fi
         with os.fdopen(h, "w+t") as f:
             f.write(content)
         return name
+
+
+#pylint: disable=missing-function-docstring
+#pylint: disable=too-few-public-methods
+class MockDevice:
+    """Mock class for pyudev.Device() class"""
+
+    _sys_path: str
+
+    def __init__(self, context=None, _device=None):
+        pass
+
+    def __del__(self):
+        pass
+
+    @property
+    def parent(self):
+        return None
+
+    @property
+    def sys_path(self):
+        return self._sys_path
+
+
+def factory_mockdevice():
+    """Can generate MockDevice() class."""
+    return MockDevice()
+
+
+class MockContext:
+    """Mock class for pyudev.Context() class."""
+    mocked_devices: List[MockDevice]
+
+    def __init__(self, devices=None):
+        self.mocked_devices = devices
+
+    def __del__(self):
+        pass
+
+    #pylint: disable=unused-argument
+    def list_devices(self, **kwargs):
+        return iter(self.mocked_devices)
+    # pylint: enable=unused-argument
+
+
+class MockDevices:
+    """Mock class for pyudev.Devices() class."""
+
+    @classmethod
+    def from_device_file(cls, context=None, filename=None):
+        if filename == "raise":
+            raise DeviceNotFoundByFileError()
+        return MockDevice(context)
+
+
+class MockedContextError:
+    """Mock class for pyudev.Context() class will generate ImportError exception."""
+    def __init__(self):
+        raise ImportError
+
+
+class MockedContextGood:
+    """Mock class for pyudev.Context() class will not generate any exception."""
+    def __init__(self):
+        pass
+
+#pylint: enable=missing-function-docstring
+#pylint: enable=too-few-public-methods
+
+
+# End.

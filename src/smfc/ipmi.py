@@ -3,9 +3,9 @@
 #   smfc package: Super Micro fan control for Linux (home) servers.
 #   smfc.Ipmi() class implementation.
 #
-import configparser
 import subprocess
 import time
+from configparser import ConfigParser
 from typing import List
 from smfc.log import Log
 
@@ -18,12 +18,14 @@ class Ipmi:
     fan_mode_delay: float       # Delay time after execution of IPMI set fan mode function
     fan_level_delay: float      # Delay time after execution of IPMI set fan level function
     swapped_zones: bool         # CPU and HD zones are swapped
-    remote_parameters: str      # Remote IPMI parameters.
+    remote_parameters: str      # Remote IPMI parameters
+    sudo: bool                  # Use `sudo` command for `ipmitool` command
 
     # Constant values for IPMI fan modes:
     STANDARD_MODE: int = 0
     FULL_MODE: int = 1
     OPTIMAL_MODE: int = 2
+    PUE_MODE: int = 3
     HEAVY_IO_MODE: int = 4
 
     # Constant values for IPMI fan zones:
@@ -42,134 +44,156 @@ class Ipmi:
     CV_IPMI_SWAPPED_ZONES: str = 'swapped_zones'
     CV_IPMI_REMOTE_PARAMETERS: str = 'remote_parameters'
 
-    def __init__(self, log: Log, config: configparser.ConfigParser) -> None:
+    def __init__(self, log: Log, config: ConfigParser, sudo: bool) -> None:
         """Initialize the Ipmi class with a log class and with a configuration class.
-
         Args:
-            log (Log): Log class
-            config (configparser.ConfigParser): configuration values
+            log (Log): a Log class instance
+            config (ConfigParser): a ConfigParser class instance
+            sudo (bool): sudo flag
         Raises:
             ValueError: invalid input parameters
-            FileNotFoundError: ipmitool command not found
+            FileNotFoundError: ipmitool not found
+            RuntimeError: ipmitool execution error
         """
         # Set default or read from configuration
         self.log = log
-        self.command = config[self.CS_IPMI].get(self.CV_IPMI_COMMAND, '/usr/bin/ipmitool')
-        self.fan_mode_delay = config[self.CS_IPMI].getint(self.CV_IPMI_FAN_MODE_DELAY, fallback=10)
-        self.fan_level_delay = config[self.CS_IPMI].getint(self.CV_IPMI_FAN_LEVEL_DELAY, fallback=2)
-        self.swapped_zones = config[self.CS_IPMI].getboolean(self.CV_IPMI_SWAPPED_ZONES, fallback=False)
-        self.remote_parameters = config[self.CS_IPMI].get(self.CV_IPMI_REMOTE_PARAMETERS, fallback='')
+        self.command = config[Ipmi.CS_IPMI].get(Ipmi.CV_IPMI_COMMAND, '/usr/bin/ipmitool')
+        self.fan_mode_delay = config[Ipmi.CS_IPMI].getint(Ipmi.CV_IPMI_FAN_MODE_DELAY, fallback=10)
+        self.fan_level_delay = config[Ipmi.CS_IPMI].getint(Ipmi.CV_IPMI_FAN_LEVEL_DELAY, fallback=2)
+        self.swapped_zones = config[Ipmi.CS_IPMI].getboolean(Ipmi.CV_IPMI_SWAPPED_ZONES, fallback=False)
+        self.remote_parameters = config[Ipmi.CS_IPMI].get(Ipmi.CV_IPMI_REMOTE_PARAMETERS, fallback='')
+        self.sudo = sudo
 
         # Validate configuration
         # Check 1: a valid command can be executed successfully.
         try:
-            subprocess.run([self.command, 'sdr'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except FileNotFoundError as e:
+            self.exec_ipmitool(['sdr'])
+        except (FileNotFoundError, RuntimeError) as e:
             raise e
         # Check 2: fan_mode_delay must be positive.
         if self.fan_mode_delay < 0:
-            raise ValueError(f'Negative fan_mode_delay ({self.fan_mode_delay})')
+            raise ValueError(f'Negative fan_mode_delay= parameter ({self.fan_mode_delay})')
         # Check 3: fan_mode_delay must be positive.
         if self.fan_level_delay < 0:
-            raise ValueError(f'Negative fan_level_delay ({self.fan_level_delay})')
+            raise ValueError(f'Negative fan_level_delay= parameter ({self.fan_level_delay})')
         # Print the configuration out at DEBUG log level.
-        if self.log.log_level >= self.log.LOG_CONFIG:
-            self.log.msg(self.log.LOG_CONFIG, 'Ipmi module was initialized with:')
-            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_COMMAND} = {self.command}')
-            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_FAN_MODE_DELAY} = {self.fan_mode_delay}')
-            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_FAN_LEVEL_DELAY} = {self.fan_level_delay}')
-            self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_SWAPPED_ZONES} = {self.swapped_zones}')
+        if self.log.log_level >= Log.LOG_CONFIG:
+            self.log.msg(Log.LOG_CONFIG, 'Ipmi module was initialized with:')
+            self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_COMMAND} = {self.command}')
+            self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_FAN_MODE_DELAY} = {self.fan_mode_delay}')
+            self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_FAN_LEVEL_DELAY} = {self.fan_level_delay}')
+            self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_SWAPPED_ZONES} = {self.swapped_zones}')
+            self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_REMOTE_PARAMETERS} = {self.remote_parameters}')
+
+    def exec_ipmitool(self, args: List[str]) -> subprocess.CompletedProcess:
+        """Execute `ipmitool` command.
+        Args:
+            args(List[str]): command line parameters
+        Returns:
+            subprocess.CompletedProcess: result of the executed subprocess
+        Raises:
+            FileNotFoundError: ipmitool cannot be found
+            RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI system/motherboard)
+        """
+        r: subprocess.CompletedProcess      # result of the executed process
+        arguments: List[str]                # Command arguments
+
+        try:
+            # Construct command line parameters.
+            arguments = []
+            # Add `sudo` if needed.
+            if self.sudo:
+                arguments.append('sudo')
+            # Add `ipmitool` path.
+            arguments.append(self.command)
+            # Add remote parameters if needed.
             if self.remote_parameters:
-                self.log.msg(self.log.LOG_CONFIG, f'   {self.CV_IPMI_REMOTE_PARAMETERS} = {self.remote_parameters}')
+                arguments.extend(self.remote_parameters.split())
+            # Add additional command line parameters from caller.
+            arguments.extend(args)
+            r = subprocess.run(arguments, check=False, capture_output=True, text=True)
+            # Check error code.
+            if self.sudo and r.returncode != 0:
+                raise RuntimeError(f'sudo error ({r.returncode}): {r.stderr}.')
+            if r.returncode != 0:
+                raise RuntimeError(f'ipmitool error ({r.returncode}): {r.stderr}.')
+        except FileNotFoundError as e:
+            raise e
+        return r
 
     def get_fan_mode(self) -> int:
         """Get the current IPMI fan mode.
-
         Returns:
             int: fan mode (ERROR, STANDARD_MODE, FULL_MODE, OPTIMAL_MODE, HEAVY_IO_MODE)
         Raises:
-            FileNotFoundError: ipmitool command cannot be found
+            FileNotFoundError: ipmitool cannot be found
+            RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI system/motherboard)
             ValueError: output of the ipmitool cannot be interpreted/converted
-            RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI systems
-                or motherboards)
         """
         r: subprocess.CompletedProcess  # result of the executed process
-        arguments: List[str]            # Command arguments
         m: int                          # fan mode
 
         # Read the current IPMI fan mode.
         try:
-            arguments = [self.command]
-            if self.remote_parameters:
-                arguments.extend(self.remote_parameters.split())
-            arguments.extend(['raw', '0x30', '0x45', '0x00'])
-            r = subprocess.run(arguments, check=False, capture_output=True, text=True)
-            if r.returncode != 0:
-                raise RuntimeError(f'ipmitool error ({r.returncode}): {r.stderr}')
+            r = self.exec_ipmitool(['raw', '0x30', '0x45', '0x00'])
             m = int(r.stdout)
-        except (FileNotFoundError, ValueError) as e:
+        except (RuntimeError, FileNotFoundError) as e:
             raise e
         return m
 
-    def get_fan_mode_name(self, mode: int) -> str:
+    @staticmethod
+    def get_fan_mode_name(mode: int) -> str:
         """Get the name of the specified IPMI fan mode.
-
         Args:
             mode (int): fan mode
         Returns:
-            str: name of the fan mode ('ERROR', 'STANDARD MODE', 'FULL MODE', 'OPTIMAL MODE', 'HEAVY IO MODE')
+            str: name of the fan mode ('UNKNOWN', 'STANDARD', 'FULL', 'OPTIMAL', 'PUE' 'HEAVY IO')
         """
         fan_mode_name: str  # Name of the fan mode
 
-        fan_mode_name = 'ERROR'
-        if mode == self.STANDARD_MODE:
-            fan_mode_name = 'STANDARD_MODE'
-        elif mode == self.FULL_MODE:
-            fan_mode_name = 'FULL_MODE'
-        elif mode == self.OPTIMAL_MODE:
-            fan_mode_name = 'OPTIMAL_MODE'
-        elif mode == self.HEAVY_IO_MODE:
-            fan_mode_name = 'HEAVY IO MODE'
+        fan_mode_name = 'UNKNOWN'
+        if mode == Ipmi.STANDARD_MODE:
+            fan_mode_name = 'STANDARD'
+        elif mode == Ipmi.FULL_MODE:
+            fan_mode_name = 'FULL'
+        elif mode == Ipmi.OPTIMAL_MODE:
+            fan_mode_name = 'OPTIMAL'
+        elif mode == Ipmi.PUE_MODE:
+            fan_mode_name = 'PUE'
+        elif mode == Ipmi.HEAVY_IO_MODE:
+            fan_mode_name = 'HEAVY IO'
         return fan_mode_name
 
     def set_fan_mode(self, mode: int) -> None:
         """Set the IPMI fan mode.
-
         Args:
-            mode (int): fan mode (STANDARD_MODE, FULL_MODE, OPTIMAL_MODE, HEAVY_IO_MODE)
+            mode (int): fan mode (STANDARD_MODE, FULL_MODE, OPTIMAL_MODE, PUE_MODE, HEAVY_IO_MODE)
         Raises:
-            FileNotFoundError: ipmitool command cannot be found
             ValueError: invalid input parameter
+            FileNotFoundError: ipmitool command cannot be found
+            RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI system/motherboard)
         """
-        arguments: List[str]    # Command arguments
-
         # Validate mode parameter.
-        if mode not in {self.STANDARD_MODE, self.FULL_MODE, self.OPTIMAL_MODE, self.HEAVY_IO_MODE}:
+        if mode not in {self.STANDARD_MODE, self.FULL_MODE, self.OPTIMAL_MODE, self.PUE_MODE, self.HEAVY_IO_MODE}:
             raise ValueError(f'Invalid fan mode value ({mode}).')
         # Call ipmitool command and set the new IPMI fan mode.
         try:
-            arguments = [self.command]
-            if self.remote_parameters:
-                arguments.extend(self.remote_parameters.split())
-            arguments.extend(['raw', '0x30', '0x45', '0x01', str(mode)])
-            subprocess.run(arguments, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except FileNotFoundError as e:
+            self.exec_ipmitool(['raw', '0x30', '0x45', '0x01', str(mode)])
+        except (RuntimeError, FileNotFoundError) as e:
             raise e
         # Give time for IPMI system/fans to apply changes in the new fan mode.
         time.sleep(self.fan_mode_delay)
 
     def set_fan_level(self, zone: int, level: int) -> None:
-        """Set the IPMI fan level in a specific zone. Raise an exception in case of invalid parameters.
-
+        """Set the fan level in a specific IPMI zone. Raise an exception in case of invalid parameters.
         Args:
             zone (int): fan zone (CPU_ZONE, HD_ZONE)
             level (int): fan level in % (0-100)
         Raises:
-            FileNotFoundError: ipmitool command cannot be found
             ValueError: invalid input parameter
+            FileNotFoundError: ipmitool command cannot be found
+            RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI system/motherboard)
         """
-        arguments: List[str]  # Command arguments
-
         # Validate zone parameter
         if zone not in {self.CPU_ZONE, self.HD_ZONE}:
             raise ValueError(f'Invalid value: zone ({zone}).')
@@ -181,14 +205,38 @@ class Ipmi:
             raise ValueError(f'Invalid value: level ({level}).')
         # Set the new IPMI fan level in the specific zone
         try:
-            arguments = [self.command]
-            if self.remote_parameters:
-                arguments.extend(self.remote_parameters.split())
-            arguments.extend(['raw', '0x30', '0x70', '0x66', '0x01', str(zone), str(level)])
-            subprocess.run(arguments, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except FileNotFoundError as e:
+            self.exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x01', str(zone), str(level)])
+        except (FileNotFoundError, RuntimeError) as e:
             raise e
         # Give time for IPMI and fans to spin up/down.
         time.sleep(self.fan_level_delay)
+
+    def get_fan_level(self, zone: int) -> int:
+        """Get the current fan level in a specific IPMI zone. Raise an exception in case of invalid parameters.
+        Args:
+            zone (int): fan zone (CPU_ZONE, HD_ZONE)
+        Returns:
+            level (int): fan level in % (0-100)
+        Raises:
+            ValueError: invalid input parameter
+            FileNotFoundError: ipmitool command cannot be found
+            RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI system/motherboard)
+        """
+        r: subprocess.CompletedProcess  # result of the executed process
+        l: int                          # Level
+
+        # Validate zone parameter
+        if zone not in {self.CPU_ZONE, self.HD_ZONE}:
+            raise ValueError(f'Invalid value: zone ({zone}).')
+        # Handle swapped zones
+        if self.swapped_zones:
+            zone = 1 - zone
+        # Get the new IPMI fan level in the specific zone
+        try:
+            r = self.exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x00', str(zone)])
+            l = int(r.stdout)
+        except (FileNotFoundError, RuntimeError) as e:
+            raise e
+        return l
 
 # End.

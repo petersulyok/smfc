@@ -3,65 +3,67 @@
 #   test_06_service.py (C) 2021-2025, Peter Sulyok
 #   Unit tests for smfc.Service() class.
 #
-import configparser
 from argparse import Namespace
 import sys
-import unittest
-from unittest.mock import patch, MagicMock
-from test_00_data import TestData
-from smfc import Log, Ipmi, CpuZone, HdZone, Service
+import time
+from configparser import ConfigParser
+import pytest
+from pyudev import Context
+from mock import MagicMock
+from pytest_mock import MockerFixture
+from test_00_data import TestData, MockedContextError, MockedContextGood
+from smfc import Log, Ipmi, CpuZone, HdZone, Service, FanController
 
 
-class ServiceTestCase(unittest.TestCase):
+class TestService:
     """Unit test for smfc.Service() class"""
 
     sleep_counter: int
 
-    def pt_ef_p1(self, ipmi: bool, log: bool) -> None:
-        """Primitive positive test function. It contains the following steps:
-            - mock print(), atexit.unregister(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
+    @pytest.mark.parametrize("ipmi, log, error", [
+        (True, True,   'Service.exit_func() 1'),
+        (False, False, 'Service.exit_func() 2')
+    ])
+    def test_exit_func(self, mocker:MockerFixture, ipmi: bool, log: bool, error: str) -> None:
+        """Positive unit test for Service.exit_func() method. It contains the following steps:
+            - mock atexit.unregister(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
             - execute Service.exit_func()
-            - ASSERT: if mocked functions not called
+            - ASSERT: if mocked functions not called expected times
         """
-        mock_print = MagicMock()
         mock_atexit_unregister = MagicMock()
+        mocker.patch('atexit.unregister', mock_atexit_unregister)
         mock_ipmi_set_fan_level = MagicMock()
+        mocker.patch('smfc.Ipmi.set_fan_level', mock_ipmi_set_fan_level)
         mock_log_msg = MagicMock()
-        with patch('builtins.print', mock_print), \
-             patch('atexit.unregister', mock_atexit_unregister), \
-             patch('smfc.Ipmi.set_fan_level', mock_ipmi_set_fan_level), \
-             patch('smfc.Log.msg_to_stdout', mock_log_msg):
-
-            service = Service()
+        mocker.patch('smfc.Log.msg_to_stdout', mock_log_msg)
+        service = Service()
+        if log:
+            service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        if ipmi:
+            service.ipmi = Ipmi.__new__(Ipmi)
+        service.exit_func()
+        assert mock_atexit_unregister.call_count == 1, error
+        if ipmi:
+            assert mock_ipmi_set_fan_level.call_count == 2, error
             if log:
-                service.log = Log(1, 0)
-            if ipmi:
-                my_td = TestData()
-                ipmi_command = my_td.create_ipmi_command()
-                my_config = configparser.ConfigParser()
-                my_config[Ipmi.CS_IPMI] = {
-                    Ipmi.CV_IPMI_COMMAND: ipmi_command,
-                    Ipmi.CV_IPMI_FAN_MODE_DELAY: '1',
-                    Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '1',
-                }
-                service.ipmi = Ipmi(service.log, my_config)
-            service.exit_func()
-            mock_atexit_unregister.assert_called_once()
-            if ipmi:
-                mock_ipmi_set_fan_level.assert_called()
-                if log:
-                    mock_log_msg.assert_called_once()
+                assert mock_log_msg.call_count == 4, error # Log.__init__ 3 + Service.exit_func() 1
 
-    def test_exit_function(self) -> None:
-        """This is a unit test for function Service.exit_function()"""
-        self.pt_ef_p1(True, True)
-        self.pt_ef_p1(False, False)
-
-    def pt_cd_p1(self, module_list: str, cpuzone: bool, hdzone: bool, hwmon_path: str, standby: bool, error: str):
-        """Primitive positive test function. It contains the following steps:
+    @pytest.mark.parametrize("module_list, cpuzone, hdzone, standby, error", [
+        ("something\ncoretemp\n",           True,  False, False, "Service.check_dependencies() 1"),
+        ("something\nk10temp\n",            True,  False, False, "Service.check_dependencies() 2"),
+        ("coretemp\nsomething\nk10temp\n",  True,  False, False, "Service.check_dependencies() 3"),
+        ("something\ndrivetemp\n",          False, True,  False, "Service.check_dependencies() 4"),
+        ("something\ndrivetemp\n",          False, True,  True,  "Service.check_dependencies() 5"),
+        ("something\n",                     False, True,  False, "Service.check_dependencies() 6"),
+        ("something\ndrivetemp\nx",         False, True,  True,  "Service.check_dependencies() 7"),
+        ("coretemp\ndrivetemp\n",           True,  True,  True,  "Service.check_dependencies() 8")
+    ])
+    def test_check_dependencies_p(self, mocker: MockerFixture, module_list: str, cpuzone: bool, hdzone: bool,
+                                  standby: bool, error: str):
+        """Positive unit test for Service.check_dependencies() method. It contains the following steps:
             - mock print(), argparse.ArgumentParser._print_message() and builtins.open() functions
             - execute Service.check_dependencies()
-            - ASSERT: if it returns an error message
+            - ASSERT: if returns an error message
         """
 
         def mocked_open(path: str, *args, **kwargs):
@@ -72,42 +74,40 @@ class ServiceTestCase(unittest.TestCase):
         ipmi_command = my_td.create_ipmi_command()
         modules = my_td.create_text_file(module_list)
         mock_print = MagicMock()
-        mock_parser_print_help = MagicMock()
+        mocker.patch('builtins.print', mock_print)
         original_open = open
         mock_open = MagicMock(side_effect=mocked_open)
-        with patch('builtins.print', mock_print), \
-             patch('argparse.ArgumentParser._print_message', mock_parser_print_help), \
-             patch('builtins.open', mock_open):
+        mocker.patch('builtins.open', mock_open)
 
-            service = Service()
-            service.config = configparser.ConfigParser()
-            service.config[Ipmi.CS_IPMI] = {}
-            service.config[Ipmi.CS_IPMI][Ipmi.CV_IPMI_COMMAND] = ipmi_command
-            service.cpu_zone_enabled = cpuzone
+        service = Service()
+        service.config = ConfigParser()
+        service.config[Ipmi.CS_IPMI] = {}
+        service.config[Ipmi.CS_IPMI][Ipmi.CV_IPMI_COMMAND] = ipmi_command
 
-            service.cpu_zone_enabled = cpuzone
-            service.config[CpuZone.CS_CPU_ZONE] = {}
-            service.config[CpuZone.CS_CPU_ZONE][CpuZone.CV_CPU_ZONE_ENABLED] = '1' if cpuzone else '0'
+        service.cpu_zone_enabled = cpuzone
+        service.config[CpuZone.CS_CPU_ZONE] = {}
+        service.config[CpuZone.CS_CPU_ZONE][CpuZone.CV_CPU_ZONE_ENABLED] = '1' if cpuzone else '0'
 
-            service.hd_zone_enabled = hdzone
-            service.config[HdZone.CS_HD_ZONE] = {}
-            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_ENABLED] = '1' if hdzone else '0'
-            if hdzone:
-                hddtemp_cmd = my_td.create_command_file('echo "38"')
-                service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_HWMON_PATH] = hwmon_path
-                service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_HDDTEMP_PATH] = hddtemp_cmd
-                service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED] = '1' if standby else '0'
-                if standby:
-                    smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
-                    service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_SMARTCTL_PATH] = smartctl_cmd
-            self.assertEqual(service.check_dependencies(), "", error)
+        service.hd_zone_enabled = hdzone
+        service.config[HdZone.CS_HD_ZONE] = {}
+        service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_ENABLED] = '1' if hdzone else '0'
+        smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
+        if hdzone:
+            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED] = '1' if standby else '0'
+            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_SMARTCTL_PATH] = smartctl_cmd
+        assert service.check_dependencies() == '', error
+        mocker.patch('builtins.open', original_open)
         del my_td
 
-    def pt_cd_n1(self, module_list: str, cpuzone: bool, hdzone: bool, hwmon_path: str, standby: bool, error: str):
-        """Primitive negative test function. It contains the following steps:
-            - mock print(), argparse.ArgumentParser._print_message() and builtins.open() functions
+    @pytest.mark.parametrize("module_list, cpuzone, hdzone, standby, error", [
+        ("coretemp\ndrivetemp\n", True, True, True, "Service.check_dependencies() 9")
+    ])
+    def test_check_dependecies_n(self, mocker:MockerFixture, module_list: str, cpuzone: bool, hdzone: bool,
+                                 standby: bool, error: str):
+        """Negative unit test fot Service.check_dependencies() method. It contains the following steps:
+            - mock print() and builtins.open() functions
             - execute Service.check_dependencies()
-            - ASSERT: if it doesn't return the specific error message
+            - ASSERT: if it didn't return the specific error message
         """
 
         def mocked_open(path: str, *args, **kwargs):
@@ -118,105 +118,140 @@ class ServiceTestCase(unittest.TestCase):
         ipmi_command = my_td.create_ipmi_command()
         modules = my_td.create_text_file(module_list)
         mock_print = MagicMock()
-        mock_parser_print_help = MagicMock()
-        original_open = open
+        mocker.patch('builtins.print', mock_print)
         mock_open = MagicMock(side_effect=mocked_open)
-        with patch('builtins.print', mock_print), \
-             patch('argparse.ArgumentParser._print_message', mock_parser_print_help), \
-             patch('builtins.open', mock_open):
+        original_open = open
+        mocker.patch('builtins.open', mock_open)
+        service = Service()
+        service.config = ConfigParser()
+        service.config[Ipmi.CS_IPMI] = {}
+        service.config[Ipmi.CS_IPMI][Ipmi.CV_IPMI_COMMAND] = ipmi_command
+        service.cpu_zone_enabled = cpuzone
+        service.config[CpuZone.CS_CPU_ZONE] = {}
+        service.config[CpuZone.CS_CPU_ZONE][CpuZone.CV_CPU_ZONE_ENABLED] = '1' if cpuzone else '0'
+        service.hd_zone_enabled = hdzone
+        service.config[HdZone.CS_HD_ZONE] = {}
+        service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_ENABLED] = '1' if hdzone else '0'
+        smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
+        if hdzone:
+            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED] = '1' if standby else '0'
+            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_SMARTCTL_PATH] = smartctl_cmd
 
-            service = Service()
-            service.config = configparser.ConfigParser()
-            service.config[Ipmi.CS_IPMI] = {}
-            service.config[Ipmi.CS_IPMI][Ipmi.CV_IPMI_COMMAND] = ipmi_command
-            service.cpu_zone_enabled = cpuzone
+        # Check if `smartctl` command is not available.
+        my_td.delete_file(smartctl_cmd)
+        error_str = service.check_dependencies()
+        assert error_str.find('smartctl') != -1, error
 
-            service.cpu_zone_enabled = cpuzone
-            service.config[CpuZone.CS_CPU_ZONE] = {}
-            service.config[CpuZone.CS_CPU_ZONE][CpuZone.CV_CPU_ZONE_ENABLED] = '1' if cpuzone else '0'
+        # Check if `drivetemp` is not on the module list.
+        modules = my_td.create_text_file('coretemp something')
+        error_str = service.check_dependencies()
+        assert error_str.find('drivetemp') != -1, error
 
-            service.hd_zone_enabled = hdzone
-            service.config[HdZone.CS_HD_ZONE] = {}
-            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_ENABLED] = '1' if hdzone else '0'
-            if hdzone:
-                hddtemp_cmd = my_td.create_command_file('echo "38"')
-                service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_HWMON_PATH] = hwmon_path
-                service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_HDDTEMP_PATH] = hddtemp_cmd
-                service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED] = '1' if standby else '0'
-                if standby:
-                    smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
-                    service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_SMARTCTL_PATH] = smartctl_cmd
+        # Check if `coretemp` is not on module list.
+        modules = my_td.create_text_file('drivetemp something')
+        error_str = service.check_dependencies()
+        assert error_str.find('coretemp') != -1, error
 
-            # Check if smartctl is not available.
-            my_td.delete_file(smartctl_cmd)
-            self.assertTrue("smartctl" in service.check_dependencies(), error)
-
-            # Check if hddtemp is not available.
-            my_td.delete_file(hddtemp_cmd)
-            self.assertTrue("hddtemp" in service.check_dependencies(), error)
-
-            # Check if drivetemp is not on module list.
-            module_list = "coretemp something"
-            modules = my_td.create_text_file(module_list)
-            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_HWMON_PATH] = "x x x"
-            self.assertTrue("drivetemp" in service.check_dependencies(), error)
-
-            # Check if coretemp is not on module list.
-            module_list = "drivetemp something"
-            modules = my_td.create_text_file(module_list)
-            self.assertTrue("coretemp" in service.check_dependencies(), error)
-
-            # Check if ipmitools is not available.
-            my_td.delete_file(ipmi_command)
-            self.assertTrue("ipmitool" in service.check_dependencies(), error)
-
+        # Check if `ipmitool` is not available.
+        my_td.delete_file(ipmi_command)
+        error_str = service.check_dependencies()
+        assert error_str.find('ipmitool') != -1, error
         del my_td
 
-    def test_check_dependencies(self) -> None:
-        """This is a unit test for function Service.check_dependencies()"""
-
-        # Positive tests:
-        # Test only CPU zone
-        self.pt_cd_p1("something\ncoretemp\n", True, False, "", False, "service check_dependencies 1")
-        self.pt_cd_p1("something\nk10temp\n", True, False, "", False, "service check_dependencies 2")
-        self.pt_cd_p1("coretemp\nsomething\nk10temp\n", True, False, "", False, "service check_dependencies 3")
-        # Test only HD zone
-        self.pt_cd_p1("something\ndrivetemp\n", False, True, "", False, "service check_dependencies 4")
-        self.pt_cd_p1("something\ndrivetemp\n", False, True, "x x x", True, "service check_dependencies 5")
-        self.pt_cd_p1("something\n", False, True, "hddtemp\nhddtemp\n", False,  "service check_dependencies 6")
-        self.pt_cd_p1("something\ndrivetemp\nx", False, True, "hddtemp x x hddtemp", True,
-                      "service check_dependencies 7")
-
-        # Test both zones
-        self.pt_cd_p1("coretemp\ndrivetemp\n", True, True, "x\nhddtemp", True, "service check_dependencies 8")
-
-        # Negative tests:
-        self.pt_cd_n1("coretemp\ndrivetemp\n", True, True, "x hddtemp", True, "service check_dependencies 9")
-
-    def pt_run_n1(self, command_line: str, exit_code: int, error: str):
-        """Primitive negative test function. It contains the following steps:
+    @pytest.mark.parametrize("command_line, exit_code, error", [
+        ('-h',                                                      0, 'Service.run() 1'),
+        ('-v',                                                      0, 'Service.run() 2'),
+        ('-l 10',                                                   2, 'Service.run() 3'),
+        ('-o 9',                                                    2, 'Service.run() 4'),
+        ('-o 1 -l 10',                                              2, 'Service.run() 5'),
+        ('-o 9 -l 1',                                               2, 'Service.run() 6'),
+        ('-o 0 -l 3 -c &.txt',                                      6, 'Service.run() 7'),
+        ('-o 0 -l 3 -c ./nonexistent_folder/nonexistent_file.conf', 6, 'Service.run() 8')
+    ])
+    def test_run_026n(self, mocker:MockerFixture, command_line: str, exit_code: int, error: str):
+        """Negative unit test for Service.run() method. It contains the following steps:
             - mock print(), argparse.ArgumentParser._print_message() functions
             - execute Service.run()
-            - ASSERT: if sys.exit() not happened with the specified exit code
+            - ASSERT: if sys.exit() did not return code 0 (-h -v), 2 (invalid arguments), 6 (invalid configuration file)
         """
         mock_print = MagicMock()
-        mock_parser_print_help = MagicMock()
-        with patch('builtins.print', mock_print), \
-             patch('argparse.ArgumentParser._print_message', mock_parser_print_help):
-            sys.argv = ('smfc.py ' + command_line).split()
-            service = Service()
-            with self.assertRaises(SystemExit) as cm:
-                service.run()
-        self.assertEqual(cm.exception.code, exit_code, error)
+        mocker.patch('builtins.print', mock_print)
+        mocker_argumentparser_print = MagicMock()
+        mocker.patch('argparse.ArgumentParser._print_message', mocker_argumentparser_print)
+        sys.argv = ('smfc ' + command_line).split()
+        service = Service()
+        with pytest.raises(SystemExit) as cm:
+            service.run()
+        assert cm.value.code == exit_code, error
 
-    def pt_run_n2(self, ipmi_command: str, mode_delay: int, level_delay: int, exit_code: int, error: str):
-        """Primitive negative test function. It contains the following steps:
-            - mock print(), argparse.ArgumentParser._print_message(), smfc.Service.exit_func() functions
+    @pytest.mark.parametrize("level, output, exit_code, error", [
+        (10, 0, 5, 'Service.run() 9'),
+        (0, 9, 5, 'Service.run() 10')
+    ])
+    def test_run_5n(self, mocker:MockerFixture, level: int, output: int, exit_code: int, error: str):
+        """Negative unit test for Service.run() method. It contains the following steps:
+            - mock print(), argparse.ArgumentParser.parse_args() functions
             - execute Service.run()
-            - ASSERT: if sys.exit() not happened with the specified exit code
+            - ASSERT: if sys.exit() did not return the code 5 (log initialization error)
+        """
+        mock_print = MagicMock()
+        mocker.patch('builtins.print', mock_print)
+        mock_parser_parse_args = MagicMock()
+        mocker.patch('argparse.ArgumentParser.parse_args', mock_parser_parse_args)
+        mock_parser_parse_args.return_value = Namespace(config_file="smfc.conf", ne=False, s=False, l=level, o=output)
+        service = Service()
+        with pytest.raises(SystemExit) as cm:
+            service.run()
+        assert cm.value.code == exit_code, error
+
+    @pytest.mark.parametrize("exit_code, error", [
+        (7, 'Service.run() 11')
+    ])
+    def test_run_7n(self, mocker:MockerFixture, exit_code: int, error: str):
+        """Negative unit test for Service.run() method. It contains the following steps:
+            - mock print(), argparse.ArgumentParser.parse_args(), smfc.Service.check_dependencies() functions
+            - execute Service.run()
+            - ASSERT: if sys.exit() did not return code 7 (check dependency error)
         """
         my_td = TestData()
-        my_config = configparser.ConfigParser()
+        my_config = ConfigParser()
+        my_config[CpuZone.CS_CPU_ZONE] = {
+            CpuZone.CV_CPU_ZONE_ENABLED: '0'
+        }
+        my_config[HdZone.CS_HD_ZONE] = {
+            HdZone.CV_HD_ZONE_ENABLED: '0'
+        }
+        conf_file = my_td.create_config_file(my_config)
+        mock_print = MagicMock()
+        mocker.patch('builtins.print', mock_print)
+        mock_parser_parse_args = MagicMock()
+        mocker.patch('argparse.ArgumentParser.parse_args', mock_parser_parse_args)
+        mock_parser_parse_args.return_value = Namespace(config_file=conf_file, ne=True, nd=False, s=False, l=0, o=0)
+        mock_check_dependencies = MagicMock()
+        mock_check_dependencies.return_value = "ERROR"
+        mocker.patch('smfc.Service.check_dependencies', mock_check_dependencies)
+        service = Service()
+        with pytest.raises(SystemExit) as cm:
+            service.run()
+        assert cm.value.code == exit_code, error
+        del my_td
+
+    @pytest.mark.parametrize("ipmi_command, mode_delay, level_delay, exit_code, error", [
+        ('NON_EXIST', 0,  0,  8,  'Service.run() 12'),
+        ('GOOD',      -1, 0,  8,  'Service.run() 13'),
+        ('GOOD',      0,  -1, 8,  'Service.run() 14'),
+        ('BAD',       0,  0,  8,  'Service.run() 15'),
+        ('GOOD',      0,  0,  10, 'Service.run() 16')
+    ])
+    def test_run_810n(self, mocker:MockerFixture, ipmi_command: str, mode_delay: int, level_delay: int, exit_code: int,
+                      error: str):
+        """Negative unit test for Service.run() method. It contains the following steps:
+            - mock print(), pyudev.Context.__init__() functions
+            - execute Service.run()
+            - ASSERT: if sys.exit() did not return code 8 (Ipmi initialization error) or 10 (no enabled zone)
+        """
+        my_td = TestData()
+        my_config = ConfigParser()
         if ipmi_command == 'NON_EXIST':
             ipmi_command = './non-existent-dir/non-existent-file'
         if ipmi_command == 'BAD':
@@ -236,137 +271,97 @@ class ServiceTestCase(unittest.TestCase):
         }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
-        mock_parser_print_help = MagicMock()
-        mock_exit_func = MagicMock()
-        mock_check_dependencies = MagicMock()
-        mock_check_dependencies.return_value = ""
-        with patch('builtins.print', mock_print), \
-             patch('argparse.ArgumentParser._print_message', mock_parser_print_help), \
-             patch('smfc.Service.exit_func', mock_exit_func), \
-             patch('smfc.Service.check_dependencies', mock_check_dependencies):
-            sys.argv = ('smfc.py -o 0 -c ' + conf_file).split()
-            service = Service()
-            with self.assertRaises(SystemExit) as cm:
-                service.run()
-            self.assertEqual(cm.exception.code, exit_code, error)
+        mocker.patch('builtins.print', mock_print)
+        mocker.patch('pyudev.Context.__init__', MockedContextGood.__init__)
+        sys.argv = ('smfc.py -o 0 -nd -ne -c ' + conf_file).split()
+        service = Service()
+        with pytest.raises(SystemExit) as cm:
+            service.run()
+        assert cm.value.code == exit_code, error
         del my_td
 
-    def pt_run_n3(self, level: int, output: int, exit_code: int, error: str):
-        """Primitive negative test function. It contains the following steps:
-            - mock print(), argparse.ArgumentParser._print_message(), argparse.ArgumentParser.parse_args(),
-              smfc.Service.exit_func() functions
+    @pytest.mark.parametrize("exit_code, error", [
+        (9, 'Service.run() 17')
+    ])
+    def test_run_9n(self, mocker:MockerFixture, exit_code: int, error: str):
+        """Negative unit test for Service.run() method. It contains the following steps:
+            - mock print(), pyudev.Context.__init__() functions
             - execute Service.run()
-            - ASSERT: if sys.exit() not happened with the specified exit code
-        """
-
-        def mocked_parser() -> Namespace:
-            return Namespace(config_file="smfc.conf", l=level, o=output)
-
-        mock_print = MagicMock()
-        mock_parser_print_help = MagicMock()
-        mock_parser_parse_args = MagicMock()
-        mock_parser_parse_args.side_effect = mocked_parser
-        mock_exit_func = MagicMock()
-        mock_check_dependencies = MagicMock()
-        mock_check_dependencies.return_value = ""
-        with patch('builtins.print', mock_print), \
-             patch('argparse.ArgumentParser._print_message', mock_parser_print_help), \
-             patch('argparse.ArgumentParser.parse_args', mock_parser_parse_args), \
-             patch('smfc.Service.exit_func', mock_exit_func), \
-             patch('smfc.Service.check_dependencies', mock_check_dependencies):
-            service = Service()
-            with self.assertRaises(SystemExit) as cm:
-                service.run()
-            self.assertEqual(cm.exception.code, exit_code, error)
-
-    def pt_run_n4(self, exit_code: int, error: str):
-        """Primitive negative test function. It contains the following steps:
-            - mock print(), argparse.ArgumentParser._print_message(), argparse.ArgumentParser.parse_args(),
-              smfc.Service.exit_func() functions
-            - execute Service.run()
-            - ASSERT: if sys.exit() not happened with the specified exit code
+            - ASSERT: if sys.exit() did not return code 9 (pyudev.Context() init error)
         """
         my_td = TestData()
-        cmd_ipmi = my_td.create_ipmi_command()
-        cmd_smart = my_td.create_command_file('echo "ACTIVE"')
-        cpu_hwmon_path = my_td.get_cpu_1()
-        hd_hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.create_hd_names(8)
-        my_config = configparser.ConfigParser()
+        my_config = ConfigParser()
+        ipmi_command = my_td.create_ipmi_command()
         my_config[Ipmi.CS_IPMI] = {
-            Ipmi.CV_IPMI_COMMAND: cmd_ipmi,
+            Ipmi.CV_IPMI_COMMAND: ipmi_command,
             Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
-            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0'
+            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: '0',
         }
         my_config[CpuZone.CS_CPU_ZONE] = {
-            CpuZone.CV_CPU_ZONE_ENABLED: '1',
-            CpuZone.CV_CPU_ZONE_COUNT: '1',
-            CpuZone.CV_CPU_ZONE_TEMP_CALC: '1',
-            CpuZone.CV_CPU_ZONE_STEPS: '5',
-            CpuZone.CV_CPU_ZONE_SENSITIVITY: '5',
-            CpuZone.CV_CPU_ZONE_POLLING: '0',
-            CpuZone.CV_CPU_ZONE_MIN_TEMP: '30',
-            CpuZone.CV_CPU_ZONE_MAX_TEMP: '60',
-            CpuZone.CV_CPU_ZONE_MIN_LEVEL: '35',
-            CpuZone.CV_CPU_ZONE_MAX_LEVEL: '100',
-            CpuZone.CV_CPU_ZONE_HWMON_PATH: cpu_hwmon_path
+            CpuZone.CV_CPU_ZONE_ENABLED: '0'
         }
         my_config[HdZone.CS_HD_ZONE] = {
-            HdZone.CV_HD_ZONE_ENABLED: '1',
-            HdZone.CV_HD_ZONE_COUNT: '8',
-            HdZone.CV_HD_ZONE_TEMP_CALC: '1',
-            HdZone.CV_HD_ZONE_STEPS: '4',
-            HdZone.CV_HD_ZONE_SENSITIVITY: '2',
-            HdZone.CV_HD_ZONE_POLLING: '0',
-            HdZone.CV_HD_ZONE_MIN_TEMP: '30',
-            HdZone.CV_HD_ZONE_MAX_TEMP: '45',
-            HdZone.CV_HD_ZONE_MIN_LEVEL: '35',
-            HdZone.CV_HD_ZONE_MAX_LEVEL: '100',
-            HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-            HdZone.CV_HD_ZONE_HWMON_PATH: hd_hwmon_path,
-            HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
-            HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: '2',
-            HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart
+            HdZone.CV_HD_ZONE_ENABLED: '0'
         }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
-        mock_parser_print_help = MagicMock()
-        mock_exit_func = MagicMock()
-        mock_check_dependecies = MagicMock()
-        mock_check_dependecies.return_value = "ERROR"
-        with patch('builtins.print', mock_print), \
-             patch('argparse.ArgumentParser._print_message', mock_parser_print_help), \
-             patch('smfc.Service.exit_func', mock_exit_func), \
-             patch('smfc.Service.check_dependencies', mock_check_dependecies):
-            sys.argv = ('smfc.py -o 0 -c ' + conf_file).split()
-            service = Service()
-            with self.assertRaises(SystemExit) as cm:
-                service.run()
-            self.assertEqual(cm.exception.code, exit_code, error)
+        mocker.patch('builtins.print', mock_print)
+        mocker.patch('pyudev.Context.__init__', MockedContextError.__init__)
+        sys.argv = ('smfc.py -o 0 -ne -nd -c ' + conf_file).split()
+        service = Service()
+        with pytest.raises(SystemExit) as cm:
+            service.run()
+        assert cm.value.code == exit_code, error
+        del my_td
 
-    # pylint: disable=unused-argument
-    def mocked_sleep(self, *args):
-        """Mocked time.sleep() function. Exists at the 10th call."""
-        self.sleep_counter += 1
-        if self.sleep_counter >= 10:
-            sys.exit(10)
-    # pragma pylint: enable=unused-argument
-
-    def pt_run_p1(self, cpuzone: int, hdzone: int, exit_code: int, error: str):
-        """Primitive positive test function. It contains the following steps:
-            - mock print(), argparse.ArgumentParser._print_message() functions
-            - execute smfc.main()
-            - The main loop will be executed 3 times then exit
+    @pytest.mark.parametrize("cpuzone, hdzone, exit_code, error", [
+        (1, 0, 100, 'Service.run() 18'),
+        (0, 1, 100, 'Service.run() 19'),
+        (1, 1, 100, 'Service.run() 20')
+    ])
+    def test_run_100p(self, mocker:MockerFixture, cpuzone: int, hdzone: int, exit_code: int, error: str):
+        """Positive unit test for Service.run() method. It contains the following steps:
+            - mock print(), time.sleep() functions
+            - execute smfc.run()
+            - The main loop will be executed 10 times then exit with code 100
         """
+
+        # pylint: disable=unused-argument
+        def mocked_sleep(*args):
+            """Mocked time.sleep() function. Exists at the 10th call."""
+            self.sleep_counter += 1
+            if self.sleep_counter >= 10:
+                sys.exit(100)
+
+        def mocked_cpuzone_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
+            self.hwmon_path = my_td.cpu_files
+            count = len(my_td.cpu_files)
+            FanController.__init__(self, log, ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, count, 1, 5,
+                                   5, 0, 30, 60, 35, 100)
+
+        def mocked_hdzone_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
+            self.hd_device_names = my_td.hd_name_list
+            self.hwmon_path = my_td.hd_files
+            count = len(my_td.hd_files)
+            self.sudo=sudo
+            FanController.__init__(self, log, ipmi, Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, count, 1, 5,
+                                   2, 0, 32, 46, 35, 100)
+            self.smartctl_path = cmd_smart
+            self.standby_guard_enabled = True
+            self.standby_hd_limit = 1
+            self.standby_array_states = [False] * self.count
+            self.standby_flag = False
+            self.standby_change_timestamp = time.monotonic()
+        # pragma pylint: enable=unused-argument
+
         my_td = TestData()
-        #cmd_ipmi = my_td.create_ipmi_command()
         # Force mode initial fan mode 0 for setting new FULL mode during the test.
         cmd_ipmi = my_td.create_command_file('echo "0"')
-        cmd_smart = my_td.create_command_file('echo "ACTIVE"')
-        cpu_hwmon_path = my_td.get_cpu_1()
-        hd_hwmon_path = my_td.get_hd_8()
-        hd_names = my_td.create_hd_names(8)
-        my_config = configparser.ConfigParser()
+        cmd_smart = my_td.create_smart_command()
+        #                     create_command_file('echo "ACTIVE"'))
+        my_td.create_cpu_data(1)
+        my_td.create_hd_data(8)
+        my_config = ConfigParser()
         my_config[Ipmi.CS_IPMI] = {
             Ipmi.CV_IPMI_COMMAND: cmd_ipmi,
             Ipmi.CV_IPMI_FAN_MODE_DELAY: '0',
@@ -374,7 +369,6 @@ class ServiceTestCase(unittest.TestCase):
         }
         my_config[CpuZone.CS_CPU_ZONE] = {
             CpuZone.CV_CPU_ZONE_ENABLED: str(cpuzone),
-            CpuZone.CV_CPU_ZONE_COUNT: '1',
             CpuZone.CV_CPU_ZONE_TEMP_CALC: '1',
             CpuZone.CV_CPU_ZONE_STEPS: '5',
             CpuZone.CV_CPU_ZONE_SENSITIVITY: '5',
@@ -383,11 +377,9 @@ class ServiceTestCase(unittest.TestCase):
             CpuZone.CV_CPU_ZONE_MAX_TEMP: '60',
             CpuZone.CV_CPU_ZONE_MIN_LEVEL: '35',
             CpuZone.CV_CPU_ZONE_MAX_LEVEL: '100',
-            CpuZone.CV_CPU_ZONE_HWMON_PATH: cpu_hwmon_path
         }
         my_config[HdZone.CS_HD_ZONE] = {
             HdZone.CV_HD_ZONE_ENABLED: str(hdzone),
-            HdZone.CV_HD_ZONE_COUNT: '8',
             HdZone.CV_HD_ZONE_TEMP_CALC: '1',
             HdZone.CV_HD_ZONE_STEPS: '4',
             HdZone.CV_HD_ZONE_SENSITIVITY: '2',
@@ -396,70 +388,26 @@ class ServiceTestCase(unittest.TestCase):
             HdZone.CV_HD_ZONE_MAX_TEMP: '45',
             HdZone.CV_HD_ZONE_MIN_LEVEL: '35',
             HdZone.CV_HD_ZONE_MAX_LEVEL: '100',
-            HdZone.CV_HD_ZONE_HD_NAMES: hd_names,
-            HdZone.CV_HD_ZONE_HWMON_PATH: hd_hwmon_path,
+            HdZone.CV_HD_ZONE_HD_NAMES: my_td.hd_names,
+            HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart,
             HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
-            HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: '2',
-            HdZone.CV_HD_ZONE_SMARTCTL_PATH: cmd_smart
+            HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: '2'
         }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
-        mock_parser_print_help = MagicMock()
+        mocker.patch('builtins.print', mock_print)
         mock_time_sleep = MagicMock()
-        mock_time_sleep.side_effect = self.mocked_sleep
-        mock_exit_func = MagicMock()
-        mock_check_dependecies = MagicMock()
-        mock_check_dependecies.return_value = ""
+        mock_time_sleep.side_effect = mocked_sleep
+        mocker.patch('time.sleep', mock_time_sleep)
+        mocker.patch('smfc.CpuZone.__init__', mocked_cpuzone_init)
+        mocker.patch('smfc.HdZone.__init__', mocked_hdzone_init)
         self.sleep_counter = 0
-        with patch('builtins.print', mock_print), \
-             patch('argparse.ArgumentParser._print_message', mock_parser_print_help), \
-             patch('time.sleep', mock_time_sleep), \
-             patch('smfc.Service.exit_func', mock_exit_func), \
-             patch('smfc.Service.check_dependencies', mock_check_dependecies):
-            sys.argv = ('smfc.py -o 0 -c ' + conf_file).split()
-            service = Service()
-            with self.assertRaises(SystemExit) as cm:
-                service.run()
-            self.assertEqual(cm.exception.code, exit_code, error)
+        sys.argv = ('smfc.py -o 0 -ne -nd -c ' + conf_file).split()
+        service = Service()
+        with pytest.raises(SystemExit) as cm:
+            service.run()
+        assert cm.value.code == exit_code, error
         del my_td
 
-    def test_run(self) -> None:
-        """This is a unit test for function Service.run()"""
 
-        # Test standard exits (0, 2).
-        self.pt_run_n1('-h', 0, 'service run 1')
-        self.pt_run_n1('-v', 0, 'service run 2')
-        # Test exits for invalid command line parameters.
-        self.pt_run_n1('-l 10', 2, 'service run 3')
-        self.pt_run_n1('-o 9', 2, 'service run 4')
-        self.pt_run_n1('-o 1 -l 10', 2, 'service run 5')
-        self.pt_run_n1('-o 9 -l 1', 2, 'service run 6')
-
-        # Test exits (5) at Log() init.
-        self.pt_run_n3(10, 0, 5, 'service run 7')
-        self.pt_run_n3(0, 9, 5, 'service run 8')
-
-        # Test exits (4) at check_dependencies().
-        self.pt_run_n4(4, 'service run 9')
-
-        # Test exits(6) at configuration file loading.
-        self.pt_run_n1('-o 0 -l 3 -c &.txt', 6, 'service run 10')
-        self.pt_run_n1('-o 0 -l 3 -c ./nonexistent_folder/nonexistent_config_file.conf', 6, 'service run 11')
-
-        # Test exits(7) at Ipmi() init.
-        self.pt_run_n2('NON_EXIST', 0, 0, 7, 'service run 12')
-        self.pt_run_n2('GOOD', -1, 0, 7, 'service run 13')
-        self.pt_run_n2('GOOD', 0, -1, 7, 'service run 14')
-        self.pt_run_n2('BAD', 0, 0, 7, 'service run 15')
-
-        # Test exits(8) at controller init.
-        self.pt_run_n2('GOOD', 0, 0, 8, 'service run 16')
-
-        # Test for main loop. Exits(10) at the 10th call of the mocked time.sleep().
-        self.pt_run_p1(1, 0, 10, 'service run 17')
-        self.pt_run_p1(0, 1, 10, 'service run 18')
-        self.pt_run_p1(1, 1, 10, 'service run 19')
-
-
-if __name__ == "__main__":
-    unittest.main()
+# End.
