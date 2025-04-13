@@ -10,13 +10,12 @@ version = "4.0.0-beta1"
 authors = [
     { name = "Peter Sulyok", email = "peter@sulyok.net" }
 ]
-requires-python = ">=3.8, <3.14"
+requires-python = ">=3.9, <4"
 keywords = ["supermicro", "linux", "daemon", "fancontrol"]
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 dependencies = [
-    "pyudev==0.24.3",
-    "pySMART==1.4.1"
+    "pyudev==0.24.3"
 ]
 classifiers = [
     "Programming Language :: Python :: 3.9",
