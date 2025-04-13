@@ -235,7 +235,8 @@ class TestHdZone:
         if rc:
             mock_subprocess_run = MagicMock()
             mocker.patch('subprocess.run', mock_subprocess_run)
-            mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=rc, stderr='ERROR')
+            mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=rc,
+                                                                           stderr='sudo: smartctl: command not found')
         my_hdzone = HdZone.__new__(HdZone)
         my_hdzone.smartctl_path = smartctl_command
         my_hdzone.sudo = sudo

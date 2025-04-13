@@ -156,11 +156,16 @@ class TestIpmi:
             - Call Ipmi.exec_ipmitool() method
             - ASSERT: if the expected assertion was not raised
         """
+        err: List[str] = [
+            'sudo: ipmi command not found',
+            'ipmitool: error while loading shared libraries'
+        ]
         # If we need to mock for the return code.
         if rc:
             mock_subprocess_run = MagicMock()
             mocker.patch('subprocess.run', mock_subprocess_run)
-            mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=rc, stderr='ERROR')
+            mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=rc,
+                                                                            stderr=err[0] if sudo else err[1])
         my_ipmi = Ipmi.__new__(Ipmi)
         my_ipmi.command = ipmi_command
         my_ipmi.remote_parameters = ''

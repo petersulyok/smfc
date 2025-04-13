@@ -156,7 +156,7 @@ class HdZone(FanController):
             args.extend(arguments)
             r = subprocess.run(args, check=False, capture_output=True, text=True)
             # In case if sudo return code report execution problem (for smartctl it could be any SMART error)
-            if self.sudo and 'sudo' in r.stderr and r.returncode != 0:
+            if r.returncode != 0 and self.sudo and 'sudo' in r.stderr:
                 raise RuntimeError(f'sudo error ({r.returncode}): {r.stderr}!')
         except FileNotFoundError as e:
             raise e
