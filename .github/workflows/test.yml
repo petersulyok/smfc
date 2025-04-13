@@ -34,7 +34,7 @@ jobs:
           pip install .
       - name: Lint pylint
         run: |
-          pylint src/*.py test/*.py
+          pylint src/smfc/*.py test/*.py
       - name: Test with pytest
         run: |
           pytest
