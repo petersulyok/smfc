@@ -1,5 +1,5 @@
 #
-#   service.py (C) 2020-2024, Peter Sulyok
+#   service.py (C) 2020-2025, Peter Sulyok
 #   smfc package: Super Micro fan control for Linux (home) servers.
 #   smfc.Service() class implementation.
 #
@@ -124,7 +124,7 @@ class Service:
         app_parser.add_argument('-o', type=int, choices=[0, 1, 2], default=2,
                                 help='log output: 0-stdout, 1-stderr, 2-syslog(default)')
         app_parser.add_argument('-nd', action='store_true', default=False,
-                                help='no dependency check')
+                                help='no dependency checking')
         app_parser.add_argument('-s', action='store_true', default=False,
                                 help='use sudo command')
         app_parser.add_argument('-ne', action='store_true', default=False,
