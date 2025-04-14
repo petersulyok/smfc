@@ -398,6 +398,7 @@ class TestService:
         mock_time_sleep = MagicMock()
         mock_time_sleep.side_effect = mocked_sleep
         mocker.patch('time.sleep', mock_time_sleep)
+        mocker.patch('pyudev.Context.__init__', MockedContextGood.__init__)
         mocker.patch('smfc.CpuZone.__init__', mocked_cpuzone_init)
         mocker.patch('smfc.HdZone.__init__', mocked_hdzone_init)
         self.sleep_counter = 0

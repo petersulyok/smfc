@@ -32,6 +32,9 @@ class TestIpmi:
         command = my_td.create_command_file()
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
+        mock_ipmi_exec = MagicMock()
+        mock_ipmi_exec.return_value = subprocess.CompletedProcess([], returncode=0)
+        mocker.patch('smfc.Ipmi._exec_ipmitool', mock_ipmi_exec)
         my_config = ConfigParser()
         my_config[Ipmi.CS_IPMI] = {
             Ipmi.CV_IPMI_COMMAND: command,
@@ -81,7 +84,7 @@ class TestIpmi:
             my_td.delete_file(command)
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
-        mocker.patch('smfc.Ipmi.exec_ipmitool', mocked_ipmi_exec)
+        mocker.patch('smfc.Ipmi._exec_ipmitool', mocked_ipmi_exec)
         my_config = ConfigParser()
         my_config[Ipmi.CS_IPMI] = {
             Ipmi.CV_IPMI_COMMAND: command,
@@ -97,6 +100,7 @@ class TestIpmi:
         assert cm.type == exception, error
         del my_td
 
+    # pylint: disable=duplicate-code, protected-access
     @pytest.mark.parametrize("args, remote_args, sudo, error", [
         (['1', '2', '3', '4', '5'], '',             False, 'Ipmi.exec() 1'),
         (['1', '2', '3', '4', '5'], '',             True,  'Ipmi.exec() 2'),
@@ -112,7 +116,7 @@ class TestIpmi:
         """Positive unit test for Ipmi.exec() method. It contains the following steps:
             - mock print(), subprocess.run() functions
             - create an Ipmi classes
-            - Call Ipmi.exec_ipmitool() method
+            - Call Ipmi._exec_ipmitool() method
             - ASSERT: if it was called with different parameters from expected argument list
             - ASSERT: if it was called with different times from expected value
         """
@@ -127,7 +131,7 @@ class TestIpmi:
         my_ipmi.command = 'usr/bin/ipmitool'
         my_ipmi.remote_parameters = remote_args
         my_ipmi.sudo = sudo
-        my_ipmi.exec_ipmitool(args)
+        my_ipmi._exec_ipmitool(args)
         expected = []
         if sudo:
             expected.append('sudo')
@@ -138,7 +142,6 @@ class TestIpmi:
         mock_subprocess_run.assert_called_with(expected, check=False, capture_output=True, text=True)
         assert mock_subprocess_run.call_count == 1, error
 
-    # pylint: disable=R0801
     @pytest.mark.parametrize("ipmi_command, sudo, rc, exception, error", [
         # The real subprocess.run() executed (without sudo)
         ('/nonexistent/command', False, 0, FileNotFoundError, 'Ipmi.exec() 9'),
@@ -152,7 +155,7 @@ class TestIpmi:
             - create a shell script for IPMI command
             - mock print(), subprocess.run() functions
             - initialize a Config, Log, Ipmi classes
-            - Call Ipmi.exec_ipmitool() method
+            - Call Ipmi._exec_ipmitool() method
             - ASSERT: if the expected assertion was not raised
         """
         err: List[str] = [
@@ -170,9 +173,9 @@ class TestIpmi:
         my_ipmi.remote_parameters = ''
         my_ipmi.sudo = sudo
         with pytest.raises(Exception) as cm:
-            my_ipmi.exec_ipmitool(['1', '2', '3'])
+            my_ipmi._exec_ipmitool(['1', '2', '3'])
         assert cm.type == exception, error
-    # pylint: enable=R0801
+    # pylint: enable=duplicate-code, protected-access
 
     @pytest.mark.parametrize("expected_mode, error", [
         (Ipmi.STANDARD_MODE, 'Ipmi.get_fan_mode() 1'),
@@ -261,7 +264,7 @@ class TestIpmi:
         my_ipmi = Ipmi.__new__(Ipmi)
         my_ipmi.fan_mode_delay = 0
         mock_ipmi_exec = MagicMock()
-        mocker.patch('smfc.Ipmi.exec_ipmitool', mock_ipmi_exec)
+        mocker.patch('smfc.Ipmi._exec_ipmitool', mock_ipmi_exec)
         mock_time_sleep = MagicMock()
         mocker.patch('time.sleep', mock_time_sleep)
         my_ipmi.set_fan_mode(fan_mode)
@@ -282,7 +285,7 @@ class TestIpmi:
               (other potential exceptions are tested elsewhere)
         """
         mock_ipmi_exec = MagicMock()
-        mocker.patch('smfc.Ipmi.exec_ipmitool', mock_ipmi_exec)
+        mocker.patch('smfc.Ipmi._exec_ipmitool', mock_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_ipmi.fan_mode_delay = 0
         my_ipmi.sudo = False
@@ -316,7 +319,7 @@ class TestIpmi:
         my_ipmi.swapped_zones = swapped
         my_ipmi.fan_level_delay = 0
         mock_ipmi_exec = MagicMock()
-        mocker.patch('smfc.Ipmi.exec_ipmitool', mock_ipmi_exec)
+        mocker.patch('smfc.Ipmi._exec_ipmitool', mock_ipmi_exec)
         mock_time_sleep = MagicMock()
         mocker.patch('time.sleep', mock_time_sleep)
         my_ipmi.set_fan_level(zone, level)
@@ -340,7 +343,7 @@ class TestIpmi:
               (other exceptions are tested elsewhere)
         """
         mock_ipmi_exec = MagicMock()
-        mocker.patch('smfc.Ipmi.exec_ipmitool', mock_ipmi_exec)
+        mocker.patch('smfc.Ipmi._exec_ipmitool', mock_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_ipmi.swapped_zones = False
         my_ipmi.fan_mode_delay = 0
@@ -434,7 +437,7 @@ class TestIpmi:
         def mocked_ipmi_exec(self, args: List[str]) -> subprocess.CompletedProcess:
             raise exception
 
-        mocker.patch('smfc.Ipmi.exec_ipmitool', mocked_ipmi_exec)
+        mocker.patch('smfc.Ipmi._exec_ipmitool', mocked_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_ipmi.swapped_zones = False
         my_ipmi.fan_mode_delay = 0

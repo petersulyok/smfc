@@ -67,7 +67,7 @@ class Ipmi:
         # Validate configuration
         # Check 1: a valid command can be executed successfully.
         try:
-            self.exec_ipmitool(['sdr'])
+            self._exec_ipmitool(['sdr'])
         except (FileNotFoundError, RuntimeError) as e:
             raise e
         # Check 2: fan_mode_delay must be positive.
@@ -85,7 +85,7 @@ class Ipmi:
             self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_SWAPPED_ZONES} = {self.swapped_zones}')
             self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_REMOTE_PARAMETERS} = {self.remote_parameters}')
 
-    def exec_ipmitool(self, args: List[str]) -> subprocess.CompletedProcess:
+    def _exec_ipmitool(self, args: List[str]) -> subprocess.CompletedProcess:
         """Execute `ipmitool` command.
         Args:
             args(List[str]): command line parameters
@@ -135,7 +135,7 @@ class Ipmi:
 
         # Read the current IPMI fan mode.
         try:
-            r = self.exec_ipmitool(['raw', '0x30', '0x45', '0x00'])
+            r = self._exec_ipmitool(['raw', '0x30', '0x45', '0x00'])
             m = int(r.stdout)
         except (RuntimeError, FileNotFoundError) as e:
             raise e
@@ -178,7 +178,7 @@ class Ipmi:
             raise ValueError(f'Invalid fan mode value ({mode}).')
         # Call ipmitool command and set the new IPMI fan mode.
         try:
-            self.exec_ipmitool(['raw', '0x30', '0x45', '0x01', str(mode)])
+            self._exec_ipmitool(['raw', '0x30', '0x45', '0x01', str(mode)])
         except (RuntimeError, FileNotFoundError) as e:
             raise e
         # Give time for IPMI system/fans to apply changes in the new fan mode.
@@ -205,7 +205,7 @@ class Ipmi:
             raise ValueError(f'Invalid value: level ({level}).')
         # Set the new IPMI fan level in the specific zone
         try:
-            self.exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x01', str(zone), str(level)])
+            self._exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x01', str(zone), str(level)])
         except (FileNotFoundError, RuntimeError) as e:
             raise e
         # Give time for IPMI and fans to spin up/down.
@@ -233,7 +233,7 @@ class Ipmi:
             zone = 1 - zone
         # Get the new IPMI fan level in the specific zone
         try:
-            r = self.exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x00', str(zone)])
+            r = self._exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x00', str(zone)])
             l = int(r.stdout)
         except (FileNotFoundError, RuntimeError) as e:
             raise e
