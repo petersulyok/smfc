@@ -55,10 +55,11 @@ filterwarnings = [ "default", "ignore::pytest.PytestCollectionWarning"]
 
 # coverage options
 [tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "if __name__ == .__main__.:",
-    ]
+exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:"]
+
+[tool.coverage.run]
+omit = ["test/conftest.py", "test/smoke_runner.py"]
+
 
 # pylint options
 [tool.pylint.main]

@@ -1,10 +1,6 @@
 #!/bin/bash
 #
 #   run_test_hd_8.sh (C) 2021-2025 Peter Sulyok
-#   This script will run smoke test: HD 8 configuration.
+#   #   This script will run smoke test with CPU 4, HDD 8 configuration.
 #
-
-# Find directories for test execution.
-source $(dirname $BASH_SOURCE)/find_dirs.sh
-
-$src_dir/smfc.py -c $test_dir/hd_8.conf -l 4 -o 0
+pytest --capture=tee-sys --cpu-num 4 --hd-num 8 --conf-file ./test/hd_2.conf ./test/smoke_runner.py

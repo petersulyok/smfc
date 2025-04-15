@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 #
 #   run_test_cpu_4.sh (C) 2021-2025 Peter Sulyok
-#   This script will run smoke test: CPU 4 configuration.
+#   #   This script will run smoke test with CPU 4, HDD 4 configuration.
 #
-
-# Find directories for test execution.
-source $(dirname $BASH_SOURCE)/find_dirs.sh
-
-$src_dir/smfc.py -c $test_dir/cpu_4.conf -l 4 -o 0
+pytest --capture=tee-sys --cpu-num 4 --hd-num 4 --conf-file ./test/cpu_4.conf ./test/smoke_runner.py

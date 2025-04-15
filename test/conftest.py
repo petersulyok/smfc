@@ -1,5 +1,13 @@
+#!/usr/bin/env python3
+#
+#   conftest.py (C) 2021-2025, Peter Sulyok
+#   Setup test configuration for pytest.
+#
 
 def pytest_addoption(parser):
-    parser.addoption("--hd", action="store")
-    parser.addoption("--cpu", action="store")
-    parser.addoption("--config", action="store")
+    """Additional command-line parameters for pytest."""
+    parser.addoption("--hd-num", action="store")
+    parser.addoption("--cpu-num", action="store")
+    parser.addoption("--conf-file", action="store")
+
+# End.
