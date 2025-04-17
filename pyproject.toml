@@ -14,9 +14,6 @@ requires-python = ">=3.9, <4"
 keywords = ["supermicro", "linux", "daemon", "fancontrol"]
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
-dependencies = [
-    "pyudev==0.24.3"
-]
 classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -26,6 +23,9 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Topic :: System :: Hardware",
     "Development Status :: 4 - Beta"
+]
+dependencies = [
+    "pyudev==0.24.3"
 ]
 
 [dependency-groups]
@@ -57,15 +57,23 @@ package-dir = {"" = "src"}
 [tool.pytest.ini_options]
 pythonpath = "src"
 mock_use_standalone_module = true
-filterwarnings = [ "default", "ignore::pytest.PytestCollectionWarning"]
+filterwarnings = [
+    "default",
+    "ignore::pytest.PytestCollectionWarning"
+]
 
 # coverage options
 [tool.coverage.report]
-exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:"]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:"
+]
 
 [tool.coverage.run]
-omit = ["test/conftest.py", "test/smoke_runner.py"]
-
+omit = [
+    "test/conftest.py",
+    "test/smoke_runner.py"
+]
 
 # pylint options
 [tool.pylint.main]
@@ -75,4 +83,4 @@ max-line-length=120
 disable= [
     "missing-module-docstring", "too-many-instance-attributes", "too-many-arguments", "too-many-positional-arguments",
     "too-many-locals", "too-many-branches", "too-many-statements", "assignment-from-no-return", "too-many-public-methods"
-    ]
+]
