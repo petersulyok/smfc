@@ -11,33 +11,31 @@ ${{\color{red}\textsf{WARNING: Please download a release (instead of cloning the
 
 ## TL;DR
 
-This is a `systemd service` running on Linux and is able to control fans in CPU and HD zones with the help of IPMI on Super Micro X10-X13 (and some X9) motherboards.
+This is a `systemd service` running on Linux and can control fans with help of IPMI on Super Micro X10-X13 (and some X9) motherboards.
 
 You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
 
 ### 1. Prerequisites
- - a Super Micro motherboard with a BMC chip (i.e. ASPEED AST2400/2500/2600)
+ - a Super Micro motherboard with ASPEED AST2400/2500/2600 chip
  - Python 3.9-3.13
- - Linux OS with:
-   - `systemd` package
-   - `coretemp` or `k10temp` kernel module for Intel or AMD CPUs
+ - Linux distribution with:
+   - `systemd` and `bash`
+   - `coretemp` kernel module for Intel CPUs or `k10temp` kernel module for AMD CPUs
    - `drivetemp` kernel module (kernel version 5.6+ required) modules for SATA HDDs/SSDs
- - `bash`
  - `ipmitool`
- - optional: `smartmontools` for the *standby guard* feature
- - optional: `hddtemp` for SAS/SCSI disks
-
+ - optional: `smartmontools` for SAS/SCSI disks and *standby guard* feature
+ 
 ### 2. Installation and configuration
- 1. Set up the IPMI threshold values for your fans (see script `ipmi/set_ipmi_threshold.sh`). 
+ 1. Set up the IPMI threshold values for your fans (see [this chapter](https://github.com/petersulyok/smfc?tab=readme-ov-file#7-ipmi-fan-control-and-sensor-thresholds) for details). 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`).
- 4. Install the service with running the script `install.sh`.
- 5. Edit the configuration file `/opt/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
+ 4. Install the service (select your preferred way of installation from [Install.md](doc/Install.md))`.
+ 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
  6. Start the `systemd` service
  7. Check results in system log
  8. Leave a feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
 
-Feel free to visit [Discussions](https://github.com/petersulyok/smfc/discussions) and raise your questions or share your experinces related to this project.
+Feel free to visit [Discussions](https://github.com/petersulyok/smfc/discussions) and raise your questions or share your experience on this project.
 
 ## Details
 ### 1. How does it work?
