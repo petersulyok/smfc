@@ -23,7 +23,7 @@ if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
 fi
 
 # Install `smfc` package from Pypi.org
-pip install --prefix=/usr smfc
+pip install -q --prefix=/usr smfc
 
 # Install configuration file.
 TARGET_DIR=/etc/smfc
@@ -34,12 +34,12 @@ fi
 # Backup configuration file if needed.
 if [ "$1" != "--keep-config" ]; then
   cp "$TARGET_DIR/smfc.conf" "$TARGET_DIR/smfc.conf.$POST_TAG"
-  curl -o "$TARGET_DIR/smfc.conf" https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/config/smfc.conf
+  curl --silent -o "$TARGET_DIR/smfc.conf" https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/config/smfc.conf
 fi
 
 # Install systemd service files.
-curl -o "/etc/default/smfc" https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/config/smfc
-curl -o "/etc/systemd/system/smfc.service" https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/config/smfc.service
+curl --silent -o "/etc/default/smfc" https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/config/smfc
+curl --silent -o "/etc/systemd/system/smfc.service" https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/config/smfc.service
 
 # Collect all disk names for `hd_names=` parameter in case of a 'smfc.conf' file.
 if [ "$1" != "--keep-config" ]; then
