@@ -86,15 +86,15 @@ class HdZone(FanController):
             self.hwmon_path.append(self.get_hwmon_path(udevc, block_dev.parent))
 
         # Initialize FanController class.
-        super().__init__(log, ipmi, Ipmi.HD_ZONE, self.CS_HD_ZONE, count,
-            config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
-            config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_STEPS, fallback=4),
-            config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_SENSITIVITY, fallback=2),
-            config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_POLLING, fallback=10),
-            config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_MIN_TEMP, fallback=32),
-            config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_MAX_TEMP, fallback=46),
-            config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_MIN_LEVEL, fallback=35),
-            config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_MAX_LEVEL, fallback=100)
+        super().__init__(log, ipmi, Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, count,
+            config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
+            config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_STEPS, fallback=4),
+            config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_SENSITIVITY, fallback=2),
+            config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_POLLING, fallback=10),
+            config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_MIN_TEMP, fallback=32),
+            config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_MAX_TEMP, fallback=46),
+            config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_MIN_LEVEL, fallback=35),
+            config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_MAX_LEVEL, fallback=100)
         )
 
         # Save path for `smartctl` command.

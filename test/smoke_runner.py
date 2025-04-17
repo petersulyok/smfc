@@ -51,16 +51,17 @@ class TestSmoke:
             self.hwmon_path = my_td.cpu_files
             count = len(my_td.cpu_files)
             # Initialize FanController class.
-            FanController.__init__(self, log, ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, count,
-                                   config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_TEMP_CALC,
-                                                                      fallback=FanController.CALC_AVG),
-                                   config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_STEPS, fallback=6),
-                                   config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_SENSITIVITY, fallback=3.0),
-                                   config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_POLLING, fallback=2),
-                                   config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_MIN_TEMP, fallback=30.0),
-                                   config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_MAX_TEMP, fallback=60.0),
-                                   config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_MIN_LEVEL, fallback=35),
-                                   config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_MAX_LEVEL, fallback=100))
+            FanController.__init__(
+                self, log, ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, count,
+                config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
+                config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_STEPS, fallback=6),
+                config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_SENSITIVITY, fallback=3.0),
+                config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_POLLING, fallback=2),
+                config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_MIN_TEMP, fallback=30.0),
+                config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_MAX_TEMP, fallback=60.0),
+                config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_MIN_LEVEL, fallback=35),
+                config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_MAX_LEVEL, fallback=100)
+            )
 
         def mocked_hdzone_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
             self.hd_device_names = my_td.hd_name_list
@@ -69,16 +70,17 @@ class TestSmoke:
             self.sudo=sudo
 
             # Initialize FanController class.
-            FanController.__init__(self, log, ipmi, Ipmi.HD_ZONE, self.CS_HD_ZONE, count,
-                                   config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_TEMP_CALC,
-                                                                  fallback=FanController.CALC_AVG),
-                                   config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_STEPS, fallback=4),
-                                   config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_SENSITIVITY, fallback=2),
-                                   config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_POLLING, fallback=10),
-                                   config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_MIN_TEMP, fallback=32),
-                                   config[self.CS_HD_ZONE].getfloat(self.CV_HD_ZONE_MAX_TEMP, fallback=46),
-                                   config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_MIN_LEVEL, fallback=35),
-                                   config[self.CS_HD_ZONE].getint(self.CV_HD_ZONE_MAX_LEVEL, fallback=100))
+            FanController.__init__(
+                self, log, ipmi, Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, count,
+                config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
+                config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_STEPS, fallback=4),
+                config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_SENSITIVITY, fallback=2),
+                config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_POLLING, fallback=10),
+                config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_MIN_TEMP, fallback=32),
+                config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_MAX_TEMP, fallback=46),
+                config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_MIN_LEVEL, fallback=35),
+                config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_MAX_LEVEL, fallback=100)
+            )
 
             # Save path for `smartctl` command.
             self.smartctl_path = cmd_smart
