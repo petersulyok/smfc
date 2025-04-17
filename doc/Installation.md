@@ -32,6 +32,6 @@ The default locations of the installation files:
 
 After running the installation script and editing your new configuration, `smfc` can be executed as a standard `systemd` service.
 
-**Although this way of the installation is safe, it is not recommended.** Systemd-wide installation of Python packages with `pip` is not recommended by newest Linux distributions.
+**Although this is a safe installation, it is not recommended.** Manual systemd-wide installation of Python packages with `pip` is not recommended by newest Linux distributions.
 
 ## 2. Docker installation
