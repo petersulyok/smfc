@@ -223,7 +223,7 @@ class Ipmi:
             RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI system/motherboard)
         """
         r: subprocess.CompletedProcess  # result of the executed process
-        l: int                          # Level
+        level: int                      # Level
 
         # Validate zone parameter
         if zone not in {self.CPU_ZONE, self.HD_ZONE}:
@@ -234,9 +234,9 @@ class Ipmi:
         # Get the new IPMI fan level in the specific zone
         try:
             r = self._exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x00', str(zone)])
-            l = int(r.stdout)
+            level = int(r.stdout)
         except (FileNotFoundError, RuntimeError) as e:
             raise e
-        return l
+        return level
 
 # End.

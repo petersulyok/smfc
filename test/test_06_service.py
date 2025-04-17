@@ -333,12 +333,14 @@ class TestService:
                 sys.exit(100)
 
         def mocked_cpuzone_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
+            nonlocal my_td
             self.hwmon_path = my_td.cpu_files
             count = len(my_td.cpu_files)
             FanController.__init__(self, log, ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, count, 1, 5,
                                    5, 0, 30, 60, 35, 100)
 
         def mocked_hdzone_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
+            nonlocal my_td
             self.hd_device_names = my_td.hd_name_list
             self.hwmon_path = my_td.hd_files
             count = len(my_td.hd_files)

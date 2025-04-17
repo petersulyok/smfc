@@ -179,21 +179,22 @@ class HdZone(FanController):
         # Use 'smartctl' command for reading HD temperature in case of empty HWMON path.
         if not self.hwmon_path[index]:
             r: subprocess.CompletedProcess  # result of the executed process
-            lines: List[str]                # Output lines.
+            output_lines: List[str]         # Lines of the output text.
+            line: str                       # One line.
             found: bool                     # Temperature value was found.
 
             # Read disk temperature with calling `smartctl -a /dev/...` command.
             try:
                 r = self._exec_smartctl(['-a', self.hd_device_names[index]])
                 # Parse the output of `smartctl` command.
-                lines = str(r.stdout).splitlines()
+                output_lines = str(r.stdout).splitlines()
                 found = False
-                for l in lines:
+                for line in output_lines:
 
                     # SCSI type of temperature reporting, like:
                     # `Current Drive Temperature:     37 C`
-                    if 'Current Drive Temperature' in l:
-                        value = float(l.split(':')[-1].strip().split()[0])
+                    if 'Current Drive Temperature' in line:
+                        value = float(line.split(':')[-1].strip().split()[0])
                         found = True
                         break
 
@@ -202,8 +203,8 @@ class HdZone(FanController):
                     # `190 Airflow_Temperature_Cel 0x0032   075   045   000    Old_age   Always       -       25`
                     # `194 Temperature_Celsius     0x0002   232   232   000    Old_age   Always       -       28 (Min/Max 17/45)`
                     # pylint: enable=C0301
-                    if 'Temperature' in l:
-                        s = l.split()
+                    if 'Temperature' in line:
+                        s = line.split()
                         value = float(s[9])
                         found = True
                         break

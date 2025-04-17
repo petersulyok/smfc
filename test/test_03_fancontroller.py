@@ -104,7 +104,7 @@ class TestFanController:
         with pytest.raises(ValueError) as cm:
             FanController(my_log, my_ipmi, ipmi_zone, name, count, temp_calc, steps, sensitivity, polling,
                           min_temp, max_temp, min_level, max_level)
-        assert cm.type == ValueError, error
+        assert cm.type is ValueError, error
 
     @pytest.mark.parametrize("devices, result, error", [
         # Normal case - 1 device found

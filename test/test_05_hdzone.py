@@ -182,7 +182,7 @@ class TestHdZone:
         my_udevc = pyudev.Context.__new__(pyudev.Context)
         with pytest.raises(Exception) as cm:
             HdZone(my_log, my_udevc, my_ipmi, my_config, False)
-        assert cm.type == ValueError, error
+        assert cm.type is ValueError, error
         del my_td
 
     #pylint: disable=protected-access

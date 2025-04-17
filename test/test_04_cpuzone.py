@@ -151,7 +151,7 @@ class TestCpuZone:
         my_udevc = pyudev.Context.__new__(pyudev.Context)
         with pytest.raises(Exception) as cm:
             CpuZone(my_log, my_udevc, my_ipmi, my_config)
-        assert cm.type == RuntimeError, error
+        assert cm.type is RuntimeError, error
 
     #pylint: disable=protected-access
     @pytest.mark.parametrize("count, index, temperatures, error", [

@@ -73,7 +73,7 @@ class TestIpmi:
 
         #pylint: disable=W0613
         def mocked_ipmi_exec(self, args: List[str]) -> subprocess.CompletedProcess:
-            if exception != ValueError:
+            if exception is not ValueError:
                 raise exception
             return subprocess.CompletedProcess([], returncode=0)
         #pylint: enable=W0613
@@ -350,7 +350,7 @@ class TestIpmi:
         my_ipmi.sudo = False
         with pytest.raises(ValueError) as cm:
             my_ipmi.set_fan_level(zone, level)
-        assert cm.type == ValueError, error
+        assert cm.type is ValueError, error
 
     @pytest.mark.parametrize("zone, expected_level, swapped, error", [
         (Ipmi.CPU_ZONE, 0,   True, 'Ipmi.get_fan_level() 1'),
@@ -418,7 +418,7 @@ class TestIpmi:
         my_ipmi = Ipmi(my_log, my_config, False)
         with pytest.raises(Exception) as cm:
             my_ipmi.get_fan_level(zone)
-        assert cm.type == ValueError, error
+        assert cm.type is ValueError, error
         del my_td
 
     @pytest.mark.parametrize("exception, error", [

@@ -67,7 +67,7 @@ class TestLog:
         mocker.patch('builtins.print', mock_print)
         with pytest.raises(ValueError) as cm:
             Log(level, output)
-        assert cm.type == ValueError, error
+        assert cm.type is ValueError, error
 
     @pytest.mark.parametrize("level, syslog_level, error", [
         (Log.LOG_ERROR, syslog.LOG_ERR, "Log.map_to_syslog() 1"),
