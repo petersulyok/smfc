@@ -11,37 +11,46 @@ on:
 jobs:
   test:
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: ["ubuntu-latest"]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version:
+          - "3.9"
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
         include:
           - coverage: true
-            os: "ubuntu-latest"
             python-version: "3.13"
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+          enable-cache: true
+          cache-local-path: ${{ github.workspace }}/.cache/uv
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
+      - name: Run test with pytest
+        run: uv run pytest
+
+      - name: Run linters
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-          pip install .
-      - name: Lint pylint
-        run: |
-          pylint src test
-      - name: Test with pytest
-        run: |
-          pytest
+          uv run pylint src test
+          uv run ruff check
+
       - name: Generate coverage report
         if: "matrix.coverage"
         run: |
-          pytest --cov=src --cov=test --cov-report=xml
+          uv run pytest --cov=src --cov=test --cov-report=xml
+
       - name: Upload coverage to Codecov
         if: "matrix.coverage"
         uses: codecov/codecov-action@v4
