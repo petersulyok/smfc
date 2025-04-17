@@ -14,7 +14,9 @@ requires-python = ">=3.9, <4"
 keywords = ["supermicro", "linux", "daemon", "fancontrol"]
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
-dependencies = ["pyudev==0.24.3"]
+dependencies = [
+    "pyudev==0.24.3"
+]
 classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -26,19 +28,23 @@ classifiers = [
     "Development Status :: 4 - Beta"
 ]
 
+[dependency-groups]
+dev = [
+    "build==1.2.2.post1",
+    "coverage==7.6.12",
+    "mock==5.2.0",
+    "pylint==3.3.5",
+    "pytest==8.3.5",
+    "pytest-cov==6.0.0",
+    "pytest-mock==3.14.0",
+    "ruff==0.11.5",
+    "twine==6.1.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/petersulyok/smfc"
 Changelog = "https://github.com/petersulyok/smfc/releases"
 Issues = "https://github.com/petersulyok/smfc/issues"
-[project.optional-dependencies]
-test = [
-    "coverage==7.6.12",
-    "pytest==8.3.5",
-    "pytest-cov==6.0.0",
-    "pytest-mock == 3.14.0",
-    "mock == 5.2.0",
-    "pylint==3.3.5"
-]
 
 [project.scripts]
 smfc = "smfc.cmd:main"
