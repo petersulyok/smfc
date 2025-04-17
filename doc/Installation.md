@@ -20,7 +20,18 @@ The installation script contains the following steps:
   - creates a new `/etc/default/smfc` file
   - creates a new `/etc/systemd/system/smfc.service` file
 
-After running the installation script and editing your new configuration, `smfc` can be started as a standard `systemd` service.
-Although this way of the installation is safe, it is not recommended. Systemd-wide installation with `pip` is not supported by newest Linux distributions.
+The default locations of the installation files: 
 
-# 2. Docker installation
+| Files           | Installation folder                               | Description                     |
+|-----------------|---------------------------------------------------|---------------------------------|
+| `smfc.service`  | `/etc/systemd/system`                             | systemd service definition file |
+| `smfc`          | `/etc/default`                                    | service command line options    |
+| `smfc.conf`     | `/etc/smfc`                                       | service configuration file      |
+| `smfc package`  | `/usr/local/bin`<br/> `/usr/local/lib/python3.xx` | python package                  |
+
+
+After running the installation script and editing your new configuration, `smfc` can be executed as a standard `systemd` service.
+
+**Although this way of the installation is safe, it is not recommended.** Systemd-wide installation of Python packages with `pip` is not recommended by newest Linux distributions.
+
+## 2. Docker installation
