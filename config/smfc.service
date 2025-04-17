@@ -6,7 +6,7 @@ After=syslog.target openipmi.service
 [Service]
 Type=simple
 EnvironmentFile=-/etc/default/smfc
-ExecStart=/opt/smfc/smfc.py $OPTIONS
+ExecStart=smfc $OPTIONS
 
 [Install]
 WantedBy=multi-user.target
