@@ -29,7 +29,7 @@ You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
  1. Set up the IPMI threshold values for your fans (see [this chapter](https://github.com/petersulyok/smfc?tab=readme-ov-file#7-ipmi-fan-control-and-sensor-thresholds) for details). 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`).
- 4. Install the service (select your preferred way of installation from [Install.md](doc/Install.md))`.
+ 4. Install `smfc` service (check [Installation.md](doc/Installation.md) for more details)`.
  5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
  6. Start the `systemd` service
  7. Check results in system log
