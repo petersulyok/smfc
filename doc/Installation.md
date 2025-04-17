@@ -30,8 +30,14 @@ The default locations of the installation files:
 | `smfc package`  | `/usr/local/bin`<br/> `/usr/local/lib/python3.xx` | python package                  |
 
 
-After running the installation script and editing your new configuration, `smfc` can be executed as a standard `systemd` service.
+After a successful installation and editing of the new configuration file, `smfc` can be executed as a standard `systemd` service.
 
-**Although this is a safe installation, it is not recommended.** Manual systemd-wide installation of Python packages with `pip` is not recommended by newest Linux distributions.
+```
+    systemctl daemon-reload
+    systemctl enable --now smfc
+    systemctl status smfc
+```
+
+**Although this is a safe installation method, it is not recommended**, since manual systemd-wide installation of Python packages with `pip` is not recommended by newest Linux distributions.
 
 ## 2. Docker installation
