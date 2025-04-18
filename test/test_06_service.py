@@ -404,7 +404,7 @@ class TestService:
         mocker.patch('smfc.CpuZone.__init__', mocked_cpuzone_init)
         mocker.patch('smfc.HdZone.__init__', mocked_hdzone_init)
         self.sleep_counter = 0
-        sys.argv = ('smfc.py -o 0 -ne -nd -c ' + conf_file).split()
+        sys.argv = ('smfc.py -o 0 -l 4 -ne -nd -c ' + conf_file).split()
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()

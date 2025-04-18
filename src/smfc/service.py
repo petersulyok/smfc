@@ -93,7 +93,7 @@ class Service:
         if sge and no_smartctl:
             return f'ERROR: smartctl command ({path}) must be installed for Standby Guard feature!'
 
-        # All required run-time dependencies seems to be available.
+        # All required run-time dependencies are available.
         return ''
 
     def run(self) -> None:
@@ -139,7 +139,7 @@ class Service:
         # Store `sudo` option.
         self.sudo = parsed_results.s
 
-        # Create a Log class instance (in theory this cannot fail).
+        # Create a Log class instance (in theory, this cannot fail).
         try:
             self.log = Log(parsed_results.l, parsed_results.o)
         except ValueError as e:
@@ -172,14 +172,19 @@ class Service:
                 self.log.msg(Log.LOG_ERROR, error_msg)
                 sys.exit(7)
 
-        # Create an Ipmi class instances and set required IPMI fan mode.
+        # Create an Ipmi class instances.
         try:
             self.ipmi = Ipmi(self.log, self.config, self.sudo)
             old_mode = self.ipmi.get_fan_mode()
         except (ValueError, FileNotFoundError) as e:
             self.log.msg(Log.LOG_ERROR, f'{e}.')
             sys.exit(8)
-        self.log.msg(Log.LOG_DEBUG, f'Old IPMI fan mode = {self.ipmi.get_fan_mode_name(old_mode)} ({old_mode})')
+        # Log the old fan mode and zone levels in DEBUG log mode.
+        if self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f'Old IPMI fan mode = {self.ipmi.get_fan_mode_name(old_mode)} ({old_mode})')
+            self.log.msg(Log.LOG_DEBUG, f'Old CPU zone level = {self.ipmi.get_fan_level(Ipmi.CPU_ZONE)}')
+            self.log.msg(Log.LOG_DEBUG, f'Old HD zone level = {self.ipmi.get_fan_level(Ipmi.HD_ZONE)}')
+        #  Set the FULL IPMI fan mode if it is not the current fan mode.
         if old_mode != Ipmi.FULL_MODE:
             self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
             self.log.msg(Log.LOG_DEBUG,
