@@ -110,6 +110,7 @@ Some additional notes:
 - For `NVME` SSDs no kernel driver will be loaded the kernel can handle this disk type automatically
 - For `SATA` disks the `drivetemp` kernel module should be loaded. **This is the fastest way to read disk temperature**, and the kernel module can report the temperature while hard disks are in sleep mode!
 - For `SAS/SCSI` disks the `smartctl` command will be used to read disk temperature
+- If `drivetemp` module is not loaded or a HDD is not compatible with `drivetemp` module then `smfc` switches back to using `smartctl` automatically.   
 - Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported in this case.
 - It is NOT RECOMMENDED to mix NVME SSD and SATA/SCSI disks in `hd_names=` parameter, because they are operating in quite different temperature intervals (e.g. 30-40C vs 40-80C).
 
