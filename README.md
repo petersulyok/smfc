@@ -9,7 +9,8 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-4 release can be tested on the main branch, see #64 for more details})}\$
+${{\color{red}\textsf{BETA-4 release can be tested on the main branch})}\$
+See #64 for more details.
 
 ## TL;DR
 
