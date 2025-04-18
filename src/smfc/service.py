@@ -182,8 +182,8 @@ class Service:
         # Log the old fan mode and zone levels in DEBUG log mode.
         if self.log.log_level >= Log.LOG_DEBUG:
             self.log.msg(Log.LOG_DEBUG, f'Old IPMI fan mode = {self.ipmi.get_fan_mode_name(old_mode)} ({old_mode})')
-            self.log.msg(Log.LOG_DEBUG, f'Old CPU zone level = {self.ipmi.get_fan_level(Ipmi.CPU_ZONE)}')
-            self.log.msg(Log.LOG_DEBUG, f'Old HD zone level = {self.ipmi.get_fan_level(Ipmi.HD_ZONE)}')
+            self.log.msg(Log.LOG_DEBUG, f'Old CPU zone level = {self.ipmi.get_fan_level(Ipmi.CPU_ZONE)}%%')
+            self.log.msg(Log.LOG_DEBUG, f'Old HD zone level = {self.ipmi.get_fan_level(Ipmi.HD_ZONE)}%%')
         #  Set the FULL IPMI fan mode if it is not the current fan mode.
         if old_mode != Ipmi.FULL_MODE:
             self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
