@@ -3,20 +3,18 @@ This is a docker image for `smfc`. Please visit the [GitHub repository](https://
 
 # Content
 This image contains the following components: 
-- `Alpine Linux` 3.20.6
-- `Python` 3.12.9
+- `Alpine Linux` 3.21.3
+- `Python` 3.12.10-r0
 - `ipmitool` 1.8.19-r1
 - `smartmontools` 7.4-r1
-- `hddtemp` 0.4.3 (https://github.com/vitlav/hddtemp.git fork used) 
 
 Some further notes:
-  1. `smfc` will be executed as a simple foreground process here (not as a `systemd` service).
+  1. `smfc` will be executed as a simple foreground process (not as a `systemd` service).
   2. Currently, the image does not require any networking, it is disabled.
   3. `ipmitool` and `smartctl` require read-only access to host's `/dev/` and `/run` folders and admin privilege.
-  4. The `/sys` filesystem can be accessed in the container, but the proper kernel module (i.e. `coretemp`, `k10temp`, or `drivetemp`) needs to be loaded on host side.
+  4. The `/sys` filesystem can be accessed in the container, but the proper kernel module (i.e. `coretemp`, `k10temp`, and `drivetemp`) needs to be loaded on host side.
   5. The container can send log messages to the host's `journald` daemon (as it is configured in _Usage chapter_), but feel free to configure [other logging drivers](https://docs.docker.com/config/containers/logging/configure/).
-  6. `/opt/smfc/hddtemp_emu.sh`  script (using `smartmontools`) is also available in docker if `hddtemp` is not compatible with your disks.
-  7. Remote access for IPMI can be used (see `[IPMI] remote_parameters=-U USERNAME -P PASSWORD -H HOST` in configuration file) if the IPMI interface is available only on host side.
+  6. IPMI remote access can be used (see `[IPMI] remote_parameters=-U USERNAME -P PASSWORD -H HOST` parameter in the configuration file) if IPMI interface is not accessible from docker container.
 
 # Usage 
 
@@ -33,7 +31,7 @@ docker run \
   -v /run:/run:ro \
   -v /etc/timezone:/etc/timezone:ro
   -v /etc/localtime:/etc/localtime:ro
-  -v /opt/smfc/smfc.conf:/opt/smfc/smfc.conf:ro \
+  -v /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro \
   -e SMFC_ARGS="-l 3" \
   petersulyok/smfc
 ```
@@ -60,7 +58,7 @@ services:
     volumes:
       - /dev:/dev:ro
       - /run:/run:ro
-      - /opt/smfc/smfc.conf:/opt/smfc/smfc.conf:ro
+      - /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
@@ -89,10 +87,11 @@ cd smfc
 ```
 
 # Versions
-  - **3.8.0** (2025.03.15): Updated to smfc version 3.8.0 and alpine 3.20.6
-  - **3.7.0** (2025.01.27): Updated to smfc version 3.7.0 and alpine 3.20.5 
-  - **3.6.0** (2024.12.12): Updated to smfc version 3.6.0 and alpine 3.20.3
-  - **3.5.1** (2024.08.23): Updated to smfc version 3.5.1 and alpine 3.20
-  - **3.5.0** (2024.03.21): Updated to smfc version 3.5.0 and alpine 3.19
+  - **4.0.0b1** (2025.04.18): Updated to smfc 4.0.0b1 and alpine 3.21.3
+  - **3.8.0** (2025.03.15): Updated to smfc 3.8.0 and alpine 3.20.6
+  - **3.7.0** (2025.01.27): Updated to smfc 3.7.0 and alpine 3.20.5 
+  - **3.6.0** (2024.12.12): Updated to smfc 3.6.0 and alpine 3.20.3
+  - **3.5.1** (2024.08.23): Updated to smfc 3.5.1 and alpine 3.20
+  - **3.5.0** (2024.03.21): Updated to smfc 3.5.0 and alpine 3.19
   - **3.4.0** (2023.11.28): Documentation updated 
   - **3.3.0** (2023.11.19): Initial release
