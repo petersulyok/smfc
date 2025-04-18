@@ -379,7 +379,7 @@ class TestIpmi:
             - delete all instances
         """
         my_td = TestData()
-        command = my_td.create_command_file(f'echo " {expected_level}"')
+        command = my_td.create_command_file(f'echo " {expected_level:x}"')
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
         my_config = ConfigParser()

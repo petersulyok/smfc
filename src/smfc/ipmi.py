@@ -234,7 +234,7 @@ class Ipmi:
         # Get the new IPMI fan level in the specific zone
         try:
             r = self._exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x00', str(zone)])
-            level = int(r.stdout)
+            level = int(r.stdout, 16)
         except (FileNotFoundError, RuntimeError) as e:
             raise e
         return level
