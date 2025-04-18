@@ -9,7 +9,7 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-4 release can be tested on main branch, [pypi.org](https://pypi.org/project/smfc/), and [hub.docker.com](https://hub.docker.com/repository/docker/petersulyok/smfc/general)})}\$
+${{\color{red}\textsf{BETA-4 release can be tested on main branch, https://pypi.org/project/smfc/, and https://hub.docker.com/repository/docker/petersulyok/smfc/general})}\$
 
 ## TL;DR
 
