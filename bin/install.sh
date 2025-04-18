@@ -23,7 +23,7 @@ if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
 fi
 
 # Install latest version of `smfc` package from Pypi.org
-latest_version=$(curl '$GITHUB_URL/pyproject.toml|grep "version = "|cut -d "\"" -f2')
+latest_version=$(curl "$GITHUB_URL/pyproject.toml"|grep "version = "|cut -d "\"" -f2)
 pip install -q --prefix=/usr smfc==$latest_version
 
 # Install configuration file.
