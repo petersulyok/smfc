@@ -10,7 +10,7 @@ then
     echo "Example: docker-build.sh 3.4.0 latest"
     exit 1
 fi
-docker image build . --debug -t petersulyok/smfc:$1 --label "org.opencontainers.image.version=$1" -f Dockerfile
+docker image build -t petersulyok/smfc:$1 --label "org.opencontainers.image.version=$1" -f ./docker/Dockerfile .
 if [ -n "$2" ];
 then
     docker image tag petersulyok/smfc:$1 petersulyok/smfc:$2

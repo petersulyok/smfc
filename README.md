@@ -15,7 +15,7 @@ ${{\color{red}\textsf{WARNING: Please download a release (instead of cloning the
 
 This is a `systemd service` running on Linux and can control fans with help of IPMI on Super Micro X10-X13 (and some X9) motherboards.
 
-You can also run `smfc` in docker, see more details in [Docker.md](Docker.md).
+You can also run `smfc` in docker, see more details in [Docker.md](docker/Docker.md).
 
 ### 1. Prerequisites
  - a Super Micro motherboard with ASPEED AST2400/2500/2600 chip
