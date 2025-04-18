@@ -99,29 +99,20 @@ This feature is monitoring the power state of SATA hard disks (with the help of 
 #### 5. Hard disk compatibility
 The `smfc` service was originally designed for `SATA` hard drives, but from `3.0` version it is also compatible with `NVME` and `SAS/SCSI` disks. The following table summarizes how the temperature is read for different disk types: 
 
-| Disk type  | Temperature source   | Kernel module | Command   |
-|------------|----------------------|---------------|-----------|
-| `SATA`     | Linux kernel (HWMON) | `drivetemp`   | -         |
-| `NVME`     | Linux kernel (HWMON) | -             | -         |
-| `SAS/SCSI` | `hddtemp`            | -             | `hddtemp` |
+| Disk type  | Temperature source   | Kernel module | Command    |
+|------------|----------------------|---------------|------------|
+| `SATA`     | Linux kernel (HWMON) | `drivetemp`   | -          |
+| `NVME`     | Linux kernel (HWMON) | -             | -          |
+| `SAS/SCSI` | `smartctl`           | -             | `smartctl` |
 
 Some additional notes:
 
-- For `NVME` SSDs no kernel driver will be loaded the kernel itself can handle this disk type
-- For `SATA` disks the `drivetemp` kernel module should be loaded (this is the fastest way to read disk temperature and the kernel module can report the temperature during sleep mode!)
-- For `SAS/SCSI` disks the `hddtemp` command will be used to read disk temperature (NO daemon mode is required for `hddtemp`!)
+- For `NVME` SSDs no kernel driver will be loaded the kernel can handle this disk type automatically
+- For `SATA` disks the `drivetemp` kernel module should be loaded. **This is the fastest way to read disk temperature**, and the kernel module can report the temperature while hard disks are in sleep mode!
+- For `SAS/SCSI` disks the `smartctl` command will be used to read disk temperature
 - Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported in this case.
-- Although `smfc` can handle NVME SSDs, it is NOT RECOMMENDED to mix NVME SSD and SATA/SCSI disks in `hd_names=` parameters, because they are operating in quite different temperature intervals (e.g. 30-40C vs 40-80C).
-- The service can identify the disk types automatically based on the tags (`ata-`/`-SATA`, `nvme-` and `scsi-`)
-- `hddtemp` command is not actively developed anymore. If it is not available on your Linux distribution, there is a workaround for that. Please use `./bin/hddtemp_emu.sh` script in the `hddtemp_path=` configuration parameter and configure `hwmon_path=` with `hddtemp` keyword as many times as you need:
-    
-    ```
-    [HD zone]
-    ...
-    hwmon_path=hddtemp hddtemp ...
-    ...
-    hddtemp_path=/opt/smfc/hddtemp_emu.sh
-    ``` 
+- It is NOT RECOMMENDED to mix NVME SSD and SATA/SCSI disks in `hd_names=` parameter, because they are operating in quite different temperature intervals (e.g. 30-40C vs 40-80C).
+
 
 ### 6. Super Micro compatibility
 Originally this software was designed to work with Super Micro X10 and X11 motherboards with a BMC chip (i.e. ASPEED AST2400/2500) and IPMI functionality. 
@@ -349,9 +340,6 @@ swapped_zones=0
 [CPU zone]
 # Fan controller enabled (bool, default=0)
 enabled=1
-# Number of CPUs (int, default=1)
-# If hwmon_path is not specified (i.e., if CPU detection is automatic), then the value of count is overridden by the detected number of sockets.
-count=1
 # Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
 # Discrete steps in mapping of temperatures to fan level (int, default=6)
@@ -368,18 +356,10 @@ max_temp=60.0
 min_level=35
 # Maximum CPU fan level (int, %, default=100)
 max_level=100
-# Path for CPU sys/hwmon file(s) (str multi-line list, default="")
-# It will be automatically generated if not specified:
-# hwmon_path=/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input
-#            /sys/devices/platform/coretemp.1/hwmon/hwmon*/temp1_input
-# or
-# hwmon_path=/sys/bus/pci/drivers/k10temp/0000*/hwmon/hwmon*/temp1_input
 
 [HD zone]
 # Fan controller enabled (bool, default=0)
 enabled=1
-# Number of HDs (int, default=1)
-count=1
 # Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
 # Discrete steps in mapping of temperatures to fan level (int, default=4)
@@ -399,23 +379,12 @@ max_level=100
 # Names of the HDs (str multi-line list, default=)
 # These names MUST BE specified in '/dev/disk/by-id/...' form!
 hd_names=
-# List of files in /sys/hwmon file system or 'hddtemp' (str multi-line list, default=)
-# It will be automatically generated for SATA disks based on the disk names.
-# Use `hddtemp` keyword for SCSI disk or for other disks incompatible with `drivetemp` module.
-# hwmon_path=/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input
-#            /sys/class/scsi_disk/1:0:0:0/device/hwmon/hwmon*/temp1_input
-#            hddtemp
+# Path for 'smartctl' command (str, default=/usr/sbin/smartctl).
+smartctl_path=/usr/sbin/smartctl
 # Standby guard feature for RAID arrays (bool, default=0)
 standby_guard_enabled=0
-# Number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)
+# 'standby guard' feature only: number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)
 standby_hd_limit=1
-# Path for 'smartctl' command (str, default=/usr/sbin/smartctl).
-# Required for 'standby guard' feature only
-smartctl_path=/usr/sbin/smartctl
-# Path for 'hddtemp' command (str, default=/usr/sbin/hddtemp).
-# Required for reading of the temperature of SAS/SCSI disks.
-# 'hddtemp_emu.sh' script could also be used here if 'hddtemp' is not available.
-hddtemp_path=/usr/sbin/hddtemp
 ```
 Important notes:
  1. `[HD zone} hd_names=`: This is a compulsory parameter, its value must be specified in `/dev/disk/by-id/...` form (the `/dev/sda` form is not persistent could be changed after a reboot).
