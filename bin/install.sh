@@ -7,7 +7,7 @@ set -e
 
 # Postfix extension for backup files.
 POST_TAG=$(date +%4Y%m%d_%H%M%S)
-
+GITHUB_URL="https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main"
 # Must be executed with root privileges.
 if [[ $EUID -ne 0 ]]; then
   echo "$0: Error - must be executed with root privileges!"
@@ -22,8 +22,9 @@ if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
   exit 0
 fi
 
-# Install `smfc` package from Pypi.org
-pip install -q --prefix=/usr smfc==4.0.0b2
+# Install latest version of `smfc` package from Pypi.org
+latest_version=$(curl '$GITHUB_URL/pyproject.toml|grep "version = "|cut -d "\"" -f2')
+pip install -q --prefix=/usr smfc==$latest_version
 
 # Install configuration file.
 TARGET_DIR=/etc/smfc
@@ -34,12 +35,12 @@ fi
 # Backup configuration file if needed.
 if [ "$1" != "--keep-config" ]; then
   cp "$TARGET_DIR/smfc.conf" "$TARGET_DIR/smfc.conf.$POST_TAG"
-  curl --silent -o "$TARGET_DIR/smfc.conf" https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/config/smfc.conf
+  curl --silent -o "$TARGET_DIR/smfc.conf" "$GITHUB_URL/config/smfc.conf"
 fi
 
 # Install systemd service files.
-curl --silent -o "/etc/default/smfc" https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/config/smfc
-curl --silent -o "/etc/systemd/system/smfc.service" https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/config/smfc.service
+curl --silent -o "/etc/default/smfc" "$GITHUB_URL/config/smfc"
+curl --silent -o "/etc/systemd/system/smfc.service" "$GITHUB_URL/config/smfc.service"
 
 # Collect all disk names for `hd_names=` parameter in case of a 'smfc.conf' file.
 if [ "$1" != "--keep-config" ]; then
