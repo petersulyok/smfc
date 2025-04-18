@@ -10,4 +10,4 @@ if [ -z "${SMFC_ARGS+x}" ]; then
 fi
 
 # Start `smfc` as a foreground process.
-/opt/smfc/smfc.py -c /opt/smfc/smfc.conf $SMFC_ARGS
+smfc -c /etc/smfc/smfc.conf $SMFC_ARGS

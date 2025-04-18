@@ -13,6 +13,6 @@ docker run \
     -v /run:/run:ro \
     -v /etc/timezone:/etc/timezone:ro \
     -v /etc/localtime:/etc/localtime:ro \
-    -v /opt/smfc/smfc.conf:/opt/smfc/smfc.conf:ro \
+    -v /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro \
     -e SMFC_ARGS="-l 3" \
     petersulyok/smfc
