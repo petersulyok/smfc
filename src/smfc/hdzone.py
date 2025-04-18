@@ -254,7 +254,7 @@ class HdZone(FanController):
             r = self._exec_smartctl(['-i', '-n', 'standby', self.hd_device_names[i]])
             if str(r.stdout).find("STANDBY") != -1:
                 self.standby_array_states[i] = True
-        self.log.msg(Log.LOG_DEBUG, 'Standby guard: current state is {self.get_standby_state_str()}.')
+        self.log.msg(Log.LOG_DEBUG, f'Standby guard: current state is {self.get_standby_state_str()}.')
         return self.standby_array_states.count(True)
 
     def go_standby_state(self):
