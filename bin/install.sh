@@ -23,7 +23,7 @@ if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
 fi
 
 # Install `smfc` package from Pypi.org
-pip install -q --prefix=/usr smfc
+pip install -q --prefix=/usr smfc==4.0.0b2
 
 # Install configuration file.
 TARGET_DIR=/etc/smfc
