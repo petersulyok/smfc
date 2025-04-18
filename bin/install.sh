@@ -55,4 +55,5 @@ if [ "$1" != "--keep-config" ]; then
   fi
 fi
 
-echo "Installation finished successfully."
+echo "smfc version $latest_version installed."
+
