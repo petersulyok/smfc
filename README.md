@@ -53,7 +53,7 @@ In this service a fan control logic is implemented for both zones which can:
  2. calculate a new fan level based on the user-defined control function and the current temperature value of the zone 
  3. set up the new fan level through IPMI in the zone
 
-<img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.jpg" align="center" width="600">
+<img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="600">
 
 The fan control logic can be enabled and disabled independently per zone. In the zone all fans will have the same rotational speed. The user can configure different temperature calculation method (e.g. minimum, average, maximum temperatures) in case of multiple heat sources in a zone.
 
@@ -62,7 +62,7 @@ Please note that `smfc` will set all fans back to 100% speed at service terminat
 #### 2. User-defined control function
 The user-defined parameters (see configuration file below for more details) create a function where a temperature interval is being mapped to a fan level interval.
 
- <img src="https://github.com/petersulyok/smfc/raw/main/doc/userdefined_control_function.jpg" align="center" width="500">
+ <img src="https://github.com/petersulyok/smfc/raw/main/doc/userdefined_control_function.png" align="center" width="500">
 
 The following five parameters will define the function in both zones:
 
@@ -74,7 +74,7 @@ The following five parameters will define the function in both zones:
 
 With the help of this function `smfc` can map any new temperature measurement value to a fan level. Changing the fan rotational speed is a very slow process (i.e. it could take seconds depending on fan type and the requested amount of change), so we try to minimize these kinds of actions. Instead of setting fan rotational speed continuously we define discrete fan levels based on `steps=` parameter.
 
- <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output_levels.jpg" align="center" width="500">
+ <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output_levels.png" align="center" width="500">
 
 In order to avoid/minimize the unnecessary change of fan levels the service employs the following steps:
 
@@ -168,7 +168,7 @@ Please also consider the fact that **fans are mechanical devices, their rotation
   2. Per fan: configure proper IMPI sensor thresholds adjusted to the fan speed interval
   3. Per zone: define safe `min_level`/`max_level` values for `smfc` respecting the variance of the all fans in the IPMI zone (it could take several iterations and adjustments) 
 
-<img src="https://github.com/petersulyok/smfc/raw/main/doc/ipmi_sensor_threshold.jpg" align="center" width="600">
+<img src="https://github.com/petersulyok/smfc/raw/main/doc/ipmi_sensor_threshold.png" align="center" width="600">
 
 Here is a real-life example for a [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) fan:
 
