@@ -11,7 +11,7 @@ Super Micro fan control for Linux (home) servers.
 
 ${{\color{red}\textsf{BETA-4 release can be tested on the main branch}}}\$
 
-See [#64] for more details.
+See [discussion#64](https://github.com/petersulyok/smfc/discussions/64) for more details.
 
 ## TL;DR
 
