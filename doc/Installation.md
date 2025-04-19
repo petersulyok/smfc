@@ -34,7 +34,7 @@ The default locations of the installation files:
 
 Final steps after a successful installation:
   - PLEASE EDIT YOUR CONFIGURATION FILE!!
-  - install programs (`ipmitool` and `smartctl`)
+  - install program dependencies (`ipmitool` and `smartctl`)
   - load proper kernel modules (`coretemp` or `k10temp` and `drivetemp`)
   - start `smfc` as a standard `systemd` service:
 
@@ -59,7 +59,8 @@ Final steps after a successful installation:
     Apr 19 03:58:49 nas smfc.service[127141]: CPU zone: new fan level > 48%/35.0C
     ```
 
-**Although this is a safe installation method, it is not recommended**, since manual systemd-wide installation of Python packages with `pip` is not recommended by newest Linux distributions.
+**Although this is a safe installation method, it is not recommended**, since manual systemd-wide installation of Python packages with `pip` is not recommended by newest Linux distributions. 
+This is the reason why `pip` generates a warning during the installation. 
 
 ## 2. Docker installation
 `smfc` is also available as a docker image, see more details in [Docker.md](docker/Docker.md). In this scenario, your job is only to provide your configuration file and start the container. 
