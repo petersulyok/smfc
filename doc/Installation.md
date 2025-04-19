@@ -63,7 +63,7 @@ Final steps after a successful installation:
 This is the reason why `pip` generates a warning during the installation. 
 
 ## 2. Docker installation
-`smfc` is also available as a docker image, see more details in [Docker.md](docker/Docker.md). In this scenario, your job is only to provide your configuration file and start the container. 
+`smfc` is also available as a docker image, see more details in [Docker.md](../docker/Docker.md). In this scenario, your job is only to provide your configuration file and start the container. 
 
 This type of installation can work if the docker image can access the temperature sources of the host (e.g. HWMON files in `/sys`).
 If the IPMI interface of the host is not accessible, you can still use IPMI remote access:
