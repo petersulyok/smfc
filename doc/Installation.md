@@ -37,6 +37,7 @@ Final steps after a successful installation:
   - install programs (`ipmitool` and `smartctl`)
   - load proper kernel modules (`coretemp` or `k10temp` and `drivetemp`)
   - start `smfc` as a standard `systemd` service:
+
     ```
     systemctl daemon-reload
     systemctl enable --now smfc
@@ -66,11 +67,9 @@ Final steps after a successful installation:
 This type of installation can work if the docker image can access the temperature sources of the host (e.g. HWMON files in `/sys`).
 If the IPMI interface of the host is not accessible, you can still use IPMI remote access:
 
-    ```
     [Ipmi]
     ...
     # IPMI parameters for remote access (HOST is the BMC network address).
     #remote_parameters=-U USERNAME -P PASSWORD -H HOST
-    ```
 
 Docker installation could be useful for special situations, for example, TrueNas Scale installed in a Proxmox VM with HW passthrough.
