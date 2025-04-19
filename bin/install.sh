@@ -30,11 +30,13 @@ pip install -q --prefix=/usr smfc==$latest_version
 TARGET_DIR=/etc/smfc
 # Create the target folder if does not exist.
 if [ ! -d "$TARGET_DIR" ]; then
-  mkdir $TARGET_DIR
+  mkdir -p $TARGET_DIR
 fi
-# Backup configuration file if needed.
+# Backup the old configuration file and install the new one.
 if [ "$1" != "--keep-config" ]; then
-  cp "$TARGET_DIR/smfc.conf" "$TARGET_DIR/smfc.conf.$POST_TAG"
+  if [ -f "$TARGET_DIR/smfc.conf" ]; then
+    cp "$TARGET_DIR/smfc.conf" "$TARGET_DIR/smfc.conf.$POST_TAG"
+  fi
   curl --silent -o "$TARGET_DIR/smfc.conf" "$GITHUB_URL/config/smfc.conf"
 fi
 
@@ -56,4 +58,3 @@ if [ "$1" != "--keep-config" ]; then
 fi
 
 echo "smfc version $latest_version installed."
-
