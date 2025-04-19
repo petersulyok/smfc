@@ -33,7 +33,7 @@ The default locations of the installation files:
 | `smfc package`  | `/usr/local/bin`<br/> `/usr/local/lib/python3.xx` | python package                  |
 
 Final steps after a successful installation:
-  - PLEASE EDIT YOUR CONFIGURATION FILE!!
+  - PLEASE EDIT YOUR NEW CONFIGURATION FILE!!
   - install program dependencies (`ipmitool` and `smartctl`)
   - load proper kernel modules (`coretemp` or `k10temp` and `drivetemp`)
   - start `smfc` as a standard `systemd` service:
