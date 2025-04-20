@@ -1,23 +1,74 @@
-﻿
+﻿# Development
+This project is using `uv` for Python project management, see more details about [installation of `uv`](https://docs.astral.sh/uv/getting-started/installation/).
+`uv` can provide everything that multiple tools (e.g. `pip`, `pyenv`, `venv`) provide, but much faster. For example:
+
+* install a Python run-time: `uv python install 3.13`
+* use a specific Python version: `uv python pin 3.13`
+* create virtual Python environment: `uv venv`
+* install all dependencies: `uv sync`
+
+`uv` has a lock file (`uv.lock`) storing all dependencies, this should be part of version control.
+
+Building a development environment from scratch (with Python 3.12) contains the following steps:
+
+      pipx install uv
+      pipx ensurepath
+      git clone https://github.com/petersulyok/smfc.git
+      uv python install 3.12
+      uv python pin 3.12
+      uv sync
+      source .venv/bin/activate
+
+Currently, the version numbers of the dependencies are recorded with Python 3.9 and specified in `pyproject.toml` file:
+
+      dependencies = [
+          "pyudev==0.24.3"
+      ]
+      
+      [dependency-groups]
+      dev = [
+          "build==1.2.2.post1",
+          "coverage==7.6.12",
+          "mock==5.2.0",
+          "pylint==3.3.5",
+          "pytest==8.3.5",
+          "pytest-cov==6.0.0",
+          "pytest-mock==3.14.0",
+          "ruff==0.11.5",
+          "twine==6.1.0",
+      ]
+
+## Linting
+The code can be checked with `pylint` and `ruff`. `pylint` can be executed this way:
+
+	pylint src test
+
+`ruff` can be executed this way:
+
+    ruff check
+
 # Testing  
-Short summary about test environment of `smfc` project.  
-Notes:  
+This chapter describes the test environment of `smfc` project.  
+Important notes:  
   
- - All test related content can be found in `test` folder
- - Only `python3` and `bash` are required for the execution of the tests (was tested on Linux, macOS), commands `ipmitool` and `smartctl` are substituted by shell scripts, so they are not required for test execution
- - Python testing tools should be installed with `pip`:  
+* All test related content can be found in `test` folder
+* Only `python3` and `bash` are required for the execution of the tests (was tested on Linux, macOS), all external commands `ipmitool` and `smartctl` are substituted by scripts
+* Test are executed by `pytest`
+* All development dependencies (defined in `pyproject.toml`) will be installed after the execution of these commands:
 
-	`$ pip install -r requirements-dev.txt`
 
- 
+      uv sync
+      source .venv/bin/activate
+
+
 ## Smoke tests  
-Several smoke tests have been provided for `smfc` where the service is executed with different configuration parameters. Notes:  
+Several smoke tests have been provided for `smfc` where the service is executed with different configuration files. Notes:  
   
-- all smoke tests should be executed from the project root folder and can be stopped by pressing `CTLR+C`:
+* all smoke tests should be executed from the project root folder and can be stopped by pressing `CTLR+C`:
 
 	`$ ./test/run_test_cpu_1.sh`
 
-- the following smoke scripts and configurations can be executed:  
+* the following smoke scripts and configurations can be executed:  
    
    | Test script              | CPU configuration                | HD configuration                    | Standby guard |
    |---------------------------|----------------------------------|-------------------------------------|---------------|
@@ -29,6 +80,7 @@ Several smoke tests have been provided for `smfc` where the service is executed 
    | `run_test_hd_4.sh`        | 2 x CPUs                         | 4 x HDs                             | disabled      |
    | `run_test_hd_8.sh`        | 4 x CPUs                         | 8 x HDs                             | enabled       |
    | `run_test_const_level.sh` | 1 x CPU (60% constant fan level) | 4 x HDs (55% constant fan level)    | enabled       |
+
 
 ## Unit tests  
 The whole project (all source code) is completely unit tested. The unit tests are executed with `pytest`:
@@ -107,20 +159,32 @@ For a more detailed HTML coverage report run this command:
 
 The detailed HTML report will be available in folder `htmlcov/index.html` with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage is 100%.  
 
-## Linting
-The code was checked with `pylint`. This linter can be executed this way:
 
-	pylint src test
+# GitHub
+
 
 ## Github workflow
-A github workflow has been implemented for this project that is executed in case of push and pull request operations. The workflow contains the following steps:
+The project implemented the following GitHub workflows:
 
- - lint with `pylint`
- - unit test with `pytest` (coverage measurement is also included)
+1. Unit test and lint execution (`test.yml`). A commit can trigger this action:
+   * executes unit test on `ubuntu-latest` OS and on Python versions `3.9`, `3.10`, `3.11`, `3.12`, `3.13`
+   * executes `pylint` and `ruff`
+   * generates coverage data and upload it to [codecov.io](https://codecov.io/)
 
-The workflow is executed on the following test matrix:
+2. Publish Python distribution packages to PyPI (`publish.yml`). A published release triggers this action:
+   * build distribution package on Python `3.13`
+   * upload the new package to PyPI
 
- - OS: `ubuntu-latest`
- - Python version: `3.9`, `3.10`, `3.11`, `3.12`, `3.13`  
- 
+
+# Release process
+Follow these steps to create a new release:
+
+* Commit all changes
+* Change the version number in `pyproject.toml`
+* Run unit tests with `pytest`, and correct all errors
+* Run linters `pylint` and `ruff`, and correct all warnings
+* Update CHANGELOG.md with the new release information
+* Commit all changes and test again
+* Create a new release on GitHub with the same version number, and the new package will be published on PyPI automatically
+
 > Written with [StackEdit](https://stackedit.io/).
