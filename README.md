@@ -9,7 +9,7 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-5 release can be tested on the main branch}}}\$
+${{\color{red}\textsf{BETA-5 release can be tested as a pre-release}}}\$
 
 See [discussion#65](https://github.com/petersulyok/smfc/discussions/65) for more details.
 
