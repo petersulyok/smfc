@@ -9,7 +9,7 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-5 release can be tested as a pre-release. Users of _Swapped zone_ feature should adjust their configuration!}}}\$
+${{\color{red}\textsf{BETA-5 release can be tested as a pre-release. Users of 'Swapped zone' feature should adjust their configuration!}}}\$
 
 See [discussion#65](https://github.com/petersulyok/smfc/discussions/65) for more details.
 
