@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "smfc"
 description = "Super Micro Fan Control for Linux"
 readme = "README.md"
-version = "4.0.0b4"
+version = "4.0.0b5"
 authors = [
     { name = "Peter Sulyok", email = "peter@sulyok.net" }
 ]
