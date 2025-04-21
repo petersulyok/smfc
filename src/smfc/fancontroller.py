@@ -69,16 +69,16 @@ class FanController:
         # Save and validate configuration parameters.
         self.log = log
         self.ipmi = ipmi
+        if ipmi_zone not in range(0, 101):
+            raise ValueError(f'invalid value: ipmi_zone ({ipmi_zone}).')
         self.ipmi_zone = ipmi_zone
-        if self.ipmi_zone not in {Ipmi.CPU_ZONE, Ipmi.HD_ZONE}:
-            raise ValueError('invalid value: ipmi_zone')
         self.name = name
         self.count = count
         if self.count <= 0:
             raise ValueError('count <= 0')
         self.temp_calc = temp_calc
         if self.temp_calc not in {self.CALC_MIN, self.CALC_AVG, self.CALC_MAX}:
-            raise ValueError('invalid value: temp_calc')
+            raise ValueError(f'invalid value: temp_calc ({temp_calc}).')
         self.steps = steps
         if self.steps <= 0:
             raise ValueError('steps <= 0')

@@ -66,7 +66,7 @@ class TestFanController:
     @pytest.mark.parametrize("ipmi_zone, name, count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, error", [
         # ipmi_zone is invalid
         (-1,            CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 9'),
-        (100,           CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 10'),
+        (101,           CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 10'),
         # count <= 0
         (Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, -1, 0, 5, 4, 2, 30, 50, 35, 100,  'FanController.__init__() 11'),
         (Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 0, 0, 5, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 12'),

@@ -17,19 +17,20 @@ class TestCpuZone:
     """Unit test class for smfc.CpuZone() class"""
 
     @pytest.mark.parametrize(
-        "count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, error", [
-        (1, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 'CpuZone.__init__() 1'),
-        (2, FanController.CALC_MIN, 6, 5, 3, 35, 55, 36, 99,  'CpuZone.__init__() 2'),
-        (4, FanController.CALC_MIN, 7, 6, 4, 40, 60, 37, 98,  'CpuZone.__init__() 3'),
-        (1, FanController.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 'CpuZone.__init__() 4'),
-        (2, FanController.CALC_AVG, 6, 5, 3, 35, 55, 36, 99,  'CpuZone.__init__() 5'),
-        (4, FanController.CALC_AVG, 7, 6, 4, 40, 60, 37, 98,  'CpuZone.__init__() 6'),
-        (1, FanController.CALC_MAX, 5, 4, 2, 30, 50, 35, 100, 'CpuZone.__init__() 7'),
-        (2, FanController.CALC_MAX, 6, 5, 3, 35, 55, 36, 99,  'CpuZone.__init__() 8'),
-        (4, FanController.CALC_MAX, 7, 6, 4, 40, 60, 37, 98,  'CpuZone.__init__() 9')
+        "count, ipmi_zone, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, error", [
+        (1, 0, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 'CpuZone.__init__() 1'),
+        (2, 1, FanController.CALC_MIN, 6, 5, 3, 35, 55, 36, 99,  'CpuZone.__init__() 2'),
+        (4, 2, FanController.CALC_MIN, 7, 6, 4, 40, 60, 37, 98,  'CpuZone.__init__() 3'),
+        (1, 3, FanController.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 'CpuZone.__init__() 4'),
+        (2, 4, FanController.CALC_AVG, 6, 5, 3, 35, 55, 36, 99,  'CpuZone.__init__() 5'),
+        (4, 5, FanController.CALC_AVG, 7, 6, 4, 40, 60, 37, 98,  'CpuZone.__init__() 6'),
+        (1, 6, FanController.CALC_MAX, 5, 4, 2, 30, 50, 35, 100, 'CpuZone.__init__() 7'),
+        (2, 7, FanController.CALC_MAX, 6, 5, 3, 35, 55, 36, 99,  'CpuZone.__init__() 8'),
+        (4, 8, FanController.CALC_MAX, 7, 6, 4, 40, 60, 37, 98,  'CpuZone.__init__() 9')
     ])
-    def test_init_p1(self, mocker:MockerFixture, count: int, temp_calc: int, steps: int, sensitivity: float,
-                     polling: float, min_temp: float, max_temp: float, min_level: int, max_level: int, error: str):
+    def test_init_p1(self, mocker:MockerFixture, count: int, ipmi_zone: int, temp_calc: int, steps: int,
+                     sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
+                     max_level: int, error: str):
         """Positive unit test for CpuZone.__init__() method. It contains the following steps:
             - mock print(), pyudev.Context.list_devices(), smfc.FanController.get_hwmon_path() functions
             - initialize a Config, Log, Ipmi, and CpuZone classes
@@ -51,6 +52,7 @@ class TestCpuZone:
         my_config = ConfigParser()
         my_config[CpuZone.CS_CPU_ZONE] = {
             CpuZone.CV_CPU_ZONE_ENABLED: '1',
+            CpuZone.CV_CPU_IPMI_ZONE: str(ipmi_zone),
             CpuZone.CV_CPU_ZONE_TEMP_CALC: str(temp_calc),
             CpuZone.CV_CPU_ZONE_STEPS: str(steps),
             CpuZone.CV_CPU_ZONE_SENSITIVITY: str(sensitivity),
@@ -66,7 +68,7 @@ class TestCpuZone:
         my_cpuzone = CpuZone(my_log, my_udevc, my_ipmi, my_config)
         assert my_cpuzone.log == my_log, error
         assert my_cpuzone.ipmi == my_ipmi
-        assert my_cpuzone.ipmi_zone == Ipmi.CPU_ZONE, error
+        assert my_cpuzone.ipmi_zone == ipmi_zone, error
         assert my_cpuzone.name == CpuZone.CS_CPU_ZONE, error
         assert my_cpuzone.count == count, error
         assert my_cpuzone.temp_calc == temp_calc, error

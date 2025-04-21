@@ -31,6 +31,7 @@ class HdZone(FanController):
     # Constant values for the configuration parameters.
     CS_HD_ZONE: str = 'HD zone'
     CV_HD_ZONE_ENABLED: str = 'enabled'
+    CV_HD_IPMI_ZONE: str = 'ipmi_zone'
     CV_HD_ZONE_TEMP_CALC: str = 'temp_calc'
     CV_HD_ZONE_STEPS: str = 'steps'
     CV_HD_ZONE_SENSITIVITY: str = 'sensitivity'
@@ -60,7 +61,7 @@ class HdZone(FanController):
         hd_names: str   # String for hd_names=
         count: int      # HDD count.
 
-        # Save and validate HdZone class specific parameters.
+        # Save and validate HdZone class-specific parameters.
         hd_names = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_HD_NAMES)
         if not hd_names:
             raise ValueError('Parameter hd_names= is not specified.')
@@ -76,7 +77,7 @@ class HdZone(FanController):
         # Iterate through each disk.
         self.hwmon_path=[]
         for i in range(count):
-            # Find udev device based on device name.
+            # Find a device in udev database based on disk name.
             try:
                 block_dev = Devices.from_device_file(udevc, self.hd_device_names[i])
             except DeviceNotFoundByFileError:
@@ -86,7 +87,9 @@ class HdZone(FanController):
             self.hwmon_path.append(self.get_hwmon_path(udevc, block_dev.parent))
 
         # Initialize FanController class.
-        super().__init__(log, ipmi, Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, count,
+        super().__init__(log, ipmi,
+            config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_IPMI_ZONE, fallback=Ipmi.HD_ZONE),
+            HdZone.CS_HD_ZONE, count,
             config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
             config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_STEPS, fallback=4),
             config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_SENSITIVITY, fallback=2),

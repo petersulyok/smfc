@@ -17,7 +17,6 @@ class Ipmi:
     command: str                # Full path for ipmitool command.
     fan_mode_delay: float       # Delay time after execution of IPMI set fan mode function
     fan_level_delay: float      # Delay time after execution of IPMI set fan level function
-    swapped_zones: bool         # CPU and HD zones are swapped
     remote_parameters: str      # Remote IPMI parameters
     sudo: bool                  # Use `sudo` command for `ipmitool` command
 
@@ -41,7 +40,6 @@ class Ipmi:
     CV_IPMI_COMMAND: str = 'command'
     CV_IPMI_FAN_MODE_DELAY: str = 'fan_mode_delay'
     CV_IPMI_FAN_LEVEL_DELAY: str = 'fan_level_delay'
-    CV_IPMI_SWAPPED_ZONES: str = 'swapped_zones'
     CV_IPMI_REMOTE_PARAMETERS: str = 'remote_parameters'
 
     def __init__(self, log: Log, config: ConfigParser, sudo: bool) -> None:
@@ -60,7 +58,6 @@ class Ipmi:
         self.command = config[Ipmi.CS_IPMI].get(Ipmi.CV_IPMI_COMMAND, '/usr/bin/ipmitool')
         self.fan_mode_delay = config[Ipmi.CS_IPMI].getint(Ipmi.CV_IPMI_FAN_MODE_DELAY, fallback=10)
         self.fan_level_delay = config[Ipmi.CS_IPMI].getint(Ipmi.CV_IPMI_FAN_LEVEL_DELAY, fallback=2)
-        self.swapped_zones = config[Ipmi.CS_IPMI].getboolean(Ipmi.CV_IPMI_SWAPPED_ZONES, fallback=False)
         self.remote_parameters = config[Ipmi.CS_IPMI].get(Ipmi.CV_IPMI_REMOTE_PARAMETERS, fallback='')
         self.sudo = sudo
 
@@ -82,7 +79,6 @@ class Ipmi:
             self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_COMMAND} = {self.command}')
             self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_FAN_MODE_DELAY} = {self.fan_mode_delay}')
             self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_FAN_LEVEL_DELAY} = {self.fan_level_delay}')
-            self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_SWAPPED_ZONES} = {self.swapped_zones}')
             self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_REMOTE_PARAMETERS} = {self.remote_parameters}')
 
     def _exec_ipmitool(self, args: List[str]) -> subprocess.CompletedProcess:
@@ -178,7 +174,7 @@ class Ipmi:
             raise ValueError(f'Invalid fan mode value ({mode}).')
         # Call ipmitool command and set the new IPMI fan mode.
         try:
-            self._exec_ipmitool(['raw', '0x30', '0x45', '0x01', str(mode)])
+            self._exec_ipmitool(['raw', '0x30', '0x45', '0x01', f'0x{mode:02x}'])
         except (RuntimeError, FileNotFoundError) as e:
             raise e
         # Give time for IPMI system/fans to apply changes in the new fan mode.
@@ -195,17 +191,14 @@ class Ipmi:
             RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI system/motherboard)
         """
         # Validate zone parameter
-        if zone not in {self.CPU_ZONE, self.HD_ZONE}:
+        if zone not in range(0, 101):
             raise ValueError(f'Invalid value: zone ({zone}).')
-        # Handle swapped zones
-        if self.swapped_zones:
-            zone = 1 - zone
         # Validate level parameter (must be in the interval [0..100%])
         if level not in range(0, 101):
             raise ValueError(f'Invalid value: level ({level}).')
         # Set the new IPMI fan level in the specific zone
         try:
-            self._exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x01', str(zone), str(level)])
+            self._exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x01', f'0x{zone:02x}', f'0x{level:02x}'])
         except (FileNotFoundError, RuntimeError) as e:
             raise e
         # Give time for IPMI and fans to spin up/down.
@@ -226,17 +219,15 @@ class Ipmi:
         level: int                      # Level
 
         # Validate zone parameter
-        if zone not in {self.CPU_ZONE, self.HD_ZONE}:
+        if zone not in range(0, 101):
             raise ValueError(f'Invalid value: zone ({zone}).')
-        # Handle swapped zones
-        if self.swapped_zones:
-            zone = 1 - zone
         # Get the new IPMI fan level in the specific zone
         try:
-            r = self._exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x00', str(zone)])
+            r = self._exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x00', f'0x{zone:x}'])
             level = int(r.stdout, 16)
         except (FileNotFoundError, RuntimeError) as e:
             raise e
         return level
+
 
 # End.

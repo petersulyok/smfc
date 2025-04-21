@@ -16,6 +16,7 @@ class CpuZone(FanController):
     # Constant values for the configuration parameters.
     CS_CPU_ZONE: str = 'CPU zone'
     CV_CPU_ZONE_ENABLED: str = 'enabled'
+    CV_CPU_IPMI_ZONE: str = 'ipmi_zone'
     CV_CPU_ZONE_TEMP_CALC: str = 'temp_calc'
     CV_CPU_ZONE_STEPS: str = 'steps'
     CV_CPU_ZONE_SENSITIVITY: str = 'sensitivity'
@@ -52,7 +53,9 @@ class CpuZone(FanController):
         count = len(self.hwmon_path)
 
         # Initialize FanController class.
-        super().__init__(log, ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, count,
+        super().__init__(log, ipmi,
+            config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_IPMI_ZONE, fallback=Ipmi.CPU_ZONE),
+            CpuZone.CS_CPU_ZONE, count,
             config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
             config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_STEPS, fallback=6),
             config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_SENSITIVITY, fallback=3.0),
