@@ -81,14 +81,14 @@ With the help of this function `smfc` can map any new temperature measurement va
 To avoid/minimize the unnecessary change of fan levels the service employs the following steps:
 
  1. When the service adjusts the fan rotational speed then it always applies a delay time defined in configuration parameter `[IPMI] fan_level_delay=` in order to let the fan implement the physical change.
- 2. There is a sensitivity threshold parameter (`sensitivity=`) for the fan control logic. If the temperature change is below this value then the service will not react at all. 
- 3. The configuration parameter `polling=` defines the frequency of reading zone's temperature. The bigger polling time in a zone the lower frequency of fan speed change.
+ 2. There is a sensitivity threshold parameter (`sensitivity=`) for the fan control logic. If the temperature change is below this value, then the service will not react at all. 
+ 3. The configuration parameter `polling=` defines the frequency of reading zone's temperature. The bigger polling time in a zone, the lower frequency of fan speed change.
 
 #### 3. Free zone assignment
 With this feature, any IPMI zone can be assigned to your zones. Typical uses-cases of this feature:
-- Optimizing fan assignment
-- Swapping zones
-- Server motherboards with multiple IPMI zones
+- Optimizing fan assignment or use (you have more fan connectors in a specific IPMI zone, and you would like to use them in a different cooling area)
+- Swapping zones (swapping two IPMI zones in cooling-term)
+- Server motherboards with multiple IPMI zones (for example, [issue#20](https://github.com/petersulyok/smfc/issues/20))
 
 Use `ipmi_zone=` parameter to specify the IPMI zone in the zone configuration.
 
