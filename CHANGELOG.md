@@ -6,15 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [v4.0.0b5] - 2025-04-21 Prerelease 
+## [v4.0.0b5] - 2025-04-21 Pre-release 
 
 ### New/Added
+- Free IPMI zone assignment feature implemented:
+  - Any IPMI zone can be assigned to _CPU zone_ or _Hd Zone_, to support server motherboards having multiple IPMI zones,
+and to implement the former _Swapped zones_ feature in a more generic way.
+  - `ipmi_zone=` parameter added to zone configuration
 - New command line options added to `install.sh` (`-k`, `-v`)
-- `ipmi_zone=` parameter added to zone configuration 
 - CHANGELOG.md document added
 
 ### Changed
 - DEVELOPMENT.md document added (TESTING.md renamed/extended)
+
+### Removed
+- `swapped_zones=` parameter is not used anymore, this feature can be used with free IPMI zone assignment. 
 
 ### Fixed 
 - `install.sh` cannot save the existing configuration file (discussion #64)
@@ -28,8 +34,8 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 - `smfc` is uploaded to pypi.org, a GitHub workflow can publish that with each new release.
 - `smfc` is using `udev` (`pyudev`) for device management (thanks to @abbaad): 
   - Automatic discovery of HWMON files for both Intel and AMD CPUs, including the number of CPUs, no manual configuration required. 
-  - Automatic discovery of HWMON files for HDDs/SSDs based on `hd_names=` parameter, including the number of HDDS/SSDs, no manual configuration required. 
-If no HWMON file found for a hard disks (i.e. SCSI disk) then `smfc` switches back to using `smartctl` automatically.
+  - Automatic discovery of HWMON files for HDDs/SSDs based on `hd_names=` parameter, including the number of HDDS/SSDs, no manual configuration required.
+  - Automatic use of `smartctl` if no HWMON file found for a hard disks (e.g. SCSI disk).
 - New command line parameters for `smfc`:
   - `-s`: use of `sudo` with `ipmitool` and `smartctl` commands.
   - `-nd`: do not check dependencies.
