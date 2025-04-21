@@ -9,7 +9,7 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-5 release can be tested as a pre-release}}}\$
+${{\color{red}\textsf{BETA-5 release can be tested as a pre-release. Users of _Swapped zone_ feature should adjust their configuration!}}}\$
 
 See [discussion#65](https://github.com/petersulyok/smfc/discussions/65) for more details.
 
@@ -92,7 +92,7 @@ With this feature, any IPMI zone can be assigned to your zones. Typical uses-cas
 
 Use `ipmi_zone=` parameter to specify the IPMI zone in the zone configuration.
 
-(Note: till `smfc v3.8.0`, _Swapped zones_ feature was implemented, this feature is a more generic successor of that one)
+(Note: till version `v3.8.0`, `smfc` had _Swapped zones_ feature, but this new feature is a more generic successor of that one)
 
 #### 4. Standby guard
 For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
@@ -116,7 +116,7 @@ Some additional notes:
 - For `NVME` SSDs no kernel driver will be loaded the kernel can handle this disk type automatically
 - For `SATA` disks the `drivetemp` kernel module should be loaded. **This is the fastest way to read disk temperature**, and the kernel module can report the temperature while hard disks are in sleep mode!
 - For `SAS/SCSI` disks the `smartctl` command will be used to read disk temperature
-- If `drivetemp` module is not loaded or a HDD is not compatible with `drivetemp` module then `smfc` switches back to using `smartctl` automatically.   
+- If `drivetemp` module is not loaded or an HDD is not compatible with `drivetemp` module then `smfc` will use `smartctl` automatically.   
 - Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported in this case.
 - It is NOT RECOMMENDED to mix NVME SSD and SATA/SCSI disks in `hd_names=` parameter, because they are operating in quite different temperature intervals (e.g. 30-40C vs 40-80C).
 
