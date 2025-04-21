@@ -9,9 +9,9 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-4 release can be tested on the main branch}}}\$
+${{\color{red}\textsf{BETA-5 release can be tested on the main branch}}}\$
 
-See [discussion#64](https://github.com/petersulyok/smfc/discussions/64) for more details.
+See [discussion#65](https://github.com/petersulyok/smfc/discussions/65) for more details.
 
 ## TL;DR
 
@@ -47,9 +47,9 @@ This service was planned for Super Micro motherboards installed in computer chas
  - CPU zone with fans: FAN1, FAN2, ...
  - HD or peripheral zone with fans: FANA, FANB, ... 
 
-Please note: the fan assignment to zones is predefined in IPMI, and it cannot be changed! On the other hand `smfc` implements a feature, called [*Swapped zones*](https://github.com/petersulyok/smfc?tab=readme-ov-file#3-swapped-zones), in order to make the use of the fans more suitable.
+Please note: the fan assignment to zones is predefined in IPMI, and it cannot be changed! But `smfc` implements a feature, called [_Free zone assigment_](https://github.com/petersulyok/smfc?tab=readme-ov-file#3-free-zone-assignment), to make the use of the fans more suitable.
 
-In this service a fan control logic is implemented for both zones which can:
+In this service, a fan control logic is implemented for both zones which can:
 
  1. read the zone's temperature from Linux kernel
  2. calculate a new fan level based on the user-defined control function and the current temperature value of the zone 
@@ -59,10 +59,10 @@ In this service a fan control logic is implemented for both zones which can:
 
 The fan control logic can be enabled and disabled independently per zone. In the zone all fans will have the same rotational speed. The user can configure different temperature calculation method (e.g. minimum, average, maximum temperatures) in case of multiple heat sources in a zone.
 
-Please note that `smfc` will set all fans back to 100% speed at service termination in order to avoid overheating! 
+Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating! 
 
 #### 2. User-defined control function
-The user-defined parameters (see configuration file below for more details) create a function where a temperature interval is being mapped to a fan level interval.
+The user-defined parameters (see the configuration file below for more details) create a function where a temperature interval is being mapped to a fan level interval.
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/userdefined_control_function.png" align="center" width="500">
 
@@ -78,17 +78,21 @@ With the help of this function `smfc` can map any new temperature measurement va
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output_levels.png" align="center" width="500">
 
-In order to avoid/minimize the unnecessary change of fan levels the service employs the following steps:
+To avoid/minimize the unnecessary change of fan levels the service employs the following steps:
 
  1. When the service adjusts the fan rotational speed then it always applies a delay time defined in configuration parameter `[IPMI] fan_level_delay=` in order to let the fan implement the physical change.
  2. There is a sensitivity threshold parameter (`sensitivity=`) for the fan control logic. If the temperature change is below this value then the service will not react at all. 
  3. The configuration parameter `polling=` defines the frequency of reading zone's temperature. The bigger polling time in a zone the lower frequency of fan speed change.
 
-#### 3. Swapped zones
-This feature is useful if you need more fans for the HD zone since Super Micro motherboards have more fan connectors in the CPU zone, typically. 
-Enabling this feature will connect fans `FAN1, FAN2, ...` to the HD zone and fans `FANA, FANB, ...` to the CPU zone. The feature can be enabled with `[IPMI] swapped_zones=True` configuration parameter, in default it is disabled.
+#### 3. Free zone assignment
+With this feature, any IPMI zone can be assigned to your zones. Typical uses-cases of this feature:
+- Optimizing fan assignment
+- Swapping zones
+- Server motherboards with multiple IPMI zones
 
-**Please note:** when you enable this feature your task is only to swap fan connectors between zones on your motherboard, the rest of the configuration file will not be impacted (i.e. the zone sections will remain the same).
+Use `ipmi_zone=` parameter to specify the IPMI zone in the zone configuration.
+
+(Note: till `smfc v3.8.0`, _Swapped zones_ feature was implemented, this feature is a more generic successor of that one)
 
 #### 4. Standby guard
 For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
@@ -321,11 +325,10 @@ Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
 ```
 #
 #   smfc.conf (C) 2020-2025, Peter Sulyok
-#   smfc service configuration parameters
+#   smfc 4.x service configuration parameters
 #
 #   Please read the documentation here: https://github.com/petersulyok/smfc
 #
-
 [Ipmi]
 # Path for ipmitool (str, default=/usr/bin/ipmitool)
 command=/usr/bin/ipmitool 
@@ -333,16 +336,14 @@ command=/usr/bin/ipmitool
 fan_mode_delay=10
 # Delay time after changing IPMI fan level (int, seconds, default=2)
 fan_level_delay=2
-# The fans in CPU and HD zones are swapped, read more details here:
-# https://github.com/petersulyok/smfc?tab=readme-ov-file#3-swapped-zones
-# (bool, default=0).
-swapped_zones=0
 # IPMI parameters for remote access (HOST is the BMC network address).
 #remote_parameters=-U USERNAME -P PASSWORD -H HOST
 
 [CPU zone]
 # Fan controller enabled (bool, default=0)
 enabled=1
+# IPMI zone number (int, [0-7], default=0))
+ipmi_zone = 0
 # Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
 # Discrete steps in mapping of temperatures to fan level (int, default=6)
@@ -363,6 +364,8 @@ max_level=100
 [HD zone]
 # Fan controller enabled (bool, default=0)
 enabled=1
+# IPMI zone number (int, [0-7], default=1))
+ipmi_zone = 1
 # Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
 # Discrete steps in mapping of temperatures to fan level (int, default=4)

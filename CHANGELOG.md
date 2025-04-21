@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Any IPMI zone can be assigned to _CPU zone_ or _Hd Zone_, to support server motherboards having multiple IPMI zones,
 and to implement the former _Swapped zones_ feature in a more generic way.
   - `ipmi_zone=` parameter added to zone configuration
+  - Users of _Swapped zones_ feature, please adjust your configuration!
 - New command line options added to `install.sh` (`-k`, `-v`)
 - CHANGELOG.md document added
 
