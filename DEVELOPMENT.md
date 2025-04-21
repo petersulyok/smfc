@@ -19,7 +19,8 @@ Building a development environment from scratch (with Python 3.12) contains the 
       uv sync
       source .venv/bin/activate
 
-Currently, the version numbers of the dependencies are recorded with Python 3.9 and specified in `pyproject.toml` file:
+Currently, the version numbers of the dependencies are fixed at level of the lowest supported Python run-time (i.e. 3.9)
+and specified in `pyproject.toml` file:
 
       dependencies = [
           "pyudev==0.24.3"
@@ -37,6 +38,8 @@ Currently, the version numbers of the dependencies are recorded with Python 3.9 
           "ruff==0.11.5",
           "twine==6.1.0",
       ]
+
+
 
 ## Linting
 The code can be checked with `pylint` and `ruff`. `pylint` can be executed this way:
