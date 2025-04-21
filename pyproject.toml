@@ -43,7 +43,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/petersulyok/smfc"
-Changelog = "https://github.com/petersulyok/smfc/releases"
+Changelog = "https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md"
 Issues = "https://github.com/petersulyok/smfc/issues"
 
 [project.scripts]
