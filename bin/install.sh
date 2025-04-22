@@ -46,9 +46,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-echo "KEEP_CONFIG=$KEEP_CONFIG"
-echo "VERBOSE=$VERBOSE"
-
 # Must be executed with root privileges.
 if [[ $EUID -ne 0 ]]; then
   echo "$(basename $0): Error - must be executed with root privileges!"
