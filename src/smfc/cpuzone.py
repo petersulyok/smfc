@@ -54,7 +54,7 @@ class CpuZone(FanController):
 
         # Initialize FanController class.
         super().__init__(log, ipmi,
-            config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_IPMI_ZONE, fallback=Ipmi.CPU_ZONE),
+            config[CpuZone.CS_CPU_ZONE].get(CpuZone.CV_CPU_IPMI_ZONE, fallback=f'{Ipmi.CPU_ZONE}'),
             CpuZone.CS_CPU_ZONE, count,
             config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
             config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_STEPS, fallback=6),

@@ -4,10 +4,11 @@
 #   Unit tests for smfc.FanController() class.
 #
 import time
+import re
 from typing import List, Tuple
 import pytest
 import pyudev
-from mock import MagicMock
+from mock import MagicMock, call
 from pytest_mock import MockerFixture
 from smfc import FanController, Log, Ipmi, CpuZone, HdZone
 from .test_00_data import MockDevice, MockContext
@@ -16,20 +17,25 @@ class TestFanController:
     """Unit test class for smfc.FanController() class"""
 
     #pylint: disable=line-too-long
-    @pytest.mark.parametrize("ipmi_zone, name, count, temp_calc, steps, sensitivity, polling, min_temp, max_temp,"
+    @pytest.mark.parametrize("ipmi_zone, name, count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, "
                              "min_level, max_level, error", [
-        (Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 1, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 1'),
-        (Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 4, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 2'),
-        (Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 6, FanController.CALC_AVG, 6, 5, 4, 32, 52, 37, 95,  'FanController.__init__() 3'),
-        (Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90,  'FanController.__init__() 4'),
-        (Ipmi.HD_ZONE,  HdZone.CS_HD_ZONE,   1, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 5'),
-        (Ipmi.HD_ZONE, HdZone.CS_HD_ZONE,    4, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 6'),
-        (Ipmi.HD_ZONE,  HdZone.CS_HD_ZONE,   6, FanController.CALC_AVG, 6, 5, 4, 32, 52, 37, 95,  'FanController.__init__() 7'),
-        (Ipmi.HD_ZONE,  HdZone.CS_HD_ZONE,   8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90,  'FanController.__init__() 8')
+        ('0', CpuZone.CS_CPU_ZONE, 1, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 1'),
+        ('0', CpuZone.CS_CPU_ZONE, 4, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 2'),
+        ('0', CpuZone.CS_CPU_ZONE, 6, FanController.CALC_AVG, 6, 5, 4, 32, 52, 37, 95,  'FanController.__init__() 3'),
+        ('0', CpuZone.CS_CPU_ZONE, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90,  'FanController.__init__() 4'),
+        ('1', HdZone.CS_HD_ZONE,   1, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 5'),
+        ('1', HdZone.CS_HD_ZONE,   4, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 6'),
+        ('1', HdZone.CS_HD_ZONE,   6, FanController.CALC_AVG, 6, 5, 4, 32, 52, 37, 95,  'FanController.__init__() 7'),
+        ('1', HdZone.CS_HD_ZONE,   8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90,  'FanController.__init__() 8'),
+        ('0, 1',    HdZone.CS_HD_ZONE, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90,      'FanController.__init__() 9'),
+        ('0, 1, 2', HdZone.CS_HD_ZONE, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90,      'FanController.__init__() 10'),
+        (' 0 1 2',   HdZone.CS_HD_ZONE, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90,     'FanController.__init__() 11'),
+        ('  0  1  2 ', HdZone.CS_HD_ZONE, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90,   'FanController.__init__() 12'),
+        ('  0,  1,  2 ', HdZone.CS_HD_ZONE, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 'FanController.__init__() 13')
     ])
     #pylint: enable=line-too-long
-    def test_init_p1(self, mocker:MockerFixture, ipmi_zone: int, name: str, count: int, temp_calc: int, steps: int,
-                     sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
+    def test_init_p1(self, mocker:MockerFixture, ipmi_zone: str, name: str, count: int, temp_calc: int,
+                     steps: int, sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
                      max_level, error: str) -> None:
         """Positive unit test for FanController.__init__() method. It contains the following steps:
             - mock print(), FanController._get_nth_temp() functions
@@ -47,8 +53,9 @@ class TestFanController:
         my_fc = FanController(my_log, my_ipmi, ipmi_zone, name, count, temp_calc, steps, sensitivity, polling,
                               min_temp, max_temp, min_level, max_level)
         assert my_fc.log == my_log, error
-        assert my_fc.ipmi == my_ipmi, error
-        assert my_fc.ipmi_zone == ipmi_zone, error
+        assert my_fc.ipmi == my_ipmi
+        zone_str = re.sub(' +', ' ', ipmi_zone.strip())
+        assert my_fc.ipmi_zone == [int(s) for s in zone_str.split(',' if ',' in ipmi_zone else ' ')], error
         assert my_fc.name == name, error
         assert my_fc.count == count, error
         assert my_fc.temp_calc == temp_calc, error
@@ -63,32 +70,36 @@ class TestFanController:
         assert my_fc.last_temp == 0, error
         assert my_fc.last_level == 0, error
 
-    @pytest.mark.parametrize("ipmi_zone, name, count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, error", [
+    @pytest.mark.parametrize("ipmi_zone, name, count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, "
+                             "min_level, max_level, error", [
         # ipmi_zone is invalid
-        (-1,            CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 9'),
-        (101,           CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 10'),
+        ('-1',      CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 14'),
+        ('101',     CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 15'),
+        ('%, &',    CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 16'),
+        ('1; 2; 3', CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 17'),
+        ('1, %, 3', CpuZone.CS_CPU_ZONE, 1, 0, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 18'),
         # count <= 0
-        (Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, -1, 0, 5, 4, 2, 30, 50, 35, 100,  'FanController.__init__() 11'),
-        (Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 0, 0, 5, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 12'),
+        ('0',   CpuZone.CS_CPU_ZONE, -1, 0, 5, 4, 2, 30, 50, 35, 100,  'FanController.__init__() 19'),
+        ('0',   CpuZone.CS_CPU_ZONE, 0, 0, 5, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 20'),
         # temp_calc is invalid
-        (Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 1, -1, 5, 4, 2, 30, 50, 35, 100,  'FanController.__init__() 13'),
-        (Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 1, 100, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 14'),
+        ('0',   CpuZone.CS_CPU_ZONE, 1, -1, 5, 4, 2, 30, 50, 35, 100,  'FanController.__init__() 21'),
+        ('0',   CpuZone.CS_CPU_ZONE, 1, 100, 5, 4, 2, 30, 50, 35, 100, 'FanController.__init__() 22'),
         # step <= 0
-        (Ipmi.HD_ZONE,  HdZone.CS_HD_ZONE,   1, 1, -2, 4, 2, 30, 50, 35, 100,  'FanController.__init__() 15'),
-        (Ipmi.HD_ZONE,  HdZone.CS_HD_ZONE,   1, 1, 0, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 16'),
+        ('1',   HdZone.CS_HD_ZONE,   1, 1, -2, 4, 2, 30, 50, 35, 100,  'FanController.__init__() 23'),
+        ('1',   HdZone.CS_HD_ZONE,   1, 1, 0, 4, 2, 30, 50, 35, 100,   'FanController.__init__() 24'),
         # sensitivity <= 0
-        (Ipmi.HD_ZONE,  HdZone.CS_HD_ZONE,   1, 1, 5, 0, 2, 30, 50, 35, 100,   'FanController.__init__() 17'),
-        (Ipmi.HD_ZONE,  HdZone.CS_HD_ZONE,   1, 1, 5, -2, 2, 30, 50, 35, 100,  'FanController.__init__() 18'),
+        ('1',   HdZone.CS_HD_ZONE,   1, 1, 5, 0, 2, 30, 50, 35, 100,   'FanController.__init__() 25'),
+        ('1',   HdZone.CS_HD_ZONE,   1, 1, 5, -2, 2, 30, 50, 35, 100,  'FanController.__init__() 26'),
         # polling < 0
-        (Ipmi.HD_ZONE,  HdZone.CS_HD_ZONE,   1, 1, 5, 4, -2, 30, 50, 35, 100,  'FanController.__init__() 19'),
+        ('1',   HdZone.CS_HD_ZONE,   1, 1, 5, 4, -2, 30, 50, 35, 100,  'FanController.__init__() 27'),
         # max_temp < min_temp
-        (Ipmi.HD_ZONE,  HdZone.CS_HD_ZONE,   1, 1, 5, 4, 2, 50, 30, 35, 100,   'FanController.__init__() 20'),
+        ('1',   HdZone.CS_HD_ZONE,   1, 1, 5, 4, 2, 50, 30, 35, 100,   'FanController.__init__() 28'),
         # max_level < min_level
-        (Ipmi.HD_ZONE,  HdZone.CS_HD_ZONE,   1, 1, 5, 4, 2, 30, 50, 100, 35,   'FanController.__init__() 21')
+        ('1',   HdZone.CS_HD_ZONE,   1, 1, 5, 4, 2, 30, 50, 100, 35,   'FanController.__init__() 29')
     ])
-    def test_init_n1(self, mocker: MockerFixture, ipmi_zone: int, name: str, count: int, temp_calc: int, steps: int,
-                   sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
-                   max_level, error: str) -> None:
+    def test_init_n1(self, mocker: MockerFixture, ipmi_zone: str, name: str, count: int, temp_calc: int,
+                     steps: int, sensitivity: float, polling: float, min_temp: float, max_temp: float,
+                     min_level: int, max_level, error: str) -> None:
         """Negative unit test for FanController.__init__() method. It contains the following steps:
             - mock print(), FanController._get_nth_temp() functions
             - initialize a Config, Log, Ipmi, and FanController classes
@@ -180,10 +191,12 @@ class TestFanController:
         assert t == expected, error
 
     @pytest.mark.parametrize("zone, level, error", [
-        (Ipmi.CPU_ZONE, 45, 'FanController.set_fan_level() 1'),
-        (Ipmi.HD_ZONE,  65, 'FanController.set_fan_level() 2')
+        ([0],       45, 'FanController.set_fan_level() 1'),
+        ([1],       55, 'FanController.set_fan_level() 2'),
+        ([0, 1],    65, 'FanController.set_fan_level() 3'),
+        ([0, 1, 2], 75, 'FanController.set_fan_level() 4')
     ])
-    def test_set_fan_level(self, mocker: MockerFixture, zone: int, level: int, error: str):
+    def test_set_fan_level(self, mocker: MockerFixture, zone: List[int], level: int, error: str):
         """Positive unit test for FanController.set_fan_level() method. It contains the following steps:
             - mock Ipmi.set_fan_level() functions
             - initialize an empty FanController class
@@ -196,17 +209,22 @@ class TestFanController:
         mock_set_fan_level = MagicMock()
         mocker.patch('smfc.Ipmi.set_fan_level', mock_set_fan_level)
         my_fc.set_fan_level(level)
-        mock_set_fan_level.assert_called_with(my_fc.ipmi_zone, level)
-        assert mock_set_fan_level.call_count == 1, error
+        calls = []
+        for z in my_fc.ipmi_zone:
+            calls.append(call(z, level))
+        mock_set_fan_level.assert_has_calls(calls)
+        assert mock_set_fan_level.call_count == len(my_fc.ipmi_zone), error
 
-    @pytest.mark.parametrize("steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, temp, level, error", [
+    @pytest.mark.parametrize(
+        "steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, temp, level, error", [
         (5, 1, 1, 30, 50, 35, 100, None, None, 'FanController.run() 1'),
         (5, 1, 1, 40, 40, 45, 45, None, None,  'FanController.run() 2'),
         # Check level if temperature is under the minimum value.
         (5, 1, 1, 30, 50, 35, 100, 25.0, 35,   'FanController.run() 3'),
         # Check level if temperature is above the maximum value.
         (5, 1, 1, 30, 50, 35, 100, 55.0, 100,  'FanController.run() 4')
-    ])
+        ]
+    )
     def test_run(self, mocker: MockerFixture, steps: int, sensitivity: float, polling: float, min_temp: float,
                   max_temp: float, min_level: int, max_level, temp: float, level: int, error: str) -> None:
         """Primitive positive test function. It contains the following steps:
@@ -241,10 +259,10 @@ class TestFanController:
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
 
-        my_fc = FanController(my_log, my_ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, 1, FanController.CALC_AVG,
+        my_fc = FanController(my_log, my_ipmi, '0', CpuZone.CS_CPU_ZONE, 1, FanController.CALC_AVG,
                               steps, sensitivity, polling, min_temp, max_temp, min_level, max_level)
 
-        # If not temperature/level are specified we use the internal data sets.
+        # If temperature/level is not specified, we use the internal data sets.
         if temp is None:
             # Test 1 with a valid data set.
             if min_temp < max_temp:

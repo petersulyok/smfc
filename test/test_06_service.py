@@ -336,8 +336,8 @@ class TestService:
             nonlocal my_td
             self.hwmon_path = my_td.cpu_files
             count = len(my_td.cpu_files)
-            FanController.__init__(self, log, ipmi, Ipmi.CPU_ZONE, CpuZone.CS_CPU_ZONE, count, 1, 5,
-                                   5, 0, 30, 60, 35, 100)
+            FanController.__init__(self, log, ipmi, f'{Ipmi.CPU_ZONE}', CpuZone.CS_CPU_ZONE, count, 1, 5,
+                                  5, 0, 30, 60, 35, 100)
 
         def mocked_hdzone_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
             nonlocal my_td
@@ -345,8 +345,8 @@ class TestService:
             self.hwmon_path = my_td.hd_files
             count = len(my_td.hd_files)
             self.sudo=sudo
-            FanController.__init__(self, log, ipmi, Ipmi.HD_ZONE, HdZone.CS_HD_ZONE, count, 1, 5,
-                                   2, 0, 32, 46, 35, 100)
+            FanController.__init__(self, log, ipmi, f'{Ipmi.HD_ZONE}', HdZone.CS_HD_ZONE, count, 1, 5,
+                                  2, 0, 32, 46, 35, 100)
             self.smartctl_path = cmd_smart
             self.standby_guard_enabled = True
             self.standby_hd_limit = 1

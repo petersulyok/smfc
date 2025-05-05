@@ -5,6 +5,7 @@
 #
 import os
 import time
+import re
 from typing import List, Callable
 from pyudev import Context, Device
 from smfc.ipmi import Ipmi
@@ -22,7 +23,7 @@ class FanController:
     # Configuration parameters
     log: Log                # Reference to a Log class instance
     ipmi: Ipmi              # Reference to an Ipmi class instance
-    ipmi_zone: int          # IPMI zone identifier
+    ipmi_zone: List[int]    # List of IPMI zones assigned to this fan controller
     name: str               # Name of the controller
     count: int              # Number of controlled entities
     temp_calc: int          # Calculate of the temperature (0-min, 1-avg, 2-max)
@@ -45,14 +46,14 @@ class FanController:
     # Function variable for selected temperature calculation method
     get_temp_func: Callable[[], float]
 
-    def __init__(self, log: Log, ipmi: Ipmi, ipmi_zone: int, name: str, count: int, temp_calc: int,
+    def __init__(self, log: Log, ipmi: Ipmi, ipmi_zone: str, name: str, count: int, temp_calc: int,
                  steps: int, sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
                  max_level: int) -> None:
         """Initialize the FanController class. Will raise an exception in case of invalid parameters.
         Args:
             log (Log): reference to a Log class instance
             ipmi (Ipmi): reference to an Ipmi class instance
-            ipmi_zone (int): IPMI zone identifier
+            ipmi_zone (str): IPMI zone(s) assigned to the controller
             name (str): name of the controller
             count (int): number of devices
             temp_calc (int): calculation of temperature
@@ -69,9 +70,11 @@ class FanController:
         # Save and validate configuration parameters.
         self.log = log
         self.ipmi = ipmi
-        if ipmi_zone not in range(0, 101):
-            raise ValueError(f'invalid value: ipmi_zone ({ipmi_zone}).')
-        self.ipmi_zone = ipmi_zone
+        zone_str = re.sub(' +', ' ', ipmi_zone.strip())
+        self.ipmi_zone = [int(s) for s in zone_str.split(',' if ',' in ipmi_zone else ' ')]
+        for zone in self.ipmi_zone:
+            if zone not in range(0, 101):
+                raise ValueError(f'invalid value: ipmi_zone = {ipmi_zone}.')
         self.name = name
         self.count = count
         if self.count <= 0:
@@ -107,7 +110,7 @@ class FanController:
             elif self.temp_calc == self.CALC_MAX:
                 self.get_temp_func = self.get_max_temp
 
-        # Try to read device temperature (at this point hwmon_path[] list must be prepared by a child class).
+        # Try to read device temperature (the hwmon_path[] list has already been created by a child class).
         # If there is any problem with reading temperature, the program will stop here with an exception.
         self.get_temp_func()
 
@@ -211,12 +214,13 @@ class FanController:
         return maximum
 
     def set_fan_level(self, level: int) -> None:
-        """Set the new fan level in the IPMI zone of the controller.
+        """Set the new fan level in all IPMI zones of the controller.
 
         Args:
             level (int): new fan level [0..100]
         """
-        self.ipmi.set_fan_level(self.ipmi_zone, level)
+        for zone in self.ipmi_zone:
+            self.ipmi.set_fan_level(zone, level)
 
     def callback_func(self) -> None:
         """Call-back function for a child class."""

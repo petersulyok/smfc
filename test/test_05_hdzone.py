@@ -23,12 +23,12 @@ class TestHdZone:
         "count, ipmi_zone, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, sb_limit, "
         "sudo, error", [
         # Test valid parameters (hd=1 case is not tested because it turns off standby guard).
-        (1, 0, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, True,  'HdZone.__init__() 1'),
-        (2, 1, FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 2, False, 'HdZone.__init__() 2'),
-        (4, 2, FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 4, True,  'HdZone.__init__() 3'),
-        (8, 3, FanController.CALC_MAX, 4, 2, 2, 32, 48, 35, 100, 6, False, 'HdZone.__init__() 4')
+        (1, '0', FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, True,  'HdZone.__init__() 1'),
+        (2, '1', FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 2, False, 'HdZone.__init__() 2'),
+        (4, '2', FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 4, True,  'HdZone.__init__() 3'),
+        (8, '3', FanController.CALC_MAX, 4, 2, 2, 32, 48, 35, 100, 6, False, 'HdZone.__init__() 4')
     ])
-    def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: int, temp_calc: int, steps: int,
+    def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: str, temp_calc: int, steps: int,
                      sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
                      max_level: int, sb_limit: int, sudo: bool, error: str):
         """Positive unit test for HdZone.__init__() method. It contains the following steps:
@@ -51,7 +51,7 @@ class TestHdZone:
         my_config = ConfigParser()
         my_config[HdZone.CS_HD_ZONE] = {
             HdZone.CV_HD_ZONE_ENABLED: '1',
-            HdZone.CV_HD_IPMI_ZONE: str(ipmi_zone),
+            HdZone.CV_HD_IPMI_ZONE: ipmi_zone,
             HdZone.CV_HD_ZONE_TEMP_CALC: str(temp_calc),
             HdZone.CV_HD_ZONE_STEPS: str(steps),
             HdZone.CV_HD_ZONE_SENSITIVITY: str(sensitivity),
@@ -69,7 +69,7 @@ class TestHdZone:
         my_ipmi = Ipmi.__new__(Ipmi)
         my_udevc = pyudev.Context.__new__(pyudev.Context)
         my_hdzone = HdZone(my_log, my_udevc, my_ipmi, my_config, sudo)
-        assert my_hdzone.ipmi_zone == ipmi_zone, error
+        assert my_hdzone.ipmi_zone == [int(s) for s in ipmi_zone.split(',' if ',' in ipmi_zone else ' ')], error
         assert my_hdzone.name == HdZone.CS_HD_ZONE, error
         assert my_hdzone.count == count, error
         assert my_hdzone.sudo == sudo, error
@@ -96,7 +96,7 @@ class TestHdZone:
         """Positive unit test for HdZone.__init__() method. It contains the following steps:
             - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path()
             - initialize a Config, Log, Context, Ipmi, and HdZone classes
-            - ASSERT: if the HdZone class attributes different from the default configuration values
+            - ASSERT: if the HdZone class attributes are different from the default configuration values
         """
         my_td = TestData()
         count = 4
@@ -116,6 +116,10 @@ class TestHdZone:
         my_ipmi = Ipmi.__new__(Ipmi)
         my_udevc = pyudev.Context.__new__(pyudev.Context)
         my_hdzone = HdZone(my_log, my_udevc, my_ipmi, my_config, False)
+        assert my_hdzone.log == my_log, error
+        assert my_hdzone.ipmi == my_ipmi
+        assert my_hdzone.ipmi_zone == [Ipmi.HD_ZONE], error
+        assert my_hdzone.name == HdZone.CS_HD_ZONE, error
         assert my_hdzone.count == count, error
         assert my_hdzone.sudo is False
         assert my_hdzone.temp_calc == FanController.CALC_AVG, error

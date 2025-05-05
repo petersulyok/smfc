@@ -88,7 +88,7 @@ class HdZone(FanController):
 
         # Initialize FanController class.
         super().__init__(log, ipmi,
-            config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_IPMI_ZONE, fallback=Ipmi.HD_ZONE),
+            config[HdZone.CS_HD_ZONE].get(HdZone.CV_HD_IPMI_ZONE, fallback=f'{Ipmi.HD_ZONE}'),
             HdZone.CS_HD_ZONE, count,
             config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
             config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_STEPS, fallback=4),
