@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v4.0.0b6] - 2025-05-05 Pre-release 
+
+### New/Added
+- Further enhancement of _Free IPMI zone assignment_ feature: multiple IPMI zones can be assigned to a fan controller.
+It means that `ipmi_zone=` parameter could be a (comma- or space-separated) list of integers. This configuration could
+be useful for server chassis or motherboard where the fans are cooling everything and the proper heat source needs
+to be selected for all fans. For example:
+
+    ```
+    [CPU zone]
+    ...
+    ipmi_zone = 0, 1
+    ```
+    means that the CPU temperature will control the fan's rotation level in the IPMI zones 0 and 1. And
+
+    ```
+    [HD zone]
+    ...
+    ipmi_zone = 2, 3
+    ```
+    means that the HDD temperature will control the fan's rotation level in the IPMI zones 2 and 3.
+
+
 
 ## [v4.0.0b5] - 2025-04-21 Pre-release 
 

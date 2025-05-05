@@ -87,6 +87,7 @@ cd smfc
 ```
 
 # Versions
+  - **4.0.0b6** (2025.05.05): Updated to smfc 4.0.0b6 and alpine 3.21.3
   - **4.0.0b5** (2025.04.21): Updated to smfc 4.0.0b5 and alpine 3.21.3
   - **4.0.0b4** (2025.04.18): Updated to smfc 4.0.0b4 and alpine 3.21.3
   - **3.8.0** (2025.03.15): Updated to smfc 3.8.0 and alpine 3.20.6
