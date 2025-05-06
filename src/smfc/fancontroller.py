@@ -70,33 +70,37 @@ class FanController:
         # Save and validate configuration parameters.
         self.log = log
         self.ipmi = ipmi
+        # Read the list of IPMI zones from a string (trim and remove multiple spaces, convert strings to integers)
         zone_str = re.sub(' +', ' ', ipmi_zone.strip())
-        self.ipmi_zone = [int(s) for s in zone_str.split(',' if ',' in ipmi_zone else ' ')]
+        try:
+            self.ipmi_zone = [int(s) for s in zone_str.split(',' if ',' in ipmi_zone else ' ')]
+        except ValueError:
+            raise ValueError(f'integer conversion error: ipmi_zone={ipmi_zone}.')
         for zone in self.ipmi_zone:
             if zone not in range(0, 101):
-                raise ValueError(f'invalid value: ipmi_zone = {ipmi_zone}.')
+                raise ValueError(f'invalid value: ipmi_zone={ipmi_zone}.')
         self.name = name
         self.count = count
         if self.count <= 0:
-            raise ValueError('count <= 0')
+            raise ValueError('invalid value: count <= 0')
         self.temp_calc = temp_calc
         if self.temp_calc not in {self.CALC_MIN, self.CALC_AVG, self.CALC_MAX}:
             raise ValueError(f'invalid value: temp_calc ({temp_calc}).')
         self.steps = steps
         if self.steps <= 0:
-            raise ValueError('steps <= 0')
+            raise ValueError('invalid value: steps <= 0')
         self.sensitivity = sensitivity
         if self.sensitivity <= 0:
-            raise ValueError('sensitivity <= 0')
+            raise ValueError('invalid value: sensitivity <= 0')
         self.polling = polling
         if self.polling < 0:
             raise ValueError('polling < 0')
         if max_temp < min_temp:
-            raise ValueError('max_temp < min_temp')
+            raise ValueError('invalid value: max_temp < min_temp')
         self.min_temp = min_temp
         self.max_temp = max_temp
         if max_level < min_level:
-            raise ValueError('max_level < min_level')
+            raise ValueError('invalid value: max_level < min_level')
         self.min_level = min_level
         self.max_level = max_level
 
@@ -133,11 +137,8 @@ class FanController:
             self.log.msg(Log.LOG_CONFIG, f'   max_temp = {self.max_temp}')
             self.log.msg(Log.LOG_CONFIG, f'   min_level = {self.min_level}')
             self.log.msg(Log.LOG_CONFIG, f'   max_level = {self.max_level}')
-            result=[]
             if hasattr(self, 'hwmon_path'):
-                for d in self.hwmon_path:
-                    result.append(d if d else 'smartctl')
-            self.log.msg(Log.LOG_CONFIG, f'   hwmon_path = {result}')
+                self.log.msg(Log.LOG_CONFIG, f'   hwmon_path = {[p if p else 'smartctl' for p in self.hwmon_path]}')
             self.print_temp_level_mapping()
 
     @staticmethod
