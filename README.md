@@ -9,7 +9,7 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-5 release can be tested as a pre-release. Users of 'Swapped zone' feature should adjust their configuration!}}}\$
+${{\color{red}\textsf{BETA-6 release can be tested as a pre-release. New feature: Multiple IPMI zones can be assigned to a single fan controller!}}}\$
 
 See [discussion#65](https://github.com/petersulyok/smfc/discussions/65) for more details.
 
@@ -43,7 +43,7 @@ Feel free to visit [Discussions](https://github.com/petersulyok/smfc/discussions
 
 ## Details
 ### 1. How does it work?
-This service was planned for Super Micro motherboards installed in computer chassis with two independent cooling systems employing separate fans. In IPMI terms these are called:
+This service was planned for Super Micro motherboards installed in computer chassis with two independent cooling systems employing separate fans. In IPMI-terms these are called:
  - CPU zone with fans: FAN1, FAN2, ...
  - HD or peripheral zone with fans: FANA, FANB, ... 
 
@@ -85,10 +85,35 @@ To avoid/minimize the unnecessary change of fan levels the service employs the f
  3. The configuration parameter `polling=` defines the frequency of reading zone's temperature. The bigger polling time in a zone, the lower frequency of fan speed change.
 
 #### 3. Free zone assignment
-With this feature, any IPMI zone can be assigned to your zones. Typical uses-cases of this feature:
-- Optimizing fan assignment or use (you have more fan connectors in a specific IPMI zone, and you would like to use them in a different cooling area)
+This feature makes free IPMI zone assignment possible in `smfc`. It means that one or more IPMI zone can be assigned to a fan controller.
+In this example:
+```
+[CPU zone]
+...
+ipmi_zone = 0
+```
+the CPU temperature will control the fan's level in IPMI 0 zone (i.e. IPMI CPU zone). In the following example:
+```
+[CPU zone]
+...
+ipmi_zone = 1
+```
+the CPU temperature will control the fan's level in IPMI 1 zone (i.e. IPMI Peripherial zone). On the other hand, we can
+assign more zones to this fan controller:
+```
+[CPU zone]
+...
+ipmi_zone = 0, 1, 2
+```
+and the CPU temperature will control the fan's level in both IPMI 0, 1 and 2 zones. 
+
+Typical uses-cases of this feature:
+- Optimizing fan assignment/use (e.g. a specific IPMI zone with the most fan connectors on the motherboard could be used)
 - Swapping zones (swapping two IPMI zones in cooling-term)
 - Server motherboards with multiple IPMI zones (for example, [issue#20](https://github.com/petersulyok/smfc/issues/20))
+
+
+
 
 Use `ipmi_zone=` parameter to specify the IPMI zone in the zone configuration.
 
@@ -317,10 +342,10 @@ The service has the following command line options:
   		-l {0,1,2,3,4}  log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG
   		-o {0,1,2}      log output: 0-stdout, 1-stderr, 2-syslog(default)
 
-You may configure logging output and logging level here and these options can be specified in `/etc/default/smfc`in a persistent way.
+You may configure logging output and logging level here, and these options can be specified in `/etc/default/smfc`in a persistent way.
 
 ### 11. Configuration file
-Edit `/opt/smfc/smfc.conf` and specify your configuration parameters here:
+Edit `/etc/smfc/smfc.conf` and specify your configuration parameters here:
 
 ```
 #
