@@ -220,8 +220,7 @@ class FanController:
         Args:
             level (int): new fan level [0..100]
         """
-        for zone in self.ipmi_zone:
-            self.ipmi.set_fan_level(zone, level)
+        self.ipmi.set_multiple_fan_levels(self.ipmi_zone, level)
 
     def callback_func(self) -> None:
         """Call-back function for a child class."""

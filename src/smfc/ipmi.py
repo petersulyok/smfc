@@ -181,9 +181,9 @@ class Ipmi:
         time.sleep(self.fan_mode_delay)
 
     def set_fan_level(self, zone: int, level: int) -> None:
-        """Set the fan level in a specific IPMI zone. Raise an exception in case of invalid parameters.
+        """Set the fan level in the specified IPMI zone. Could raise several exceptions in case of invalid parameters.
         Args:
-            zone (int): fan zone (CPU_ZONE, HD_ZONE)
+            zone (int): IPMI zone
             level (int): fan level in % (0-100)
         Raises:
             ValueError: invalid input parameter
@@ -199,6 +199,32 @@ class Ipmi:
         # Set the new IPMI fan level in the specific zone
         try:
             self._exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x01', f'0x{zone:02x}', f'0x{level:02x}'])
+        except (FileNotFoundError, RuntimeError) as e:
+            raise e
+        # Give time for IPMI and fans to spin up/down.
+        time.sleep(self.fan_level_delay)
+
+    def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
+        """Set the fan level in multiple IPMI zones. Could raise several exceptions in case of invalid parameters.
+        Args:
+            zone_list (List[int]): List of IPMI zones
+            level (int): fan level in % (0-100)
+        Raises:
+            ValueError: invalid input parameter
+            FileNotFoundError: ipmitool command cannot be found
+            RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI system/motherboard)
+        """
+        # Validate zone parameters
+        for zone in zone_list:
+            if zone not in range(0, 101):
+                raise ValueError(f'Invalid value: zone ({zone}).')
+        # Validate level parameter (must be in the interval [0..100%])
+        if level not in range(0, 101):
+            raise ValueError(f'Invalid value: level ({level}).')
+        # Set the new IPMI fan level in the specific zone
+        try:
+            for zone in zone_list:
+                self._exec_ipmitool(['raw', '0x30', '0x70', '0x66', '0x01', f'0x{zone:02x}', f'0x{level:02x}'])
         except (FileNotFoundError, RuntimeError) as e:
             raise e
         # Give time for IPMI and fans to spin up/down.

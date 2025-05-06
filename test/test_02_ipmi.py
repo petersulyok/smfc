@@ -7,7 +7,7 @@ import subprocess
 from typing import Any, List
 from configparser import ConfigParser
 import pytest
-from mock import MagicMock
+from mock import MagicMock, call
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi
 from .test_00_data import TestData
@@ -289,12 +289,12 @@ class TestIpmi:
         assert cm.type == exception, error
 
     @pytest.mark.parametrize("zone, level, error", [
-        (Ipmi.CPU_ZONE, 0,   'Ipmi.set_fan_level() 1'),
-        (Ipmi.CPU_ZONE, 50,  'Ipmi.set_fan_level() 2'),
-        (Ipmi.CPU_ZONE, 100, 'Ipmi.set_fan_level() 3'),
-        (Ipmi.HD_ZONE, 0,    'Ipmi.set_fan_level() 4'),
-        (Ipmi.HD_ZONE, 50,   'Ipmi.set_fan_level() 5'),
-        (Ipmi.HD_ZONE, 100,  'Ipmi.set_fan_level() 6'),
+        (0, 0,        'Ipmi.set_fan_level() 1'),
+        (0, 50,       'Ipmi.set_fan_level() 2'),
+        (0, 100,      'Ipmi.set_fan_level() 3'),
+        (1, 0,        'Ipmi.set_fan_level() 4'),
+        (1, 50,       'Ipmi.set_fan_level() 5'),
+        (1, 100,      'Ipmi.set_fan_level() 6')
     ])
     def test_set_fan_level_p1(self, mocker:MockerFixture, zone: int, level: int, error: str) -> None:
         """Positive unit test function. It contains the following steps:
@@ -335,6 +335,57 @@ class TestIpmi:
         my_ipmi.sudo = False
         with pytest.raises(ValueError) as cm:
             my_ipmi.set_fan_level(zone, level)
+        assert cm.type is ValueError, error
+
+    @pytest.mark.parametrize("zones, level, error", [
+        ([0],       0,      'Ipmi.set_multiple_fan_levels() 1'),
+        ([0, 1],    50,     'Ipmi.set_multiple_fan_levels() 2'),
+        ([0, 1, 2], 100,    'Ipmi.set_multiple_fan_levels() 3')
+    ])
+    def test_set_multiple_fan_levels_p1(self, mocker:MockerFixture, zones: List[int], level: int, error: str) -> None:
+        """Positive unit test function. It contains the following steps:
+            - mock print(), subprocess.run() functions
+            - initialize a Config, Log, Ipmi classes
+            - ASSERT: if set_multiple_fan_levels() calls subprocess.run() command with other parameters than expected
+            - delete the instances
+        """
+        my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.fan_level_delay = 0
+        mock_ipmi_exec = MagicMock()
+        mocker.patch('smfc.Ipmi._exec_ipmitool', mock_ipmi_exec)
+        mock_time_sleep = MagicMock()
+        mocker.patch('time.sleep', mock_time_sleep)
+        my_ipmi.set_multiple_fan_levels(zones, level)
+        calls=[]
+        for z in zones:
+            calls.append(call(['raw', '0x30', '0x70', '0x66', '0x01', f'0x{z:02x}', f'0x{level:02x}']))
+        mock_ipmi_exec.assert_has_calls(calls)
+        assert mock_ipmi_exec.call_count == len(zones), error
+        mock_time_sleep.assert_called_with(my_ipmi.fan_level_delay)
+        assert mock_time_sleep.call_count == 1, error
+
+    @pytest.mark.parametrize("zones, level, error", [
+        ([0],       -1,     'Ipmi.set_multiple_fan_levels() 4'),
+        ([0],       101,    'Ipmi.set_multiple_fan_levels() 5'),
+        ([-1],      50,     'Ipmi.set_multiple_fan_levels() 6'),
+        ([101],     50,     'Ipmi.set_multiple_fan_levels() 7'),
+        ([0, -1],   50,     'Ipmi.set_multiple_fan_levels() 8'),
+        ([101, 0],  50,     'Ipmi.set_multiple_fan_levels() 9')
+    ])
+    def test_set_multiple_fan_levels_n1(self, mocker: MockerFixture, zones: List[int], level: int, error: str) -> None:
+        """Negative unit test for Ipmi.set_fan_level() method. It contains the following steps:
+            - mock Ipmi.exec() function
+            - create an empty Ipmi class
+            - ASSERT: if set_multiple_fan_levels() does not raise ValueError exception in case of invalid parameters
+              (other exceptions are tested elsewhere)
+        """
+        mock_ipmi_exec = MagicMock()
+        mocker.patch('smfc.Ipmi._exec_ipmitool', mock_ipmi_exec)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.fan_level_delay = 0
+        my_ipmi.sudo = False
+        with pytest.raises(ValueError) as cm:
+            my_ipmi.set_multiple_fan_levels(zones, level)
         assert cm.type is ValueError, error
 
     @pytest.mark.parametrize("zone, expected_level, error", [
@@ -427,6 +478,10 @@ class TestIpmi:
 
         with pytest.raises(Exception) as cm:
             my_ipmi.set_fan_level(Ipmi.CPU_ZONE, 50)
+        assert cm.type == exception, error
+
+        with pytest.raises(Exception) as cm:
+            my_ipmi.set_multiple_fan_levels([0], 50)
         assert cm.type == exception, error
 
         with pytest.raises(Exception) as cm:

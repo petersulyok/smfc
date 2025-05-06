@@ -190,13 +190,13 @@ class TestFanController:
             t = my_fc.get_max_temp()
         assert t == expected, error
 
-    @pytest.mark.parametrize("zone, level, error", [
+    @pytest.mark.parametrize("zones, level, error", [
         ([0],       45, 'FanController.set_fan_level() 1'),
         ([1],       55, 'FanController.set_fan_level() 2'),
         ([0, 1],    65, 'FanController.set_fan_level() 3'),
         ([0, 1, 2], 75, 'FanController.set_fan_level() 4')
     ])
-    def test_set_fan_level(self, mocker: MockerFixture, zone: List[int], level: int, error: str):
+    def test_set_fan_level(self, mocker: MockerFixture, zones: List[int], level: int, error: str):
         """Positive unit test for FanController.set_fan_level() method. It contains the following steps:
             - mock Ipmi.set_fan_level() functions
             - initialize an empty FanController class
@@ -204,16 +204,16 @@ class TestFanController:
         """
         my_ipmi = Ipmi.__new__(Ipmi)
         my_fc = FanController.__new__(FanController)
-        my_fc.ipmi_zone = zone
+        my_fc.ipmi_zone = zones
         my_fc.ipmi = my_ipmi
-        mock_set_fan_level = MagicMock()
-        mocker.patch('smfc.Ipmi.set_fan_level', mock_set_fan_level)
+        mock_set_multiple_fan_levels = MagicMock()
+        mocker.patch('smfc.Ipmi.set_multiple_fan_levels', mock_set_multiple_fan_levels)
         my_fc.set_fan_level(level)
         calls = []
         for z in my_fc.ipmi_zone:
             calls.append(call(z, level))
-        mock_set_fan_level.assert_has_calls(calls)
-        assert mock_set_fan_level.call_count == len(my_fc.ipmi_zone), error
+        mock_set_multiple_fan_levels.assert_called_with(zones, level)
+        assert mock_set_multiple_fan_levels.call_count == 1, error
 
     @pytest.mark.parametrize(
         "steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, temp, level, error", [
