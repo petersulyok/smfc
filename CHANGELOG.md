@@ -5,10 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v4.0.0b6] - 2025-05-05 Pre-release 
+## [v4.0.0b6] - 2025-05-06 Pre-release 
 
 ### New/Added
-- Further enhancement of the _Free IPMI zone assignment_ feature: multiple IPMI zones can be assigned to a fan controller.
+- Further enhancement of **_Free zone assignment_** feature: multiple IPMI zones can be assigned to a fan controller.
 It means that `ipmi_zone=` parameter could be a (comma- or space-separated) list of integers. This configuration could
 be useful for server chassis or motherboard where the fans are cooling everything and the proper heat source needs
 to be selected for all fans. For example:
@@ -18,18 +18,21 @@ to be selected for all fans. For example:
     ...
     ipmi_zone = 0, 1
     ```
-    means that the CPU temperature will control the fan's rotation level in the IPMI zones 0 and 1. And
+    in this configuration, the CPU temperature will control the fans in the IPMI zones 0 and 1, while here:
 
     ```
     [HD zone]
     ...
     ipmi_zone = 2, 3
     ```
-    means that the HDD temperature will control the fan's rotation level in the IPMI zones 2 and 3.
+    the HDD temperature will control the fans in the IPMI zones 2 and 3.
+
 - IPMI zone information added to the new fan level log message, for example:
 
-  `smfc.service[1645]: CPU zone: new fan level > 35%/28.0C @ IPMI [0, 1] zone(s).`
+    `smfc.service[1645]: CPU zone: new fan level > 35%/28.0C @ IPMI [0, 1] zone(s).`
 
+- Python package on `pypi.org` updated to v4.0.0b6
+- Docker image updated to v4.0.0.b6
 
 
 ## [v4.0.0b5] - 2025-04-21 Pre-release 
