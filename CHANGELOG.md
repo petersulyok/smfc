@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v4.0.0b6] - 2025-05-05 Pre-release 
 
 ### New/Added
-- Further enhancement of _Free IPMI zone assignment_ feature: multiple IPMI zones can be assigned to a fan controller.
+- Further enhancement of the _Free IPMI zone assignment_ feature: multiple IPMI zones can be assigned to a fan controller.
 It means that `ipmi_zone=` parameter could be a (comma- or space-separated) list of integers. This configuration could
 be useful for server chassis or motherboard where the fans are cooling everything and the proper heat source needs
 to be selected for all fans. For example:
@@ -26,6 +26,9 @@ to be selected for all fans. For example:
     ipmi_zone = 2, 3
     ```
     means that the HDD temperature will control the fan's rotation level in the IPMI zones 2 and 3.
+- IPMI zone information added to the new fan level log message, for example:
+
+  `smfc.service[1645]: CPU zone: new fan level > 35%/28.0C @ IPMI [0, 1] zone(s).`
 
 
 
