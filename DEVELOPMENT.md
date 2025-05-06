@@ -182,8 +182,10 @@ The project implemented the following GitHub workflows:
 # Release process
 Follow these steps to create a new release:
 
-* Commit all changes
+
 * Change the version number in `pyproject.toml`
+* Run `uv sync` for updating version number in `uv.lock` file
+* Commit all changes
 * Run unit tests with `pytest`, and correct all errors
 * Run linters `pylint` and `ruff`, and correct all warnings
 * Update CHANGELOG.md with the new release information
