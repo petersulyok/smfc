@@ -74,8 +74,8 @@ class FanController:
         zone_str = re.sub(' +', ' ', ipmi_zone.strip())
         try:
             self.ipmi_zone = [int(s) for s in zone_str.split(',' if ',' in ipmi_zone else ' ')]
-        except ValueError:
-            raise ValueError(f'integer conversion error: ipmi_zone={ipmi_zone}.')
+        except ValueError as e:
+            raise e
         for zone in self.ipmi_zone:
             if zone not in range(0, 101):
                 raise ValueError(f'invalid value: ipmi_zone={ipmi_zone}.')
@@ -246,7 +246,7 @@ class FanController:
         if (current_time - self.last_time) >= self.polling:
             self.last_time = current_time
 
-            # Step 2: read temperature and sensitivity gap.
+            # Step 2: read the temperature and check the sensitivity gap.
             self.callback_func()
             current_temp = self.get_temp_func()
             self.log.msg(Log.LOG_DEBUG, f'{self.name}: new temperature > {current_temp:.1f}C')
@@ -266,7 +266,8 @@ class FanController:
                 if current_level != self.last_level:
                     self.last_level = current_level
                     self.set_fan_level(current_level)
-                    self.log.msg(Log.LOG_INFO, f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C @ IPMI {self.ipmi_zone} zone(s).')
+                    self.log.msg(Log.LOG_INFO, f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C'
+                                 f' @ IPMI {self.ipmi_zone} zone(s).')
 
     def print_temp_level_mapping(self) -> None:
         """Print out the user-defined temperature to level mapping value in log DEBUG level."""
