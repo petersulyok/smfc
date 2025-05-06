@@ -85,37 +85,38 @@ To avoid/minimize the unnecessary change of fan levels the service employs the f
  3. The configuration parameter `polling=` defines the frequency of reading zone's temperature. The bigger polling time in a zone, the lower frequency of fan speed change.
 
 #### 3. Free zone assignment
-This feature makes free IPMI zone assignment possible in `smfc`. It means that one or more IPMI zone can be assigned to a fan controller.
-In this example:
+This feature makes free IPMI zone assignment possible in `smfc`. In more details, `smfc` implemented several fan controllers:
+- CPU
+- HD
+- GPU (not yet implemented)
+
+- where the heat source is pre-defined, but you can assign one or more IPMI zones to them. This way, a heat source
+(like CPU temperature) can control the fan levels:
+1. in any user specified IPMI zone
+2. multiple IPMI zones at the same time
+
+Use `ipmi_zone=` parameter to specify the required IPMI zone(s) for the selected fan controller.
+
+Here are some sample configurations for the better understanding. In the first example:
 ```
 [CPU zone]
 ...
 ipmi_zone = 0
 ```
-the CPU temperature will control the fan's level in IPMI 0 zone (i.e. IPMI CPU zone). In the following example:
+CPU temperature will control the fan's level in IPMI 0 zone (i.e. IPMI CPU zone). In the second example:
 ```
-[CPU zone]
-...
-ipmi_zone = 1
-```
-the CPU temperature will control the fan's level in IPMI 1 zone (i.e. IPMI Peripherial zone). On the other hand, we can
-assign more zones to this fan controller:
-```
-[CPU zone]
+[HD zone]
 ...
 ipmi_zone = 0, 1, 2
 ```
-and the CPU temperature will control the fan's level in both IPMI 0, 1 and 2 zones. 
+HD temperature will control the fan's level in the IPMI 0, 1, 2 zones.
 
 Typical uses-cases of this feature:
-- Optimizing fan assignment/use (e.g. a specific IPMI zone with the most fan connectors on the motherboard could be used)
+- Optimizing fan assignment/use (i.e. a specific IPMI zone with the most fan connectors on the motherboard could be used)
 - Swapping zones (swapping two IPMI zones in cooling-term)
 - Server motherboards with multiple IPMI zones (for example, [issue#20](https://github.com/petersulyok/smfc/issues/20))
 
 
-
-
-Use `ipmi_zone=` parameter to specify the IPMI zone in the zone configuration.
 
 (Note: till version `v3.8.0`, `smfc` had _Swapped zones_ feature, but this new feature is a more generic successor of that one)
 
