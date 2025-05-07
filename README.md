@@ -9,9 +9,9 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-6 release can be tested as a pre-release. New feature: Multiple IPMI zones can be assigned to a single fan controller!}}}\$
+${{\color{red}\textsf{BETA-6 release is available as a pre-release. New feature: Multiple IPMI zones can be assigned to a single fan controller!}}}\$
 
-See [discussion#65](https://github.com/petersulyok/smfc/discussions/65) for more details.
+See [discussion#66](https://github.com/petersulyok/smfc/discussions/66) for more details.
 
 ## TL;DR
 
