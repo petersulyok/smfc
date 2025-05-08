@@ -90,7 +90,7 @@ This feature makes free IPMI zone assignment possible in `smfc`. In more details
 - HD
 - GPU (not yet implemented)
 
-- where the heat source is pre-defined, but you can assign one or more IPMI zones to them. This way, a heat source
+where the heat source is pre-defined, but you can assign one or more IPMI zones to them. This way, a heat source
 (like CPU temperature) can control the fan levels:
 1. in any user specified IPMI zone
 2. multiple IPMI zones at the same time
