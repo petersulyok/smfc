@@ -191,8 +191,21 @@ if [[ $1 = "-s" && $2 = "standby,now" ]] ; then
     exit 0  
 fi
 
-exit 0"""
+exit 0
+"""
         )
+
+    def create_nvidia_smi_command(self, count: int, temp_list: List[float] = None) -> str:
+        """Creates a shell script emulating `nvidia-smi`."""
+        file_content = 'cat << EOF\n'
+        for i in range(0, count):
+            if temp_list:
+                v = temp_list[i]
+            else:
+                v = random.uniform(35.0, 75.0)
+            file_content += f'{v:.0f}' + '\n'
+        file_content += 'EOF\n'
+        return self.create_command_file(file_content)
 
     def create_text_file(self, content: str) -> str:
         """Creates a text file with the specified content."""
