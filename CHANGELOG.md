@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v4.0.0b7] - 2025-05-18 Pre-release 
+
+### New/Added
+- Supporting of the GPU controller implemented for Nvidia video cards. A new section added to the configuration file.
+- Python package on `pypi.org` updated to v4.0.0b7
+- Docker image IS NOT updated!
+
+
 ## [v4.0.0b6] - 2025-05-06 Pre-release 
 
 ### New/Added

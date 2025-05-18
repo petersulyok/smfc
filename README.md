@@ -9,9 +9,9 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-6 pre-release. New feature: Multiple IPMI zones can be assigned to a single fan controller!}}}\$
+${{\color{red}\textsf{BETA-7 pre-release. New feature: GPU zone controller implemented for Nvidia cards!}}}\$
 
-See [discussion#66](https://github.com/petersulyok/smfc/discussions/66) for more details.
+See [discussion#67](https://github.com/petersulyok/smfc/discussions/67) for more details.
 
 ## TL;DR
 
@@ -28,7 +28,9 @@ You can also run `smfc` in docker, see more details in [Docker.md](docker/Docker
    - `drivetemp` kernel module (kernel version 5.6+ required) modules for SATA HDDs/SSDs
  - `ipmitool`
  - optional: `smartmontools` for SAS/SCSI disks and *standby guard* feature
- 
+ - optional: `nvidia-smi` for GPU fan controller 
+
+
 ### 2. Installation and configuration
  1. Set up the IPMI threshold values for your fans (see [this chapter](https://github.com/petersulyok/smfc?tab=readme-ov-file#7-ipmi-fan-control-and-sensor-thresholds) for details). 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
@@ -88,7 +90,7 @@ To avoid/minimize the unnecessary change of fan levels the service employs the f
 This feature makes free IPMI zone assignment possible in `smfc`. In more details, `smfc` implemented several fan controllers:
 - CPU
 - HD
-- GPU (not yet implemented)
+- GPU
 
 where the heat source is pre-defined, but you can assign one or more IPMI zones to them. This way, a heat source
 (like CPU temperature) can control the fan levels:
