@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   test_06_service.py (C) 2021-2025, Peter Sulyok
+#   test_07_service.py (C) 2021-2025, Peter Sulyok
 #   Unit tests for smfc.Service() class.
 #
 from argparse import Namespace
