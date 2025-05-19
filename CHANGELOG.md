@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v4.0.0b8] - 2025-05-19 Pre-release 
+
+### Fixed
+- GPU fan controller feature fixed (missing commit added).
+- Python package on `pypi.org` updated to v4.0.0b8
+- Docker image IS NOT updated!
+
+
 ## [v4.0.0b7] - 2025-05-18 Pre-release 
 
 ### New/Added
