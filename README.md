@@ -9,9 +9,9 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-7 pre-release. New feature: GPU zone controller implemented for Nvidia cards!}}}\$
+${{\color{red}\textsf{BETA-8 pre-release. New feature: GPU zone controller feature fixed!}}}\$
 
-See [discussion#67](https://github.com/petersulyok/smfc/discussions/67) for more details.
+See [discussion#68](https://github.com/petersulyok/smfc/discussions/68) for more details.
 
 ## TL;DR
 
