@@ -11,6 +11,7 @@ from importlib.metadata import version
 from configparser import ConfigParser
 from argparse import ArgumentParser, Namespace
 from pyudev import Context
+from smfc.gpuzone import GpuZone
 from smfc.cpuzone import CpuZone
 from smfc.hdzone import HdZone
 from smfc.ipmi import Ipmi
@@ -28,9 +29,10 @@ class Service:
     ipmi: Ipmi              # Instance for an Ipmi class
     cpu_zone: CpuZone       # Instance for a CPU Zone fan controller class
     hd_zone: HdZone         # Instance for an HD Zone fan controller class
+    gpu_zone: GpuZone       # Instance for an GPU Zone fan controller class
     cpu_zone_enabled: bool  # CPU zone fan controller enabled
     hd_zone_enabled: bool   # HD zone fan controller enabled
-
+    gpu_zone_enabled: bool  # GPU zone fan controller enabled
 
     def exit_func(self) -> None:
         """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
@@ -163,6 +165,7 @@ class Service:
             sys.exit(6)
         self.cpu_zone_enabled = self.config[CpuZone.CS_CPU_ZONE].getboolean(CpuZone.CV_CPU_ZONE_ENABLED, fallback=False)
         self.hd_zone_enabled = self.config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_ENABLED, fallback=False)
+        self.gpu_zone_enabled = self.config[GpuZone.CS_GPU_ZONE].getboolean(GpuZone.CV_GPU_ZONE_ENABLED, fallback=False)
         self.log.msg(Log.LOG_DEBUG, f'Configuration file ({parsed_results.config_file}) loaded')
 
         # Check run-time dependencies (commands, kernel modules) if `-nd` command line option is not specified.
@@ -207,16 +210,27 @@ class Service:
             self.log.msg(Log.LOG_DEBUG, 'HD zone fan controller enabled')
             self.hd_zone = HdZone(self.log, self.udevc, self.ipmi, self.config, self.sudo)
 
+        # Create an instance for GPU zone fan controller if enabled.
+        if self.gpu_zone_enabled:
+            self.log.msg(Log.LOG_DEBUG, 'GPU zone fan controller enabled')
+            self.gpu_zone = GpuZone(self.log, self.ipmi, self.config)
+
         # Calculate the default sleep time for the main loop.
-        if self.cpu_zone_enabled and self.hd_zone_enabled:
-            wait = min(self.cpu_zone.polling, self.hd_zone.polling) / 2
-        elif self.cpu_zone_enabled and not self.hd_zone_enabled:
-            wait = self.cpu_zone.polling / 2
-        elif not self.cpu_zone_enabled and self.hd_zone_enabled:
-            wait = self.hd_zone.polling / 2
-        else:  # elif not cpu_zone_enabled and not hd_controller_enabled:
+        polling_set = set()
+        if self.cpu_zone_enabled:
+            polling_set.add(self.cpu_zone.polling)
+        if self.hd_zone_enabled:
+            polling_set.add(self.hd_zone.polling)
+        if self.gpu_zone_enabled:
+            polling_set.add(self.gpu_zone.polling)
+
+        # If none of the fan controller zones is enabled.
+        if len(polling_set) == 0:
             self.log.msg(Log.LOG_ERROR, 'None of the zones are enabled, service terminated.')
             sys.exit(10)
+
+        # Calculate the wait time in the main loop.
+        wait = min(polling_set) / 2
         self.log.msg(Log.LOG_DEBUG, f'Main loop sleep time = {wait} sec')
 
         # Main execution loop.
@@ -225,6 +239,9 @@ class Service:
                 self.cpu_zone.run()
             if self.hd_zone_enabled:
                 self.hd_zone.run()
+            if self.gpu_zone_enabled:
+                self.gpu_zone.run()
             time.sleep(wait)
+
 
 # End.

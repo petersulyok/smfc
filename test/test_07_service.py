@@ -11,7 +11,7 @@ import pytest
 from pyudev import Context
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, CpuZone, HdZone, Service, FanController
+from smfc import Log, Ipmi, CpuZone, HdZone, GpuZone, Service, FanController
 from .test_00_data import TestData, MockedContextError, MockedContextGood
 
 class TestService:
@@ -47,18 +47,18 @@ class TestService:
             if log:
                 assert mock_log_msg.call_count == 1, error
 
-    @pytest.mark.parametrize("module_list, cpuzone, hdzone, standby, error", [
-        ("something\ncoretemp\n",           True,  False, False, "Service.check_dependencies() 1"),
-        ("something\nk10temp\n",            True,  False, False, "Service.check_dependencies() 2"),
-        ("coretemp\nsomething\nk10temp\n",  True,  False, False, "Service.check_dependencies() 3"),
-        ("something\ndrivetemp\n",          False, True,  False, "Service.check_dependencies() 4"),
-        ("something\ndrivetemp\n",          False, True,  True,  "Service.check_dependencies() 5"),
-        ("something\n",                     False, True,  False, "Service.check_dependencies() 6"),
-        ("something\ndrivetemp\nx",         False, True,  True,  "Service.check_dependencies() 7"),
-        ("coretemp\ndrivetemp\n",           True,  True,  True,  "Service.check_dependencies() 8")
+    @pytest.mark.parametrize("module_list, cpuzone, hdzone, gpuzone, standby, error", [
+        ("something\ncoretemp\n",           True,  False, False, False, "Service.check_dependencies() 1"),
+        ("something\nk10temp\n",            True,  False, True,  False, "Service.check_dependencies() 2"),
+        ("coretemp\nsomething\nk10temp\n",  True,  False, False, False, "Service.check_dependencies() 3"),
+        ("something\ndrivetemp\n",          False, True,  True,  False, "Service.check_dependencies() 4"),
+        ("something\ndrivetemp\n",          False, True,  False, True,  "Service.check_dependencies() 5"),
+        ("something\n",                     False, True,  False, False, "Service.check_dependencies() 6"),
+        ("something\ndrivetemp\nx",         False, True,  True,  True,  "Service.check_dependencies() 7"),
+        ("coretemp\ndrivetemp\n",           True,  True,  False, True,  "Service.check_dependencies() 8")
     ])
     def test_check_dependencies_p(self, mocker: MockerFixture, module_list: str, cpuzone: bool, hdzone: bool,
-                                  standby: bool, error: str):
+                                  gpuzone: bool, standby: bool, error: str):
         """Positive unit test for Service.check_dependencies() method. It contains the following steps:
             - mock print(), argparse.ArgumentParser._print_message() and builtins.open() functions
             - execute Service.check_dependencies()
@@ -90,6 +90,11 @@ class TestService:
         service.hd_zone_enabled = hdzone
         service.config[HdZone.CS_HD_ZONE] = {}
         service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_ENABLED] = '1' if hdzone else '0'
+
+        service.gpu_zone_enabled = gpuzone
+        service.config[GpuZone.CS_GPU_ZONE] = {}
+        service.config[GpuZone.CS_GPU_ZONE][GpuZone.CV_GPU_ZONE_ENABLED] = '1' if gpuzone else '0'
+
         smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
         if hdzone:
             service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED] = '1' if standby else '0'
@@ -98,11 +103,8 @@ class TestService:
         mocker.patch('builtins.open', original_open)
         del my_td
 
-    @pytest.mark.parametrize("module_list, cpuzone, hdzone, standby, error", [
-        ("coretemp\ndrivetemp\n", True, True, True, "Service.check_dependencies() 9")
-    ])
-    def test_check_dependecies_n(self, mocker:MockerFixture, module_list: str, cpuzone: bool, hdzone: bool,
-                                 standby: bool, error: str):
+    @pytest.mark.parametrize("error", ["Service.check_dependencies() 9"])
+    def test_check_dependecies_n(self, mocker:MockerFixture, error: str):
         """Negative unit test fot Service.check_dependencies() method. It contains the following steps:
             - mock print() and builtins.open() functions
             - execute Service.check_dependencies()
@@ -115,7 +117,7 @@ class TestService:
 
         my_td = TestData()
         ipmi_command = my_td.create_ipmi_command()
-        modules = my_td.create_text_file(module_list)
+        modules = my_td.create_text_file("coretemp\ndrivetemp\n")
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
         mock_open = MagicMock(side_effect=mocked_open)
@@ -125,16 +127,18 @@ class TestService:
         service.config = ConfigParser()
         service.config[Ipmi.CS_IPMI] = {}
         service.config[Ipmi.CS_IPMI][Ipmi.CV_IPMI_COMMAND] = ipmi_command
-        service.cpu_zone_enabled = cpuzone
+        service.cpu_zone_enabled = True
         service.config[CpuZone.CS_CPU_ZONE] = {}
-        service.config[CpuZone.CS_CPU_ZONE][CpuZone.CV_CPU_ZONE_ENABLED] = '1' if cpuzone else '0'
-        service.hd_zone_enabled = hdzone
+        service.config[CpuZone.CS_CPU_ZONE][CpuZone.CV_CPU_ZONE_ENABLED] = '1'
+        service.hd_zone_enabled = True
         service.config[HdZone.CS_HD_ZONE] = {}
-        service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_ENABLED] = '1' if hdzone else '0'
+        service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_ENABLED] = '1'
+        service.gpu_zone_enabled = True
+        service.config[GpuZone.CS_GPU_ZONE] = {}
+        service.config[GpuZone.CS_GPU_ZONE][GpuZone.CV_GPU_ZONE_ENABLED] = '1'
         smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
-        if hdzone:
-            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED] = '1' if standby else '0'
-            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_SMARTCTL_PATH] = smartctl_cmd
+        service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED] = '1'
+        service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_SMARTCTL_PATH] = smartctl_cmd
 
         # Check if `smartctl` command is not available.
         my_td.delete_file(smartctl_cmd)
@@ -185,13 +189,13 @@ class TestService:
 
     @pytest.mark.parametrize("level, output, exit_code, error", [
         (10, 0, 5, 'Service.run() 9'),
-        (0, 9, 5, 'Service.run() 10')
+        (0,  9, 5, 'Service.run() 10')
     ])
     def test_run_5n(self, mocker:MockerFixture, level: int, output: int, exit_code: int, error: str):
         """Negative unit test for Service.run() method. It contains the following steps:
             - mock print(), argparse.ArgumentParser.parse_args() functions
             - execute Service.run()
-            - ASSERT: if sys.exit() did not return the code 5 (log initialization error)
+            - ASSERT: if sys.exit() did not return code 5 (log initialization error)
         """
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
@@ -219,6 +223,9 @@ class TestService:
         }
         my_config[HdZone.CS_HD_ZONE] = {
             HdZone.CV_HD_ZONE_ENABLED: '0'
+        }
+        my_config[GpuZone.CS_GPU_ZONE] = {
+            GpuZone.CV_GPU_ZONE_ENABLED: '0'
         }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
@@ -268,6 +275,9 @@ class TestService:
         my_config[HdZone.CS_HD_ZONE] = {
             HdZone.CV_HD_ZONE_ENABLED: '0'
         }
+        my_config[GpuZone.CS_GPU_ZONE] = {
+            GpuZone.CV_GPU_ZONE_ENABLED: '0'
+        }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
@@ -302,6 +312,9 @@ class TestService:
         my_config[HdZone.CS_HD_ZONE] = {
             HdZone.CV_HD_ZONE_ENABLED: '0'
         }
+        my_config[GpuZone.CS_GPU_ZONE] = {
+            GpuZone.CV_GPU_ZONE_ENABLED: '0'
+        }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
@@ -313,12 +326,12 @@ class TestService:
         assert cm.value.code == exit_code, error
         del my_td
 
-    @pytest.mark.parametrize("cpuzone, hdzone, exit_code, error", [
-        (1, 0, 100, 'Service.run() 18'),
-        (0, 1, 100, 'Service.run() 19'),
-        (1, 1, 100, 'Service.run() 20')
+    @pytest.mark.parametrize("cpuzone, hdzone, gpuzone, exit_code, error", [
+        (1, 0, 1, 100, 'Service.run() 18'),
+        (0, 1, 0, 100, 'Service.run() 19'),
+        (1, 0, 1, 100, 'Service.run() 20')
     ])
-    def test_run_100p(self, mocker:MockerFixture, cpuzone: int, hdzone: int, exit_code: int, error: str):
+    def test_run_100p(self, mocker:MockerFixture, cpuzone: int, hdzone: int, gpuzone: int, exit_code: int, error: str):
         """Positive unit test for Service.run() method. It contains the following steps:
             - mock print(), time.sleep() functions
             - execute smfc.run()
@@ -341,6 +354,7 @@ class TestService:
 
         def mocked_hdzone_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
             nonlocal my_td
+            nonlocal cmd_smart
             self.hd_device_names = my_td.hd_name_list
             self.hwmon_path = my_td.hd_files
             count = len(my_td.hd_files)
@@ -353,6 +367,16 @@ class TestService:
             self.standby_array_states = [False] * self.count
             self.standby_flag = False
             self.standby_change_timestamp = time.monotonic()
+
+        def mocked_gpuzone_init(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
+            nonlocal my_td
+            nonlocal cmd_nvidia
+            self.gpu_device_ids = [0]
+            count = 1
+            self.nvidia_smi_path = cmd_nvidia
+            self.nvidia_smi_called = 0
+            FanController.__init__(self, log, ipmi, '2', GpuZone.CS_GPU_ZONE, count, 1, 5,
+                                  2, 0, 45, 70, 35, 100)
         # pragma pylint: enable=unused-argument
 
         my_td = TestData()
@@ -360,6 +384,7 @@ class TestService:
         cmd_ipmi = my_td.create_command_file('echo "0"')
         cmd_smart = my_td.create_smart_command()
         #                     create_command_file('echo "ACTIVE"'))
+        cmd_nvidia = my_td.create_nvidia_smi_command(1)
         my_td.create_cpu_data(1)
         my_td.create_hd_data(8)
         my_config = ConfigParser()
@@ -394,6 +419,20 @@ class TestService:
             HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED: '1',
             HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT: '2'
         }
+        my_config[GpuZone.CS_GPU_ZONE] = {
+            GpuZone.CV_GPU_ZONE_ENABLED: str(gpuzone),
+            GpuZone.CV_GPU_IPMI_ZONE: '2',
+            GpuZone.CV_GPU_ZONE_TEMP_CALC: '1',
+            GpuZone.CV_GPU_ZONE_STEPS: '4',
+            GpuZone.CV_GPU_ZONE_SENSITIVITY: '2',
+            GpuZone.CV_GPU_ZONE_POLLING: '0',
+            GpuZone.CV_GPU_ZONE_MIN_TEMP: '45',
+            GpuZone.CV_GPU_ZONE_MAX_TEMP: '70',
+            GpuZone.CV_GPU_ZONE_MIN_LEVEL: '35',
+            GpuZone.CV_GPU_ZONE_MAX_LEVEL: '100',
+            GpuZone.CV_GPU_ZONE_GPU_IDS: '0',
+            GpuZone.CV_GPU_ZONE_NVIDIA_SMI_PATH: cmd_nvidia,
+        }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
@@ -403,6 +442,7 @@ class TestService:
         mocker.patch('pyudev.Context.__init__', MockedContextGood.__init__)
         mocker.patch('smfc.CpuZone.__init__', mocked_cpuzone_init)
         mocker.patch('smfc.HdZone.__init__', mocked_hdzone_init)
+        mocker.patch('smfc.GpuZone.__init__', mocked_gpuzone_init)
         self.sleep_counter = 0
         sys.argv = ('smfc.py -o 0 -l 4 -ne -nd -c ' + conf_file).split()
         service = Service()
