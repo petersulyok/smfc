@@ -73,17 +73,17 @@ Several smoke tests have been provided for `smfc` where the service is executed 
 
 * the following smoke scripts and configurations can be executed:  
    
-   | Test script              | CPU configuration                | HD configuration                    | Standby guard |
-   |---------------------------|----------------------------------|-------------------------------------|---------------|
-   | `run_test_cpu_1.sh`       | 1 x CPU                          | 1 x HD                              | enabled       |
-   | `run_test_cpu_2.sh`       | 2 x CPUs                         | disabled                            | disabled      |
-   | `run_test_cpu_4.sh`       | 4 x CPUs                         | 4 x HDs                             | enabled       |
-   | `run_test_hd_1.sh`        | disabled                         | 1 x HD                              | enabled       |
-   | `run_test_hd_2.sh`        | 1 x CPU                          | 2 x HDs                             | disabled      |
-   | `run_test_hd_4.sh`        | 2 x CPUs                         | 4 x HDs                             | disabled      |
-   | `run_test_hd_8.sh`        | 4 x CPUs                         | 8 x HDs                             | enabled       |
-   | `run_test_const_level.sh` | 1 x CPU (60% constant fan level) | 4 x HDs (55% constant fan level)    | enabled       |
-
+   | Test script               | CPU configuration | HD configuration | GPU configuration | Standby guard |
+   |---------------------------|-------------------|------------------|-------------------|---------------|
+   | `run_test_cpu_1.sh`       | 1 x CPU           | 1 x HD           | disabled          | enabled       |
+   | `run_test_cpu_2.sh`       | 2 x CPUs          | disabled         | 1 GPU             | disabled      |
+   | `run_test_cpu_4.sh`       | 4 x CPUs          | 4 x HDs          | 4 GPUs            | enabled       |
+   | `run_test_hd_1.sh`        | disabled          | 1 x HD           | disabled          | enabled       |
+   | `run_test_hd_2.sh`        | 1 x CPU           | 2 x HDs          | disabled          | disabled      |
+   | `run_test_hd_4.sh`        | disabled          | 4 x HDs          | 2 GPUs            | disabled      |
+   | `run_test_hd_8.sh`        | 4 x CPUs          | 8 x HDs          | disabled          | enabled       |
+   | `run_test_const_level.sh` | 1 x CPU (60%)     | 4 x HDs (55%)    | disabled          | enabled       |
+   | `run_test_gpu_8.sh`       | 1 x CPU           | disabled         | 8 GPUs            | disabled      |
 
 ## Unit tests  
 The whole project (all source code) is completely unit tested. The unit tests are executed with `pytest`:

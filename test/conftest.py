@@ -6,8 +6,9 @@
 
 def pytest_addoption(parser):
     """Additional command-line parameters for pytest."""
-    parser.addoption("--hd-num", action="store")
     parser.addoption("--cpu-num", action="store")
+    parser.addoption("--hd-num", action="store")
+    parser.addoption("--gpu-num", action="store")
     parser.addoption("--conf-file", action="store")
 
 # End.
