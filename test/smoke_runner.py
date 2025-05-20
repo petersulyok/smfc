@@ -13,6 +13,7 @@ from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, CpuZone, HdZone, GpuZone, Service, FanController
 from .test_00_data import TestData, MockedContextGood
 
+# In case of adding a new command line parameter, see `conftest.py` as well.
 
 @fixture()
 def cpu_num(request) -> int:
