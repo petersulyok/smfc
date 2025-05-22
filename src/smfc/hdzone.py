@@ -86,6 +86,9 @@ class HdZone(FanController):
             # Add the hwmon path string for NVME/SATA/HDD disks or '' for SAS/SCSI disks.
             self.hwmon_path.append(self.get_hwmon_path(udevc, block_dev.parent))
 
+        # Save path for `smartctl` command.
+        self.smartctl_path = config[HdZone.CS_HD_ZONE].get(HdZone.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
+
         # Initialize FanController class.
         super().__init__(log, ipmi,
             config[HdZone.CS_HD_ZONE].get(HdZone.CV_HD_IPMI_ZONE, fallback=f'{Ipmi.HD_ZONE}'),
@@ -99,9 +102,6 @@ class HdZone(FanController):
             config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_MIN_LEVEL, fallback=35),
             config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_MAX_LEVEL, fallback=100)
         )
-
-        # Save path for `smartctl` command.
-        self.smartctl_path = config[HdZone.CS_HD_ZONE].get(HdZone.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
 
         # Read and validate the configuration of standby guard if enabled.
         self.standby_guard_enabled = config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED,
