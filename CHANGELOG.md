@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v4.0.0b10] - 2025-05-23 Pre-release 
+
+### New
+- A new fan controller, called CONST zone, implemented to provide constant fan level in one or more IPMI zones. It does not have any temperature source
+and does not read any temperature. The zone configuration is the following:
+
+```
+# Const zone: this fan controller does not read any temperature and sets constant fan level for IPMI zones(s).
+[CONST zone]
+# Fan controller enabled (bool, default=0)
+enabled=0
+# IPMI zone(s) (comma- or space-separated list of int, default=1))
+ipmi_zone=1
+# Polling interval for checking level and restting if needed (int, sec, default=30)
+polling=30
+# Constant fan level (int, %, default=50)
+level=50
+```
+
+- Unit tests and smoketest updated
+- Python package on `pypi.org` updated to v4.0.0b10
+- Docker image IS NOT updated!
+
+
+## [v4.0.0b9] - 2025-05-22 Pre-release 
+
+### Fixed
+- HdZone init fixed.
+- Python package on `pypi.org` updated to v4.0.0b9
+- Docker image IS NOT updated!
+
+
 ## [v4.0.0b8] - 2025-05-19 Pre-release 
 
 ### Fixed
