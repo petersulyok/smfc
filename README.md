@@ -9,9 +9,9 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-9 pre-release. HdZone init fixed!}}}\$
+${{\color{red}\textsf{BETA-10 pre-release. New [CONST zone] implemented!}}}\$
 
-See [discussion#70](https://github.com/petersulyok/smfc/discussions/70) for more details.
+See [discussion#71](https://github.com/petersulyok/smfc/discussions/71) for more details.
 
 ## TL;DR
 
