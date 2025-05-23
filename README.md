@@ -357,6 +357,8 @@ Edit `/etc/smfc/smfc.conf` and specify your configuration parameters here:
 #
 #   Please read the documentation here: https://github.com/petersulyok/smfc
 #
+
+# Ipmi specific parameters.
 [Ipmi]
 # Path for ipmitool (str, default=/usr/bin/ipmitool)
 command=/usr/bin/ipmitool 
@@ -364,14 +366,16 @@ command=/usr/bin/ipmitool
 fan_mode_delay=10
 # Delay time after changing IPMI fan level (int, seconds, default=2)
 fan_level_delay=2
-# IPMI parameters for remote access (HOST is the BMC network address).
+# IPMI parameters for remote access (string, default='')
 #remote_parameters=-U USERNAME -P PASSWORD -H HOST
 
+
+# CPU zone: this fan controller works based on CPU(s) temperature.
 [CPU zone]
 # Fan controller enabled (bool, default=0)
 enabled=1
-# IPMI zone number (int, [0-7], default=0))
-ipmi_zone = 0
+# IPMI zone(s) (comma- or space-separated list of int, default=0))
+ipmi_zone=0
 # Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
 # Discrete steps in mapping of temperatures to fan level (int, default=6)
@@ -389,11 +393,13 @@ min_level=35
 # Maximum CPU fan level (int, %, default=100)
 max_level=100
 
+
+# HD zone: this fan controller works based on HD(s) temperature.
 [HD zone]
 # Fan controller enabled (bool, default=0)
 enabled=1
-# IPMI zone number (int, [0-7], default=1))
-ipmi_zone = 1
+# IPMI zone(s) (comma- or space-separated list of int, default=1))
+ipmi_zone=1
 # Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
 # Discrete steps in mapping of temperatures to fan level (int, default=4)
@@ -417,9 +423,51 @@ hd_names=
 smartctl_path=/usr/sbin/smartctl
 # Standby guard feature for RAID arrays (bool, default=0)
 standby_guard_enabled=0
-# 'standby guard' feature only: number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)
+# Number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)
 standby_hd_limit=1
+
+
+# GPU zone: this fan controller works based on GPU(s) temperature.
+[GPU zone]
+# Fan controller enabled (bool, default=0)
+enabled=0
+# IPMI zone(s) (comma- or space-separated list of int, default=1))
+ipmi_zone=1
+# Calculation of GPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
+temp_calc=1
+# Discrete steps in mapping of temperatures to fan level (int, default=5)
+steps=5
+# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
+sensitivity=2.0
+# Polling interval for reading temperature (int, sec, default=10)
+polling=2
+# Minimum GPU temperature (float, C, default=40.0)
+min_temp=40.0
+# Maximum GPU temperature (float, C, default=70.0)
+max_temp=70.0
+# Minimum GPU zone fan level (int, %, default=35)
+min_level=35
+# Maximum GPU zone fan level (int, %, default=100)
+max_level=100
+# GPU device IDs (comma- or space-separated list of int, default=0)
+# These are indices in nvidia-smi temperature report.
+gpu_device_ids=0
+# Path for 'nvidia-smi' command (str, default=/usr/bin/nvidia-smi).
+nvidia_smi_path=/usr/bin/nvidia-smi
+
+
+# Const zone: this fan controller does not read any temperature and sets constant fan level for IPMI zones(s).
+[CONST zone]
+# Fan controller enabled (bool, default=0)
+enabled=0
+# IPMI zone(s) (comma- or space-separated list of int, default=1))
+ipmi_zone=1
+# Polling interval for checking level and restting if needed (int, sec, default=30)
+polling=30
+# Constant fan level (int, %, default=50)
+level=50
 ```
+
 Important notes:
  1. `[HD zone} hd_names=`: This is a compulsory parameter, its value must be specified in `/dev/disk/by-id/...` form (the `/dev/sda` form is not persistent could be changed after a reboot).
  2. `[CPU zone] / [HD zone] min_level= / max_level=`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotational speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
