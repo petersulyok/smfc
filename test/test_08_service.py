@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   test_07_service.py (C) 2021-2025, Peter Sulyok
+#   test_08_service.py (C) 2021-2025, Peter Sulyok
 #   Unit tests for smfc.Service() class.
 #
 from argparse import Namespace
@@ -11,7 +11,7 @@ import pytest
 from pyudev import Context
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, CpuZone, HdZone, GpuZone, Service, FanController
+from smfc import Log, Ipmi, FanController, CpuZone, HdZone, GpuZone, ConstZone, Service
 from .test_00_data import TestData, MockedContextError, MockedContextGood
 
 class TestService:
@@ -227,6 +227,9 @@ class TestService:
         my_config[GpuZone.CS_GPU_ZONE] = {
             GpuZone.CV_GPU_ZONE_ENABLED: '0'
         }
+        my_config[ConstZone.CS_CONST_ZONE] = {
+            ConstZone.CV_CONST_ZONE_ENABLED: '0'
+        }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
@@ -278,6 +281,9 @@ class TestService:
         my_config[GpuZone.CS_GPU_ZONE] = {
             GpuZone.CV_GPU_ZONE_ENABLED: '0'
         }
+        my_config[ConstZone.CS_CONST_ZONE] = {
+            ConstZone.CV_CONST_ZONE_ENABLED: '0'
+        }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
@@ -315,6 +321,9 @@ class TestService:
         my_config[GpuZone.CS_GPU_ZONE] = {
             GpuZone.CV_GPU_ZONE_ENABLED: '0'
         }
+        my_config[ConstZone.CS_CONST_ZONE] = {
+            ConstZone.CV_CONST_ZONE_ENABLED: '0'
+        }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
@@ -326,12 +335,13 @@ class TestService:
         assert cm.value.code == exit_code, error
         del my_td
 
-    @pytest.mark.parametrize("cpuzone, hdzone, gpuzone, exit_code, error", [
-        (1, 0, 1, 100, 'Service.run() 18'),
-        (0, 1, 0, 100, 'Service.run() 19'),
-        (1, 0, 1, 100, 'Service.run() 20')
+    @pytest.mark.parametrize("cpuzone, hdzone, gpuzone, constzone, exit_code, error", [
+        (True,  False, True,  False, 100, 'Service.run() 18'),
+        (False, True,  False, True,  100, 'Service.run() 19'),
+        (True,  False, True,  False, 100, 'Service.run() 20')
     ])
-    def test_run_100p(self, mocker:MockerFixture, cpuzone: int, hdzone: int, gpuzone: int, exit_code: int, error: str):
+    def test_run_100p(self, mocker:MockerFixture, cpuzone: bool, hdzone: bool, gpuzone: bool, constzone: bool,
+                      exit_code: int, error: str):
         """Positive unit test for Service.run() method. It contains the following steps:
             - mock print(), time.sleep() functions
             - execute smfc.run()
@@ -377,6 +387,15 @@ class TestService:
             self.nvidia_smi_called = 0
             FanController.__init__(self, log, ipmi, '2', GpuZone.CS_GPU_ZONE, count, 1, 5,
                                   2, 0, 45, 70, 35, 100)
+
+        def mocked_constzone_init(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
+            self.ipmi = ipmi
+            self.log = log
+            self.name = ConstZone.CS_CONST_ZONE
+            self.ipmi_zone = [Ipmi.HD_ZONE]
+            self.polling = 30
+            self.level = 50
+            self.last_time = 0
         # pragma pylint: enable=unused-argument
 
         my_td = TestData()
@@ -433,6 +452,12 @@ class TestService:
             GpuZone.CV_GPU_ZONE_GPU_IDS: '0',
             GpuZone.CV_GPU_ZONE_NVIDIA_SMI_PATH: cmd_nvidia,
         }
+        my_config[ConstZone.CS_CONST_ZONE] = {
+            ConstZone.CV_CONST_ZONE_ENABLED: str(constzone),
+            ConstZone.CV_CONST_IPMI_ZONE: '2',
+            ConstZone.CV_CONST_ZONE_POLLING: '0',
+            ConstZone.CV_CONST_ZONE_LEVEL: '35'
+        }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
@@ -443,6 +468,7 @@ class TestService:
         mocker.patch('smfc.CpuZone.__init__', mocked_cpuzone_init)
         mocker.patch('smfc.HdZone.__init__', mocked_hdzone_init)
         mocker.patch('smfc.GpuZone.__init__', mocked_gpuzone_init)
+        mocker.patch('smfc.ConstZone.__init__', mocked_constzone_init)
         self.sleep_counter = 0
         sys.argv = ('smfc.py -o 0 -l 4 -ne -nd -c ' + conf_file).split()
         service = Service()

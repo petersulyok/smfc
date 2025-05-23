@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   test_08_cmd.py (C) 2021-2025, Peter Sulyok
+#   test_09_cmd.py (C) 2021-2025, Peter Sulyok
 #   Unit tests for smfc.cmd() class.
 #
 from mock import MagicMock
