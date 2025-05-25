@@ -46,7 +46,7 @@ Feel free to visit [Discussions](https://github.com/petersulyok/smfc/discussions
 ## Details
 ### 1. How does it work?
 This service was designed for Super Micro motherboards with IPMI functionality, implementing different fan controllers connected to one or more IPMI zones.
-In `smfc` the following fan controllers are implemented:
+In `smfc`, the following fan controllers are implemented:
 
 | Fan controller | Temperature source      | Configuration                                                           | Default IPMI zone   |
 |----------------|-------------------------|-------------------------------------------------------------------------|---------------------|
@@ -63,10 +63,10 @@ On a typical Super Micro motherboard, there are two predefined IPMI zones:
 - CPU or System zone (zone 0) with fan names: FAN1, FAN2, etc.
 - Peripheral or HD zone (zone 1) with fan names: FANA, FANB, etc.
 
-On Super Micro server motherboards, there could be more predefined IPMI zones with different fan names (for example [#31](https://github.com/petersulyok/smfc/issues/31)). 
-`smfc v3.8.0` and previous versions implemented _Swapped Zones_ feature to swap IPMI zone 0 and 1, from `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convince for the user.  
+On Super Micro server motherboards, there could be more predefined IPMI zones with different fan names (see [issue #31](https://github.com/petersulyok/smfc/issues/31)). 
+`smfc v3.8.0` and previous versions implemented _Swapped Zones_ feature to swap IPMI zone 0 and 1, from `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convince for the user (see `ipmi_zone=` parameter for more detail).  
 
-In this service, the temperature-driven fan controllers have the following control logic:
+In `smfc`, temperature-driven fan controllers have the following control logic:
 
  1. it reads the zone's temperature
  2. it calculates a new fan level based on the user-defined control function and the temperature value of the zone 
@@ -74,8 +74,8 @@ In this service, the temperature-driven fan controllers have the following contr
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="600">
 
-If there are multiple heat sources in the zone, the user can configure different temperature calculation methods for minimum, average, maximum temperatures.
-Constant zone is an exception, it does not have a heat source, it provides user-defined constant fan level for one or more IPMI zones.
+If there are multiple heat sources in the zone, the user can configure different temperature calculation methods (i.e. minimum, average, maximum temperatures).
+The _Constant zone_ is an exception here, it does not have/require a temperature source, it can provide a constant fan level for one or more IPMI zones.
 
 Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating! 
 
@@ -84,7 +84,7 @@ Fan controllers are using user-defined control functions where a temperature int
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/userdefined_control_function.png" align="center" width="500">
 
-The following five parameters will define the user-defined control function:
+The following five parameters will define such a function:
 
      min_temp=
      max_temp=
@@ -92,8 +92,8 @@ The following five parameters will define the user-defined control function:
      max_level=
      steps=
 
-In this way, a fan controller can map any new temperature value to a fan level (here the temperature values are Celsius degrees, levels are %-values).   
-Changing the fan rotational speed is a very slow process (i.e. it could take seconds depending on the fan type and the requested amount of change), so we try to minimize these kinds of actions. Instead of setting fan rotational speed continuously, we define discrete fan levels based on `steps=` parameter.
+In this way, a fan controller can map any new temperature value to a fan level (from Celsius degrees to % value).   
+Changing the fan rotational speed is a very slow process (it could take several seconds depending on the fan type and the requested amount of change), so we try to minimize these kinds of actions. Instead of setting fan rotational speed continuously, we define discrete fan levels based on `steps=` parameter.
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output_levels.png" align="center" width="500">
 
@@ -104,12 +104,13 @@ The fan controllers implement the following strategies to avoid/minimize the unn
  3. The configuration parameter `polling=` defines the frequency of the temperature reading. The bigger polling time, the lower frequency of the fan speed change.
 
 #### 3. Standby guard
-For HD zone an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
+For HD zone fan controller, an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
 	
  - SATA hard disks are organized into a RAID array
  - the RAID array will go to standby mode recurrently
 
-This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature we can avoid a situation where the array is partially in standby mode while other members are still active.
+This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature, the situation can be avoided where the array is partially in standby mode while other members are still active.
+SCSI disks are not compatible with this feature.
 
 #### 5. Hard disk compatibility
 The `smfc` service was originally designed for `SATA` hard drives, but from `3.0` version it is also compatible with `NVME` and `SAS/SCSI` disks. The following table summarizes how the temperature is read for different disk types: 
