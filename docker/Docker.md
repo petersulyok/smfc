@@ -3,10 +3,10 @@ This is a docker image for `smfc`. Please visit the [GitHub repository](https://
 
 # Content
 This image contains the following components: 
-- `Alpine Linux` 3.21.3
-- `Python` 3.12.10-r0
+- `Alpine Linux` 3.22
+- `Python` 3.12.10-r1
 - `ipmitool` 1.8.19-r1
-- `smartmontools` 7.4-r1
+- `smartmontools` 7.5-r0
 
 Some further notes:
   1. `smfc` will be executed as a simple foreground process (not as a `systemd` service).
@@ -15,6 +15,7 @@ Some further notes:
   4. The `/sys` filesystem can be accessed in the container, but the proper kernel module (i.e. `coretemp`, `k10temp`, and `drivetemp`) needs to be loaded on host side.
   5. The container can send log messages to the host's `journald` daemon (as it is configured in _Usage chapter_), but feel free to configure [other logging drivers](https://docs.docker.com/config/containers/logging/configure/).
   6. IPMI remote access can be used (see `[IPMI] remote_parameters=-U USERNAME -P PASSWORD -H HOST` parameter in the configuration file) if IPMI interface is not accessible from docker container.
+  7. Currently, [GPU zone] is not working in docker, since `nvidia-smi` is not part of the image 
 
 # Usage 
 
@@ -87,6 +88,7 @@ cd smfc
 ```
 
 # Versions
+  - **4.0.0b11** (2025.06.02): Updated to smfc 4.0.0b11 and alpine 3.22
   - **4.0.0b6** (2025.05.06): Updated to smfc 4.0.0b6 and alpine 3.21.3
   - **4.0.0b5** (2025.04.21): Updated to smfc 4.0.0b5 and alpine 3.21.3
   - **4.0.0b4** (2025.04.18): Updated to smfc 4.0.0b4 and alpine 3.21.3
