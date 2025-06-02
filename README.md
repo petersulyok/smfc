@@ -9,9 +9,10 @@
 
 Super Micro fan control for Linux (home) servers.
 
-${{\color{red}\textsf{BETA-10 pre-release. New [CONST zone] implemented!}}}\$
+> [!NOTE]
+> BETA-11 released: docker image updated (GPU zone is not working in the image).
 
-See [discussion#71](https://github.com/petersulyok/smfc/discussions/71) for more details.
+See [discussion#72](https://github.com/petersulyok/smfc/discussions/72) for more details.
 
 ## TL;DR
 
@@ -113,7 +114,7 @@ This feature is monitoring the power state of SATA hard disks (with the help of 
 SCSI disks are not compatible with this feature.
 
 #### 5. Hard disk compatibility
-The `smfc` service was originally designed for `SATA` hard drives, but from `3.0` version it is also compatible with `NVME` and `SAS/SCSI` disks. The following table summarizes how the temperature is read for different disk types: 
+The `smfc` service was originally designed for `SATA` hard drives, but `smfc v3.0.0` is also compatible with `NVME` and `SAS/SCSI` disks. The following table summarizes how the temperature is read for different disk types: 
 
 | Disk type  | Temperature source   | Kernel module | Command    |
 |------------|----------------------|---------------|------------|
@@ -123,11 +124,11 @@ The `smfc` service was originally designed for `SATA` hard drives, but from `3.0
 
 Some additional notes:
 
-- For `NVME` SSDs no kernel driver will be loaded the kernel can handle this disk type automatically
+- For `NVME` SSDs no kernel driver needs to be loaded the kernel can handle this disk type automatically
 - For `SATA` disks the `drivetemp` kernel module should be loaded. **This is the fastest way to read disk temperature**, and the kernel module can report the temperature while hard disks are in sleep mode!
 - For `SAS/SCSI` disks the `smartctl` command will be used to read disk temperature
 - If `drivetemp` module is not loaded or an HDD is not compatible with `drivetemp` module then `smfc` will use `smartctl` automatically.   
-- Different disks types can be mixed in `hd_names=` configuration parameter but the power management (standy mode) and *Standby guard* feature will not be supported in this case.
+- Different disks types can be mixed in `hd_names=` configuration parameter but the *Standby guard* feature will not be supported in this case.
 - It is NOT RECOMMENDED to mix NVME SSD and SATA/SCSI disks in `hd_names=` parameter, because they are operating in quite different temperature intervals (e.g. 30-40C vs 40-80C).
 
 
