@@ -17,7 +17,7 @@ BUILD_IMAGE_VERSION=$1
 BUILD_IMAGE_NAME="petersulyok/smfc"
 
 # Execute build process.
-docker image build -t ${BUILD_IMAGE_NAME}:${BUILD_IMAGE_VERSION} --build-arg BUILD_IMAGE_VERSION=${BUILD_IMAGE_VERSION} -f ./docker/Dockerfile .
+DOCKER_BUILDKIT=1 docker build -t ${BUILD_IMAGE_NAME}:${BUILD_IMAGE_VERSION} --build-arg BUILD_IMAGE_VERSION=${BUILD_IMAGE_VERSION} -f ./docker/Dockerfile .
 
 # Set secondary tag (i.e. latest) if specified.
 if [ -n "$2" ];
