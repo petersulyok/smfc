@@ -93,6 +93,7 @@ class TestService:
         if hdzone:
             smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
             service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_SMARTCTL_PATH] = smartctl_cmd
+            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED] = '1' if standby else '0'
 
         service.gpu_zone_enabled = gpuzone
         service.config[GpuZone.CS_GPU_ZONE] = {}
