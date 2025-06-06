@@ -125,20 +125,31 @@ class TestService:
         mocker.patch('builtins.open', mock_open)
         service = Service()
         service.config = ConfigParser()
+
         service.config[Ipmi.CS_IPMI] = {}
         service.config[Ipmi.CS_IPMI][Ipmi.CV_IPMI_COMMAND] = ipmi_command
+
         service.cpu_zone_enabled = True
         service.config[CpuZone.CS_CPU_ZONE] = {}
         service.config[CpuZone.CS_CPU_ZONE][CpuZone.CV_CPU_ZONE_ENABLED] = '1'
+
         service.hd_zone_enabled = True
         service.config[HdZone.CS_HD_ZONE] = {}
         service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_ENABLED] = '1'
+        smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
+        service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_SMARTCTL_PATH] = smartctl_cmd
+        service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED] = '1'
+
+        nvidia_smi_cmd = my_td.create_command_file('echo "0"')
         service.gpu_zone_enabled = True
         service.config[GpuZone.CS_GPU_ZONE] = {}
         service.config[GpuZone.CS_GPU_ZONE][GpuZone.CV_GPU_ZONE_ENABLED] = '1'
-        smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
-        service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED] = '1'
-        service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_SMARTCTL_PATH] = smartctl_cmd
+        service.config[GpuZone.CS_GPU_ZONE][GpuZone.CV_GPU_ZONE_NVIDIA_SMI_PATH] = nvidia_smi_cmd
+
+        # Check if `nvidia-smi` command is not available.
+        my_td.delete_file(nvidia_smi_cmd)
+        error_str = service.check_dependencies()
+        assert error_str.find('nvidia-smi') != -1, error
 
         # Check if `smartctl` command is not available.
         my_td.delete_file(smartctl_cmd)
@@ -150,7 +161,7 @@ class TestService:
         error_str = service.check_dependencies()
         assert error_str.find('drivetemp') != -1, error
 
-        # Check if `coretemp` is not on module list.
+        # Check if `coretemp` is not on the module list.
         modules = my_td.create_text_file('drivetemp something')
         error_str = service.check_dependencies()
         assert error_str.find('coretemp') != -1, error

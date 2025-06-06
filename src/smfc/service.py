@@ -55,6 +55,7 @@ class Service:
               - ipmitool command
               - if CPU zone enabled: `coretemp` or `k10temp` kernel module
               - if HD zone enabled: `drivetemp` kernel module or `smartctl` command
+              - if GPU zone enabled: `nvidia-smi` command
         Returns:
              (str): error string (empty = no errors)
 
@@ -72,12 +73,12 @@ class Service:
         with open('/proc/modules', 'rt', encoding='utf-8') as file:
             modules = file.read()
 
-        # Check the kernel modules for CPUs
+        # Check the kernel modules for CPU zone.
         if self.cpu_zone_enabled:
             if 'coretemp' not in modules and 'k10temp' not in modules:
                 return 'ERROR: coretemp or k10temp kernel module must be loaded!'
 
-        # Check dependencies for disks
+        # Check dependencies for HD zone.
         if self.hd_zone_enabled:
 
             # Check if `smartctl` command is available.
@@ -97,6 +98,14 @@ class Service:
             sge = self.config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED, fallback=False)
             if sge and no_smartctl:
                 return f'ERROR: smartctl command ({path}) must be installed for Standby Guard feature!'
+
+        # Check dependencies for GPU zone
+        if self.gpu_zone_enabled:
+
+            # Check if `nvidia-smi` command is available.
+            path = self.config[GpuZone.CS_GPU_ZONE].get(GpuZone.CV_GPU_ZONE_NVIDIA_SMI_PATH, '/usr/bin/nvidia-smi')
+            if not os.path.exists(path):
+                return f'ERROR: nvidia-smi command cannot be found {path}!'
 
         # All required run-time dependencies are available.
         return ''
