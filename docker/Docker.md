@@ -168,7 +168,7 @@ git clone https://github.com/petersulyok/smfc.git
 cd smfc
 ./docker/docker-build.sh 3.4.0
 ```
-Please note that the dockerfile will install smfc from `pypi.org`, so the version must refer an official `smfc` release.
+Please note that the dockerfile will install `smfc` from `pypi.org`, so the version must refer an official `smfc` release.
 
 # Versions
   - **4.0.0b13** (2025.06.06): Updated to smfc 4.0.0b13 (Alpine 3.22/Debian 12)
