@@ -1,13 +1,22 @@
 version: "2"
 services:
   smfc:
-    image: petersulyok/smfc:latest
+    image: petersulyok/smfc:latest-gpu
     container_name: smfc
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
     logging:
         driver: journald
     privileged: true
     environment:
       - SMFC_ARGS=-l 3
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
     volumes:
       - /dev:/dev:ro
       - /run:/run:ro

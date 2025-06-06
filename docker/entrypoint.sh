@@ -4,7 +4,7 @@
 #   Entry point for `smfc` docker image (for Alpine Linux).
 #
 
-# Set a default value for $SMFC_ARG environment variable if it was undefined.
+# Set a default value for $SMFC_ARG environment variable if it was empty.
 if [ -z "${SMFC_ARGS+x}" ]; then
     SMFC_ARGS="-l 3"
 fi

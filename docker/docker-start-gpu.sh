@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 #
-#   docker-start.sh (C) 2023-2025, Peter Sulyok
-#   This script will start `smfc` docker image.
+#   docker-start-gpu.sh (C) 2023-2025, Peter Sulyok
+#   This script will start `smfc` GPU enabled docker image.
 #
 docker run \
     -d \
     --rm \
+    --runtime=nvidia \
+    --gpus all \
     --log-driver=journald \
     --privileged=true \
     --name "smfc" \
@@ -15,4 +17,4 @@ docker run \
     -v /etc/localtime:/etc/localtime:ro \
     -v /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro \
     -e SMFC_ARGS="-l 3" \
-    petersulyok/smfc:latest
+    petersulyok/smfc:latest-gpu
