@@ -90,17 +90,18 @@ class TestService:
         service.hd_zone_enabled = hdzone
         service.config[HdZone.CS_HD_ZONE] = {}
         service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_ENABLED] = '1' if hdzone else '0'
+        if hdzone:
+            smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
+            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_SMARTCTL_PATH] = smartctl_cmd
 
         service.gpu_zone_enabled = gpuzone
         service.config[GpuZone.CS_GPU_ZONE] = {}
         service.config[GpuZone.CS_GPU_ZONE][GpuZone.CV_GPU_ZONE_ENABLED] = '1' if gpuzone else '0'
+        if gpuzone:
+            nvidia_smi_cmd = my_td.create_command_file('echo "0"')
+            service.config[GpuZone.CS_GPU_ZONE][GpuZone.CV_GPU_ZONE_NVIDIA_SMI_PATH] = nvidia_smi_cmd
 
-        smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
-        if hdzone:
-            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED] = '1' if standby else '0'
-            service.config[HdZone.CS_HD_ZONE][HdZone.CV_HD_ZONE_SMARTCTL_PATH] = smartctl_cmd
         assert service.check_dependencies() == '', error
-        mocker.patch('builtins.open', original_open)
         del my_td
 
     @pytest.mark.parametrize("error", ["Service.check_dependencies() 9"])
