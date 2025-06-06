@@ -170,6 +170,7 @@ cd smfc
 ```
 
 # Versions
+  - **4.0.0b13** (2025.06.06): Updated to smfc 4.0.0b13 (Alpine 3.22/Debian 12)
   - **4.0.0b12** (2025.06.06): Updated to smfc 4.0.0b12 (Alpine 3.22/Debian 12)
   - **4.0.0b11** (2025.06.02): Updated to smfc 4.0.0b11 (Alpine 3.22)
   - **4.0.0b6** (2025.05.06): Updated to smfc 4.0.0b6 (Alpine 3.21.3)
