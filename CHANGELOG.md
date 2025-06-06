@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New
 - GPU zone fan controller is enabled in docker (please read [Docker.md](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md))
-- There are two docker images: standard, gpu-enabled
-- Dependency check: check of nvidia-smi added
+- There are two docker images available: standard, gpu-enabled
+- Dependency check: check of `nvidia-smi` added
 
 
 ## [v4.0.0b11] - 2025-06-02 Pre-release 
