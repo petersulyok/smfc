@@ -755,7 +755,7 @@ wheels = [
 
 [[package]]
 name = "smfc"
-version = "4.0.0b11"
+version = "4.0.0b12"
 source = { editable = "." }
 dependencies = [
     { name = "pyudev" },
