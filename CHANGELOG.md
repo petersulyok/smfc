@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fix
 - Fix: test_08_service.py stopped running if `nvidia-smi` was not installed.
+- Fix: pylint warning
 
 
 ## [v4.0.0b12] - 2025-06-06 Pre-release 
