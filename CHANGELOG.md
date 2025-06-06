@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [v4.0.0b12] - 2025-06-06 Pre-release 
+
+### New
+- GPU zone fan controller is enabled in docker (please read [Docker.md](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md))
+- There are two docker images: standard, gpu-enabled
+- Dependency check: check of nvidia-smi added
+
+
 ## [v4.0.0b11] - 2025-06-02 Pre-release 
 
 ### New

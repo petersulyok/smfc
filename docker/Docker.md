@@ -1,11 +1,11 @@
 # smfc in docker
-This page contains the most important docker-specific information for `smfc`. Please visit the [GitHub repository](https://github.com/petersulyok/smfc) of `smfc` for more details or for reporting issues.
+This page describes the most important docker-specific information for `smfc`. Please visit the [GitHub repository](https://github.com/petersulyok/smfc) of `smfc` for more details or for reporting issues.
 
 # Content
 There are two images created for `smfc`:
 
 - **Standard image** is an Alpine Linux-based image with the small image size, but the GPU zone is not supported.
-- **GPU-enabled image** is a Debian-based image with larger image size, but the GPU zone is working (with NVIDIA Container Toolkit).
+- **GPU-enabled image** is a Debian-based image with larger image size, but the GPU zone is working (i.e. with the help of NVIDIA Container Toolkit, the `nvidia-smi` command is available in the container and can report GPU data running on the host).
 
 Generic notes for the docker images:
   1. `smfc` is executed here as a simple foreground process (not as a `systemd` service).
@@ -170,14 +170,15 @@ cd smfc
 ```
 
 # Versions
-  - **4.0.0b11** (2025.06.02): Updated to smfc 4.0.0b11 and alpine 3.22
-  - **4.0.0b6** (2025.05.06): Updated to smfc 4.0.0b6 and alpine 3.21.3
-  - **4.0.0b5** (2025.04.21): Updated to smfc 4.0.0b5 and alpine 3.21.3
-  - **4.0.0b4** (2025.04.18): Updated to smfc 4.0.0b4 and alpine 3.21.3
-  - **3.8.0** (2025.03.15): Updated to smfc 3.8.0 and alpine 3.20.6
-  - **3.7.0** (2025.01.27): Updated to smfc 3.7.0 and alpine 3.20.5 
-  - **3.6.0** (2024.12.12): Updated to smfc 3.6.0 and alpine 3.20.3
-  - **3.5.1** (2024.08.23): Updated to smfc 3.5.1 and alpine 3.20
-  - **3.5.0** (2024.03.21): Updated to smfc 3.5.0 and alpine 3.19
+  - **4.0.0b12** (2025.06.06): Updated to smfc 4.0.0b12 (Alpine 3.22/Debian 12)
+  - **4.0.0b11** (2025.06.02): Updated to smfc 4.0.0b11 (Alpine 3.22)
+  - **4.0.0b6** (2025.05.06): Updated to smfc 4.0.0b6 (Alpine 3.21.3)
+  - **4.0.0b5** (2025.04.21): Updated to smfc 4.0.0b5 (Alpine 3.21.3)
+  - **4.0.0b4** (2025.04.18): Updated to smfc 4.0.0b4 (Alpine 3.21.3)
+  - **3.8.0** (2025.03.15): Updated to smfc 3.8.0 and (Alpine 3.20.6)
+  - **3.7.0** (2025.01.27): Updated to smfc 3.7.0 and (Alpine 3.20.5) 
+  - **3.6.0** (2024.12.12): Updated to smfc 3.6.0 and (Alpine 3.20.3)
+  - **3.5.1** (2024.08.23): Updated to smfc 3.5.1 and (Alpine 3.20)
+  - **3.5.0** (2024.03.21): Updated to smfc 3.5.0 and (Alpine 3.19)
   - **3.4.0** (2023.11.28): Documentation updated 
   - **3.3.0** (2023.11.19): Initial release
