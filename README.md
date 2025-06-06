@@ -10,7 +10,7 @@
 Super Micro fan control for Linux (home) servers.
 
 > [!NOTE]
-> BETA-13 released: docker images updated, GPU zone is working now.
+> BETA-13 released: docker images updated, GPU zone is working now in docker.
 
 See [discussion#75](https://github.com/petersulyok/smfc/discussions/75) for more details.
 
