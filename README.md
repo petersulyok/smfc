@@ -56,16 +56,17 @@ In `smfc`, the following fan controllers are implemented:
 | GPU zone       | Nvidia GPUs             | GPU indices must be specified in `[GPU zone] gpu_device_ids=` parameter | 1 (Peripheral zone) |
 | Constant zone  | None                    | Constant fan level can be specified in `[CONST zone] level=` parameter  | 1 (Peripheral zone) |
 
-The fan controllers can be enabled and disabled independently. They can be used in a free combination with the IPMI zones, but fan controllers should use different IPMI zones (i.e. no overlapping is allowed)!
+These fan controllers can be enabled and disabled independently. They can be used in a free combination with on or more IPMI zones, but different fan controllers should control different IPMI zones (i.e. no overlapping is allowed)!
 
 The _IPMI zone_ is a logical term, representing a cooling zone, where there are predefined fans having the same rotation speed. Please note that the fan assignment to an IPMI zone is predefined on the motherboard, it cannot be changed! 
-On a typical Super Micro motherboard, there are two predefined IPMI zones:
+On a typical Super Micro motherboard, there are two IPMI zones:
 
-- CPU or System zone (zone 0) with fan names: FAN1, FAN2, etc.
-- Peripheral or HD zone (zone 1) with fan names: FANA, FANB, etc.
+- CPU or System zone (IPMI zone 0) with fan names: FAN1, FAN2, etc.
+- Peripheral or HD zone (IPMI zone 1) with fan names: FANA, FANB, etc.
 
-On Super Micro server motherboards, there could be more predefined IPMI zones with different fan names (see [issue #31](https://github.com/petersulyok/smfc/issues/31)). 
-`smfc v3.8.0` and previous versions implemented _Swapped Zones_ feature to swap IPMI zone 0 and 1, from `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convince for the user (see `ipmi_zone=` parameter for more detail).  
+On Super Micro server motherboards, there could be more IPMI zones with different fan names (see [issue #31](https://github.com/petersulyok/smfc/issues/31)). 
+
+Note: `smfc v3.8.0` and previous versions implemented _Swapped Zones_ feature to swap IPMI zone 0 and 1. From `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convince for the user (see `ipmi_zone=` parameter for more detail).  
 
 In `smfc`, temperature-driven fan controllers have the following control logic:
 
