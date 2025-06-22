@@ -171,6 +171,8 @@ cd smfc
 Please note that the dockerfile will install `smfc` from `pypi.org`, so the version must refer an official `smfc` release.
 
 # Versions
+See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
+  - **4.0.0b14** (2025.06.22): Updated to smfc 4.0.0b14 (Alpine 3.22/Debian 12)
   - **4.0.0b13** (2025.06.06): Updated to smfc 4.0.0b13 (Alpine 3.22/Debian 12)
   - **4.0.0b12** (2025.06.06): Updated to smfc 4.0.0b12 (Alpine 3.22/Debian 12)
   - **4.0.0b11** (2025.06.02): Updated to smfc 4.0.0b11 (Alpine 3.22)
