@@ -10,7 +10,7 @@
 Super Micro fan control for Linux (home) servers.
 
 > [!NOTE]
-> BETA-14 released: Fix for parsing temperate of newer SCSI disks (issue #76).
+> BETA-14 released: Fix for parsing the temperature of newer SCSI disks (issue #76).
 
 See [discussion#77](https://github.com/petersulyok/smfc/discussions/77) for more details.
 
