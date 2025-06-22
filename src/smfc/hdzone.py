@@ -205,9 +205,11 @@ class HdZone(FanController):
                     # ATA/SATA type of temperature reporting, like:
                     # `190 Airflow_Temperature_Cel 0x0032   075   045   000    Old_age   Always       -       25`
                     # `194 Temperature_Celsius     0x0002   232   232   000    Old_age   Always       -       28 (Min/Max 17/45)`
+                    # Fix issue #76: Number of words in the line is also checked to avoid such a case for SCSI disks:
+                    # `Temperature Warning:  Enabled`
                     # pylint: enable=C0301
-                    if 'Temperature' in line:
-                        s = line.split()
+                    s = line.split()
+                    if 'Temperature' in line and len(s) >= 9:
                         value = float(s[9])
                         found = True
                         break
