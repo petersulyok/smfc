@@ -10,9 +10,9 @@
 Super Micro fan control for Linux (home) servers.
 
 > [!NOTE]
-> BETA-13 released: docker images updated, GPU zone is working now in docker.
+> BETA-14 released: Fix for parsing temperate of newer SCSI disks (issue #76).
 
-See [discussion#75](https://github.com/petersulyok/smfc/discussions/75) for more details.
+See [discussion#77](https://github.com/petersulyok/smfc/discussions/77) for more details.
 
 ## TL;DR
 
