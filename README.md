@@ -33,11 +33,11 @@ You can also run `smfc` in docker, see more details in [Docker.md](docker/Docker
 
 
 ### 2. Installation and configuration
- 1. Set up the IPMI threshold values for your fans (see [this chapter](https://github.com/petersulyok/smfc?tab=readme-ov-file#7-ipmi-fan-control-and-sensor-thresholds) for details). 
+ 1. Set up the IPMI threshold values for your fans (see [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds) for details). 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`).
  4. Install `smfc` service (check [Installation.md](doc/Installation.md) for more details)`.
- 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc`.
+ 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [this chapters]() for details).
  6. Start the `systemd` service
  7. Check results in system log
  8. Leave a feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
@@ -134,7 +134,7 @@ Some additional notes:
 
 
 ### 5. Super Micro compatibility
-Originally this software was designed to work with Super Micro X10 and X11 motherboards with a BMC chip (i.e. ASPEED AST2400/2500) and IPMI functionality. 
+This software was designed to work with Super Micro X10 and X11 motherboards with a BMC chip (i.e. ASPEED AST2400/2500/2600) and IPMI functionality. Unfortunately, there are some motherboards (e.g. X10QBi see issue #69) not compatible with `smfc`.
 
 In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employ BMC chip). 
 
@@ -195,6 +195,7 @@ max_level = 100 (i.e. 1500 rpm)
 min_level = 35 (i.e. 500 rpm)
 ```
 
+
 Notes:
   - Use the following `ipmitool` command to display the current IMPI sensor thresholds for fans:
     ```
@@ -221,7 +222,7 @@ Notes:
     root@home:~# ipmitool sensor thresh FAN1 upper 1600 1700 1800
     ```
   - You can also edit and run `ipmi/set_ipmi_treshold.sh` to configure all IPMI sensor thresholds
-  - If you install a new BMC firmware on your Super Micro motherboard you have to configure IPMI thresholds again
+  - If you install new BMC firmware on your Super Micro motherboard, you have to configure IPMI thresholds again
   - If you do not see fans when executing `ipmitool sensors`, you may want to reset the BMC to factory default using the Web UI or using `ipmitool mc reset cold`
   - Noctua specifies the variance of minimum and maximum fan rotational speeds (e.g. see the [specification of Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm/specification)). For example:
 
@@ -301,7 +302,7 @@ Notes:
 - `smfc` is able to find the proper HWMON file automatically for Intel(R) CPUs, AMD(R) CPUs, SATA drives, or NVMe drives, but users may also specify the files manually (see `hwmon_path=` parameter in the config file)
 - Reading `drivetemp` module is the fastest way to get the temperature of the hard disks, and it can read temperature of the SATA hard disks even in standby mode, too. 
 
-### 10. Installation
+### 9. Installation
 For the installation you need a root user. Download and extract a release file or clone the git repository first.
 Then use the installation script `install.sh`, or copy the following files manually:
 
@@ -332,6 +333,17 @@ The service has the following command line options:
 You may configure logging output and logging level here, and these options can be specified in `/etc/default/smfc`in a persistent way.
 
 ### 10. Configuration file
+
+#### 10.1 Right strategy to create your configuration file
+You have to think over and answer the following questions:
+
+1. What are the most important heat sources in your machine? Typically, these could be CPU(s), hard disks, or GPUs.
+2. Which fan controllers would you like to use and configure in `smfc`?
+3. What is the expected temperature interval (minimum/maximum C degree) for the selected temperature source(s)? Use some test tools to measure it (e.g. [`s-tui`](https://github.com/amanusk/s-tui), [`fio`](https://fio.readthedocs.io/en/latest/fio_doc.html), [`iozone`](https://www.iozone.org/)) if you don't have their track record.  
+4. Which IPMI zone(s) will be connected to these fan controllers/temperate sources)? Check how many IPMI zones you have, how the fans are connected on your motherboard, and how they are cooling the selected temperature source(s). 
+5. What is the stable level interval for fans in the selected IPMI zone(s)? Probably this part requires the most patience! You have assumptions here, you will try them. If there are IPMI assertions and your fans are spinning up then you will refine the interval and try again. You might have several cycles here, this is normal. 
+
+#### 10.2 Sample configuration file
 Edit `/etc/smfc/smfc.conf` and specify your configuration parameters here:
 
 ```
@@ -453,34 +465,12 @@ level=50
 ```
 
 Important notes:
- 1. `[HD zone} hd_names=`: This is a compulsory parameter, its value must be specified in `/dev/disk/by-id/...` form (the `/dev/sda` form is not persistent could be changed after a reboot).
- 2. `[CPU zone] / [HD zone] min_level= / max_level=`: Check the stability of your fans and adjust the fan levels based on your measurement. As it was stated earlier, IPMI can switch back to full rotational speed if fans reach specific thresholds. You can collect real data about the behavior of your fans if you edit and run script `ipmi/fan_measurement.sh`. The script will set fan levels from 100% to 20% in 5% steps and results will be saved in the file `fan_result.csv`:
+1. `[IPMI zone] remote_parameters=-U USERNAME -P PASSWORD -H HOST` parameter can be used for remote access for the IPMI interface. It could be useful for a VM setup where the hard disks are configured with PCI passthrough (e.g. a TrueNAS running in a VM on Proxmox), but IPMI needs to be accessed "remotely". Please note that the HOST is the BMC network address (not the VM host address). 
+2. `[HD zone] hd_names=` is a compulsory parameter for this fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent could be changed after a reboot!
+3. `[CPU zone] / [HD zone] min_level= / max_level=` should be configured in alignment with threshold configuration (see more in [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)). Be patient, several refinement cycles could happen.
+4. Several sample configuration files are provided in `./config/samples` folder.
+5. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
 
-		root:~# cat fan_result.csv
-		Level,FAN1,FAN2,FAN4,FANA,FANB
-		100,1300,1300,1200,1300,1300
-		95,1300,1300,1100,1200,1300
-		90,1200,1200,1100,1200,1200
-		85,1100,1100,1000,1100,1100
-		80,1100,1100,1000,1100,1100
-		75,1000,1000,900,1000,1000
-		70,900,900,800,1000,900
-		65,900,900,800,900,900
-		60,800,800,700,900,800
-		55,700,700,700,800,700
-		50,700,700,600,700,700
-		45,600,600,500,700,600
-		40,500,500,500,600,500
-		35,500,500,400,500,500
-		30,400,400,300,400,400
-		25,300,300,300,400,300
-		20,1300,1300,1200,1300,1300
-
-	My experience is that Noctua fans in my box are running stable in the 35-100% fan level interval. An additional user experience is (see [issue #12](https://github.com/petersulyok/smfc/issues/12)) when Noctua fans are paired with Ultra Low Noise Adapter the minimum stable fan level could go up to 45% (i.e. 35% is not stable).  
-
- 3. `[CPU zone] / [HD zone] hwmon_path=`: This parameter is optional for Intel(R) CPUs, AMD(R) CPUs, SATA drives, and NVME drives (i.e., `smfc` can automatically identify the proper file locations), but may also be specified manually for special use cases. In case of SAS/SCSI hard disks (where `drivetemp` cannot be loaded) you can specify `hddtemp` value. You can use wild characters (`?,*`) in this parameter and `smfc` will do the path resolution automatically.
- 4. `[Ipmi] remote_parameters=`: if you run `smfc` in a Virtual Machine (e.g. you run TrueNAS Scale in a Proxmox VM with direct access on controller or HDDs) you would like to access IPMI remotely on your host. With this parameter your can specify IPMI remote parameters added to each IPMI calls (see [issue #27](https://github.com/petersulyok/smfc/issues/27)). Please note that the host address here is the BMC network address (not the VM host address). 
- 5. Several sample configuration files are provided for different scenarios in folder `./src/samples`. Please take a look on them, it could be a good starting point in the creation of your own configuration.
 
 ### 11. Automatic execution of the service
 This `systemd` service can be started and stopped in the standard way. Do not forget to reload `systemd` configuration after a new installation or if you changed the service definition file:
