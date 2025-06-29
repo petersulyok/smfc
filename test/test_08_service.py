@@ -31,8 +31,8 @@ class TestService:
         """
         mock_atexit_unregister = MagicMock()
         mocker.patch('atexit.unregister', mock_atexit_unregister)
-        mock_ipmi_set_fan_level = MagicMock()
-        mocker.patch('smfc.Ipmi.set_fan_level', mock_ipmi_set_fan_level)
+        mock_ipmi_set_fan_mode = MagicMock()
+        mocker.patch('smfc.Ipmi.set_fan_mode', mock_ipmi_set_fan_mode)
         mock_log_msg = MagicMock()
         mocker.patch('smfc.Log.msg_to_stdout', mock_log_msg)
         service = Service()
@@ -43,7 +43,7 @@ class TestService:
         service.exit_func()
         assert mock_atexit_unregister.call_count == 1, error
         if ipmi:
-            assert mock_ipmi_set_fan_level.call_count == 2, error
+            assert mock_ipmi_set_fan_mode.call_count == 1, error
             if log:
                 assert mock_log_msg.call_count == 1, error
 
