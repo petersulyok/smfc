@@ -86,8 +86,7 @@ verbose_echo "Systemd files for smfc installed."
 # Collect all disk names for `hd_names=` parameter in case of a 'smfc.conf' file.
 if [ -z "${KEEP_CONFIG}" ]; then
   hd_list=$(ls /dev/disk/by-id/|grep -v -E ".*-part.$"|grep -v -E ".*_1$")
-  if [ -n "$hd_list" ];
-  then
+  if [ -n "$hd_list" ]; then
     hd_names=""
     for hl in $hd_list; do
       hd_names+="/dev/disk/by-id/$hl\n\t"
