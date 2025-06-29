@@ -25,7 +25,7 @@ class TestService:
     ])
     def test_exit_func(self, mocker:MockerFixture, ipmi: bool, log: bool, error: str) -> None:
         """Positive unit test for Service.exit_func() method. It contains the following steps:
-            - mock atexit.unregister(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
+            - mock atexit.unregister(), Ipmi.set_fan_mode(), Log.msg_to_stdout() functions
             - execute Service.exit_func()
             - ASSERT: if mocked functions not called expected times
         """
