@@ -33,11 +33,11 @@ You can also run `smfc` in docker, see more details in [Docker.md](docker/Docker
 
 
 ### 2. Installation and configuration
- 1. Set up the IPMI threshold values for your fans (see [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds) for details). 
+ 1. Set up the IPMI threshold values for your fans (see [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds) for the details). 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`).
  4. Install `smfc` service (check [Installation.md](doc/Installation.md) for more details)`.
- 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [this chapters]() for details).
+ 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [this chapters](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration-file) for the details).
  6. Start the `systemd` service
  7. Check results in system log
  8. Leave a feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
@@ -68,7 +68,7 @@ On Super Micro server motherboards, there could be more IPMI zones with differen
 
 Note: `smfc v3.8.0` and previous versions implemented _Swapped Zones_ feature to swap IPMI zone 0 and 1. From `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convince for the user (see `ipmi_zone=` parameter for more detail).  
 
-In `smfc`, temperature-driven fan controllers have the following control logic:
+In `smfc`, a temperature-driven fan controller implements the following control logic:
 
  1. it reads the zone's temperature
  2. it calculates a new fan level based on the user-defined control function and the temperature value of the zone 
@@ -76,7 +76,7 @@ In `smfc`, temperature-driven fan controllers have the following control logic:
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="600">
 
-If there are multiple heat sources in the zone, the user can configure different temperature calculation methods (i.e. minimum, average, maximum temperatures).
+If there are multiple heat sources (e.g. multiple CPUs or HDDs) in the zone, the user can configure different temperature calculation methods (i.e. minimum, average, maximum temperatures).
 The _Constant zone_ is an exception here, it does not have/require a temperature source, it can provide a constant fan level for one or more IPMI zones.
 
 Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating! 
