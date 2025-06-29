@@ -481,19 +481,20 @@ systemctl start smfc.service
 systemctl stop smfc.service
 systemctl restart smfc.service
 systemctl status smfc.service
+root@nas:~# systemctl status smfc
 ● smfc.service - Super Micro Fan Control
      Loaded: loaded (/etc/systemd/system/smfc.service; enabled; preset: enabled)
-     Active: active (running) since Mon 2025-01-27 00:55:26 CET; 8h ago
-   Main PID: 33361 (smfc.py)
-      Tasks: 1 (limit: 76963)
-     Memory: 8.1M
-        CPU: 21.388s
+     Active: active (running) since Mon 2025-06-23 17:55:50 CEST; 6 days ago
+   Main PID: 8464 (smfc)
+      Tasks: 1 (limit: 76863)
+     Memory: 10.4M
+        CPU: 7min 35.345s
      CGroup: /system.slice/smfc.service
-             └─33361 /usr/bin/python3 /opt/smfc/smfc.py -c /opt/smfc/smfc.conf -l 3
+             └─8464 /usr/bin/python3 /usr/local/bin/smfc -c /etc/smfc/smfc.conf -l 3
 
-Jan 27 09:10:44 nas smfc.service[33361]: CPU zone: new fan level > 48%/37.0C
-Jan 27 09:10:48 nas smfc.service[33361]: CPU zone: new fan level > 35%/29.0C
-Jan 27 09:10:54 nas smfc.service[33361]: CPU zone: new fan level > 48%/35.0C
+Jun 29 19:17:29 nas smfc.service[8464]: CPU zone: new fan level > 48%/34.0C @ IPMI [0] zone(s).
+Jun 29 19:21:07 nas smfc.service[8464]: CPU zone: new fan level > 61%/38.0C @ IPMI [0] zone(s).
+Jun 29 19:21:11 nas smfc.service[8464]: CPU zone: new fan level > 48%/34.0C @ IPMI [0] zone(s).
 ```
 
 If you are testing your configuration, you can start `smfc.py` directly in a terminal. Logging to the standard output and debug log level are useful in this case:
