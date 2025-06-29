@@ -42,8 +42,7 @@ class Service:
            all fans back to rhw default speed 100% to avoid overheating while `smfc` is not running."""
         # Configure fans.
         if hasattr(self, 'ipmi'):
-            self.ipmi.set_fan_level(Ipmi.CPU_ZONE, 100)
-            self.ipmi.set_fan_level(Ipmi.HD_ZONE, 100)
+            self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
             if hasattr(self, 'log'):
                 self.log.msg(Log.LOG_INFO, 'smfc terminated: all fans are switched back to the 100% speed.')
 
@@ -121,7 +120,7 @@ class Service:
         7 - runtime dependency error
         8 - IPMI initialization error
         9 - udev initialization error
-        10 - none of the zones is enabled
+        10 - none of the fan controllers is enabled
         """
         app_parser: ArgumentParser     # Instance for an ArgumentParser class
         parsed_results: Namespace      # Results of parsed command line arguments
