@@ -172,7 +172,7 @@ Like many other utilities (created by NAS and home server community), `smfc` als
    2. then their speed can be safely configured in `[Lower Critical, Upper Critical]` interval
    3. if any fan speed oversteps either `Lower Critical` or `Upper Critical` threshold then IPMI will generate an _assertion event_ and will set the all fan speeds back to 100% in the zone
 
-Please also consider the fact that **fans are mechanical devices, their rotational speed is not stable** (it could be fluctuating). In order to avoid IPMI's assertion mechanism described here please follow the next steps: 
+Please also consider the fact that **fans are mechanical devices, their rotational speed is not stable** (it could be fluctuating). To avoid IPMI's assertion mechanism described here please follow the next steps: 
 
   1. Per fan: check the minimum and maximum rotational speeds of your fan on its vendor website
   2. Per fan: configure proper IMPI sensor thresholds adjusted to the fan speed interval
@@ -240,7 +240,7 @@ You can read more about:
 If low noise and low heat generation are important attributes of your Linux box, then you may consider the following chapters.
 
 #### 7.1 CPU
-Most of the modern CPUs has multiple energy saving features. You can check your BIOS and enable them in order to minimize the heat generation.
+Most of the modern CPUs has multiple energy saving features. You can check your BIOS and enable them to minimize the heat generation.
 
 Intel(R) CPUs:
  - Intel(R) Speed Shift Technology
@@ -266,7 +266,7 @@ With the help of command `hdparm` you can enable advanced power management and s
 	hdparm -B 127 /dev/sda
 	hdparm -S 240 /dev/sda
 	
-In file `/etc/hdparm.conf` you can specify all parameters in a persistent way:
+In file `/etc/hdparm.conf` you can specify all parameters persistently:
 
 	quiet
 
@@ -473,7 +473,7 @@ Important notes:
 
 
 ### 11. Automatic execution of the service
-This `systemd` service can be started and stopped in the standard way. Do not forget to reload `systemd` configuration after a new installation or if you changed the service definition file:
+This `systemd` service can be started and stopped in the standard way. Remember to reload `systemd` configuration after a new installation or if you changed the service definition file:
 
 ```
 systemctl daemon-reload
