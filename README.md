@@ -519,6 +519,8 @@ options:
   -ne             no fan speed recovery at exit
 ```
 
+`smfc` command-line options can be specified in `/etc/default/smfc` file if you run `smfc` as a systemd service. 
+
 If you are testing your configuration, you can start `smfc.py` directly in a terminal (logging to the standard output on debug log level):
 
 	smfc -o 0 -l 3
