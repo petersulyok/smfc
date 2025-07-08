@@ -52,11 +52,12 @@ In `smfc`, the following fan controllers are implemented:
 | Fan controller | Temperature source      | Configuration                                                           | Default IPMI zone   |
 |----------------|-------------------------|-------------------------------------------------------------------------|---------------------|
 | CPU zone       | Intel/AMD CPU(s)        | CPUs are identified automatically                                       | 0 (CPU zone)        |
-| HD zone        | SATA and SCSI HDDs/SSDs | Hard disks' names must be specified `[HD zone] hd_names=` parameter     | 1 (Peripheral zone) | 
+| HD zone        | SATA and SCSI HDDs/SSDs | Hard disks' names must be specified in `[HD zone] hd_names=` parameter  | 1 (Peripheral zone) | 
 | GPU zone       | Nvidia GPUs             | GPU indices must be specified in `[GPU zone] gpu_device_ids=` parameter | 1 (Peripheral zone) |
 | Constant zone  | None                    | Constant fan level can be specified in `[CONST zone] level=` parameter  | 1 (Peripheral zone) |
 
 These fan controllers can be enabled and disabled independently. They can be used in a free combination with on or more IPMI zones, but different fan controllers should control different IPMI zones (i.e. no overlapping is allowed)!
+_Constant zone_ is an exception here, it does not require a temperature source, it can provide a constant fan level for one or more IPMI zones.
 
 The _IPMI zone_ is a logical term, representing a cooling zone, where there are predefined fans having the same rotation speed. Please note that the fan assignment to an IPMI zone is predefined on the motherboard, it cannot be changed! 
 On a typical Super Micro motherboard, there are two IPMI zones:
@@ -76,8 +77,7 @@ In `smfc`, a temperature-driven fan controller implements the following control 
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="600">
 
-If there are multiple heat sources (e.g. multiple CPUs or HDDs) in the zone, the user can configure different temperature calculation methods (i.e. minimum, average, maximum temperatures).
-The _Constant zone_ is an exception here, it does not have/require a temperature source, it can provide a constant fan level for one or more IPMI zones.
+If there are multiple heat sources (e.g. multiple CPUs, HDDs or GPUs) defined in the fan controller, then the user can configure a calculation method (i.e. minimum, average, maximum) for the temperature calculation (see `temp_calc=` parameter in the configuration).
 
 Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating! 
 
@@ -302,44 +302,55 @@ Notes:
 - `smfc` is able to find the proper HWMON file automatically for Intel(R) CPUs, AMD(R) CPUs, SATA drives, or NVMe drives, but users may also specify the files manually (see `hwmon_path=` parameter in the config file)
 - Reading `drivetemp` module is the fastest way to get the temperature of the hard disks, and it can read temperature of the SATA hard disks even in standby mode, too. 
 
-### 9. Installation
-For the installation you need a root user. Download and extract a release file or clone the git repository first.
-Then use the installation script `install.sh`, or copy the following files manually:
+#### 9. Installation
+For the installation, you need root privileges. There are several ways to install `smfc`, this chapter
 
-| File             | Installation folder   | Description                            |
-|------------------|-----------------------|----------------------------------------|
-| `smsc.service`   | `/etc/systemd/system` | systemd service definition file        |
-| `smsc`           | `/etc/default`        | service command line options           |
-| `smsc.py`        | `/opt/smfc`           | service (python program)               |
-| `smsc.conf`      | `/opt/smfc`           | service configuration file             |
-| `hddtemp_emu.sh` | `/opt/smfc`           | `hddtemp` emulation script (optional)  |
+#### 9.1. Manual installation
+There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` remotely from the GitHub repository (without cloning or downloading).
+The installation script requires `curl` and `pip` commands and can be executed in this way:
 
-Notes:
-  - any target folder can be used instead of `/opt`
-  - `install.sh` will add all of your disks to your new `smfc.conf`, please remove the unnecessary itesm 
+`curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh|bash`
 
-The service has the following command line options:
+or if you want to preserve your existing configuration file, this way:
 
-	root@home:~/opt/smfc# ./smfc.py --help
-	usage: smfc.py [-h] [-c CONFIG_FILE] [-v] [-l {0,1,2,3,4}] [-o {0,1,2}]
-	
-	optional arguments:
-  		-h, --help      show this help message and exit
-  		-c CONFIG_FILE  configuration file
-  		-v              show program's version number and exit
-  		-l {0,1,2,3,4}  log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG
-  		-o {0,1,2}      log output: 0-stdout, 1-stderr, 2-syslog(default)
+`curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh|bash /dev/stdin --keep-config`
 
-You may configure logging output and logging level here, and these options can be specified in `/etc/default/smfc`in a persistent way.
+The installation script has the following command line parameters:
+
+```
+user@host:~$ ./install.sh --help
+usage: install.sh [-h|--help] [-k|--keep-config] [-v|--verbose]
+           -h, --help         help text
+           -k, --keep-config  keep original configuration file
+           -v, --verbose      verbose output
+```
+
+The default locations of the installation files: 
+
+| Files           | Installation folder                               | Description                     |
+|-----------------|---------------------------------------------------|---------------------------------|
+| `smfc.service`  | `/etc/systemd/system`                             | systemd service definition file |
+| `smfc`          | `/etc/default`                                    | service command line options    |
+| `smfc.conf`     | `/etc/smfc`                                       | service configuration file      |
+| `smfc package`  | `/usr/local/bin`<br/> `/usr/local/lib/python3.xx` | python package                  |
+
+Further manual steps after a successful installation:
+  - install program dependencies (`ipmitool`, `smartctl` or `nvidia-smi`)
+  - load proper kernel modules (`coretemp` or `k10temp` and `drivetemp`)
+
+#### 9.2. Docker installation
+`smfc` is also available as a docker image, see more details in [Docker.md](../docker/Docker.md). In this case, your job is only to provide your configuration file on host computer, `smfc` will be executed automatically when the container is starting. 
+
 
 ### 10. Configuration file
+After successful installation, create your new configuration file. If you just upgrade to a new `smfc` version, you can preserve the existing one. 
 
 #### 10.1 Right strategy to create your configuration file
 You have to think over and answer the following questions:
 
 1. What are the most important heat sources in your machine? Typically, these could be CPU(s), hard disks, or GPUs.
 2. Which fan controllers would you like to use and configure in `smfc`?
-3. What is the expected temperature interval (minimum/maximum C degree) for the selected temperature source(s)? Use some test tools to measure it (e.g. [`s-tui`](https://github.com/amanusk/s-tui), [`fio`](https://fio.readthedocs.io/en/latest/fio_doc.html), [`iozone`](https://www.iozone.org/)) if you don't have their track record.  
+3. What is the expected temperature interval (minimum/maximum C degree) for the selected temperature source(s)? Use some test tools to measure it (e.g. [`s-tui`](https://github.com/amanusk/s-tui), [`fio`](https://fio.readthedocs.io/en/latest/fio_doc.html), [`iozone`](https://www.iozone.org/)) if you don't have their track records.  
 4. Which IPMI zone(s) will be connected to these fan controllers/temperate sources)? Check how many IPMI zones you have, how the fans are connected on your motherboard, and how they are cooling the selected temperature source(s). 
 5. What is the stable level interval for fans in the selected IPMI zone(s)? Probably this part requires the most patience! You have assumptions here, you will try them. If there are IPMI assertions and your fans are spinning up then you will refine the interval and try again. You might have several cycles here, this is normal. 
 
@@ -472,8 +483,8 @@ Important notes:
 5. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
 
 
-### 11. Automatic execution of the service
-This `systemd` service can be started and stopped in the standard way. Remember to reload `systemd` configuration after a new installation or if you changed the service definition file:
+### 11. How to run `smfc`?
+After a manual installation `smfc` can be started and stopped as a standard `systemd` service. Remember to reload `systemd` configuration after a new installation or if you changed the service definition file:
 
 ```
 systemctl daemon-reload
@@ -497,10 +508,28 @@ Jun 29 19:21:07 nas smfc.service[8464]: CPU zone: new fan level > 61%/38.0C @ IP
 Jun 29 19:21:11 nas smfc.service[8464]: CPU zone: new fan level > 48%/34.0C @ IPMI [0] zone(s).
 ```
 
-If you are testing your configuration, you can start `smfc.py` directly in a terminal. Logging to the standard output and debug log level are useful in this case:
+The `smfc` program has the following parameters:
 
-	cd /opt
-	sudo smfc.py -o 0 -l 3
+```
+root@nas$ smfc --help
+usage: smfc [-h] [-c CONFIG_FILE] [-v] [-l {0,1,2,3,4}] [-o {0,1,2}] [-nd] [-s] [-ne]
+
+options:
+  -h, --help      show this help message and exit
+  -c CONFIG_FILE  configuration file
+  -v              show program's version number and exit
+  -l {0,1,2,3,4}  log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG
+  -o {0,1,2}      log output: 0-stdout, 1-stderr, 2-syslog(default)
+  -nd             no dependency checking
+  -s              use sudo command
+  -ne             no fan speed recovery at exit
+```
+
+If you are testing your configuration, you can start `smfc.py` directly in a terminal (logging to the standard output on debug log level):
+
+	smfc -o 0 -l 3
+
+In case of Docker installation, `smfc` will be executed automatically when the container is started. Its command-line parameters can be specified in the docker-compose file. 
 
 ### 12. Checking the results and monitoring the logs
 All messages will be logged to the specific output and the specific level.
@@ -517,7 +546,7 @@ With the help of command `journalctl` you can check logs easily. For example:
 ## 13. FAQ
 
 ### Q: My fans are spinning up and loud. What's wrong?
-Most probably, the rotational speed of a fan went above or below of a IPMI threshold and IPMI switched back that zone to full rotational speed.
+Most probably, there was an assertion (i.e the rotational speed of a fan went above or below of a IPMI threshold) and IPMI switched back that zone to full rotational speed.
 You can check the current fan rotational speeds:
 
 	ipmitool sdr
@@ -533,23 +562,8 @@ root@home:~# ipmitool sel list
    5 | 10/19/2023 | 05:20:59 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
 ```
 
-If the problematic fan (causing the alert) is identified then you must adjust its threshold. This process could take several adjustment cycle. Be patent :)
+If the problematic fan (causing the alert) is identified, then you must adjust its threshold. This process could take several adjustment cycle. Be patent :)
 You may read [this chapter](https://github.com/petersulyok/smfc#7-ipmi-fan-control-and-sensor-thresholds) for more details. 
-
-### Q: I would like to use constant fan rotational speed in one or both zones. How can I configure that?
-You should configure the temperatures and levels with the same value. 
-
-	min_temp=40
-	max_temp=40
-	min_level=60
-	max_level=60
-
-With this setup there will be a constant 60% fan level in the specific zone. The temperature value is ignored, `steps` parameter is also ignored.
-
-### Q: I receive an error message "Cannot read hwmon*/temp1_input file". What is the problem?
-The problem is that the specific file cannot be found in HWMON system. The potential reasons behind this issue could be:
- - `drivetemp` driver cannot support your disks (it support only SATA hard disks). In case of SAS/SCSI hard disks you can use `hddtemp` instead of `drivetemp`. See more details in [issue #21](https://github.com/petersulyok/smfc/issues/21).
- - Maybe you specified the `hwmon_path=` parameter manually and it contains an invalid path. You can correct it.
 
 ### Q: How does the author test/use this service?
 The configuration is the following:
