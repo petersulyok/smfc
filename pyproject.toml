@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "smfc"
 description = "Super Micro Fan Control for Linux"
 readme = "README.md"
-version = "4.0.0b14"
+version = "4.0.0"
 authors = [
     { name = "Peter Sulyok", email = "peter@sulyok.net" }
 ]
@@ -22,7 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Operating System :: POSIX :: Linux",
     "Topic :: System :: Hardware",
-    "Development Status :: 4 - Beta"
+    "Development Status :: 5 - Production/Stable"
 ]
 dependencies = [
     "pyudev==0.24.3"

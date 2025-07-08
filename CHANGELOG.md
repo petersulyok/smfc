@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [v4.0.0] - 2025-07-08 Final Release 
+The final release is identical with the beta-14 version and some documentation updates. Here is a high level summary of new features and changes:
+
+### New
+- `smfc` is using `udev` (`pyudev` package) for device management (thanks to @abbaad): 
+  - Automatic discovery of HWMON files for both Intel and AMD CPUs, including the number of CPUs, no manual configuration required. 
+  - Automatic discovery of HWMON files for HDDs/SSDs based on `hd_names=` parameter, including the number of HDDS/SSDs, no manual configuration required.
+  - Automatic use of `smartctl` if no HWMON file found for a hard disks (e.g. SCSI disk).
+- `smfc` is a Python package, uploaded to pypi.org
+- `smfc` has new command-line options (-s, -nd, -ne)
+- `smfc` is using `uv` for Python project management
+- `smfc` implements new fan controllers:
+  - `[GPU zone]`: supporting nvidia GPUs (using `nvidia-smi` command)
+  - `[CONST zone]` constant fan level in the zone(s)
+- `smfc` implements free IPMI zone assignment, where a fan controller can control fans on one or more IPMI zones (see `ipmi_zone= parameter`)
+- `CHANGELOG.md` added
+
+### Change
+- `smfc` installer moved to `bin` folder, and can install remotely:
+
+    `curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh|bash /dev/stdin --keep-config --verbose`
+
+- Default location of `smfc.conf ` moved to `/etc/smfc` folder.
+- `hddtemp` is deprecated, `smfc` uses `smartctl` command for SAS/SCSI disks.
+- `smfc` configuration file changes: 
+  - `smfc` can read the old configuration files (version 3.x), but some parameters are not used anymore.
+  - `count=` parameter is not used anymore, count is calculated automatically.
+  - `hwmon_path=` parameter is not used anymore, identified automatically.
+  - `hddtemp_path`= is not used anymore.
+  - `swapped_zones=` is not used anymore, use `ipmi_zone=` parameter instead to specify the proper IPMI zone
+- `TESTING.md` was renamed to `DEVELOPMENT.md`
+- Docker changes:
+  - There are two docker images available: smaller standard image (Alpine Linux based), bigger gpu-enabled image (Debian 12 based)
+  - Tag naming is also changed (e.g. 4.0, latest, 4.0-gpu, latest-gpu)
+
+### Removed
+- Unused test data files from `test` folder 
+- Unused scripts from `bin` folder 
+- `hddtemp` removed
+
+### Fix
+- Support of AMD CPUs (without manual configuration) - issue #25
+
+
 ## [v4.0.0b14] - 2025-06-22 Pre-release 
 
 ### Fix
