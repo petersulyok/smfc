@@ -6,13 +6,7 @@
 ](https://github.com/petersulyok/smfc/issues) [![Supported Python Versions](https://img.shields.io/pypi/pyversions/smfc)](https://pypi.org/project/smfc)
 [![PyPI version](https://badge.fury.io/py/smfc.svg)](https://badge.fury.io/py/smfc)
 
-
 Super Micro fan control for Linux (home) servers.
-
-> [!NOTE]
-> BETA-14 released: Fix for parsing the temperature of newer SCSI disks (issue #76).
-
-See [discussion#77](https://github.com/petersulyok/smfc/discussions/77) for more details.
 
 ## TL;DR
 
@@ -33,12 +27,12 @@ You can also run `smfc` in docker, see more details in [Docker.md](docker/Docker
 
 
 ### 2. Installation and configuration
- 1. Set up the IPMI threshold values for your fans (see [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds) for the details). 
+ 1. Set up the IPMI threshold values for your fans (see [chapter 6.](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds) for more details). 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`).
- 4. Install `smfc` service (check [Installation.md](doc/Installation.md) for more details)`.
- 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [this chapters](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration-file) for the details).
- 6. Start the `systemd` service
+ 4. Install `smfc` service (check [chapter 9.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#9-installation) for more details).
+ 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapters 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration-file) for more details).
+ 6. Start `smfc` service (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc) for more details).
  7. Check results in system log
  8. Leave a feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
 
