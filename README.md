@@ -390,7 +390,7 @@ min_level=35
 max_level=100
 
 
-# HD zone: this fan controller works based on HD(s) temperature.
+# HD zone: this fan controller works based on HDDs/SSDs temperature.
 [HD zone]
 # Fan controller enabled (bool, default=0)
 enabled=1
@@ -452,13 +452,13 @@ gpu_device_ids=0
 nvidia_smi_path=/usr/bin/nvidia-smi
 
 
-# Const zone: this fan controller does not read any temperature and sets constant fan level for IPMI zones(s).
+# Const zone: this fan controller sets constant fan level (without any heat source) for IPMI zones(s).
 [CONST zone]
 # Fan controller enabled (bool, default=0)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1))
 ipmi_zone=1
-# Polling interval for checking level and restting if needed (int, sec, default=30)
+# Polling interval for checking/resetting level if needed (int, sec, default=30)
 polling=30
 # Constant fan level (int, %, default=50)
 level=50
