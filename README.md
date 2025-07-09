@@ -297,7 +297,7 @@ Notes:
 - Reading `drivetemp` module is the fastest way to get the temperature of the hard disks, and it can read temperature of the SATA hard disks even in standby mode, too. 
 
 #### 9. Installation
-For the installation, you need root privileges. There are several ways to install `smfc`, this chapter
+For the installation, you need root privileges. There are several ways to install `smfc`, this chapter will show them.
 
 #### 9.1. Manual installation
 There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` remotely from the GitHub repository (without cloning or downloading).
