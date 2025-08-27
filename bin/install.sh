@@ -78,10 +78,14 @@ if [ -z "${KEEP_CONFIG}" ]; then
   verbose_echo "New configuration file installed ($TARGET_DIR/smfc.conf)."
 fi
 
-# Install systemd service files.
+# Install smfc files.
 curl --silent -o "/etc/default/smfc" "$GITHUB_URL/config/smfc"
 curl --silent -o "/etc/systemd/system/smfc.service" "$GITHUB_URL/config/smfc.service"
-verbose_echo "Systemd files for smfc installed."
+mkdir -p /usr/local/share/man/man1
+curl --silent -o "/usr/local/share/man/man1/smfc.1" "$GITHUB_URL/doc/smfc.1"
+gzip "/usr/local/share/man/man1/smfc.1"
+mandb > /dev/null 2>&1
+verbose_echo "smfc files have been installed."
 
 # Collect all disk names for `hd_names=` parameter in case of a 'smfc.conf' file.
 if [ -z "${KEEP_CONFIG}" ]; then
