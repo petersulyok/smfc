@@ -1,0 +1,99 @@
+.TH SMFC 1 smfc\-4.1.0
+.SH NAME
+.B smfc
+\- Super Micro fan control for Linux (home) servers.
+.SH SYNOPSIS
+.B smfc
+[options]
+.SH DESCRIPTION
+.B smfc
+is a systemd service (written in Python), which can control fans on Super Micro X10-X13 motherboards with IPMI.
+It can be started and stopped as a systemd service, but it can be also executed as a standalone command, manually.
+See more details in GitHub repository:
+.IP
+https://github.com/petersulyok/smfc
+
+.SH OPTIONS
+.TP
+.B -h, --help
+show this help message and exit
+
+.TP
+.B -c CONFIG_FILE
+configuration file (default is
+.I /etc/smfc/smfc.conf
+)
+
+.TP
+.B -v, --version
+show program's version number and exit
+
+.TP
+.B -l {0,1,2,3,4}
+set log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG
+
+.TP
+.B -o {0,1,2}
+set log output: 0-stdout, 1-stderr, 2-syslog(default)
+
+.TP
+.B -nd
+no dependency checking at start
+
+.TP
+.B -s
+use sudo command
+
+.TP
+.B -ne
+no fan speed recovery at exit
+
+.SH FILES
+.TP
+.I
+/etc/smfc/sfmc.conf
+
+.TP
+.I
+/etc/default/smfc
+
+.TP
+.I
+/etc/systemd/system/smfc.service
+
+.SH EXIT CODES
+.TP
+.B 0
+normal exit
+
+.TP
+.B 2
+invalid parameter (argument parser)
+
+.TP
+.B 5
+log system initialization error
+
+.TP
+.B 6
+config file error
+
+.TP
+.B 7
+runtime dependency error
+
+.TP
+.B 8
+IPMI initialization error
+
+.TP
+.B 9
+udev initialization error
+
+.TP
+.B 10
+none of the fan controllers are enabled
+
+.SH COPYRIGHT
+.Bsmfc
+is Copyright (C) 2020-2025 by Peter Sulyok
