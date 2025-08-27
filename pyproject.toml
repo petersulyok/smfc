@@ -1,12 +1,8 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "smfc"
 description = "Super Micro Fan Control for Linux"
 readme = "README.md"
-version = "4.0.0"
+version = "4.1.0"
 authors = [
     { name = "Peter Sulyok", email = "peter@sulyok.net" }
 ]
@@ -25,21 +21,26 @@ classifiers = [
     "Development Status :: 5 - Production/Stable"
 ]
 dependencies = [
-    "pyudev==0.24.3"
+    "pyudev"
 ]
-
 [dependency-groups]
 dev = [
-    "build==1.2.2.post1",
-    "coverage==7.6.12",
-    "mock==5.2.0",
-    "pylint==3.3.5",
-    "pytest==8.3.5",
-    "pytest-cov==6.0.0",
-    "pytest-mock==3.14.0",
-    "ruff==0.11.5",
-    "twine==6.1.0",
+    "build",
+    "coverage",
+    "mock",
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+    "twine"
 ]
+lint = [
+    "ruff",
+    "pylint"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
 [project.urls]
 Homepage = "https://github.com/petersulyok/smfc"
@@ -48,6 +49,9 @@ Issues = "https://github.com/petersulyok/smfc/issues"
 
 [project.scripts]
 smfc = "smfc.cmd:main"
+
+[tool.uv]
+default-groups = ["dev", "lint"]
 
 [tool.setuptools]
 packages = ["smfc"]

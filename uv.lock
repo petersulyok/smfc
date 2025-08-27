@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.9, <4"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -755,7 +755,7 @@ wheels = [
 
 [[package]]
 name = "smfc"
-version = "4.0.0"
+version = "4.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "pyudev" },
@@ -766,28 +766,32 @@ dev = [
     { name = "build" },
     { name = "coverage" },
     { name = "mock" },
-    { name = "pylint" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
-    { name = "ruff" },
     { name = "twine" },
+]
+lint = [
+    { name = "pylint" },
+    { name = "ruff" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pyudev", specifier = "==0.24.3" }]
+requires-dist = [{ name = "pyudev" }]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "build", specifier = "==1.2.2.post1" },
-    { name = "coverage", specifier = "==7.6.12" },
-    { name = "mock", specifier = "==5.2.0" },
-    { name = "pylint", specifier = "==3.3.5" },
-    { name = "pytest", specifier = "==8.3.5" },
-    { name = "pytest-cov", specifier = "==6.0.0" },
-    { name = "pytest-mock", specifier = "==3.14.0" },
-    { name = "ruff", specifier = "==0.11.5" },
-    { name = "twine", specifier = "==6.1.0" },
+    { name = "build" },
+    { name = "coverage" },
+    { name = "mock" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "twine" },
+]
+lint = [
+    { name = "pylint" },
+    { name = "ruff" },
 ]
 
 [[package]]
