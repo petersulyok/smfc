@@ -130,14 +130,14 @@ class Service:
         app_parser = ArgumentParser()
         # Syntax definition of the command-line parameters.
         app_parser.add_argument('-c', action='store', dest='config_file', default='smfc.conf',
-                                help='configuration file')
-        app_parser.add_argument('-v', action='version', version='%(prog)s ' + version("smfc"))
+                                help='configuration file (default is /etc/smfc/smfc.conf)')
+        app_parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + version("smfc"))
         app_parser.add_argument('-l', type=int, choices=[0, 1, 2, 3, 4], default=1,
-                                help='log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG')
+                                help='set log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG')
         app_parser.add_argument('-o', type=int, choices=[0, 1, 2], default=2,
-                                help='log output: 0-stdout, 1-stderr, 2-syslog(default)')
+                                help='set log output: 0-stdout, 1-stderr, 2-syslog(default)')
         app_parser.add_argument('-nd', action='store_true', default=False,
-                                help='no dependency checking')
+                                help='no dependency checking at start')
         app_parser.add_argument('-s', action='store_true', default=False,
                                 help='use sudo command')
         app_parser.add_argument('-ne', action='store_true', default=False,
