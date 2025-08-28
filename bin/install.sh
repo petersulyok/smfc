@@ -58,7 +58,7 @@ LATEST_VERSION=$(curl --silent "$GITHUB_URL/pyproject.toml"|grep "version = "|cu
 verbose_echo "Latest smfc version from GitHub: $LATEST_VERSION"
 
 # Install latest `smfc` package from Pypi.org
-pip install -q --prefix=/usr smfc==$LATEST_VERSION > /dev/null 2>&1
+pip install -q --prefix=/usr smfc==$LATEST_VERSION
 verbose_echo "pip installed smfc==$LATEST_VERSION."
 
 # Install configuration file.
