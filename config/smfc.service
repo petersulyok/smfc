@@ -1,7 +1,7 @@
 [Unit]
 Description=Super Micro Fan Control
 Requires=openipmi.service
-After=syslog.target openipmi.service
+After=syslog.target
 
 [Service]
 Type=simple
