@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### New
 - Linux man page added to `smfc`, part of the installation.
 - Documentation updates.
-- Delays added between starting fan controllers at startup
+- Delays added between starting fan controllers at startup (to provide more time for fan speed changes)
+- `install.sh`: new dependencies added (`gzip`, `mandb` commands).
 
 ### Change
 - `uv` dependencies changed in `pyproject.toml`.
