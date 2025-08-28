@@ -44,10 +44,10 @@ This service was designed for Super Micro motherboards having IPMI functionality
 fan speed dynamically in one or more IPMI zones. The service operates the fans in IPMI FULL mode, where the fan rotation level
 can be adjusted with IPMI raw commands (read [more details here](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/)).
 
-#### IPMI zones
+#### 1.1 IPMI zones
 _IPMI zone_ is a logical term, representing a cooling zone, where there are predefined fans having the same rotation speed.
 Please note that the fan assignment to an IPMI zone is predefined on the motherboard, it cannot be changed (Super Micro does not 
-provide individual configuration for fans, other vensors do it). On a typical Super Micro motherboard, there are two IPMI zones:
+provide individual fan configuration features in IPMI, while other vendors do it). On a typical Super Micro motherboard, there are two IPMI zones:
 
 - CPU or System zone (IPMI zone 0) with fan names: FAN1, FAN2, etc.
 - Peripheral or HD zone (IPMI zone 1) with fan names: FANA, FANB, etc.
@@ -56,7 +56,7 @@ On Super Micro server boards, there could be more IPMI zones with different fan 
 
 > `smfc v3.8.0` and earlier versions implemented a feature (called _Swapped Zones_) to swap IPMI zone 0 and 1. From `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convince for the user (see `ipmi_zone=` parameter for more details).  
 
-#### Fan controllers
+#### 1.2 Fan controllers
 In `smfc`, the following fan controllers are implemented:
 
 | Fan controller | Temperature source      | Configuration                                                           | Default IPMI zone   |
