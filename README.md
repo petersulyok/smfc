@@ -40,7 +40,23 @@ Feel free to visit [Discussions](https://github.com/petersulyok/smfc/discussions
 
 ## Details
 ### 1. How does it work?
-This service was designed for Super Micro motherboards with IPMI functionality, implementing different fan controllers connected to one or more IPMI zones.
+This service was designed for Super Micro motherboards having IPMI functionality, implementing fan controllers controlling
+fan speed dynamically in one or more IPMI zones. The service operates the fans in IPMI FULL mode, where the fan rotation level
+can be adjusted with IPMI raw commands (read [more details here](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/)).
+
+#### IPMI zones
+_IPMI zone_ is a logical term, representing a cooling zone, where there are predefined fans having the same rotation speed.
+Please note that the fan assignment to an IPMI zone is predefined on the motherboard, it cannot be changed (Super Micro does not 
+provide individual configuration for fans, other vensors do it). On a typical Super Micro motherboard, there are two IPMI zones:
+
+- CPU or System zone (IPMI zone 0) with fan names: FAN1, FAN2, etc.
+- Peripheral or HD zone (IPMI zone 1) with fan names: FANA, FANB, etc.
+
+On Super Micro server boards, there could be more IPMI zones with different fan names (see [issue #31](https://github.com/petersulyok/smfc/issues/31)). 
+
+> `smfc v3.8.0` and earlier versions implemented a feature (called _Swapped Zones_) to swap IPMI zone 0 and 1. From `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convince for the user (see `ipmi_zone=` parameter for more details).  
+
+#### Fan controllers
 In `smfc`, the following fan controllers are implemented:
 
 | Fan controller | Temperature source      | Configuration                                                           | Default IPMI zone   |
@@ -52,16 +68,7 @@ In `smfc`, the following fan controllers are implemented:
 
 These fan controllers can be enabled and disabled independently. They can be used in a free combination with on or more IPMI zones, but different fan controllers should control different IPMI zones (i.e. no overlapping is allowed)!
 _Constant zone_ is an exception here, it does not require a temperature source, it can provide a constant fan level for one or more IPMI zones.
-
-The _IPMI zone_ is a logical term, representing a cooling zone, where there are predefined fans having the same rotation speed. Please note that the fan assignment to an IPMI zone is predefined on the motherboard, it cannot be changed! 
-On a typical Super Micro motherboard, there are two IPMI zones:
-
-- CPU or System zone (IPMI zone 0) with fan names: FAN1, FAN2, etc.
-- Peripheral or HD zone (IPMI zone 1) with fan names: FANA, FANB, etc.
-
-On Super Micro server motherboards, there could be more IPMI zones with different fan names (see [issue #31](https://github.com/petersulyok/smfc/issues/31)). 
-
-Note: `smfc v3.8.0` and previous versions implemented _Swapped Zones_ feature to swap IPMI zone 0 and 1. From `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convince for the user (see `ipmi_zone=` parameter for more detail).  
+In `smfc` configuration file each fan controller has an individual section.
 
 In `smfc`, a temperature-driven fan controller implements the following control logic:
 
@@ -510,11 +517,11 @@ usage: smfc [-h] [-c CONFIG_FILE] [-v] [-l {0,1,2,3,4}] [-o {0,1,2}] [-nd] [-s] 
 
 options:
   -h, --help      show this help message and exit
-  -c CONFIG_FILE  configuration file
-  -v              show program's version number and exit
-  -l {0,1,2,3,4}  log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG
-  -o {0,1,2}      log output: 0-stdout, 1-stderr, 2-syslog(default)
-  -nd             no dependency checking
+  -c CONFIG_FILE  configuration file (default is /etc/smfc/smfc.conf)
+  -v, --version   show program's version number and exit
+  -l {0,1,2,3,4}  set log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG
+  -o {0,1,2}      set log output: 0-stdout, 1-stderr, 2-syslog(default)
+  -nd             no dependency checking at start
   -s              use sudo command
   -ne             no fan speed recovery at exit
 ```
