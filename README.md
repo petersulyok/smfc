@@ -308,7 +308,7 @@ For the installation, you need root privileges. There are several ways to instal
 
 #### 9.1. Manual installation
 There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` remotely from the GitHub repository (without cloning or downloading).
-The installation script requires `curl` and `pip` commands and can be executed in this way:
+The installation script requires: `curl`, `pip`, `gzip`, and `mandb` commands. It can be executed this way:
 
 `curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh|bash`
 
