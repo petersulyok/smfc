@@ -228,21 +228,25 @@ class Service:
         if self.cpu_zone_enabled:
             self.log.msg(Log.LOG_DEBUG, 'CPU zone fan controller enabled')
             self.cpu_zone = CpuZone(self.log, self.udevc, self.ipmi, self.config)
+            time.sleep(self.ipmi.fan_level_delay)
 
         # Create an instance for HD zone fan controller if enabled.
         if self.hd_zone_enabled:
             self.log.msg(Log.LOG_DEBUG, 'HD zone fan controller enabled')
             self.hd_zone = HdZone(self.log, self.udevc, self.ipmi, self.config, self.sudo)
+            time.sleep(self.ipmi.fan_level_delay)
 
         # Create an instance for GPU zone fan controller if enabled.
         if self.gpu_zone_enabled:
             self.log.msg(Log.LOG_DEBUG, 'GPU zone fan controller enabled')
             self.gpu_zone = GpuZone(self.log, self.ipmi, self.config)
+            time.sleep(self.ipmi.fan_level_delay)
 
         # Create an instance for Const zone fan controller if enabled.
         if self.const_zone_enabled:
             self.log.msg(Log.LOG_DEBUG, 'CONST zone fan controller enabled')
             self.const_zone = ConstZone(self.log, self.ipmi, self.config)
+            time.sleep(self.ipmi.fan_level_delay)
 
         # Calculate the default sleep time for the main loop.
         polling_set = set()

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v4.1.0] - 2025-08-28 
+
+### New
+- Linux man page added to `smfc`, part of the installation.
+- Documentation updates.
+- Delays added between starting fan controllers at startup
+
+### Change
+- `uv` dependencies changed in `pyproject.toml`.
+- `install.sh`: pip errors visible again.
+
+### Removed
+- `openipmi.service` target removed from `smfc.service`, Debian 13 Trixie complained about it.
+
 
 ## [v4.0.0] - 2025-07-08 Final Release 
 The final release is identical with the beta-14 version and some documentation updates. Here is a high level summary of new features and changes:
