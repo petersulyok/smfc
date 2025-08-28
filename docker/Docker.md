@@ -17,8 +17,8 @@ Generic notes for the docker images:
 
 # Standard image
 This image contains the following components: 
-- `Alpine Linux` 3.22
-- `Python` 3.12.10-r1
+- `Alpine Linux` 3.22.1
+- `Python` 3.12.11-r0
 - `ipmitool` 1.8.19-r1
 - `smartmontools` 7.5-r0
 
@@ -172,6 +172,7 @@ Please note that the dockerfile will install `smfc` from `pypi.org`, so the vers
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
+  - **4.1.0** (2025.08.28): Updated to smfc 4.1.0 (Alpine 3.22.1/Debian 12) - beta releases deleted
   - **4.0.0** (2025.07.08): Updated to smfc 4.0.0 (Alpine 3.22/Debian 12) - beta releases deleted
   - **3.8.0** (2025.03.15): Updated to smfc 3.8.0 and (Alpine 3.20.6)
   - **3.7.0** (2025.01.27): Updated to smfc 3.7.0 and (Alpine 3.20.5) 
