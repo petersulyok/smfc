@@ -129,14 +129,14 @@ class TestConstZone:
         my_config[ConstZone.CS_CONST_ZONE] = {
             ConstZone.CV_CONST_ZONE_ENABLED: '1',
             ConstZone.CV_CONST_IPMI_ZONE: ipmi_zone,
-            ConstZone.CV_CONST_ZONE_POLLING: str(30),
+            ConstZone.CV_CONST_ZONE_POLLING: str(3.0),
             ConstZone.CV_CONST_ZONE_LEVEL: str(level)
         }
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_constzone = ConstZone(my_log, my_ipmi, my_config)
         my_constzone.level = level
-        my_constzone.last_time = 0
+        my_constzone.last_time = -100.0
         my_constzone.run()
         assert mock_getfanlevel.call_count == len(my_constzone.ipmi_zone), error
         if read_level != level:

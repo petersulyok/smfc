@@ -51,12 +51,12 @@ class ConstZone(FanController):
 
         self.name = ConstZone.CS_CONST_ZONE
         self.polling = config[ConstZone.CS_CONST_ZONE].getfloat(ConstZone.CV_CONST_ZONE_POLLING, fallback=30.0)
-        if self.polling < 0:
+        if self.polling < 0.0:
             raise ValueError('polling < 0')
         self.level = config[ConstZone.CS_CONST_ZONE].getint(ConstZone.CV_CONST_ZONE_LEVEL, fallback=50)
         if self.level not in range(0, 101):
             raise ValueError('invalid level')
-        self.last_time = 0
+        self.last_time = 0.0
 
         # Print configuration at DEBUG log level.
         if self.log.log_level >= Log.LOG_CONFIG:
@@ -79,7 +79,7 @@ class ConstZone(FanController):
 
         # Step 1: check the elapsed time.
         current_time = time.monotonic()
-        if (time.monotonic() - self.last_time) >= self.polling:
+        if (current_time - self.last_time) >= self.polling:
             self.last_time = current_time
 
             # Check in all IPMI zones if the current fan level is the expected one,
