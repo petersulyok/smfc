@@ -10,7 +10,7 @@ Super Micro fan control for Linux (home) servers.
 
 ## TL;DR
 
-This is a `systemd service` running on Linux and can control fans with help of IPMI on Super Micro X10-X13 (and some X9) motherboards.
+This is a `systemd service` running on Linux and can control fans with help of IPMI on Super Micro X10-X13/H10-H13 (and some X9) motherboards.
 
 You can also run `smfc` in docker, see more details in [Docker.md](docker/Docker.md).
 
@@ -135,14 +135,13 @@ Some additional notes:
 
 
 ### 5. Super Micro compatibility
-This software was designed to work with Super Micro X10 and X11 motherboards with a BMC chip (i.e. ASPEED AST2400/2500/2600) and IPMI functionality. Unfortunately, there are some motherboards (e.g. X10QBi see issue #69) not compatible with `smfc`.
+This software was designed to work with Super Micro X10-X12/H10-H12 motherboards with a BMC chip (i.e. ASPEED AST2400/2500) and with IPMI functionality. Unfortunately, there are some motherboards (e.g. X10QBi see [issue #69](https://github.com/petersulyok/smfc/issues/69)) not compatible with `smfc`.
 
-In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employ BMC chip). 
+In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employ a BMC chip). 
 
-The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI_FULL` mode, and they cannot control fan levels how it is implemented in `smfc`.
+The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
 
-X13 motherboards (with AST2600 BMC chips) seem to be compatible with smfc (see mode details in [issue #33](https://github.com/petersulyok/smfc/issues/33) about an X13SAE-F motherboard).
-Fan control and `IPMI_FULL` mode are working properly. The only difference is in using thresholds, AST2600 implements only `Lower Critical` threshold, so setting up thresholds is different in this case.  
+The newer X13/H13 motherboards (with AST2600 chips) are compatible with `smfc` (see mode details in [issue #33](https://github.com/petersulyok/smfc/issues/33) about an X13SAE-F motherboard). The only difference is in the implementation of thresholds, AST2600 chip implements only `Lower Critical` threshold, so setting up thresholds is different.  
 
 Feel free to create a short feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55) on your compatibility experience.
 
