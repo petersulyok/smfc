@@ -81,7 +81,7 @@ verbose_echo "Root privilege granted."
 
 
 # CASE 1: Local installation from the current folder.
-if [ "$LOCAL_INSTALL" = "YES" ]; then
+if [ "$LOCAL_INSTALL" = "yes" ]; then
 
   # Display the installation type.
   verbose_echo "Local installation from current folder."
@@ -97,7 +97,6 @@ if [ "$LOCAL_INSTALL" = "YES" ]; then
   # Install configuration file.
   TARGET_DIR=/etc/smfc
   new_configuration "cp ./config/smfc.conf $TARGET_DIR/smfc.conf"
-  verbose_echo "New configuration file installed ($TARGET_DIR/smfc.conf)."
 
   # Install smfc files.
   cp -f ./config/smfc /etc/default/smfc
