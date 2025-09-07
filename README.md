@@ -303,29 +303,26 @@ Notes:
 - Reading `drivetemp` module is the fastest way to get the temperature of the hard disks, and it can read temperature of the SATA hard disks even in standby mode, too. 
 
 #### 9. Installation
-For the installation, you need root privileges. There are several ways to install `smfc`, this chapter will show them.
+For the installation, you need root privilege. There are several ways to install `smfc`, this chapter will show them.
 
 #### 9.1. Manual installation
-There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` remotely from the GitHub repository (without cloning or downloading).
-The installation script requires: `curl`, `pip`, `gzip`, and `mandb` commands. It can be executed this way:
+There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` in two different ways:
+- remotely from the GitHub repository (no cloning required)
+- locally from a git repository (GitHub repository needs to be cloned)
 
-`curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh|bash`
-
-or if you want to preserve your existing configuration file, this way:
-
-`curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh|bash /dev/stdin --keep-config`
-
-The installation script has the following command line parameters:
+The installation script requires `curl`, `pip`, `gzip`, and `mandb` commands, and it has the following
+command line parameters:
 
 ```
 user@host:~$ ./install.sh --help
-usage: install.sh [-h|--help] [-k|--keep-config] [-v|--verbose]
+usage: install.sh [-h|--help] [-k|--keep-config] [-l|--local] [-v|--verbose]
            -h, --help         help text
            -k, --keep-config  keep original configuration file
+           -l, --local        installation from a local git repository
            -v, --verbose      verbose output
 ```
 
-The default locations of the installation files: 
+The default locations of the installed files: 
 
 | Files           | Installation folder                               | Description                     |
 |-----------------|---------------------------------------------------|---------------------------------|
@@ -334,22 +331,51 @@ The default locations of the installation files:
 | `smfc.conf`     | `/etc/smfc`                                       | service configuration file      |
 | `smfc package`  | `/usr/local/bin`<br/> `/usr/local/lib/python3.xx` | python package                  |
 
-Further manual steps after a successful installation:
-  - install program dependencies (`ipmitool`, `smartctl` or `nvidia-smi`)
-  - load proper kernel modules (`coretemp` or `k10temp` and `drivetemp`)
+Notes for the script:
+- It will stop for any error (set -e)
+- The default installation method is the remote installation
+- Using `--local` parameter will do installation locally, from the current folder (the GitHUb repository needs to be cloned)
+- In default, a new configuration file will be installed (an existing previous configuration file will be renamed) and
+the `hd_names=` parameter will be filled with the list of existing hard disks (please edit this list manually because there
+are redundant items on that)
+- Using `--keep-config` parameter, the original configuration file will be preserved
+- Using `--verbose` parameter, the phases of the installation will be displayed 
+
+For remote installation the script can be executed (as root user) this way:
+
+```
+curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh|bash /dev/stdin --verbose
+```
+
+or if you want to preserve your existing configuration file:
+
+```
+curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh|bash /dev/stdin --verbose --keep-config
+```
+
+For local installation follow these steps ([`uv` command](https://docs.astral.sh/uv/getting-started/installation/) is also required):
+
+```
+git clone https://github.com/petersulyok/smfc.git
+cd smfc
+uv sync
+uv build
+./bin/install.sh --local --verbose --keep-config
+```
+
+Here we clone the GitHub repository and make the `smfc` package locally before installation.
 
 #### 9.2. Docker installation
 `smfc` is also available as a docker image, see more details in [Docker.md](../docker/Docker.md). In this case, your job is only to provide your configuration file on host computer, `smfc` will be executed automatically when the container is starting. 
 
-
 ### 10. Configuration file
-After successful installation, create your new configuration file. If you just upgrade to a new `smfc` version, you can preserve the existing one. 
+After successful installation, create/edit your new configuration file. If you just upgraded to a new `smfc` version, you can preserve the existing one. 
 
 #### 10.1 Right strategy to create your configuration file
 You have to think over and answer the following questions:
 
 1. What are the most important heat sources in your machine? Typically, these could be CPU(s), hard disks, or GPUs.
-2. Which fan controllers would you like to use and configure in `smfc`?
+2. Which fan controller would you like to use and configure in `smfc`?
 3. What is the expected temperature interval (minimum/maximum C degree) for the selected temperature source(s)? Use some test tools to measure it (e.g. [`s-tui`](https://github.com/amanusk/s-tui), [`fio`](https://fio.readthedocs.io/en/latest/fio_doc.html), [`iozone`](https://www.iozone.org/)) if you don't have their track records.  
 4. Which IPMI zone(s) will be connected to these fan controllers/temperate sources)? Check how many IPMI zones you have, how the fans are connected on your motherboard, and how they are cooling the selected temperature source(s). 
 5. What is the stable level interval for fans in the selected IPMI zone(s)? Probably this part requires the most patience! You have assumptions here, you will try them. If there are IPMI assertions and your fans are spinning up then you will refine the interval and try again. You might have several cycles here, this is normal. 
