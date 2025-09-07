@@ -336,8 +336,7 @@ Notes for the script:
 - The default installation method is the remote installation
 - Using `--local` parameter will do installation locally, from the current folder (the GitHUb repository needs to be cloned)
 - In default, a new configuration file will be installed (an existing previous configuration file will be renamed) and
-the `hd_names=` parameter will be filled with the list of existing hard disks (please edit this list manually because there
-are redundant items on that)
+the `hd_names=` parameter will be prefilled with the list of existing hard disks (please edit this list!) for user's convenience
 - Using `--keep-config` parameter, the original configuration file will be preserved
 - Using `--verbose` parameter, the phases of the installation will be displayed 
 
