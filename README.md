@@ -599,16 +599,16 @@ You may read [this chapter](https://github.com/petersulyok/smfc#7-ipmi-fan-contr
 The configuration is the following:
 
  - [Super Micro X11SCH-F motherboard](https://www.supermicro.com/en/products/motherboard/X11SCH-F)
- - [Intel Core i3-9300T CPU](https://ark.intel.com/content/www/us/en/ark/products/134875/intel-core-i39300t-processor-8m-cache-up-to-3-80-ghz.html)
- - 64 GB ECC DDR4 RAM
+ - [Intel (R) Xeon (R) E-2276G processor](https://www.intel.com/content/www/us/en/products/sku/191035/intel-xeon-e2276g-processor-12m-cache-3-80-ghz/specifications.html)
+ - 128 GB ECC DDR4-2666MHz RAM
  - [Fractal Design Node 804 case](https://www.fractal-design.com/products/cases/node/node-804/black/), with separate chambers for the motherboard and the hard disks:
  
 	<img src="https://www.legitreviews.com/wp-content/uploads/2014/05/fractal-design-node-804-vendor-fans.jpg" align="center" width="500">
 
- - Debian Linux LTS (actually bookworm with backported Linux kernel 6.5)
+ - Proxmox 9
  - 8 x [WD Red 12TB (WD120EFAX)](https://shop.westerndigital.com/en-ie/products/outlet/internal-drives/wd-red-plus-sata-3-5-hdd#WD120EFAX) hard disks in ZFS RAID
- - 3 x [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN4) in CPU zone 
- - 2 x [Noctua NF-12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) fans (FANA, FANB) in HD zone
+ - 4 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN3, FAN4) in CPU zone 
+ - 2 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) on an Y-adapter + [Noctua NF-A14 PWM](https://noctua.at/en/products/fan/nf-a14-pwm) fans (FANA, FANB) in HD zone
 
 ## 15. References
 Further readings:
