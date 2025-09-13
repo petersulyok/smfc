@@ -324,19 +324,19 @@ usage: install.sh [-h|--help] [-k|--keep-config] [-l|--local] [-v|--verbose]
 
 The default locations of the installed files: 
 
-| Files           | Installation folder                               | Description                     |
-|-----------------|---------------------------------------------------|---------------------------------|
-| `smfc.service`  | `/etc/systemd/system`                             | systemd service definition file |
-| `smfc`          | `/etc/default`                                    | service command line options    |
-| `smfc.conf`     | `/etc/smfc`                                       | service configuration file      |
-| `smfc package`  | `/usr/local/bin`<br/> `/usr/local/lib/python3.xx` | python package                  |
+| Files          | Installation folder                                                                                                                         | Description                     |
+|----------------|---------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------|
+| `smfc.service` | `/etc/systemd/system`                                                                                                                       | systemd service definition file |
+| `smfc`         | `/etc/default`                                                                                                                              | service command line options    |
+| `smfc.conf`    | `/etc/smfc`                                                                                                                                 | service configuration file      |
+| `smfc service` | `/usr/local/bin`, `/usr/local/lib/python3.xx` <br/> or  <br/> `/usr/bin`, `/usr/lib/python3.xx`  <br/> (depending on the Linux distribution) | python package                  |
 
 Notes for the script:
-- It will stop for any error (set -e)
+- Installation process will stop for any error
 - The default installation method is the remote installation
 - Using `--local` parameter will do installation locally, from the current folder (the GitHUb repository needs to be cloned)
 - In default, a new configuration file will be installed (an existing previous configuration file will be renamed) and
-the `hd_names=` parameter will be prefilled with the list of existing hard disks (please edit this list!) for user's convenience
+the `hd_names=` parameter will be pre-filled with the list of existing hard disks for user's convenience (please check/edit this paramaeter!)
 - Using `--keep-config` parameter, the original configuration file will be preserved
 - Using `--verbose` parameter, the phases of the installation will be displayed 
 
@@ -352,7 +352,7 @@ or if you want to preserve your existing configuration file:
 curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh|bash /dev/stdin --verbose --keep-config
 ```
 
-For local installation follow these steps ([`uv` command](https://docs.astral.sh/uv/getting-started/installation/) is also required):
+For local installation follow these steps (here [`uv` command](https://docs.astral.sh/uv/getting-started/installation/) is also required):
 
 ```
 git clone https://github.com/petersulyok/smfc.git
@@ -362,7 +362,7 @@ uv build
 ./bin/install.sh --local --verbose --keep-config
 ```
 
-Here we clone the GitHub repository and make the `smfc` package locally before installation.
+(here we clone the GitHub repository and make the `smfc` package locally before installation).
 
 #### 9.2. Docker installation
 `smfc` is also available as a docker image, see more details in [Docker.md](../docker/Docker.md). In this case, your job is only to provide your configuration file on host computer, `smfc` will be executed automatically when the container is starting. 
