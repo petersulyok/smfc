@@ -25,20 +25,16 @@ function verbose_echo() {
 
 
 function new_configuration() {
-  # Create the configuration target folder if it does not exist.
-  if [ ! -d "$TARGET_DIR" ]; then
-    mkdir -p $TARGET_DIR
-    verbose_echo "$TARGET_DIR folder created."
-  fi
-  # Backup the old configuration file if required.
+  # Install a new configuration file (if the old one should not be preserved)
   if [ -z "${KEEP_CONFIG}" ]; then
-    if [ -f "$TARGET_DIR/smfc.conf" ]; then
-      cp "$TARGET_DIR/smfc.conf" "$TARGET_DIR/smfc.conf.$POST_TAG"
-      verbose_echo "Original configuration file saved ($TARGET_DIR/smfc.conf.$POST_TAG)."
+    # Backup the old existing configuration file.
+    if [ -f /etc/smfc/smfc.conf ]; then
+      cp /etc/smfc/smfc.conf /etc/smfc/smfc.conf.$POST_TAG
+      verbose_echo "Original configuration file saved (/etc/smfc/smfc.conf.$POST_TAG)."
     fi
-    # Execute installation command
+    # Execute installation command (parameter)
     $1
-    verbose_echo "New configuration file installed ($TARGET_DIR/smfc.conf)."
+    verbose_echo "New configuration file installed (/etc/smfc/smfc.conf)."
   fi
 }
 
@@ -79,6 +75,18 @@ if [[ $EUID -ne 0 ]]; then
 fi
 verbose_echo "Root privilege granted."
 
+# Create the configuration target folder if it does not exist.
+if [ ! -d /etc/smfc ]; then
+  mkdir -p /etc/smfc
+  verbose_echo "/etc/smfc folder created."
+fi
+# Create the target folder for manual page.
+if [ ! -d /usr/share/man/man1 ]; then
+  mkdir -p /usr/share/man/man1
+  verbose_echo "/usr/share/man/man1 folder created."
+fi
+# PIP parameters.
+PIP_PARAM="-q --root-user-action=ignore --break-system-packages"
 
 # CASE 1: Local installation from the current folder.
 if [ "$LOCAL_INSTALL" = "yes" ]; then
@@ -91,20 +99,16 @@ if [ "$LOCAL_INSTALL" = "yes" ]; then
   verbose_echo "smfc version: $SMFC_VERSION."
 
   # Install smfc package from `./dist` folder
-  pip install -q --prefix=/usr "./dist/smfc-$SMFC_VERSION.tar.gz"
+  pip install "./dist/smfc-$SMFC_VERSION.tar.gz"
   verbose_echo "pip installed smfc==$SMFC_VERSION."
 
   # Install configuration file.
-  TARGET_DIR=/etc/smfc
-  new_configuration "cp ./config/smfc.conf $TARGET_DIR/smfc.conf"
+  new_configuration "cp ./config/smfc.conf /etc/smfc/smfc.conf"
 
   # Install smfc files.
   cp -f ./config/smfc /etc/default/smfc
   cp -f ./config/smfc.service /etc/systemd/system/smfc.service
-  mkdir -p /usr/local/share/man/man1
-  cp -f ./doc/smfc.1 /usr/local/share/man/man1/smfc.1
-  chown root:root "$TARGET_DIR/smfc.conf" /etc/default/smfc /etc/systemd/system/smfc.service /usr/local/share/man/man1/smfc.1
-
+  cp -f ./doc/smfc.1 /usr/share/man/man1/smfc.1
 
 # CASE 2: Remote installation from GitHub and pypi.
 else
@@ -120,28 +124,27 @@ else
   verbose_echo "smfc version from GitHub: $SMFC_VERSION"
 
   # Install smfc package from Pypi.org
-  pip install -q --prefix=/usr smfc==$SMFC_VERSION
+  pip install $PIP_PARAM smfc==$SMFC_VERSION
   verbose_echo "pip installed smfc==$SMFC_VERSION."
 
   # Install configuration file.
-  TARGET_DIR=/etc/smfc
-  new_configuration "curl --silent -o $TARGET_DIR/smfc.conf $GITHUB_URL/config/smfc.conf"
+  new_configuration "curl --silent -o /etc/smfc/smfc.conf $GITHUB_URL/config/smfc.conf"
 
   # Install smfc files.
   curl --silent -o "/etc/default/smfc" "$GITHUB_URL/config/smfc"
   curl --silent -o "/etc/systemd/system/smfc.service" "$GITHUB_URL/config/smfc.service"
-  mkdir -p /usr/local/share/man/man1
-  curl --silent -o "/usr/local/share/man/man1/smfc.1" "$GITHUB_URL/doc/smfc.1"
+  curl --silent -o "/usr/share/man/man1/smfc.1" "$GITHUB_URL/doc/smfc.1"
 
 fi
 
-gzip -f /usr/local/share/man/man1/smfc.1
+# Compress manual page.
+gzip -f /usr/share/man/man1/smfc.1
 mandb > /dev/null 2>&1
 chown root:root \
-  "$TARGET_DIR/smfc.conf" \
+  /etc/smfc/smfc.conf \
   /etc/default/smfc \
   /etc/systemd/system/smfc.service \
-  /usr/local/share/man/man1/smfc.1.gz
+  /usr/share/man/man1/smfc.1.gz
 verbose_echo "smfc files have been installed."
 
 # Collect all disk names for `hd_names=` parameter in 'smfc.conf' file.
@@ -152,7 +155,7 @@ if [ -z "${KEEP_CONFIG}" ]; then
     for hl in $hd_list; do
       hd_names+="/dev/disk/by-id/$hl\n\t"
     done
-    sed -i "s|^hd_names=|hd_names=$hd_names|g" "$TARGET_DIR/smfc.conf"
+    sed -i "s|^hd_names=|hd_names=$hd_names|g" /etc/smfc/smfc.conf
     verbose_echo "HDD names are listed in the new configuration file (please edit!)."
   fi
 fi
