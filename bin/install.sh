@@ -99,7 +99,7 @@ if [ "$LOCAL_INSTALL" = "yes" ]; then
   verbose_echo "smfc version: $SMFC_VERSION."
 
   # Install smfc package from `./dist` folder
-  pip install "./dist/smfc-$SMFC_VERSION.tar.gz"
+  pip install $PIP_PARAM "./dist/smfc-$SMFC_VERSION.tar.gz"
   verbose_echo "pip installed smfc==$SMFC_VERSION."
 
   # Install configuration file.
