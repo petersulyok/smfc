@@ -322,14 +322,16 @@ usage: install.sh [-h|--help] [-k|--keep-config] [-l|--local] [-v|--verbose]
            -v, --verbose      verbose output
 ```
 
-The default locations of the installed files: 
+The default location of the installed files: 
 
-| Files          | Installation folder                                                                                                                         | Description                     |
-|----------------|---------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------|
-| `smfc.service` | `/etc/systemd/system`                                                                                                                       | systemd service definition file |
-| `smfc`         | `/etc/default`                                                                                                                              | service command line options    |
-| `smfc.conf`    | `/etc/smfc`                                                                                                                                 | service configuration file      |
-| `smfc service` | `/usr/local/bin`, `/usr/local/lib/python3.xx` <br/> or  <br/> `/usr/bin`, `/usr/lib/python3.xx`  <br/> (depending on the Linux distribution) | python package                  |
+| Files          | Installation folder     | Description                     |
+|----------------|-------------------------|---------------------------------|
+| `smfc.service` | `/etc/systemd/system`   | systemd service definition file |
+| `smfc`         | `/etc/default`          | service command line options    |
+| `smfc.conf`    | `/etc/smfc`             | service configuration file      |
+| `smfc.1.gz`    | `/usr/share/man/man1`   | smfc manual page                | 
+| `smfc`         | `/usr/bin`              | smfc command                    |
+| `smfc service` | `/usr/lib/python3.xx`   | smfc python package             |
 
 Notes for the script:
 - Installation process will stop for any error
