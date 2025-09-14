@@ -183,7 +183,7 @@ The project implemented the following GitHub workflows:
 Follow these steps to create a new release:
 
 
-* Change the version number in `pyproject.toml`
+* Change the version number in `pyproject.toml` and `./doc/smfc.1` files
 * Run `uv sync` for updating version number in `uv.lock` file
 * Commit all changes
 * Run unit tests with `pytest`, and correct all errors
@@ -191,5 +191,6 @@ Follow these steps to create a new release:
 * Update CHANGELOG.md with the new release information
 * Commit all changes and test again
 * Create a new release on GitHub with the same version number, and the new package will be published on PyPI automatically
+* Build new images for docker and upload them
 
 > Written with [StackEdit](https://stackedit.io/).
