@@ -324,16 +324,18 @@ usage: install.sh [-h|--help] [-k|--keep-config] [-l|--local] [-v|--verbose]
 
 The default location of the installed files: 
 
-| Files          | Installation folder     | Description                     |
-|----------------|-------------------------|---------------------------------|
-| `smfc.service` | `/etc/systemd/system`   | systemd service definition file |
-| `smfc`         | `/etc/default`          | service command line options    |
-| `smfc.conf`    | `/etc/smfc`             | service configuration file      |
-| `smfc.1.gz`    | `/usr/share/man/man1`   | smfc manual page                | 
-| `smfc`         | `/usr/bin`              | smfc command                    |
-| `smfc service` | `/usr/lib/python3.xx`   | smfc python package             |
+| Files          | Installation folder                                        | Description                     |
+|----------------|------------------------------------------------------------|---------------------------------|
+| `smfc.service` | `/etc/systemd/system`                                      | systemd service definition file |
+| `smfc`         | `/etc/default`                                             | service command line options    |
+| `smfc.conf`    | `/etc/smfc`                                                | service configuration file      |
+| `smfc.1.gz`    | `/usr/share/man/man1`                                      | smfc manual page                | 
+| `smfc`         | `/usr/bin` or /br> `/usr/local/bin`                        | smfc command                    |
+| `smfc service` | `/usr/lib/python3.xx` or </br> `/usr/local/lib/python3.xx` | smfc python package             |
 
 Notes for the script:
+- Different Linux distros install python package to different folders
+- The installation script was tested on Ubuntu 24.04, Debian 13, Suse Leap 15, Proxmox 9, and Arch Linux
 - Installation process will stop for any error
 - The default installation method is the remote installation
 - Using `--local` parameter will do installation locally, from the current folder (the GitHUb repository needs to be cloned)
