@@ -302,10 +302,10 @@ Notes:
 - `smfc` is able to find the proper HWMON file automatically for Intel(R) CPUs, AMD(R) CPUs, SATA drives, or NVMe drives, but users may also specify the files manually (see `hwmon_path=` parameter in the config file)
 - Reading `drivetemp` module is the fastest way to get the temperature of the hard disks, and it can read temperature of the SATA hard disks even in standby mode, too. 
 
-#### 9. Installation
-For the installation, you need root privilege. There are several ways to install `smfc`, this chapter will show them.
+#### 9. Installation and uninstallation
+For the installation and uninstallation, you need root privilege. There are several ways to install and `smfc`, this chapter will show them.
 
-#### 9.1. Manual installation
+#### 9.1. Manual installation and uninstallation
 There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` in two different ways:
 - remotely from the GitHub repository (no cloning required)
 - locally from a git repository (GitHub repository needs to be cloned)
@@ -329,9 +329,9 @@ The default location of the installed files:
 | `smfc.service` | `/etc/systemd/system`                                      | systemd service definition file |
 | `smfc`         | `/etc/default`                                             | service command line options    |
 | `smfc.conf`    | `/etc/smfc`                                                | service configuration file      |
-| `smfc.1.gz`    | `/usr/share/man/man1`                                      | smfc manual page                | 
-| `smfc`         | `/usr/bin` or /br> `/usr/local/bin`                        | smfc command                    |
-| `smfc service` | `/usr/lib/python3.xx` or </br> `/usr/local/lib/python3.xx` | smfc python package             |
+| `smfc.1.gz`    | `/usr/local/share/man/man1`                                | smfc manual page                | 
+| `smfc`         | `/usr/local/bin` or </br> `/usr/bin`                       | smfc command                    |
+| `smfc service` | `/usr/local/lib/python3.xx` or </br> `/usr/lib/python3.xx` | smfc python package             |
 
 Notes for the script:
 - Different Linux distros install python package to different folders
@@ -367,6 +367,25 @@ uv build
 ```
 
 (here we clone the GitHub repository and make the `smfc` package locally before installation).
+
+On the other hand, there is an uninstallation script ([`bin/uninstall.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/uninstall.sh)) which can uninstall `smfc`.
+This script has the following command line parameters:
+
+```
+user@host:~$ ./uninstall.sh --help
+usage: uninstall.sh [-h|--help] [-k|--keep-config] [-v|--verbose]
+           -h, --help         help text
+           -k, --keep-config  keep original configuration file
+           -v, --verbose      verbose output
+```
+
+This script can be executed locally and remotely as it described for installation here. Here is an axample for remote execution: 
+
+```
+curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/uninstall.sh|bash /dev/stdin --verbose
+```
+
+The script will remove the installed `smfc` files and the pyton package.
 
 #### 9.2. Docker installation
 `smfc` is also available as a docker image, see more details in [Docker.md](../docker/Docker.md). In this case, your job is only to provide your configuration file on host computer, `smfc` will be executed automatically when the container is starting. 
