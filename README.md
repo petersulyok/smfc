@@ -54,20 +54,21 @@ provide individual fan configuration features in IPMI, while other vendors do it
 
 On Super Micro server boards, there could be more IPMI zones with different fan names (see [issue #31](https://github.com/petersulyok/smfc/issues/31)). 
 
-> `smfc v3.8.0` and earlier versions implemented a feature (called _Swapped Zones_) to swap IPMI zone 0 and 1. From `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convince for the user (see `ipmi_zone=` parameter for more details).  
+> `smfc v3.8.0` and earlier versions implemented a feature (called _Swapped Zones_) to swap IPMI zone 0 and 1. From `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convenience for the user (see `ipmi_zone=` parameter for more details).  
 
 #### 1.2 Fan controllers
 In `smfc`, the following fan controllers are implemented:
 
-| Fan controller | Temperature source      | Configuration                                                           | Default IPMI zone   |
-|----------------|-------------------------|-------------------------------------------------------------------------|---------------------|
-| CPU zone       | Intel/AMD CPU(s)        | CPUs are identified automatically                                       | 0 (CPU zone)        |
-| HD zone        | SATA and SCSI HDDs/SSDs | Hard disks' names must be specified in `[HD zone] hd_names=` parameter  | 1 (Peripheral zone) | 
-| GPU zone       | Nvidia GPUs             | GPU indices must be specified in `[GPU zone] gpu_device_ids=` parameter | 1 (Peripheral zone) |
-| Constant zone  | None                    | Constant fan level can be specified in `[CONST zone] level=` parameter  | 1 (Peripheral zone) |
+| Fan controller     | Temperature source      | Configuration                                                                                                                        | Default IPMI zone   |
+|--------------------|-------------------------|--------------------------------------------------------------------------------------------------------------------------------------|---------------------|
+| CPU zone           | Intel/AMD CPU(s)        | CPUs are identified automatically                                                                                                    | 0 (CPU zone)        |
+| CPU case fans zone | Intel/AMD CPU(s)        | CPUs are identified automatically.<br>Allows distinct control a seperate IPMI zone with different fan speeds/temperature thresholds. | 1 (Peripheral zone) |
+| HD zone            | SATA and SCSI HDDs/SSDs | Hard disks' names must be specified in `[HD zone] hd_names=` parameter                                                               | 1 (Peripheral zone) |
+| GPU zone           | Nvidia GPUs             | GPU indices must be specified in `[GPU zone] gpu_device_ids=` parameter                                                              | 1 (Peripheral zone) |
+| Constant zone      | None                    | Constant fan level can be specified in `[CONST zone] level=` parameter                                                               | 1 (Peripheral zone) |
 
-These fan controllers can be enabled and disabled independently. They can be used in a free combination with on or more IPMI zones, but different fan controllers should control different IPMI zones (i.e. no overlapping is allowed)!
-_Constant zone_ is an exception here, it does not require a temperature source, it can provide a constant fan level for one or more IPMI zones.
+These fan controllers can be enabled and disabled independently. They can be used in a free combination with one or more IPMI zones. Overlapping is allowed (i.e. HD Zone and GPU Zone can both control `IPMI Zone 1`) - the maximum fan level from one of the controlling zones will be used.
+_Constant zone_ is an exception here, it does not require a temperature source, it can provide a constant fan level for one or more IPMI zones, and cannot overlap.
 In `smfc` configuration file each fan controller has an individual section.
 
 In `smfc`, a temperature-driven fan controller implements the following control logic:
