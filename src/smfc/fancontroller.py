@@ -226,6 +226,7 @@ class FanController:
 
         Args:
             level (int): new fan level [0..100]
+            current_temp (float): Current temperature (used in log output)
         """
         set_zones = []
         any_shared = any(self.ipmi.is_ipmi_zone_shared(zone) for zone in self.ipmi_zone)
