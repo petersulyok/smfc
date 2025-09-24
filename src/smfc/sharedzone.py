@@ -68,7 +68,7 @@ class SharedIpmiZone:
                 highest_desired_level_user = user
 
         self.log.msg(Log.LOG_DEBUG, f"{self.name}: Most demanding zone user is {highest_desired_level_user}")
-        # 3. Check if desired level different to current
+        # Check if desired level different to current
         if not highest_desired_level_user:
             return
 

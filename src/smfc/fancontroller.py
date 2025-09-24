@@ -131,7 +131,7 @@ class FanController:
         self.last_time = time.monotonic() - (polling + 1)
         # Print configuration at DEBUG log level.
         if self.log.log_level >= Log.LOG_CONFIG:
-            self.log.msg(Log.LOG_CONFIG, f'{self.name} fan controller was initialized with: ')
+            self.log.msg(Log.LOG_CONFIG, f'{self.name} fan controller was initialized with:')
             self.log.msg(Log.LOG_CONFIG, f'   ipmi zone = {self.ipmi_zone}')
             self.log.msg(Log.LOG_CONFIG, f'   count = {self.count}')
             self.log.msg(Log.LOG_CONFIG, f'   temp_calc = {self.temp_calc}')
@@ -227,11 +227,11 @@ class FanController:
         Args:
             level (int): new fan level [0..100]
         """
-        set_any = False
+        set_zones = []
         any_shared = any(self.ipmi.is_ipmi_zone_shared(zone) for zone in self.ipmi_zone)
         if not any_shared:
             self.ipmi.set_multiple_fan_levels(self.ipmi_zone, level)
-            set_any = True
+            set_zones = self.ipmi_zone
         else:
             for zone in self.ipmi_zone:
                 if self.ipmi.is_ipmi_zone_shared(zone):
@@ -240,11 +240,11 @@ class FanController:
                                  f'IPMI zone {zone} is shared.')
                 else:
                     self.ipmi.set_fan_level(zone, level)
-                    set_any = True
+                    set_zones.append(zone)
 
-        if set_any:
+        if set_zone:
             self.log.msg(Log.LOG_INFO, f'{self.name}: new fan level > {level}%/{current_temp:.1f}C'
-                         f' @ IPMI {self.ipmi_zone} zone(s).')
+                         f' @ IPMI {set_zones} zone(s).')
 
     def callback_func(self) -> None:
         """Call-back function for a child class."""
