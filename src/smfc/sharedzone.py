@@ -76,7 +76,9 @@ class SharedIpmiZone:
             current_level = highest_desired_level_user.desired_level
             current_temp = highest_desired_level_user.last_temperature
             if not current_temp:
-                current_temp = 0  # to prevent breaking tests
+                # temp is always set by FanController, but None is default to prevent breaking tests
+                # However it must have a value here for f-string
+                current_temp = 0
             self.log.msg(Log.LOG_INFO, f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C'
                          f', requested by {highest_desired_level_user.name}')
             self.current_fan_level = current_level
