@@ -243,7 +243,7 @@ class FanController:
                     self.ipmi.set_fan_level(zone, level)
                     set_zones.append(zone)
 
-        if set_zone:
+        if set_zones:
             self.log.msg(Log.LOG_INFO, f'{self.name}: new fan level > {level}%/{current_temp:.1f}C'
                          f' @ IPMI {set_zones} zone(s).')
 
