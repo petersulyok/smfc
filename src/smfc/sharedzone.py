@@ -49,7 +49,7 @@ class SharedIpmiZone:
         self.current_fan_level = None
         self.name = f"Shared IPMI Zone {zone}"
         self.zone_users = users
-        if len(self.zone_users) < 1:
+        if len(self.zone_users) <= 1:
             raise ValueError(f"IPMI zone {self.zone} does not appear to be shared"
                              f" - only has {len(self.zone_users)} controllers registered to it")
 
