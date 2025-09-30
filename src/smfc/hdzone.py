@@ -216,10 +216,12 @@ class HdZone(FanController):
 
                 # If we did not find any matching temperature pattern.
                 if not found:
-                    raise ValueError('smartctl output: Temperature value cannot be found!')
+                    raise ValueError(f'ERROR: Temperature cannot found in smartctl output '
+                                     f'(disk={self.hd_device_names[index]})!')
 
             except (FileNotFoundError, RuntimeError, ValueError, IndexError) as e:
-                raise e
+                raise type(e)(f'ERROR: Temperature cannot read from smartctl '
+                              f'(disk={self.hd_device_names[index]})!') from e
 
         # Read temperature from a HWMON file.
         else:
@@ -227,7 +229,7 @@ class HdZone(FanController):
                 with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
                     value = float(f.read()) / 1000
             except (IOError, FileNotFoundError, ValueError, IndexError) as e:
-                raise e
+                raise type(e)('ERROR: Cannot read from HWMON file (disk={self.hd_device_names[index]})!') from e
 
         return value
 
