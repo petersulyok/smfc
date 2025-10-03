@@ -26,7 +26,7 @@ class CpuZone(FanController):
     CV_CPU_ZONE_MIN_LEVEL: str = 'min_level'
     CV_CPU_ZONE_MAX_LEVEL: str = 'max_level'
 
-    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config:ConfigParser) -> None:
+    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config:ConfigParser, config_section: str, instance_identifier: str) -> None:
         """Initialize the CpuZone class and raise exception in case of invalid configuration.
         Args:
             log (Log): reference to a Log class instance
@@ -51,19 +51,20 @@ class CpuZone(FanController):
             raise RuntimeError('pyudev: No HWMON device(s) can be found for the CPU.')
         # Calculate count.
         count = len(self.hwmon_path)
+        self.config_section = config_section
 
         # Initialize FanController class.
         super().__init__(log, ipmi,
-            config[CpuZone.CS_CPU_ZONE].get(CpuZone.CV_CPU_IPMI_ZONE, fallback=f'{Ipmi.CPU_ZONE}'),
-            CpuZone.CS_CPU_ZONE, count,
-            config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
-            config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_STEPS, fallback=6),
-            config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_SENSITIVITY, fallback=3.0),
-            config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_POLLING, fallback=2),
-            config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_MIN_TEMP, fallback=30.0),
-            config[CpuZone.CS_CPU_ZONE].getfloat(CpuZone.CV_CPU_ZONE_MAX_TEMP, fallback=60.0),
-            config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_MIN_LEVEL, fallback=35),
-            config[CpuZone.CS_CPU_ZONE].getint(CpuZone.CV_CPU_ZONE_MAX_LEVEL, fallback=100)
+            config[config_section].get(CpuZone.CV_CPU_IPMI_ZONE, fallback=f'{Ipmi.CPU_ZONE}'),
+            CpuZone.CS_CPU_ZONE + instance_identifier, count,
+            config[config_section].getint(CpuZone.CV_CPU_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
+            config[config_section].getint(CpuZone.CV_CPU_ZONE_STEPS, fallback=6),
+            config[config_section].getfloat(CpuZone.CV_CPU_ZONE_SENSITIVITY, fallback=3.0),
+            config[config_section].getfloat(CpuZone.CV_CPU_ZONE_POLLING, fallback=2),
+            config[config_section].getfloat(CpuZone.CV_CPU_ZONE_MIN_TEMP, fallback=30.0),
+            config[config_section].getfloat(CpuZone.CV_CPU_ZONE_MAX_TEMP, fallback=60.0),
+            config[config_section].getint(CpuZone.CV_CPU_ZONE_MIN_LEVEL, fallback=35),
+            config[config_section].getint(CpuZone.CV_CPU_ZONE_MAX_LEVEL, fallback=100)
         )
 
     def _get_nth_temp(self, index: int) -> float:

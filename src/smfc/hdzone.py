@@ -46,7 +46,7 @@ class HdZone(FanController):
     CV_HD_ZONE_STANDBY_HD_LIMIT: str = 'standby_hd_limit'
 
 
-    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
+    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, config_section: str, instance_identifier: str, sudo: bool) -> None:
         """Initialize the HdZone class. Abort in case of configuration errors.
 
         Args:
@@ -87,24 +87,25 @@ class HdZone(FanController):
             self.hwmon_path.append(self.get_hwmon_path(udevc, block_dev.parent))
 
         # Save path for `smartctl` command.
-        self.smartctl_path = config[HdZone.CS_HD_ZONE].get(HdZone.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
-
+        self.smartctl_path = config[config_section].get(HdZone.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
+        
+        self.config_section = config_section
         # Initialize FanController class.
         super().__init__(log, ipmi,
-            config[HdZone.CS_HD_ZONE].get(HdZone.CV_HD_IPMI_ZONE, fallback=f'{Ipmi.HD_ZONE}'),
-            HdZone.CS_HD_ZONE, count,
-            config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
-            config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_STEPS, fallback=4),
-            config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_SENSITIVITY, fallback=2),
-            config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_POLLING, fallback=10),
-            config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_MIN_TEMP, fallback=32),
-            config[HdZone.CS_HD_ZONE].getfloat(HdZone.CV_HD_ZONE_MAX_TEMP, fallback=46),
-            config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_MIN_LEVEL, fallback=35),
-            config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_MAX_LEVEL, fallback=100)
+            config[config_section].get(HdZone.CV_HD_IPMI_ZONE, fallback=f'{Ipmi.HD_ZONE}'),
+            HdZone.CS_HD_ZONE + instance_identifier, count,
+            config[config_section].getint(HdZone.CV_HD_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
+            config[config_section].getint(HdZone.CV_HD_ZONE_STEPS, fallback=4),
+            config[config_section].getfloat(HdZone.CV_HD_ZONE_SENSITIVITY, fallback=2),
+            config[config_section].getfloat(HdZone.CV_HD_ZONE_POLLING, fallback=10),
+            config[config_section].getfloat(HdZone.CV_HD_ZONE_MIN_TEMP, fallback=32),
+            config[config_section].getfloat(HdZone.CV_HD_ZONE_MAX_TEMP, fallback=46),
+            config[config_section].getint(HdZone.CV_HD_ZONE_MIN_LEVEL, fallback=35),
+            config[config_section].getint(HdZone.CV_HD_ZONE_MAX_LEVEL, fallback=100)
         )
 
         # Read and validate the configuration of standby guard if enabled.
-        self.standby_guard_enabled = config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED,
+        self.standby_guard_enabled = config[config_section].getboolean(HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED,
                                                                           fallback=False)
         if self.count == 1:
             self.log.msg(Log.LOG_INFO, '   WARNING: Standby guard is disabled ([HD zone] count=1')
@@ -112,7 +113,7 @@ class HdZone(FanController):
         if self.standby_guard_enabled:
             self.standby_array_states = [False] * self.count
             # Read and validate further parameters.
-            self.standby_hd_limit = config[HdZone.CS_HD_ZONE].getint(HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT, fallback=1)
+            self.standby_hd_limit = config[config_section].getint(HdZone.CV_HD_ZONE_STANDBY_HD_LIMIT, fallback=1)
             if self.standby_hd_limit < 0:
                 raise ValueError('standby_hd_limit < 0')
             if self.standby_hd_limit > self.count:
