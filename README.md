@@ -62,7 +62,6 @@ In `smfc`, the following fan controllers are implemented:
 | Fan controller     | Temperature source      | Configuration                                                                                                                           | Default IPMI zone   |
 |--------------------|-------------------------|-----------------------------------------------------------------------------------------------------------------------------------------|---------------------|
 | CPU zone           | Intel/AMD CPU(s)        | CPUs are identified automatically                                                                                                       | 0 (CPU zone)        |
-| CPU case fans zone | Intel/AMD CPU(s)        | CPUs are identified automatically.<br>Allows distinct control of a seperate IPMI zone with different fan speeds/temperature thresholds. | 1 (Peripheral zone) |
 | HD zone            | SATA and SCSI HDDs/SSDs | Hard disks' names must be specified in `[HD zone] hd_names=` parameter                                                                  | 1 (Peripheral zone) |
 | GPU zone           | Nvidia GPUs             | GPU indices must be specified in `[GPU zone] gpu_device_ids=` parameter                                                                 | 1 (Peripheral zone) |
 | Constant zone      | None                    | Constant fan level can be specified in `[CONST zone] level=` parameter                                                                  | 1 (Peripheral zone) |

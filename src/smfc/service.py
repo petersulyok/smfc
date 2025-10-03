@@ -24,21 +24,19 @@ class Service:
     """Service class contains all resources/functions for the execution."""
 
     # Service data.
-    config: ConfigParser                # Instance for a parsed configuration
-    sudo: bool                          # Use sudo command
-    log: Log                            # Instance for a Log class
-    udevc: Context                      # Reference to a pyudev Context instance (i.e. udev database connection)
-    ipmi: Ipmi                          # Instance for an Ipmi class
-    cpu_zone: CpuZone                   # Instance for a CPU Zone fan controller class
-    cpu_case_fans_zone: CpuZone         # Instance for a CPU Case Fans Zone fan controller class
-    hd_zone: HdZone                     # Instance for an HD Zone fan controller class
-    gpu_zone: GpuZone                   # Instance for a GPU Zone fan controller class
-    const_zone: ConstZone               # Instance for a Const Zone fan controller class
-    cpu_zone_enabled: bool              # CPU zone fan controller enabled
-    cpu_case_fans_zone_enabled: bool    # CPU case fan zone controller enabled
-    hd_zone_enabled: bool               # HD zone fan controller enabled
-    gpu_zone_enabled: bool              # GPU zone fan controller enabled
-    const_zone_enabled: bool            # Const zone fan controller enabled
+    config: ConfigParser        # Instance for a parsed configuration
+    sudo: bool                  # Use sudo command
+    log: Log                    # Instance for a Log class
+    udevc: Context              # Reference to a pyudev Context instance (i.e. udev database connection)
+    ipmi: Ipmi                  # Instance for an Ipmi class
+    cpu_zone: CpuZone           # Instance for a CPU Zone fan controller class
+    hd_zone: HdZone             # Instance for an HD Zone fan controller class
+    gpu_zone: GpuZone           # Instance for a GPU Zone fan controller class
+    const_zone: ConstZone       # Instance for a Const Zone fan controller class
+    cpu_zone_enabled: bool      # CPU zone fan controller enabled
+    hd_zone_enabled: bool       # HD zone fan controller enabled
+    gpu_zone_enabled: bool      # GPU zone fan controller enabled
+    const_zone_enabled: bool    # Const zone fan controller enabled
 
     def exit_func(self) -> None:
         """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
@@ -182,11 +180,6 @@ class Service:
                                  getboolean(CpuZone.CV_CPU_ZONE_ENABLED, fallback=False)) \
             if self.config.has_section(CpuZone.CS_CPU_ZONE) else False
 
-        # Read [CPU case fan zone] enabled= parameter if the section exists.
-        self.cpu_case_fans_zone_enabled = (self.config[CpuZone.CS_CPU_CASE_FANS_ZONE].
-                                           getboolean(CpuZone.CV_CPU_ZONE_ENABLED, fallback=False)) \
-            if self.config.has_section(CpuZone.CS_CPU_CASE_FANS_ZONE) else False
-
         # Read [HD zone] enabled= parameter if the section exists.
         self.hd_zone_enabled = (self.config[HdZone.CS_HD_ZONE].
                                 getboolean(HdZone.CV_HD_ZONE_ENABLED, fallback=False)) \
@@ -237,11 +230,6 @@ class Service:
         if self.cpu_zone_enabled:
             self.log.msg(Log.LOG_DEBUG, 'CPU zone fan controller enabled')
             self.cpu_zone = CpuZone(self.log, self.udevc, self.ipmi, self.config)
-            time.sleep(self.ipmi.fan_level_delay)
-
-        if self.cpu_case_fans_zone_enabled:
-            self.log.msg(Log.LOG_DEBUG, 'CPU case fans zone fan controller enabled')
-            self.cpu_case_fans_zone = CpuZone(self.log, self.udevc, self.ipmi, self.config, case_fans=True)
             time.sleep(self.ipmi.fan_level_delay)
 
         # Create an instance for HD zone fan controller if enabled.
@@ -297,8 +285,6 @@ class Service:
         while True:
             if self.cpu_zone_enabled:
                 self.cpu_zone.run()
-            if self.cpu_case_fans_zone_enabled:
-                self.cpu_case_fans_zone.run()
             if self.hd_zone_enabled:
                 self.hd_zone.run()
             if self.gpu_zone_enabled:
