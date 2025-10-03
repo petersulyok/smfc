@@ -61,25 +61,42 @@ class SharedIpmiZone:
         """
         Finds the maximum desired level from any controller in this zone, and changes fan level if required
         """
-        # Find max desired level
+        # Get zone users
+        zone_users = self.ipmi.ipmi_zone_users.get(self.zone, [])
+
+        # Find max desired level, for a controller above min temp and min desired level for any controller
         highest_desired_level_user = None
-        for user in self.zone_users:
+        highest_desired_level_user_above_temp = None
+        lowest_desired_level_user = None
+        for user in zone_users:
             if not highest_desired_level_user or user.desired_level > highest_desired_level_user.desired_level:
                 highest_desired_level_user = user
+            if not user.below_temperature:
+                if not highest_desired_level_user_above_temp or user.desired_level > highest_desired_level_user_above_temp.desired_level:
+                    highest_desired_level_user_above_temp = user
+            if not lowest_desired_level_user or user.desired_level < lowest_desired_level_user.desired_level:
+                lowest_desired_level_user = user
 
-        self.log.msg(Log.LOG_DEBUG, f"{self.name}: Most demanding zone user is {highest_desired_level_user}")
-        # Check if desired level different to current
         if not highest_desired_level_user:
+            self.log.msg(Log.LOG_DEBUG, f"{self.name}: No controllers have set a desired level yet")
             return
 
-        if not self.current_fan_level or highest_desired_level_user.desired_level != self.current_fan_level:
-            current_level = highest_desired_level_user.desired_level
-            current_temp = highest_desired_level_user.last_temperature
-            if not current_temp:
-                # temp is always set by FanController, but None is default to prevent breaking tests
-                # However it must have a value here for f-string
-                current_temp = 0
+        self.log.msg(Log.LOG_DEBUG, f"{self.name}: Most demanding zone user is {highest_desired_level_user}")
+        self.log.msg(Log.LOG_DEBUG, f"{self.name}: Most demanding zone user above min_temp is {highest_desired_level_user_above_temp}")
+        self.log.msg(Log.LOG_DEBUG, f"{self.name}: Least demanding zone user is {lowest_desired_level_user}")
+        
+        # The following logic is applied to determine which user (FanController)'s level is used:
+        #  - For any controllers above min_temp, we will find the controller with the highest desired fan level
+        #  - If none of the controllers are above min_temp, we will find the lowest specified fan level across all controllers
+        selected_user = highest_desired_level_user_above_temp
+        if not selected_user:
+            selected_user = lowest_desired_level_user
+            self.log.msg(Log.LOG_DEBUG, f"{self.name}: No zones above min_temp, taking lowest desired level from {selected_user}")
+
+        if not self.current_fan_level or selected_user.desired_level != self.current_fan_level:
+            current_level = selected_user.desired_level
+            current_temp = selected_user.last_temperature
             self.log.msg(Log.LOG_INFO, f'{self.name}: new fan level > {current_level}%/{current_temp:.1f}C'
-                         f', requested by {highest_desired_level_user.name}')
+                         f', requested by {selected_user.name}')
             self.current_fan_level = current_level
             self.ipmi.set_fan_level(self.zone, current_level)
