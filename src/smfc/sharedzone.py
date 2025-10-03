@@ -4,6 +4,7 @@
 #   smfc.sharedzone.IpmiZoneUser() and smfc.sharedzone.SharedIpmiZone() class implementation.
 #
 from smfc.log import Log
+from smfc.ipmi import Ipmi
 
 class IpmiZoneUser:
     """IpmiZoneUser is used to represent a user (a FanController instance) of an IPMI zone"""
@@ -72,7 +73,8 @@ class SharedIpmiZone:
             if not highest_desired_level_user or user.desired_level > highest_desired_level_user.desired_level:
                 highest_desired_level_user = user
             if not user.below_temperature:
-                if not highest_desired_level_user_above_temp or user.desired_level > highest_desired_level_user_above_temp.desired_level:
+                if (not highest_desired_level_user_above_temp
+                    or user.desired_level > highest_desired_level_user_above_temp.desired_level):
                     highest_desired_level_user_above_temp = user
             if not lowest_desired_level_user or user.desired_level < lowest_desired_level_user.desired_level:
                 lowest_desired_level_user = user
@@ -82,16 +84,18 @@ class SharedIpmiZone:
             return
 
         self.log.msg(Log.LOG_DEBUG, f"{self.name}: Most demanding zone user is {highest_desired_level_user}")
-        self.log.msg(Log.LOG_DEBUG, f"{self.name}: Most demanding zone user above min_temp is {highest_desired_level_user_above_temp}")
+        self.log.msg(Log.LOG_DEBUG, f"{self.name}: Most demanding zone user above min_temp is"
+                                    f" {highest_desired_level_user_above_temp}")
         self.log.msg(Log.LOG_DEBUG, f"{self.name}: Least demanding zone user is {lowest_desired_level_user}")
-        
+
         # The following logic is applied to determine which user (FanController)'s level is used:
-        #  - For any controllers above min_temp, we will find the controller with the highest desired fan level
-        #  - If none of the controllers are above min_temp, we will find the lowest specified fan level across all controllers
+        #  - For any controllers above min_temp, find the controller with the highest desired fan level
+        #  - If none of the controllers are above min_temp, find the lowest specified fan level across all controllers
         selected_user = highest_desired_level_user_above_temp
         if not selected_user:
             selected_user = lowest_desired_level_user
-            self.log.msg(Log.LOG_DEBUG, f"{self.name}: No zones above min_temp, taking lowest desired level from {selected_user}")
+            self.log.msg(Log.LOG_DEBUG, f"{self.name}: No zones above min_temp, "
+                                        f"taking lowest desired level from {selected_user}")
 
         if not self.current_fan_level or selected_user.desired_level != self.current_fan_level:
             current_level = selected_user.desired_level
