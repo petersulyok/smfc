@@ -25,7 +25,7 @@ class ConstZone(FanController):
     level: int
 
     #pylint: disable=super-init-not-called
-    def __init__(self, log: Log, ipmi: Ipmi, config:ConfigParser) -> None:
+    def __init__(self, log: Log, ipmi: Ipmi, config:ConfigParser, config_section: str, instance_identifier: str) -> None:
         """Initialize the ConstZone class and raise exception in case invalid configuration items.
         Args:
             log (Log): reference to a Log class instance
@@ -38,8 +38,9 @@ class ConstZone(FanController):
         self.log = log
         self.ipmi = ipmi
 
+        self.config_section = config_section
         # Read the list of IPMI zones from a string (trim and remove multiple spaces, convert strings to integers)
-        ipmi_zone_str = config[ConstZone.CS_CONST_ZONE].get(ConstZone.CV_CONST_IPMI_ZONE, fallback=f'{Ipmi.HD_ZONE}')
+        ipmi_zone_str = config[config_section].get(ConstZone.CV_CONST_IPMI_ZONE, fallback=f'{Ipmi.HD_ZONE}')
         ipmi_zone_str = re.sub(' +', ' ', ipmi_zone_str.strip())
         try:
             self.ipmi_zone = [int(s) for s in ipmi_zone_str.split(',' if ',' in ipmi_zone_str else ' ')]
@@ -49,11 +50,11 @@ class ConstZone(FanController):
             if zone not in range(0, 101):
                 raise ValueError(f'invalid value: ipmi_zone={ipmi_zone_str}.')
 
-        self.name = ConstZone.CS_CONST_ZONE
-        self.polling = config[ConstZone.CS_CONST_ZONE].getfloat(ConstZone.CV_CONST_ZONE_POLLING, fallback=30.0)
+        self.name = ConstZone.CS_CONST_ZONE + instance_identifier
+        self.polling = config[config_section].getfloat(ConstZone.CV_CONST_ZONE_POLLING, fallback=30.0)
         if self.polling < 0.0:
             raise ValueError('polling < 0')
-        self.level = config[ConstZone.CS_CONST_ZONE].getint(ConstZone.CV_CONST_ZONE_LEVEL, fallback=50)
+        self.level = config[config_section].getint(ConstZone.CV_CONST_ZONE_LEVEL, fallback=50)
         if self.level not in range(0, 101):
             raise ValueError('invalid level')
         self.last_time = 0.0

@@ -37,12 +37,13 @@ class GpuZone(FanController):
     CV_GPU_ZONE_GPU_IDS: str = 'gpu_device_ids'
     CV_GPU_ZONE_NVIDIA_SMI_PATH: str = 'nvidia_smi_path'
 
-    def __init__(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
+    def __init__(self, log: Log, ipmi: Ipmi, config: ConfigParser, config_section: str, instance_identifier: str) -> None:
         """Initialize the GpuZone class. Abort in case of configuration errors.
         Args:
             log (Log): reference to a Log class instance
             ipmi (Ipmi): reference to an Ipmi class instance
             config (configparser.ConfigParser): reference to the configuration (default=None)
+            TODO
         Raises:
             ValueError: invalid parameters
         """
@@ -50,7 +51,7 @@ class GpuZone(FanController):
         count: int          # GPU count.
 
         # Save and validate GpuZone class-specific parameters.
-        gpu_id_list = config[self.CS_GPU_ZONE].get(self.CV_GPU_ZONE_GPU_IDS, '0')
+        gpu_id_list = config[config_section].get(self.CV_GPU_ZONE_GPU_IDS, '0')
         gpu_id_list = re.sub(' +', ' ', gpu_id_list.strip())
         try:
             self.gpu_device_ids = [int(s) for s in gpu_id_list.split(',' if ',' in gpu_id_list else ' ')]
@@ -60,22 +61,24 @@ class GpuZone(FanController):
             if gid not in range(0, 101):
                 raise ValueError(f'invalid value: {self.CV_GPU_ZONE_GPU_IDS}={gpu_id_list}.')
         count = len(self.gpu_device_ids)
-        self.nvidia_smi_path = config[GpuZone.CS_GPU_ZONE].get(GpuZone.CV_GPU_ZONE_NVIDIA_SMI_PATH,
+        self.nvidia_smi_path = config[config_section].get(GpuZone.CV_GPU_ZONE_NVIDIA_SMI_PATH,
                                                               '/usr/bin/nvidia-smi')
         self.nvidia_smi_called = 0
 
+        self.config_section = config_section
+
         # Initialize FanController class.
         super().__init__(log, ipmi,
-            config[GpuZone.CS_GPU_ZONE].get(GpuZone.CV_GPU_IPMI_ZONE, fallback=f'{Ipmi.HD_ZONE}'),
-            GpuZone.CS_GPU_ZONE, count,
-            config[GpuZone.CS_GPU_ZONE].getint(GpuZone.CV_GPU_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
-            config[GpuZone.CS_GPU_ZONE].getint(GpuZone.CV_GPU_ZONE_STEPS, fallback=5),
-            config[GpuZone.CS_GPU_ZONE].getfloat(GpuZone.CV_GPU_ZONE_SENSITIVITY, fallback=2),
-            config[GpuZone.CS_GPU_ZONE].getfloat(GpuZone.CV_GPU_ZONE_POLLING, fallback=2),
-            config[GpuZone.CS_GPU_ZONE].getfloat(GpuZone.CV_GPU_ZONE_MIN_TEMP, fallback=40),
-            config[GpuZone.CS_GPU_ZONE].getfloat(GpuZone.CV_GPU_ZONE_MAX_TEMP, fallback=70),
-            config[GpuZone.CS_GPU_ZONE].getint(GpuZone.CV_GPU_ZONE_MIN_LEVEL, fallback=35),
-            config[GpuZone.CS_GPU_ZONE].getint(GpuZone.CV_GPU_ZONE_MAX_LEVEL, fallback=100)
+            config[config_section].get(GpuZone.CV_GPU_IPMI_ZONE, fallback=f'{Ipmi.HD_ZONE}'),
+            GpuZone.CS_GPU_ZONE + instance_identifier, count,
+            config[config_section].getint(GpuZone.CV_GPU_ZONE_TEMP_CALC, fallback=FanController.CALC_AVG),
+            config[config_section].getint(GpuZone.CV_GPU_ZONE_STEPS, fallback=5),
+            config[config_section].getfloat(GpuZone.CV_GPU_ZONE_SENSITIVITY, fallback=2),
+            config[config_section].getfloat(GpuZone.CV_GPU_ZONE_POLLING, fallback=2),
+            config[config_section].getfloat(GpuZone.CV_GPU_ZONE_MIN_TEMP, fallback=40),
+            config[config_section].getfloat(GpuZone.CV_GPU_ZONE_MAX_TEMP, fallback=70),
+            config[config_section].getint(GpuZone.CV_GPU_ZONE_MIN_LEVEL, fallback=35),
+            config[config_section].getint(GpuZone.CV_GPU_ZONE_MAX_LEVEL, fallback=100)
         )
 
         # Print configuration in CONFIG log level (or higher).
