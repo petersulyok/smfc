@@ -8,7 +8,7 @@ import time
 from configparser import ConfigParser
 from typing import List
 from smfc.log import Log
-
+from smfc.sharedzone import IpmiZoneUser
 
 class Ipmi:
     """IPMI interface class can set/get IPMI fan mode, and can set IPMI fan level using ipmitool."""
@@ -19,6 +19,7 @@ class Ipmi:
     fan_level_delay: float      # Delay time after execution of IPMI set fan level function
     remote_parameters: str      # Remote IPMI parameters
     sudo: bool                  # Use `sudo` command for `ipmitool` command
+    ipmi_zone_users: dict = {}  # Track if multiple controllers are managing the same IPMI zone
 
     # Constant values for IPMI fan modes:
     STANDARD_MODE: int = 0
@@ -80,6 +81,27 @@ class Ipmi:
             self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_FAN_MODE_DELAY} = {self.fan_mode_delay}')
             self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_FAN_LEVEL_DELAY} = {self.fan_level_delay}')
             self.log.msg(Log.LOG_CONFIG, f'   {Ipmi.CV_IPMI_REMOTE_PARAMETERS} = {self.remote_parameters}')
+
+    def register_fan_controller(self, controller_name: str, ipmi_zone: int) -> IpmiZoneUser:
+        """
+        Registers a fan controller against a zone. Used for shared IPMI zones.
+
+        Args:
+            controller_name (str): Name of the controller (i.e. "HD Zone")
+            ipmi_zone (int): Zone number
+        Returns:
+            Instance of IpmiZoneUser class
+        """
+        ipmi_zone_user = IpmiZoneUser(controller_name)
+        if not self.ipmi_zone_users.get(ipmi_zone, None):
+            self.ipmi_zone_users[ipmi_zone] = []
+
+        self.ipmi_zone_users[ipmi_zone].append(ipmi_zone_user)
+        return ipmi_zone_user
+
+    def is_ipmi_zone_shared(self, ipmi_zone: int) -> bool:
+        """Check whether an IPMI zone is shared by multiple controllers"""
+        return len(self.ipmi_zone_users.get(ipmi_zone, [])) > 1
 
     def _exec_ipmitool(self, args: List[str]) -> subprocess.CompletedProcess:
         """Execute `ipmitool` command.
