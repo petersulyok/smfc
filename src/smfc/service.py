@@ -16,6 +16,7 @@ from smfc.gpuzone import GpuZone
 from smfc.cpuzone import CpuZone
 from smfc.hdzone import HdZone
 from smfc.ipmi import Ipmi
+from smfc.sharedzone import SharedIpmiZone
 from smfc.log import Log
 
 
@@ -178,6 +179,7 @@ class Service:
         self.cpu_zone_enabled = (self.config[CpuZone.CS_CPU_ZONE].
                                  getboolean(CpuZone.CV_CPU_ZONE_ENABLED, fallback=False)) \
             if self.config.has_section(CpuZone.CS_CPU_ZONE) else False
+
         # Read [HD zone] enabled= parameter if the section exists.
         self.hd_zone_enabled = (self.config[HdZone.CS_HD_ZONE].
                                 getboolean(HdZone.CV_HD_ZONE_ENABLED, fallback=False)) \
@@ -248,6 +250,17 @@ class Service:
             self.const_zone = ConstZone(self.log, self.ipmi, self.config)
             time.sleep(self.ipmi.fan_level_delay)
 
+        # Handle multiple controllers sharing the same IPMI zone
+        shared_ipmi_zones = []
+        for zone, users in self.ipmi.ipmi_zone_users.items():
+            if self.ipmi.is_ipmi_zone_shared(zone):
+                shared_ipmi = SharedIpmiZone(zone, users, self.ipmi, self.log)
+                shared_ipmi_zones.append(shared_ipmi)
+                zone_users = ", ".join(user.name for user in shared_ipmi.zone_users)
+                self.log.msg(Log.LOG_INFO, f'IPMI Zone {zone} is shared with multiple controllers ({zone_users})')
+        if not shared_ipmi_zones:
+            self.log.msg(Log.LOG_DEBUG, 'No IPMI zones are shared')
+
         # Calculate the default sleep time for the main loop.
         polling_set = set()
         if self.cpu_zone_enabled:
@@ -278,6 +291,9 @@ class Service:
                 self.gpu_zone.run()
             if self.const_zone_enabled:
                 self.const_zone.run()
+            if shared_ipmi_zones:
+                for shared_zone in shared_ipmi_zones:
+                    shared_zone.run()
             time.sleep(wait)
 
 
