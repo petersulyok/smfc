@@ -63,7 +63,7 @@ class SharedIpmiZone:
         Finds the maximum desired level from any controller in this zone, and changes fan level if required
         """
         # Get zone users
-        zone_users = self.ipmi.ipmi_zone_users.get(self.zone, [])
+        zone_users = self.ipmi.controllers.get(self.zone, [])
 
         # Find max desired level, for a controller above min temp and min desired level for any controller
         highest_desired_level_user = None

@@ -118,10 +118,8 @@ class FanController:
         # If there is any problem with reading temperature, the program will stop here with an exception.
         self.get_temp_func()
 
-        self.ipmi_zone_user = {}
-        # Register fan controller to support shared IPMI zones
-        for zone in self.ipmi_zone:
-            self.ipmi_zone_user[zone] = self.ipmi.register_fan_controller(self.name, zone)
+        # Register this fan controller for the used IPMI zones.
+        self.ipmi.register_fan_controller(self.name, self.ipmi_zone)
 
         # Initialize calculated values.
         self.temp_step = (max_temp - min_temp) / steps
@@ -219,29 +217,24 @@ class FanController:
             maximum = max(self._get_nth_temp(i), maximum)
         return maximum
 
-    def set_fan_level(self, level: int, current_temp: float = None) -> None:
+    def set_fan_level(self, level: int) -> int:
         """Set the new fan level in all IPMI zones of the controller.
-
-        For shared zones, update the desired level for the zone user.
-
         Args:
             level (int): new fan level [0..100]
-            current_temp (float): Current temperature (used in log output)
+
         """
-        set_zones = []
-        any_shared = any(self.ipmi.is_ipmi_zone_shared(zone) for zone in self.ipmi_zone)
-        if not any_shared:
-            self.ipmi.set_multiple_fan_levels(self.ipmi_zone, level)
-            set_zones = self.ipmi_zone
-        else:
-            for zone in self.ipmi_zone:
-                if self.ipmi.is_ipmi_zone_shared(zone):
-                    self.ipmi_zone_user[zone].set_desired_level(level, current_temp)
-                    self.log.msg(Log.LOG_DEBUG, f'{self.name}: desires fan level -> {level}%/{current_temp:.1f}C.'
-                                 f'IPMI zone {zone} is shared.')
-                else:
-                    self.ipmi.set_fan_level(zone, level)
-                    set_zones.append(zone)
+        for zone in self.ipmi_zone:
+            if self.ipmi.is_ipmi_zone_shared(zone):
+                index = self.ipmi.controllers[zone][self.name]
+                self.ipmi.levels[zone][index] = level
+                shared_level = max(self.ipmi.levels[zone])
+                self.ipmi.set_fan_level(zone, shared_level)
+                self.log.msg(Log.LOG_INFO, f'{self.name}: new fan level > {shared_level}%/{self.last_temp:.1f}C'
+                         f' @ IPMI {zone} shared zone.')
+            else:
+                self.ipmi.set_fan_level(zone, level)
+                self.log.msg(Log.LOG_INFO, f'{self.name}: new fan level > {level}%/{self.last_temp:.1f}C'
+                         f' @ IPMI {zone} zone.')
 
         if set_zones:
             self.log.msg(Log.LOG_INFO, f'{self.name}: new fan level > {level}%/{current_temp:.1f}C'
@@ -289,7 +282,7 @@ class FanController:
                 # Step 4: the new fan level will be set and logged.
                 if current_level != self.last_level:
                     self.last_level = current_level
-                    self.set_fan_level(current_level, current_temp)
+                    self.set_fan_level(current_level)
 
 
     def print_temp_level_mapping(self) -> None:

@@ -252,7 +252,7 @@ class Service:
 
         # Handle multiple controllers sharing the same IPMI zone
         shared_ipmi_zones = []
-        for zone, users in self.ipmi.ipmi_zone_users.items():
+        for zone, users in self.ipmi.controllers.items():
             if self.ipmi.is_ipmi_zone_shared(zone):
                 shared_ipmi = SharedIpmiZone(zone, users, self.ipmi, self.log)
                 shared_ipmi_zones.append(shared_ipmi)
