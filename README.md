@@ -78,7 +78,7 @@ In `smfc`, a temperature-driven fan controller implements the following control 
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="600">
 
-If there are multiple heat sources (e.g. multiple CPUs, HDDs or GPUs) defined in the fan controller, then the user can configure a calculation method (i.e. minimum, average, maximum) for the temperature calculation (see `temp_calc=` parameter in the configuration).
+If the temperature source has multiple instances (e.g. multiple CPUs, HDDs or GPUs) then the user can configure a calculation method (i.e. minimum, average, maximum) for the calculation of the final temperature value (see `temp_calc=` parameter).
 
 Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating! 
 
