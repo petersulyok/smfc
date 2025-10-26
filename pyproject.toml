@@ -2,7 +2,7 @@
 name = "smfc"
 description = "Super Micro Fan Control for Linux"
 readme = "README.md"
-version = "4.2.0"
+version = "4.2.1"
 authors = [
     { name = "Peter Sulyok", email = "peter@sulyok.net" }
 ]
