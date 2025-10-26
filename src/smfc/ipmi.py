@@ -69,7 +69,7 @@ class Ipmi:
         bmc_timeout = 0.0
         while 1:
             try:
-                self._exec_ipmitool(['mc info'])
+                self._exec_ipmitool(['sdr'])
                 break
             except FileNotFoundError as e:
                 raise e
