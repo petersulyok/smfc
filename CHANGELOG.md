@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Issue #95: SMFC fails to start as system service after reboot. If BMC is not fully initialized when `smfc` is starting
-then `smfc` can stop with an error. It can happen if BMC and the PC are booting at the same time. With this fix
+then `smfc` can stop with an error. It can happen if the BMC and the PC are booting at the same time. With this fix
 `smfc` waits maximum 120 seconds for BMC initialization and will check BMC again every 5 seconds.
 
 
