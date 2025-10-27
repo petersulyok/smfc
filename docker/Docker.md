@@ -17,8 +17,8 @@ Generic notes for the docker images:
 
 # Standard image
 This image contains the following components: 
-- `Alpine Linux` 3.22.1
-- `Python` 3.12.11-r0
+- `Alpine Linux` 3.22.2
+- `Python` 3.12.12-r0
 - `ipmitool` 1.8.19-r1
 - `smartmontools` 7.5-r0
 
@@ -166,12 +166,15 @@ The images can be built locally in the following way:
 ```commandline
 git clone https://github.com/petersulyok/smfc.git
 cd smfc
-./docker/docker-build.sh 3.4.0
+./docker/docker-build.sh 4.1.0 latest
 ```
+It will generate the following tags: `4.1.0`, `latest`, `4.1.0-gpu`, `latest-gpu`.
+
 Please note that the dockerfile will install `smfc` from `pypi.org`, so the version must refer an official `smfc` release.
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
+  - **4.2.1** (2025.10.26): Updated to smfc 4.2.1 (Alpine 3.22.2/Debian 12) 
   - **4.1.0** (2025.08.28): Updated to smfc 4.1.0 (Alpine 3.22.1/Debian 12)
   - **4.0.0** (2025.07.08): Updated to smfc 4.0.0 (Alpine 3.22/Debian 12) - beta releases deleted
   - **3.8.0** (2025.03.15): Updated to smfc 3.8.0 and (Alpine 3.20.6)

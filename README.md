@@ -30,7 +30,7 @@ You can also run `smfc` in docker, see more details in [Docker.md](docker/Docker
  1. Set up the IPMI threshold values for your fans (see [chapter 6.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#6-ipmi-fan-control-and-sensor-thresholds) for more details). 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`).
- 4. Install `smfc` service (see [chapter 9.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#9-installation) for more details).
+ 4. Install `smfc` service (see [chapter 9.](https://github.com/petersulyok/smfc?tab=readme-ov-file#9-installation-and-uninstallation) for more details).
  5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapters 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration-file) for more details).
  6. Start `smfc` service (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc) for more details).
  7. Check results in system log
@@ -79,11 +79,11 @@ In `smfc`, a temperature-driven fan controller implements the following control 
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="600">
 
-If there are multiple heat sources (e.g. multiple CPUs, HDDs or GPUs) defined in the fan controller, then the user can configure a calculation method (i.e. minimum, average, maximum) for the temperature calculation (see `temp_calc=` parameter in the configuration).
+If the temperature source has multiple instances (e.g. multiple CPUs, HDDs or GPUs) then the user can configure a calculation method (i.e. minimum, average, maximum) for the calculation of the final temperature value (see `temp_calc=` parameter).
 
 Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating! 
 
-#### 2. User-defined control function
+### 2. User-defined control function
 Fan controllers are using user-defined control functions where a temperature interval is being mapped to a fan rotation level interval.
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/userdefined_control_function.png" align="center" width="500">
@@ -107,7 +107,7 @@ The fan controllers implement the following strategies to avoid/minimize the unn
  2. There is a sensitivity threshold parameter (`sensitivity=`) in the fan controller configuration. While the temperature change is below this value, the fan controller does not react. 
  3. The configuration parameter `polling=` defines the frequency of the temperature reading. The bigger polling time, the lower frequency of the fan speed change.
 
-#### 3. Standby guard
+### 3. Standby guard
 For HD zone fan controller, an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
 	
  - SATA hard disks are organized into a RAID array
@@ -116,7 +116,7 @@ For HD zone fan controller, an additional optional feature was implemented, call
 This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature, the situation can be avoided where the array is partially in standby mode while other members are still active.
 SCSI disks are not compatible with this feature.
 
-#### 5. Hard disk compatibility
+### 4. Hard disk compatibility
 The `smfc` service was originally designed for `SATA` hard drives, but `smfc v3.0.0` is also compatible with `NVME` and `SAS/SCSI` disks. The following table summarizes how the temperature is read for different disk types: 
 
 | Disk type  | Temperature source   | Kernel module | Command    |
@@ -303,7 +303,7 @@ Notes:
 - `smfc` is able to find the proper HWMON file automatically for Intel(R) CPUs, AMD(R) CPUs, SATA drives, or NVMe drives, but users may also specify the files manually (see `hwmon_path=` parameter in the config file)
 - Reading `drivetemp` module is the fastest way to get the temperature of the hard disks, and it can read temperature of the SATA hard disks even in standby mode, too. 
 
-#### 9. Installation and uninstallation
+### 9. Installation and uninstallation
 For the installation and uninstallation, you need root privilege. There are several ways to install and `smfc`, this chapter will show them.
 
 #### 9.1. Manual installation and uninstallation
@@ -335,13 +335,16 @@ The default location of the installed files:
 | `smfc service` | `/usr/local/lib/python3.xx` or </br> `/usr/lib/python3.xx` | smfc python package             |
 
 Notes for the script:
-- Different Linux distros install python package to different folders
-- The installation script was tested on Ubuntu 24.04, Debian 13, Suse Leap 15, Proxmox 9, and Arch Linux
+- Different Linux distros install python package to different folders (it was tested on Ubuntu 24.04, Debian 13,
+Suse Leap 15, Proxmox 9, and Arch Linux)
 - Installation process will stop for any error
 - The default installation method is the remote installation
-- Using `--local` parameter will do installation locally, from the current folder (the GitHUb repository needs to be cloned)
-- In default, a new configuration file will be installed (an existing previous configuration file will be renamed) and
-the `hd_names=` parameter will be pre-filled with the list of existing hard disks for user's convenience (please check/edit this paramaeter!)
+- Using `--local` parameter will do installation locally, from the current folder (i.e. GitHUb repository needs to be cloned)
+- The default action is following:
+  - the existing previous configuration file will be renamed
+  - a new configuration file will be installed
+  - `hd_names=` configuration parameter will be pre-filled with the list of existing hard disks for user's convenience
+    (please check/edit this parameter!)
 - Using `--keep-config` parameter, the original configuration file will be preserved
 - Using `--verbose` parameter, the phases of the installation will be displayed 
 
@@ -367,7 +370,7 @@ uv build
 ./bin/install.sh --local --verbose --keep-config
 ```
 
-(here we clone the GitHub repository and make the `smfc` package locally before installation).
+Here we clone the GitHub repository and make the `smfc` package locally before installation.
 
 On the other hand, there is an uninstallation script ([`bin/uninstall.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/uninstall.sh)) which can uninstall `smfc`.
 This script has the following command line parameters:
@@ -380,7 +383,7 @@ usage: uninstall.sh [-h|--help] [-k|--keep-config] [-v|--verbose]
            -v, --verbose      verbose output
 ```
 
-This script can be executed locally and remotely as it described for installation here. Here is an axample for remote execution: 
+This script can be executed locally and remotely as it described for installation here. Here is an example for remote execution: 
 
 ```
 curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/uninstall.sh|bash /dev/stdin --verbose
@@ -401,9 +404,10 @@ You have to think over and answer the following questions:
 2. Which fan controller would you like to use and configure in `smfc`?
 3. What is the expected temperature interval (minimum/maximum C degree) for the selected temperature source(s)? Use some test tools to measure it (e.g. [`s-tui`](https://github.com/amanusk/s-tui), [`fio`](https://fio.readthedocs.io/en/latest/fio_doc.html), [`iozone`](https://www.iozone.org/)) if you don't have their track records.  
 4. Which IPMI zone(s) will be connected to these fan controllers/temperate sources)? Check how many IPMI zones you have, how the fans are connected on your motherboard, and how they are cooling the selected temperature source(s). 
-5. What is the stable level interval for fans in the selected IPMI zone(s)? Probably this part requires the most patience! You have assumptions here, you will try them. If there are IPMI assertions and your fans are spinning up then you will refine the interval and try again. You might have several cycles here, this is normal. 
+5. What is the stable level interval for fans in the selected IPMI zone(s)? Probably this part requires the most patience! You have assumptions here that need to be verified. If you experience IPMI assertions and your fans are spinning up then you have to refine the level interval or threshold configuration and try again. You will have several cycles here, this is normal. 
 
 #### 10.2 Sample configuration file
+The configration file contains sections. The first one for IPMI configuration, the rest for fan controllers.
 Edit `/etc/smfc/smfc.conf` and specify your configuration parameters here:
 
 ```

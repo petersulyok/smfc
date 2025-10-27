@@ -51,6 +51,9 @@ class Ipmi:
     CV_IPMI_FAN_LEVEL_DELAY: str = 'fan_level_delay'
     CV_IPMI_REMOTE_PARAMETERS: str = 'remote_parameters'
 
+    # Timeout value for BMC initialization (seconds).
+    BMC_INIT_TIMEOUT: float = 120.0
+
     def __init__(self, log: Log, config: ConfigParser, sudo: bool) -> None:
         """Initialize the Ipmi class with a log class and with a configuration class.
         Args:
@@ -71,11 +74,25 @@ class Ipmi:
         self.sudo = sudo
 
         # Validate configuration
-        # Check 1: a valid command can be executed successfully.
-        try:
-            self._exec_ipmitool(['sdr'])
-        except (FileNotFoundError, RuntimeError) as e:
-            raise e
+        # Check 1: a valid command can be executed successfully and wait if BMC is not ready.
+        bmc_timeout = 0.0
+        while 1:
+            try:
+                self._exec_ipmitool(['sdr'])
+                break
+            except FileNotFoundError as e:
+                raise e
+            except RuntimeError as e:
+                # In case of ipmitool error we try to wait BMC initialization in maximum 120 seconds
+                # (in 5 seconds steps), otherwise reraise the exception.
+                if 'ipmitool' in e.args[0]:
+                    self.log.msg(Log.LOG_INFO, 'BMC is not ready, waiting 5 seconds.')
+                    time.sleep(5)
+                    bmc_timeout += 5
+                    if bmc_timeout < Ipmi.BMC_INIT_TIMEOUT:
+                        continue
+                raise e
+
         # Check 2: fan_mode_delay must be positive.
         if self.fan_mode_delay < 0:
             raise ValueError(f'Negative fan_mode_delay= parameter ({self.fan_mode_delay})')

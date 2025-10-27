@@ -52,13 +52,15 @@ class TestIpmi:
         assert my_ipmi.sudo == sudo, error
         del my_td
 
-    @pytest.mark.parametrize("cmd_exists, mode_delay, level_delay, remote_pars, exception, error", [
-        (True, -1,  2,  None,            ValueError,         'Ipmi.__init__() 3'),
-        (True, 10, -2,  '-I lanplus',    ValueError,         'Ipmi.__init__() 4'),
-        (False, 1,  1,  '',              FileNotFoundError,  'Ipmi.__init__() 5'),
-        (False, 1,  1,  '-I lanplus',    RuntimeError,       'Ipmi.__init__() 6')
+    @pytest.mark.parametrize("case, cmd_exists, mode_delay, level_delay, remote_pars, exception, error", [
+        (0, True, -1,  2,  None,            ValueError,         'Ipmi.__init__() 3'),
+        (1, True, 10, -2,  '-I lanplus',    ValueError,         'Ipmi.__init__() 4'),
+        (2, False, 1,  1,  '',              FileNotFoundError,  'Ipmi.__init__() 5'),
+        (3, True,  1,  1,  '-I lanplus',    RuntimeError,       'Ipmi.__init__() 6'), # sudo error
+        (4, True,  1,  1,  '',              RuntimeError,       'Ipmi.__init__() 7'), # ipmitool error, but recovered
+        (5, True,  1,  1,  '',              RuntimeError,       'Ipmi.__init__() 8')  # ipmitool error with exit
     ])
-    def test_init_n1(self, mocker: MockerFixture, cmd_exists: bool, mode_delay: int, level_delay: int,
+    def test_init_n1(self, mocker: MockerFixture, case: int, cmd_exists: bool, mode_delay: int, level_delay: int,
                      remote_pars: str, exception: Any, error: str) -> None:
         """Negative unit test for Ipmi.__init__() method. It contains the following steps:
             - create a shell script depending on `cmd_exists` flag
@@ -66,13 +68,26 @@ class TestIpmi:
             - ASSERT: if the specified exception was not raised during __init__
             - delete all instances
         """
+        wait_time: float = 0.0
 
         #pylint: disable=W0613
         def mocked_ipmi_exec(self, args: List[str]) -> subprocess.CompletedProcess:
-            if exception is not ValueError:
-                raise exception
+            nonlocal case
+            if case == 2:
+                raise FileNotFoundError
+            if case == 3:
+                raise RuntimeError('sudo error (1): error.')
+            if case == 4:
+                if wait_time < Ipmi.BMC_INIT_TIMEOUT/2:
+                    raise RuntimeError('ipmitool error (1): error.')
+            if case == 5:
+                raise RuntimeError('ipmitool error (1): error.')
             return subprocess.CompletedProcess([], returncode=0)
         #pylint: enable=W0613
+
+        def mocked_time_sleep(second: float) -> None:
+            nonlocal  wait_time
+            wait_time += second
 
         my_td = TestData()
         command = my_td.create_command_file()
@@ -80,6 +95,7 @@ class TestIpmi:
             my_td.delete_file(command)
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
+        mocker.patch('time.sleep', mocked_time_sleep)
         mocker.patch('smfc.Ipmi._exec_ipmitool', mocked_ipmi_exec)
         my_config = ConfigParser()
         my_config[Ipmi.CS_IPMI] = {
@@ -90,9 +106,13 @@ class TestIpmi:
         if remote_pars is not None:
             my_config.set(Ipmi.CS_IPMI, Ipmi.CV_IPMI_REMOTE_PARAMETERS, remote_pars)
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-        with pytest.raises(Exception) as cm:
+        if case == 4:
             Ipmi(my_log, my_config, False)
-        assert cm.type == exception, error
+            assert wait_time >= Ipmi.BMC_INIT_TIMEOUT/2, error
+        else:
+            with pytest.raises(Exception) as cm:
+                Ipmi(my_log, my_config, False)
+            assert cm.type is exception, error
         del my_td
 
     # pylint: disable=duplicate-code, protected-access
