@@ -166,8 +166,10 @@ The images can be built locally in the following way:
 ```commandline
 git clone https://github.com/petersulyok/smfc.git
 cd smfc
-./docker/docker-build.sh 3.4.0
+./docker/docker-build.sh 4.1.0 latest
 ```
+It will generate the following tags: `4.1.0`, `latest`, `4.1.0-gpu`, `latest-gpu`.
+
 Please note that the dockerfile will install `smfc` from `pypi.org`, so the version must refer an official `smfc` release.
 
 # Versions
