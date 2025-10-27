@@ -170,7 +170,6 @@ The detailed HTML report will be available in folder `htmlcov/index.html` with c
 
 # GitHub
 
-
 ## Github workflow
 The project implemented the following GitHub workflows:
 
@@ -185,8 +184,9 @@ The project implemented the following GitHub workflows:
 
 
 # Release process
-Follow these steps to create a new release:
 
+## Creation of a new GitHub release
+Follow these steps to create a new release:
 
 * Change the version number in `pyproject.toml` and `./doc/smfc.1` files
 * Run `uv sync` for updating version number in `uv.lock` file
@@ -197,5 +197,24 @@ Follow these steps to create a new release:
 * Commit all changes and test again
 * Create a new release on GitHub with the same version number, and the new package will be published on PyPI automatically
 * Build new images for docker and upload them
+
+## Building and uploading of Docker images
+After publishing an `smfc` release, the docker image could be built and uploaded. 
+The docker images can be built locally in the project root folder:
+
+```commandline
+./docker/docker-build.sh 4.1.0 latest
+```
+Notes:
+- Please note that the dockerfile will install `smfc` from `pypi.org`, so the version must refer an official `smfc` release.
+- The build script will generate the following tags: `4.1.0`, `latest`, `4.1.0-gpu`, `latest-gpu`.
+
+The generated docker images can be uploaded to [hub.docker.com](https://hub.docker.com/r/petersulyok/smfc)
+in the following way:
+
+```commandline
+./docker/docker-push.sh 4.1.0 latest
+./docker/docker-push.sh 4.1.0-gpu latest-gpu
+```
 
 > Written with [StackEdit](https://stackedit.io/).
