@@ -19,26 +19,27 @@ Building a development environment from scratch (with Python 3.12) contains the 
       uv sync
       source .venv/bin/activate
 
-Currently, the version numbers of the dependencies are fixed at level of the lowest supported Python run-time (i.e. 3.9)
-and specified in `pyproject.toml` file:
+Dependencies are listed in `pyproject.toml` file and the proper version numbers are handled by `uv`:
 
-      dependencies = [
-          "pyudev==0.24.3"
-      ]
-      
-      [dependency-groups]
-      dev = [
-          "build==1.2.2.post1",
-          "coverage==7.6.12",
-          "mock==5.2.0",
-          "pylint==3.3.5",
-          "pytest==8.3.5",
-          "pytest-cov==6.0.0",
-          "pytest-mock==3.14.0",
-          "ruff==0.11.5",
-          "twine==6.1.0",
-      ]
+    dependencies = [
+        "pyudev"
+    ]
 
+    [dependency-groups]
+    dev = [
+        "build",
+        "coverage",
+        "mock",
+        "pytest",
+        "pytest-cov",
+        "pytest-mock",
+        "twine"
+    ]
+
+    lint = [
+        "ruff",
+        "pylint"
+	]
 
 
 ## Linting
@@ -90,71 +91,75 @@ The whole project (all source code) is completely unit tested. The unit tests ar
 
 
       $ pytest
-      ================================================= test session starts ==================================================
-      platform linux -- Python 3.9.21, pytest-8.3.5, pluggy-1.5.0
+      ========================================================================================== test session starts ===========================================================================================
+      platform linux -- Python 3.13.7, pytest-8.3.5, pluggy-1.5.0
       rootdir: /home/petersulyok/git/github/smfc
       configfile: pyproject.toml
       plugins: cov-6.0.0, mock-3.14.0
-      collected 344 items                                                                                                    
-      
-      test/test_01_log.py ............................................................................................ [ 26%]
-      .............                                                                                                    [ 30%]
-      test/test_02_ipmi.py ..........................................................................                  [ 52%]
-      test/test_03_fancontroller.py .......................................                                            [ 63%]
-      test/test_04_cpuzone.py .....................                                                                    [ 69%]
-      test/test_05_hdzone.py .........................................................................                 [ 90%]
-      test/test_06_service.py ...............................                                                          [ 99%]
-      test/test_07_cmd.py .                                                                                            [100%]
-      
-      ================================================= 344 passed in 2.24s =================================================
-
+      collected 382 items                                                                                                                                                                                      
+        
+      test/test_01_log.py .........................................................................................................                                                                      [ 27%]
+      test/test_02_ipmi.py .......................................................................                                                                                                       [ 46%]
+      test/test_03_fancontroller.py .................................................                                                                                                                    [ 58%]
+      test/test_04_cpuzone.py .....................                                                                                                                                                      [ 64%]
+      test/test_05_hdzone.py .........................................................................                                                                                                   [ 83%]
+      test/test_06_gpuzone.py ..............                                                                                                                                                             [ 87%]
+      test/test_07_constzone.py .................                                                                                                                                                        [ 91%]
+      test/test_08_service.py ...............................                                                                                                                                            [ 99%]
+      test/test_09_cmd.py .                                                                                                                                                                              [100%]
+        
+      ========================================================================================== 382 passed in 1.32s ===========================================================================================
+	
 
 The code coverage could be also measured and displayed during the test execution:
 
 
       $ pytest --cov=src --cov=test
-      ================================================= test session starts ==================================================
-      platform linux -- Python 3.9.21, pytest-8.3.5, pluggy-1.5.0
+      ========================================================================================== test session starts ===========================================================================================
+      platform linux -- Python 3.13.7, pytest-8.3.5, pluggy-1.5.0
       rootdir: /home/petersulyok/git/github/smfc
       configfile: pyproject.toml
       plugins: cov-6.0.0, mock-3.14.0
-      collected 344 items                                                                                                    
-      
-      test/test_01_log.py ............................................................................................ [ 26%]
-      .............                                                                                                    [ 30%]
-      test/test_02_ipmi.py ..........................................................................                  [ 52%]
-      test/test_03_fancontroller.py .......................................                                            [ 63%]
-      test/test_04_cpuzone.py .....................                                                                    [ 69%]
-      test/test_05_hdzone.py .........................................................................                 [ 90%]
-      test/test_06_service.py ...............................                                                          [ 99%]
-      test/test_07_cmd.py .                                                                                            [100%]
-      
-      ---------- coverage: platform linux, python 3.9.21-final-0 -----------
+      collected 382 items                                                                                                                                                                                      
+        
+      test/test_01_log.py .........................................................................................................                                                                      [ 27%]
+      test/test_02_ipmi.py .......................................................................                                                                                                       [ 46%]
+      test/test_03_fancontroller.py .................................................                                                                                                                    [ 58%]
+      test/test_04_cpuzone.py .....................                                                                                                                                                      [ 64%]
+      test/test_05_hdzone.py .........................................................................                                                                                                   [ 83%]
+      test/test_06_gpuzone.py ..............                                                                                                                                                             [ 87%]
+      test/test_07_constzone.py .................                                                                                                                                                        [ 91%]
+      test/test_08_service.py ...............................                                                                                                                                            [ 99%]
+      test/test_09_cmd.py .                                                                                                                                                                              [100%]
+        
+      ---------- coverage: platform linux, python 3.13.7-final-0 -----------
       Name                            Stmts   Miss  Cover
       ---------------------------------------------------
-      src/smfc/__init__.py                8      0   100%
+      src/smfc/__init__.py               10      0   100%
       src/smfc/cmd.py                     4      0   100%
-      src/smfc/cpuzone.py                33      0   100%
-      src/smfc/fancontroller.py         144      0   100%
-      src/smfc/hdzone.py                147      0   100%
-      src/smfc/ipmi.py                  120      0   100%
+      src/smfc/constzone.py              47      0   100%
+      src/smfc/cpuzone.py                34      0   100%
+      src/smfc/fancontroller.py         147      0   100%
+      src/smfc/gpuzone.py                62      0   100%
+      src/smfc/hdzone.py                148      0   100%
+      src/smfc/ipmi.py                  136      0   100%
       src/smfc/log.py                    60      0   100%
-      src/smfc/service.py               125      0   100%
+      src/smfc/service.py               159      0   100%
       test/__init__.py                    0      0   100%
-      test/test_00_data.py              107      0   100%
+      test/test_00_data.py              116      0   100%
       test/test_01_log.py                52      0   100%
-      test/test_02_ipmi.py              209      0   100%
-      test/test_03_fancontroller.py     129      0   100%
+      test/test_02_ipmi.py              247      0   100%
+      test/test_03_fancontroller.py     134      0   100%
       test/test_04_cpuzone.py           142      0   100%
-      test/test_05_hdzone.py            273      0   100%
-      test/test_06_service.py           229      0   100%
-      test/test_07_cmd.py                 9      0   100%
+      test/test_05_hdzone.py            277      0   100%
+      test/test_06_gpuzone.py           111      0   100%
+      test/test_07_constzone.py          67      0   100%
+      test/test_08_service.py           266      0   100%
+      test/test_09_cmd.py                 9      0   100%
       ---------------------------------------------------
-      TOTAL                            1791      0   100%
-      
-      
-      ================================================= 344 passed in 2.62s ==================================================
-
+      TOTAL                            2228      0   100%
+       
+      ========================================================================================== 382 passed in 1.52s ===========================================================================================
 
 For a more detailed HTML coverage report run this command:
 
