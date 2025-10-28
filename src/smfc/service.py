@@ -11,31 +11,26 @@ from importlib.metadata import version
 from configparser import ConfigParser
 from argparse import ArgumentParser, Namespace
 from pyudev import Context
+from smfc.fancontroller import FanController
 from smfc.constzone import ConstZone
 from smfc.gpuzone import GpuZone
 from smfc.cpuzone import CpuZone
 from smfc.hdzone import HdZone
 from smfc.ipmi import Ipmi
 from smfc.log import Log
-
+from typing import List
+CV_ZONE_ENABLED: str = 'enabled'
 
 class Service:
     """Service class contains all resources/functions for the execution."""
 
     # Service data.
-    config: ConfigParser        # Instance for a parsed configuration
-    sudo: bool                  # Use sudo command
-    log: Log                    # Instance for a Log class
-    udevc: Context              # Reference to a pyudev Context instance (i.e. udev database connection)
-    ipmi: Ipmi                  # Instance for an Ipmi class
-    cpu_zone: CpuZone           # Instance for a CPU Zone fan controller class
-    hd_zone: HdZone             # Instance for an HD Zone fan controller class
-    gpu_zone: GpuZone           # Instance for a GPU Zone fan controller class
-    const_zone: ConstZone       # Instance for a Const Zone fan controller class
-    cpu_zone_enabled: bool      # CPU zone fan controller enabled
-    hd_zone_enabled: bool       # HD zone fan controller enabled
-    gpu_zone_enabled: bool      # GPU zone fan controller enabled
-    const_zone_enabled: bool    # Const zone fan controller enabled
+    config: ConfigParser                # Instance for a parsed configuration
+    sudo: bool                          # Use sudo command
+    log: Log                            # Instance for a Log class
+    udevc: Context                      # Reference to a pyudev Context instance (i.e. udev database connection)
+    ipmi: Ipmi                          # Instance for an Ipmi class
+    fan_zones: List[FanController]
 
     def exit_func(self) -> None:
         """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
@@ -72,42 +67,79 @@ class Service:
         with open('/proc/modules', 'rt', encoding='utf-8') as file:
             modules = file.read()
 
-        # Check the kernel modules for CPU zone.
-        if self.cpu_zone_enabled:
-            if 'coretemp' not in modules and 'k10temp' not in modules:
-                return 'ERROR: coretemp or k10temp kernel module must be loaded!'
+        for zone in self.fan_zones:
+            if isinstance(zone, CpuZone):
+                # Check the kernel modules for CPU zone.
+                if 'coretemp' not in modules and 'k10temp' not in modules:
+                    return 'ERROR: coretemp or k10temp kernel module must be loaded!'
+            elif isinstance(zone, HdZone):
+                # Check if `smartctl` command is available.
+                path = self.config[zone.config_section].get(HdZone.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
+                if not os.path.exists(path):
+                    no_smartctl = True
 
-        # Check dependencies for HD zone.
-        if self.hd_zone_enabled:
+                # Check if `drivetemp` modules is loaded.
+                if 'drivetemp' not in modules:
+                    no_drivetemp = True
 
-            # Check if `smartctl` command is available.
-            path = self.config[HdZone.CS_HD_ZONE].get(HdZone.CV_HD_ZONE_SMARTCTL_PATH, '/usr/sbin/smartctl')
-            if not os.path.exists(path):
-                no_smartctl = True
+                # If neither `drivetemp` nor `smartctl` is available.
+                if no_smartctl and no_drivetemp:
+                    return f'ERROR: drivetemp kernel module must be loaded or smartctl command ({path}) must be installed!'
 
-            # Check if `drivetemp` modules is loaded.
-            if 'drivetemp' not in modules:
-                no_drivetemp = True
+                # If Standby Guard feature enabled, `smartctl` command should be available
+                sge = self.config[zone.config_section].getboolean(HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED, fallback=False)
+                if sge and no_smartctl:
+                    return f'ERROR: smartctl command ({path}) must be installed for Standby Guard feature!'
 
-            # If neither `drivetemp` nor `smartctl` is available.
-            if no_smartctl and no_drivetemp:
-                return f'ERROR: drivetemp kernel module must be loaded or smartctl command ({path}) must be installed!'
-
-            # If Standby Guard feature enabled, `smartctl` command should be available
-            sge = self.config[HdZone.CS_HD_ZONE].getboolean(HdZone.CV_HD_ZONE_STANDBY_GUARD_ENABLED, fallback=False)
-            if sge and no_smartctl:
-                return f'ERROR: smartctl command ({path}) must be installed for Standby Guard feature!'
-
-        # Check dependencies for GPU zone
-        if self.gpu_zone_enabled:
-
-            # Check if `nvidia-smi` command is available.
-            path = self.config[GpuZone.CS_GPU_ZONE].get(GpuZone.CV_GPU_ZONE_NVIDIA_SMI_PATH, '/usr/bin/nvidia-smi')
-            if not os.path.exists(path):
-                return f'ERROR: nvidia-smi command cannot be found {path}!'
+            elif isinstance(zone, GpuZone):
+                # Check if `nvidia-smi` command is available.
+                path = self.config[zone.config_section].get(GpuZone.CV_GPU_ZONE_NVIDIA_SMI_PATH, '/usr/bin/nvidia-smi')
+                if not os.path.exists(path):
+                    return f'ERROR: nvidia-smi command cannot be found {path}!'
 
         # All required run-time dependencies are available.
         return ''
+
+    def load_zone_config(self) -> None:
+        # Read the config sections to determine which zones to enable
+        # Multiple instances of zones are supported
+        self.fan_zones = []
+        for section_key in self.config.sections():
+            if section_key == "Ipmi":
+                continue
+
+            if ":" in section_key:
+                if len(section_key.split(":")) == 2:
+                    zone_type, instance_identifier = section_key.split(":")
+                else:
+                    self.log.msg(Log.LOG_ERROR, f'Invalid config section: {section_key} (too many semi-colons)')
+                    sys.exit(6)
+            else:
+                zone_type = section_key
+                instance_identifier = ""
+            zone_enabled = (self.config[section_key].
+                                 getboolean(CV_ZONE_ENABLED, fallback=False))
+            if not zone_enabled:
+                continue
+
+            if instance_identifier:
+                instance_identifier = f": {instance_identifier}"  # prefix as it will be concatenated with name
+
+            if zone_type == CpuZone.CS_CPU_ZONE:
+                zone = CpuZone(self.log, self.udevc, self.ipmi, self.config, section_key, instance_identifier)
+            elif zone_type == HdZone.CS_HD_ZONE:
+                zone = HdZone(self.log, self.udevc, self.ipmi, self.config, section_key, instance_identifier, self.sudo)
+            elif zone_type == GpuZone.CS_GPU_ZONE:
+                zone = GpuZone(self.log, self.ipmi, self.config, section_key, instance_identifier)
+            elif zone_type == ConstZone.CS_CONST_ZONE:
+                zone = ConstZone(self.log, self.ipmi, self.config, section_key, instance_identifier)
+            else:
+                self.log.msg(Log.LOG_ERROR, f'Invalid config section: {section_key} (not a valid zone type)')
+                sys.exit(6)
+            self.log.msg(Log.LOG_DEBUG, f'{zone_type} fan controller enabled')
+            self.fan_zones.append(zone)
+            time.sleep(self.ipmi.fan_level_delay)
+
 
     def run(self) -> None:
         """Run function: main execution function of the systemd service.
@@ -174,30 +206,6 @@ class Service:
         if not self.config or not self.config.read(parsed_results.config_file):
             self.log.msg(Log.LOG_ERROR, f'Cannot load configuration file ({parsed_results.config_file})')
             sys.exit(6)
-        # Read [CPU zone] enabled= parameter if the section exists.
-        self.cpu_zone_enabled = (self.config[CpuZone.CS_CPU_ZONE].
-                                 getboolean(CpuZone.CV_CPU_ZONE_ENABLED, fallback=False)) \
-            if self.config.has_section(CpuZone.CS_CPU_ZONE) else False
-        # Read [HD zone] enabled= parameter if the section exists.
-        self.hd_zone_enabled = (self.config[HdZone.CS_HD_ZONE].
-                                getboolean(HdZone.CV_HD_ZONE_ENABLED, fallback=False)) \
-            if self.config.has_section(HdZone.CS_HD_ZONE) else False
-        # Read [GPU zone] enabled= parameter if the section exists.
-        self.gpu_zone_enabled = (self.config[GpuZone.CS_GPU_ZONE].
-                                 getboolean(GpuZone.CV_GPU_ZONE_ENABLED, fallback=False)) \
-            if self.config.has_section(GpuZone.CS_GPU_ZONE) else False
-        # Read [CONST zone] enabled= parameter if the section exists.
-        self.const_zone_enabled = (self.config[ConstZone.CS_CONST_ZONE].
-                                   getboolean(ConstZone.CV_CONST_ZONE_ENABLED, fallback=False)) \
-            if self.config.has_section(ConstZone.CS_CONST_ZONE) else False
-        self.log.msg(Log.LOG_DEBUG, f'Configuration file ({parsed_results.config_file}) loaded')
-
-        # Check run-time dependencies (commands, kernel modules) if `-nd` command line option is not specified.
-        if not parsed_results.nd:
-            error_msg = self.check_dependencies()
-            if error_msg:
-                self.log.msg(Log.LOG_ERROR, error_msg)
-                sys.exit(7)
 
         # Create an Ipmi class instances.
         try:
@@ -224,40 +232,30 @@ class Service:
             self.log.msg(Log.LOG_ERROR, f'pyudev error: Could not interface with libudev: {e}.')
             sys.exit(9)
 
-        # Create an instance for CPU zone fan controller if enabled.
-        if self.cpu_zone_enabled:
-            self.log.msg(Log.LOG_DEBUG, 'CPU zone fan controller enabled')
-            self.cpu_zone = CpuZone(self.log, self.udevc, self.ipmi, self.config)
-            time.sleep(self.ipmi.fan_level_delay)
+        # Load zone config
+        self.load_zone_config()
 
-        # Create an instance for HD zone fan controller if enabled.
-        if self.hd_zone_enabled:
-            self.log.msg(Log.LOG_DEBUG, 'HD zone fan controller enabled')
-            self.hd_zone = HdZone(self.log, self.udevc, self.ipmi, self.config, self.sudo)
-            time.sleep(self.ipmi.fan_level_delay)
+        # Check run-time dependencies (commands, kernel modules) if `-nd` command line option is not specified.
+        if not parsed_results.nd:
+            error_msg = self.check_dependencies()
+            if error_msg:
+                self.log.msg(Log.LOG_ERROR, error_msg)
+                sys.exit(7)
 
-        # Create an instance for GPU zone fan controller if enabled.
-        if self.gpu_zone_enabled:
-            self.log.msg(Log.LOG_DEBUG, 'GPU zone fan controller enabled')
-            self.gpu_zone = GpuZone(self.log, self.ipmi, self.config)
-            time.sleep(self.ipmi.fan_level_delay)
-
-        # Create an instance for Const zone fan controller if enabled.
-        if self.const_zone_enabled:
-            self.log.msg(Log.LOG_DEBUG, 'CONST zone fan controller enabled')
-            self.const_zone = ConstZone(self.log, self.ipmi, self.config)
-            time.sleep(self.ipmi.fan_level_delay)
+        # Handle multiple controllers sharing the same IPMI zone
+        shared_ipmi_zones = []
+        for zone in self.ipmi.ipmi_zone_users.keys():
+            if self.ipmi.is_ipmi_zone_shared(zone):
+                shared_ipmi = SharedIpmiZone(zone, self.ipmi, self.log)
+                shared_ipmi_zones.append(shared_ipmi)
+                self.log.msg(Log.LOG_INFO, f'IPMI Zone {zone} is shared with multiple controllers')
+        if not shared_ipmi_zones:
+            self.log.msg(Log.LOG_DEBUG, 'No IPMI zones are shared')
 
         # Calculate the default sleep time for the main loop.
         polling_set = set()
-        if self.cpu_zone_enabled:
-            polling_set.add(self.cpu_zone.polling)
-        if self.hd_zone_enabled:
-            polling_set.add(self.hd_zone.polling)
-        if self.gpu_zone_enabled:
-            polling_set.add(self.gpu_zone.polling)
-        if self.const_zone_enabled:
-            polling_set.add(self.const_zone.polling)
+        for zone in self.fan_zones:
+            polling_set.add(zone.polling)
 
         # If none of the fan controller zones is enabled.
         if len(polling_set) == 0:
@@ -270,14 +268,12 @@ class Service:
 
         # Main execution loop.
         while True:
-            if self.cpu_zone_enabled:
-                self.cpu_zone.run()
-            if self.hd_zone_enabled:
-                self.hd_zone.run()
-            if self.gpu_zone_enabled:
-                self.gpu_zone.run()
-            if self.const_zone_enabled:
-                self.const_zone.run()
+            for zone in self.fan_zones:
+                zone.run()
+
+            if shared_ipmi_zones:
+                for shared_zone in shared_ipmi_zones:
+                    shared_zone.run()
             time.sleep(wait)
 
 
