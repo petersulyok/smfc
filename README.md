@@ -12,8 +12,6 @@ Super Micro fan control for Linux (home) servers.
 
 This is a `systemd service` running on Linux and can control fans with help of IPMI on Super Micro X10-X13/H10-H13 (and some X9) motherboards.
 
-You can also run `smfc` in docker, see more details in [Docker.md](docker/Docker.md).
-
 ### 1. Prerequisites
  - a Super Micro motherboard with ASPEED AST2400/2500/2600 chip
  - Python 3.9-3.13
@@ -27,12 +25,13 @@ You can also run `smfc` in docker, see more details in [Docker.md](docker/Docker
 
 
 ### 2. Installation and configuration
- 1. Set up the IPMI threshold values for your fans (see [chapter 6.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#6-ipmi-fan-control-and-sensor-thresholds) for more details). 
+ 1. Set up the IPMI threshold values for your fans (see [chapter 6.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#6-ipmi-fan-control-and-sensor-thresholds) for more details) 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
- 3. Load kernel modules (`coretemp/k10temp` and `drivetemp`).
- 4. Install `smfc` service (see [chapter 9.](https://github.com/petersulyok/smfc?tab=readme-ov-file#9-installation-and-uninstallation) for more details).
+ 3. Load kernel modules (`coretemp/k10temp` and `drivetemp`)
+ 4. Install `smfc` service (see [chapter 9.](https://github.com/petersulyok/smfc?tab=readme-ov-file#9-installation-and-uninstallation) for more details)
+    or run `smfc` in docker (see more details in [Docker.md](docker/Docker.md))
  5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapters 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration-file) for more details).
- 6. Start `smfc` service (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc) for more details).
+ 6. Start `smfc` service (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc) for more details)
  7. Check results in system log
  8. Leave a feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
 
@@ -136,13 +135,13 @@ Some additional notes:
 
 
 ### 5. Super Micro compatibility
-This software was designed to work with Super Micro X10-X12/H10-H12 motherboards with a BMC chip (i.e. ASPEED AST2400/2500) and with IPMI functionality. Unfortunately, there are some motherboards (e.g. X10QBi see [issue #69](https://github.com/petersulyok/smfc/issues/69)) not compatible with `smfc`.
+Originally, this software was designed to work with Super Micro X10-X12/H10-H12 motherboards with a BMC chip (i.e. ASPEED AST2400/2500) and with IPMI functionality. Unfortunately, there are motherboards (e.g. X10QBi see [issue #69](https://github.com/petersulyok/smfc/issues/69)) that are not compatible with `smfc`.
 
 In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employ a BMC chip). 
 
 The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
 
-The newer X13/H13 motherboards (with AST2600 chips) are compatible with `smfc` (see mode details in [issue #33](https://github.com/petersulyok/smfc/issues/33) about an X13SAE-F motherboard). The only difference is in the implementation of thresholds, AST2600 chip implements only `Lower Critical` threshold, so setting up thresholds is different.  
+Newer X13/H13 motherboards (with AST2600 chips) are compatible with `smfc` (see mode details in [issue #33](https://github.com/petersulyok/smfc/issues/33) about an X13SAE-F motherboard). The only difference is in the implementation of thresholds, AST2600 chip implements only `Lower Critical` threshold, so setting up thresholds is different.  
 
 Feel free to create a short feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55) on your compatibility experience.
 
@@ -286,22 +285,17 @@ Important notes:
  2. In file `/etc/hdparm.conf` you must define HD names in `/dev/disk/by-id/...` form to avoid inconsistency.
 
 ### 8. Kernel modules
-We need to load the following important Linux kernel modules:
+One or more of following Linux kernel modules needs to be loaded for `smfc`:
 
  - [`coretemp`](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html): temperature report for Intel(R) CPUs
  - [`k10temp`](https://docs.kernel.org/hwmon/k10temp.html): temperature report for AMD(R) CPUs
  - [`drivetemp`](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html): temperature report for SATA hard disks (available from kernel 5.6+ version)
 
 Use `/etc/modules` file for persistent loading of these modules. 
-Here are some sample HWMON file locations for these kernel modules:
-
- - `coretemp`: `/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input`
- - `k10temp`: `/sys/bus/pci/drivers/k10temp/0000*/hwmon/hwmon*/temp1_input`
- - `drivetemp`: `/sys/class/scsi_disk/0:0:0:0/device/hwmon/hwmon*/temp1_input`
 
 Notes:
-- `smfc` is able to find the proper HWMON file automatically for Intel(R) CPUs, AMD(R) CPUs, SATA drives, or NVMe drives, but users may also specify the files manually (see `hwmon_path=` parameter in the config file)
-- Reading `drivetemp` module is the fastest way to get the temperature of the hard disks, and it can read temperature of the SATA hard disks even in standby mode, too. 
+- Reading `drivetemp` module is the fastest way to get the temperature of the hard disks, and it can read temperature of the SATA hard disks even if they are in standby mode.
+
 
 ### 9. Installation and uninstallation
 For the installation and uninstallation, you need root privilege. There are several ways to install and `smfc`, this chapter will show them.
