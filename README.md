@@ -134,7 +134,7 @@ Some additional notes:
 
 
 ### 5. Super Micro compatibility
-Originally, this software was designed to work with Super Micro X10-X12/H10-H12 motherboards with a BMC chip (i.e. ASPEED AST2400/2500) and with IPMI functionality. Unfortunately, there are motherboards (e.g. X10QBi see [issue #69](https://github.com/petersulyok/smfc/issues/69)) that are not compatible with `smfc`.
+Originally, this software was designed to work with Super Micro X10-X12/H10-H12 motherboards with a BMC chip (i.e. ASPEED AST2400/2500) and with IPMI functionality. Unfortunately, there are motherboards that do not allow the fan duty cycle to be controlled with `ipmitool raw` commands, and are not compatible with `smfc`.
 
 In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employ a BMC chip). 
 
@@ -421,6 +421,10 @@ fan_mode_delay=10
 fan_level_delay=2
 # IPMI parameters for remote access (string, default='')
 #remote_parameters=-U USERNAME -P PASSWORD -H HOST
+# Optional override to trigger platform specific behaviour (string, default='')
+# This will be automatically discovered from `ipmitool mc info` if not specified,
+# however can be overridden here.
+#platform_name=X10QBi
 
 
 # CPU zone: this fan controller works based on CPU(s) temperature.
@@ -531,12 +535,49 @@ Important notes:
 4. Several sample configuration files are provided in `./config/samples` folder.
 5. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
 
+#### 10.3 Platform specific configuration
+
+`smfc` supports a number of platform specific overrides to the underlying `ipmitool raw` behaviour. This section details the available overrides and any differences in configuration that need to be accounted for. Triggering these overrides occurs through two mechanisms:
+
+1. Specification of a value for the configuration parameter `[Ipmi.platform_name]`
+2. Autodiscovery of the platform name, which will be triggered if a value for `[Ipmi.platform_name]` is not provided.
+
+If the value provided by either of these match an existing override, that override will be used and platform-specific behaviour will be triggered.
+
+##### 10.3.1 X10QBi
+
+If `smfc` is being executed on an X10QBi, then no additional configuration should be required to ensure that the correct platform override is selected. However, the X10QBi override can be triggered manually with the following configuration:
+
+```
+[Ipmi]
+platform_name=X10QBi
+```
+
+Additionally, the valid values for fan controller zones differs to the values present in the default configuration file. Valid zones are:
+
+* 16 (`0x10`): FANCTL1
+* 17 (`0x11`): FANCTL2
+* 18 (`0x12`): FANCTL3
+* 19 (`0x13`): FANCTL4
+
+In stock configuration of a Supermicro SYS-8048-TR4FT, zone `0x10` is known to control the four midplane fans and the three rear exhaust fans, and zones `0x11`-`0x13` are left unassigned. The recommendation in this case is to update the configuration such that `ipmi_zone=16` for all sensors.
+
+Note that compatibility has only been assessed for the following BMC configuration:
+
+| Item     | Version     |
+|----------|-------------|
+| Firmware | 3.65.00     |
+| BIOS     | 3.1         |
+| BMC      | ASPEED 2400 |
+| Redfish  | 1.0.1       |
+| IPMI     | 2.0         |
 
 ### 11. How to run `smfc`?
 After a manual installation `smfc` can be started and stopped as a standard `systemd` service. Remember to reload `systemd` configuration after a new installation or if you changed the service definition file:
 
 ```
 systemctl daemon-reload
+systemctl enable smfc.service
 systemctl start smfc.service
 systemctl stop smfc.service
 systemctl restart smfc.service

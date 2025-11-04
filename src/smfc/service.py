@@ -17,6 +17,7 @@ from smfc.cpuzone import CpuZone
 from smfc.hdzone import HdZone
 from smfc.ipmi import Ipmi
 from smfc.log import Log
+from smfc.platform import FanMode
 
 
 class Service:
@@ -42,7 +43,7 @@ class Service:
            all fans back to rhw default speed 100% to avoid overheating while `smfc` is not running."""
         # Configure fans.
         if hasattr(self, 'ipmi'):
-            self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
+            self.ipmi.set_fan_mode(FanMode.FULL)
             if hasattr(self, 'log'):
                 self.log.msg(Log.LOG_INFO, 'smfc terminated: all fans are switched back to the 100% speed.')
 
@@ -209,13 +210,20 @@ class Service:
         # Log the old fan mode and zone levels in DEBUG log mode.
         if self.log.log_level >= Log.LOG_DEBUG:
             self.log.msg(Log.LOG_DEBUG, f'Old IPMI fan mode = {self.ipmi.get_fan_mode_name(old_mode)} ({old_mode})')
-            self.log.msg(Log.LOG_DEBUG, f'Old CPU zone (0) level = {self.ipmi.get_fan_level(Ipmi.CPU_ZONE)}%')
-            self.log.msg(Log.LOG_DEBUG, f'Old HD zone (1) level = {self.ipmi.get_fan_level(Ipmi.HD_ZONE)}%')
+            try:
+                # The validity of Ipmi.CPU_ZONE and Ipmi.HD_ZONE are platform dependent. These values should probably
+                # be defined by the platform, which is a TODO. For now, handle the exception if there is one. This isn't
+                # a meaningful comparison where `Ipmi.CPU_ZONE` or `Ipmi.HD_ZONE` are invalid anyway.
+                self.log.msg(Log.LOG_DEBUG, f'Old CPU zone (0) level = {self.ipmi.get_fan_level(Ipmi.CPU_ZONE)}%')
+                self.log.msg(Log.LOG_DEBUG, f'Old HD zone (1) level = {self.ipmi.get_fan_level(Ipmi.HD_ZONE)}%')
+            except ValueError:
+                # Silently disregard the exception; this isn't important to execution.
+                pass
         #  Set the FULL IPMI fan mode if it is not the current fan mode.
-        if old_mode != Ipmi.FULL_MODE:
-            self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
+        if old_mode != FanMode.FULL:
+            self.ipmi.set_fan_mode(FanMode.FULL)
             self.log.msg(Log.LOG_DEBUG,
-                         f'New IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}')
+                         f'New IPMI fan mode = {self.ipmi.get_fan_mode_name(FanMode.FULL)}')
 
         # Initialize connection to udev database
         try:
