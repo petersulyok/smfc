@@ -6,16 +6,16 @@ version = "4.2.1"
 authors = [
     { name = "Peter Sulyok", email = "peter@sulyok.net" }
 ]
-requires-python = ">=3.9, <4"
+requires-python = ">=3.10, <4"
 keywords = ["supermicro", "linux", "daemon", "fancontrol"]
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 classifiers = [
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: POSIX :: Linux",
     "Topic :: System :: Hardware",
     "Development Status :: 5 - Production/Stable"

@@ -174,7 +174,7 @@ The detailed HTML report will be available in folder `htmlcov/index.html` with c
 The project implemented the following GitHub workflows:
 
 1. Unit test and lint execution (`test.yml`). A commit can trigger this action:
-   * executes unit test on `ubuntu-latest` OS and on Python versions `3.9`, `3.10`, `3.11`, `3.12`, `3.13`
+   * executes unit test on `ubuntu-latest` OS and on Python versions `3.10`, `3.11`, `3.12`, `3.13`, `3.14`
    * executes `pylint` and `ruff`
    * generates coverage data and upload it to [codecov.io](https://codecov.io/)
 
