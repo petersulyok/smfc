@@ -39,6 +39,6 @@ case $fan_mode in
 esac
 
 echo "Current IPMI fan mode is: $mode_str ($fan_mode)."
-echo "ipmitool status: $rc."
+echo "ipmitool return code: $rc."
 
 echo "Done."
