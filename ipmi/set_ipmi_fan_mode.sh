@@ -49,4 +49,6 @@ esac
 
 # Configure IPMI fan mode.
 ipmitool raw 0x30 0x45 0x01 $c
+echo "ipmitool status: $?"
+
 echo "Done."
