@@ -40,5 +40,3 @@ esac
 
 echo "Current IPMI fan mode is: $mode_str ($fan_mode)."
 echo "ipmitool return code: $rc."
-
-echo "Done."
