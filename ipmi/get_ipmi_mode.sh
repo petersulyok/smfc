@@ -13,7 +13,7 @@ then
 fi
 
 # Configure IPMI fan mode.
-fan_mode=$((ipmitool raw 0x30 0x45 0x00))
+fan_mode=$(( $(ipmitool raw 0x30 0x45 0x00) ))
 rc=$?
 
 # Check input parameter.
