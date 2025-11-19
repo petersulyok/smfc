@@ -12,7 +12,7 @@ then
     exit -1
 fi
 
-# Configure IPMI fan mode.
+# Read current IPMI fan mode.
 fan_mode=$(( $(ipmitool raw 0x30 0x45 0x00) ))
 rc=$?
 
