@@ -22,7 +22,7 @@ case $1 in
     zone_str="HD"
     ;;
 2 | 3 | 4 | 5 | 6 | 7)
-    zone="0x$1"
+    zone="0x0$1"
     zone_str=$1
     ;;
 *)
@@ -37,7 +37,8 @@ case $1 in
 esac
 
 # Read IPMI fan level in the specified zone.
-level=$((16#$(ipmitool raw 0x30 0x45 0x00 $zone)))
+level_str=$(ipmitool raw 0x30 0x45 0x00 $zone)
 rc=$?
+level=$(printf "%d" $level)
 echo "Current IPMI fan level in $zone_str is: $level."
 echo "ipmitool return code: $rc"
