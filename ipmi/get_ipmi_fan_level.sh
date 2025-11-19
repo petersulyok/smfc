@@ -39,7 +39,7 @@ esac
 # Read IPMI fan level in the specified zone.
 level_str=$(ipmitool raw 0x30 0x70 0x66 0x00 $zone)
 rc=$?
-level_str=$(echo $level_str|tr -d ' ')
-level=$(printf "%d" "0x$level_str")
-echo "Current IPMI fan level in $zone_str zone is: $level (\"0x\"$level_str)."
+level_str=$(echo 0x$level_str|tr -d ' ')
+level=$(printf "%d" $level_str)
+echo "Current IPMI fan level in $zone_str zone is: $level ($level_str)."
 echo "ipmitool return code: $rc"
