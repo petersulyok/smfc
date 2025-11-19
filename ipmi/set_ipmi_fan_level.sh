@@ -38,7 +38,7 @@ esac
 if (( 0<=$2 && $2<=100 ))
 then 
     level=$(printf "0x%02x" $2)
-    echo "Fan level set to $2 ($level) in zone $zone_str ($zone)."
+    echo "Fan level set to $2% ($level) in zone $zone_str ($zone)."
 else
     echo "ERROR: Bad level parameter!"
     echo "Use: $0 zone level"
