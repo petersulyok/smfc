@@ -18,7 +18,7 @@ for i in 1 2 4 A B;
 do
     # Edit the lower threshold values here (0, 100, 200)!
     ipmitool sensor thresh FAN${i} lower 0 100 200
-    echo "ipmitool rc: $?"
+    echo "ipmitool return code: $?"
 done
 
 # Setup of the upper threshold limits of the fans (Noctua NF-F12 PWM rotation speed 300-1500 rpm).
@@ -27,5 +27,5 @@ for i in 1 2 4 A B;
 do
     # Edit the upper threshold values here (1600, 1700, 1800)!
     ipmitool sensor thresh FAN${i} upper 1600 1700 1800
-    echo "ipmitool rc: $?"
+    echo "ipmitool return code: $?"
 done
