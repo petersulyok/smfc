@@ -24,6 +24,7 @@ case $1 in
 2 | 3 | 4 | 5 | 6 | 7)
     zone="0x$1"
     zone_str=$1
+    ;;
 *)
     echo "Bad zone parameter"
     echo "Use: $0 zone"
