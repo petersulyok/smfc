@@ -14,15 +14,16 @@ fi
 # Check first (zone) parameter.
 case $1 in
 0 | cpu)
-    z=0x00
-    echo "CPU zone."
+    zone=0x00
+    zone_str="CPU"
     ;;
 1 | hd)
-    z=0x01
-    echo "HD zone."
+    zone=0x01
+    zone_str="HD"
     ;;
 *)
-    echo "Use: $0 zone leve"
+    echo "Bad zone input parameter"
+    echo "Use: $0 zone level"
     echo "     zone         fan zone: \"cpu\" or \"hd\""
     echo "     level        fan level: 0-100"
     exit
@@ -32,13 +33,16 @@ esac
 # Check second (level) parameter.
 if (( 0<=$2 && $2<=100 ))
 then 
-    s=$(printf "0x%02x" $2)
-    echo "Fan level set to $2 ($s)"
+    level=$(printf "0x%02x" $2)
+    echo "Fan level set to $2 ($level) in zone $zone_str ($zone)."
 else
-    echo "ERROR: Bad input parameter!"
+    echo "ERROR: Bad level input parameter!"
+    echo "Use: $0 zone level"
+    echo "     zone         fan zone: \"cpu\" or \"hd\""
+    echo "     level        fan level: 0-100"
     exit
 fi
 
 # Configure IPMI fan level in the specified zone.
-ipmitool raw 0x30 0x70 0x66 0x01 $z $s
-echo "Done."
+ipmitool raw 0x30 0x70 0x66 0x01 $zone $level
+echo "ipmitool status: $?"
