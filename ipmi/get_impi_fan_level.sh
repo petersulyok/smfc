@@ -39,4 +39,4 @@ esac
 level=$((16#$(ipmitool raw 0x30 0x45 0x00 $zone)))
 rc=$?
 echo "Current IPMI fan level in $zone_str is: $level."
-echo "ipmitool status: $rc"
+echo "ipmitool return code: $rc"
