@@ -15,40 +15,40 @@ fi
 # Check input parameter.
 case $1 in
 0 | standard)
-    c=0x00
+    mode=0x00
     mode_str="Standard"
     ;;
 1 | full)
-    c=0x01
+    mode=0x01
     mode_str="Full"
     ;;
 2 | optimal)
-    c=0x02
+    mode=0x02
     mode_str="Optimal"
     ;;
 3 | pue)
-    c=0x03
+    mode=0x03
     mode_str="PUE/2"
     ;;
 4 | heavyio)
-    c=0x04
+    mode=0x04
     mode_str="Heavy IO"
     ;;
 *)
     echo "ERROR: Bad input parameter!"
     echo "Usage: set_ipmi_fan_mode.sh mode"
-    echo "where mode:"
-    echo "    0 - STANDARD mode"
-    echo "    1 - FULL mode"
-    echo "    2 - OPTIMAL mode"
-    echo "    3 - PUE/2 mode"
-    echo "    4 - HEAVY IO mode"
+    echo "where mode is:"
+    echo "    0|standard - STANDARD mode"
+    echo "    1|full     - FULL mode"
+    echo "    2|optimal  - OPTIMAL mode"
+    echo "    3|pue      - PUE/2 mode"
+    echo "    4|heavyio  - HEAVY IO mode"
     exit
     ;;
 esac
 
 # Configure IPMI fan mode.
-ipmitool raw 0x30 0x45 0x01 $c
+ipmitool raw 0x30 0x45 0x01 $mode
 rc=$?
-echo "IPMI fan mode set to: $mode_str ($c)."
+echo "IPMI fan mode set to: $mode_str ($mode)."
 echo "ipmitool return code: $rc"
