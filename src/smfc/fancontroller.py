@@ -24,6 +24,7 @@ class FanController:
     log: Log                # Reference to a Log class instance
     ipmi: Ipmi              # Reference to an Ipmi class instance
     ipmi_zone: List[int]    # List of IPMI zones assigned to this fan controller
+    config_section: str     # Name of config section this controller was configured by
     name: str               # Name of the controller
     count: int              # Number of controlled entities
     temp_calc: int          # Calculate of the temperature (0-min, 1-avg, 2-max)
