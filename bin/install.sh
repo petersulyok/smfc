@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#   install.sh (C) 2021-2025, Peter Sulyok
+#   install.sh (C) 2021-2026, Peter Sulyok
 #   Installation script for `smfc` service.
 #
 set -e

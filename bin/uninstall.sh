@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#   uninstall.sh (C) 2021-2025, Peter Sulyok
+#   uninstall.sh (C) 2021-2026, Peter Sulyok
 #   Uninstallation script for `smfc` service.
 #
 set -e

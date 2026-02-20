@@ -1,4 +1,5 @@
 ﻿# Development
+
 This project is using `uv` for Python project management, see more details about [installation of `uv`](https://docs.astral.sh/uv/getting-started/installation/).
 `uv` can provide everything that multiple tools (e.g. `pip`, `pyenv`, `venv`) provide, but much faster. For example:
 
@@ -10,7 +11,7 @@ This project is using `uv` for Python project management, see more details about
 `uv` has a lock file (`uv.lock`) storing all dependencies, this should be part of version control.
 
 Building a development environment from scratch (with Python 3.12) contains the following steps:
-
+```
       pipx install uv
       pipx ensurepath
       git clone https://github.com/petersulyok/smfc.git
@@ -18,9 +19,9 @@ Building a development environment from scratch (with Python 3.12) contains the 
       uv python pin 3.12
       uv sync
       source .venv/bin/activate
-
+```
 Dependencies are listed in `pyproject.toml` file and the proper version numbers are handled by `uv`:
-
+```
     dependencies = [
         "pyudev"
     ]
@@ -40,18 +41,18 @@ Dependencies are listed in `pyproject.toml` file and the proper version numbers 
         "ruff",
         "pylint"
 	]
-
+```
 
 ## Linting
-The code can be checked with `pylint` and `ruff`. `pylint` can be executed this way:
 
+The code can be checked with `pylint` and `ruff`:
+```
 	pylint src test
-
-`ruff` can be executed this way:
-
     ruff check
+```
 
-# Testing  
+# Testing
+
 This chapter describes the test environment of `smfc` project.  
 Important notes:  
   
@@ -60,12 +61,13 @@ Important notes:
 * Test are executed by `pytest`
 * All development dependencies (defined in `pyproject.toml`) will be installed after the execution of these commands:
 
-
+```
       uv sync
       source .venv/bin/activate
-
+```
 
 ## Smoke tests  
+
 Several smoke tests have been provided for `smfc` where the service is executed with different configuration files. Notes:  
   
 * all smoke tests should be executed from the project root folder and can be stopped by pressing `CTLR+C`:
@@ -87,6 +89,7 @@ Several smoke tests have been provided for `smfc` where the service is executed 
    | `run_test_gpu_8.sh`       | 1 x CPU   | disabled | 8 GPUs    | enabled    | disabled      |
 
 ## Unit tests  
+
 The whole project (all source code) is completely unit tested. The unit tests are executed with `pytest`:
 
 

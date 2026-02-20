@@ -1,5 +1,5 @@
 #
-#    __init__.py (C) 2020-2025, Peter Sulyok
+#    __init__.py (C) 2020-2026, Peter Sulyok
 #   smfc package: Super Micro fan control for Linux (home) servers.
 #
 from smfc.log import Log

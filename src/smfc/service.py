@@ -1,5 +1,5 @@
 #
-#   service.py (C) 2020-2025, Peter Sulyok
+#   service.py (C) 2020-2026, Peter Sulyok
 #   smfc package: Super Micro fan control for Linux (home) servers.
 #   smfc.Service() class implementation.
 #

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#   set_ipmi_threshold.sh (C) 2021-2025, Peter Sulyok
+#   set_ipmi_threshold.sh (C) 2021-2026, Peter Sulyok
 #   This script will setup IPMI threshold values for fans.
 #   Read more here: https://www.truenas.com/community/resources/how-to-change-ipmi-sensor-thresholds-using-ipmitool.35/
 #

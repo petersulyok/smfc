@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   test_06_gpuzone.py (C) 2021-2025, Peter Sulyok
+#   test_06_gpuzone.py (C) 2021-2026, Peter Sulyok
 #   Unit tests for smfc.GpuZone() class.
 #
 import subprocess

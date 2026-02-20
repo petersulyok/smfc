@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#   docker-start-gpu.sh (C) 2023-2025, Peter Sulyok
+#   docker-start-gpu.sh (C) 2023-2026, Peter Sulyok
 #   This script will start `smfc` GPU enabled docker image.
 #
 docker run \

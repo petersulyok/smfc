@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#   get_ipmi_fan_level.sh (C) 2021-2025, Peter Sulyok
+#   get_ipmi_fan_level.sh (C) 2021-2026, Peter Sulyok
 #   This script will read the current fan level in a specified IPMI zone.
 #
 

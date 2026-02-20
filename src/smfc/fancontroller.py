@@ -1,5 +1,5 @@
 #
-#   fancontroller.py (C) 2020-2025, Peter Sulyok
+#   fancontroller.py (C) 2020-2026, Peter Sulyok
 #   smfc package: Super Micro fan control for Linux (home) servers.
 #   smfc.FanController() class implementation.
 #

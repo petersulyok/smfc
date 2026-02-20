@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   conftest.py (C) 2021-2025, Peter Sulyok
+#   conftest.py (C) 2021-2026, Peter Sulyok
 #   Setup test configuration for pytest.
 #
 

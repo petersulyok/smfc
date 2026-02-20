@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   smoke_runner.py (C) 2021-2025, Peter Sulyok
+#   smoke_runner.py (C) 2021-2026, Peter Sulyok
 #   Smoke test runner for smfc service.
 #
 import atexit

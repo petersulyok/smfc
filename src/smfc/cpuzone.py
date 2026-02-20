@@ -1,5 +1,5 @@
 #
-#   cpuzone.py (C) 2020-2025, Peter Sulyok
+#   cpuzone.py (C) 2020-2026, Peter Sulyok
 #   smfc package: Super Micro fan control for Linux (home) servers.
 #   smfc.CpuZone() class implementation.
 #

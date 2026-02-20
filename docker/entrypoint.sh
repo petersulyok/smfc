@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-#   entrypoint.sh (C) 2025, Peter Sulyok
+#   entrypoint.sh (C) 2026, Peter Sulyok
 #   Entry point for `smfc` docker image (for Alpine Linux).
 #
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#   get_ipmi_fan_mode.sh (C) 2021-2025, Peter Sulyok
+#   get_ipmi_fan_mode.sh (C) 2021-2026, Peter Sulyok
 #   This script will read the current IPMI fan mode.
 #   Read more here: https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/
 #

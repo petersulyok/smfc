@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   test_04_constzone.py (C) 2021-2025, Peter Sulyok
+#   test_04_constzone.py (C) 2021-2026, Peter Sulyok
 #   Unit tests for smfc.ConstZone() class.
 #
 from configparser import ConfigParser
