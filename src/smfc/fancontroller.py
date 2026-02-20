@@ -13,7 +13,7 @@ from smfc.log import Log
 
 
 class FanController:
-    """Generic fan controller class for an IPMI zone."""
+    '''Generic fan controller class for an IPMI zone.'''
 
     # Constant values for temperature calculation
     CALC_MIN: int = 0
@@ -49,7 +49,7 @@ class FanController:
     def __init__(self, log: Log, ipmi: Ipmi, ipmi_zone: str, name: str, count: int, temp_calc: int,
                  steps: int, sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
                  max_level: int) -> None:
-        """Initialize the FanController class. Will raise an exception in case of invalid parameters.
+        '''Initialize the FanController class. Will raise an exception in case of invalid parameters.
         Args:
             log (Log): reference to a Log class instance
             ipmi (Ipmi): reference to an Ipmi class instance
@@ -66,7 +66,7 @@ class FanController:
             max_level (int): maximum fan level value [0..100%]
         Raises:
             ValueError: invalid input parameter
-        """
+        '''
         # Save and validate configuration parameters.
         self.log = log
         self.ipmi = ipmi
@@ -162,19 +162,19 @@ class FanController:
         """Get the temperature of the 'nth' element in the hwmon list. This is an empty implementation."""
 
     def get_1_temp(self) -> float:
-        """Get a single temperature of a controlled entity in the IPMI zone.
+        '''Get a single temperature of a controlled entity in the IPMI zone.
 
         Returns:
             float: single temperature of a controlled entity (C)
-        """
+        '''
         return self._get_nth_temp(0)
 
     def get_min_temp(self) -> float:
-        """Get the minimum temperature of multiple controlled entities.
+        '''Get the minimum temperature of multiple controlled entities.
 
         Returns:
             float: minimum temperature of the controlled entities (C)
-        """
+        '''
         minimum: float      # Minimum temperature value
 
         # Calculate minimum temperature.
@@ -184,11 +184,11 @@ class FanController:
         return minimum
 
     def get_avg_temp(self):
-        """Get the average temperature of the controlled entities in the IPMI zone.
+        '''Get the average temperature of the controlled entities in the IPMI zone.
 
            Returns:
                 float: average temperature of the controlled entities (C)
-        """
+        '''
         average: float      # Average temperature
         counter: int        # Value counter
 
@@ -201,11 +201,11 @@ class FanController:
         return average / counter
 
     def get_max_temp(self) -> float:
-        """Get the maximum temperature of the controlled entities in the IPMI zone.
+        '''Get the maximum temperature of the controlled entities in the IPMI zone.
 
            Returns:
                 float: maximum temperature of the controlled entities (C)
-        """
+        '''
         maximum: float      # Maximum temperature value
 
         # Calculate minimum temperature.
@@ -215,18 +215,18 @@ class FanController:
         return maximum
 
     def set_fan_level(self, level: int) -> None:
-        """Set the new fan level in all IPMI zones of the controller.
+        '''Set the new fan level in all IPMI zones of the controller.
 
         Args:
             level (int): new fan level [0..100]
-        """
+        '''
         self.ipmi.set_multiple_fan_levels(self.ipmi_zone, level)
 
     def callback_func(self) -> None:
-        """Call-back function for a child class."""
+        '''Call-back function for a child class.'''
 
     def run(self) -> None:
-        """Run IPMI zone controller function with the following steps:
+        '''Run IPMI zone controller function with the following steps:
 
             * Step 1: Read current time. If the elapsed time is bigger than the polling time period
               then go to step 2, otherwise return.
@@ -234,7 +234,7 @@ class FanController:
               the sensitivity limit then go to step 3, otherwise return
             * Step 3: Calculate the current gain and fan level based on the measured temperature
             * Step 4: If the new fan level is different it will be set and logged
-        """
+        '''
         current_time: float     # Current system timestamp (measured)
         current_temp: float     # Current temperature (measured)
         current_level: int      # Current fan level (calculated)
@@ -269,7 +269,7 @@ class FanController:
                                  f' @ IPMI {self.ipmi_zone} zone(s).')
 
     def print_temp_level_mapping(self) -> None:
-        """Print out the user-defined temperature to level mapping value in log DEBUG level."""
+        '''Print out the user-defined temperature to level mapping value in log DEBUG level.'''
         self.log.msg(Log.LOG_CONFIG, '   User-defined control function:')
         for i in range(self.steps + 1):
             self.log.msg(Log.LOG_CONFIG, f'   {i}. [T:{self.min_temp+(i*self.temp_step):.1f}C - '

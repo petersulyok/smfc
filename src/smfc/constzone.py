@@ -12,7 +12,7 @@ from smfc.log import Log
 
 
 class ConstZone(FanController):
-    """Constant zone fan control."""
+    '''Constant zone fan control.'''
 
     # Constant values for the configuration parameters.
     CS_CONST_ZONE: str = 'CONST zone'
@@ -26,14 +26,14 @@ class ConstZone(FanController):
 
     #pylint: disable=super-init-not-called
     def __init__(self, log: Log, ipmi: Ipmi, config:ConfigParser) -> None:
-        """Initialize the ConstZone class and raise exception in case invalid configuration items.
+        '''Initialize the ConstZone class and raise exception in case invalid configuration items.
         Args:
             log (Log): reference to a Log class instance
             ipmi (Ipmi): reference to an Ipmi class instance
             config (ConfigParser): reference to the configuration (default=None)
         Raises:
             ValueError: invalid configuration parameters
-        """
+        '''
         # Initialize ConstZone class.
         self.log = log
         self.ipmi = ipmi
@@ -67,14 +67,14 @@ class ConstZone(FanController):
     # pylint: enable=super-init-not-called
 
     def run(self) -> None:
-        """Run IPMI zone controller function with the following steps:
+        '''Run IPMI zone controller function with the following steps:
 
             * Step 1: Read current time. If the elapsed time is bigger than the polling time period,
               then go to step 2, otherwise return.
             * Step 2: Loop through IPMI zones: read current fan level in the zone, if the level is different from the
               expected one then we set fan level in the zone again, otherwise return.
             * Step 3: Log the fan level.
-        """
+        '''
         current_time: float     # Current system timestamp (measured)
 
         # Step 1: check the elapsed time.

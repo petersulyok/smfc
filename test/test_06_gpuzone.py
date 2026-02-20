@@ -13,11 +13,11 @@ from smfc import Log, Ipmi, FanController, GpuZone
 from .test_00_data import TestData
 
 class TestGpuZone:
-    """Unit test class for smfc.GpuZone() class"""
+    '''Unit test class for smfc.GpuZone() class'''
 
     @pytest.mark.parametrize(
-        "count, ipmi_zone, gpu_device_ids, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, "
-        "max_level, error", [
+        'count, ipmi_zone, gpu_device_ids, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, '
+        'max_level, error', [
         (1, '0', '0',           FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 'GpuZone.__init__() 1'),
         (2, '1', '0, 1',        FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 'GpuZone.__init__() 2'),
         (4, '2', '0, 1, 2, 3',  FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 'GpuZone.__init__() 3')
@@ -25,11 +25,11 @@ class TestGpuZone:
     def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: str, gpu_device_ids: str, temp_calc: int,
                      steps: int, sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
                      max_level: int, error: str):
-        """Positive unit test for GpuZone.__init__() method. It contains the following steps:
+        '''Positive unit test for GpuZone.__init__() method. It contains the following steps:
             - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path()
             - initialize a Config, Log, Ipmi, and GpuZone classes
             - ASSERT: if the GpuZone class attributes are different from values passed to __init__
-        """
+        '''
         my_td = TestData()
         nvidia_smi_cmd = my_td.create_nvidia_smi_command(count)
         mock_print = MagicMock()
@@ -68,15 +68,15 @@ class TestGpuZone:
         assert my_gpuzone.nvidia_smi_path == nvidia_smi_cmd, error
         del my_td
 
-    @pytest.mark.parametrize("error", [
+    @pytest.mark.parametrize('error', [
         'GpuZone.__init__() 4'
     ])
     def test_init_p2(self, mocker: MockerFixture, error: str):
-        """Positive unit test for GpuZone.__init__() method. It contains the following steps:
+        '''Positive unit test for GpuZone.__init__() method. It contains the following steps:
             - mock print(), smfc.GpuZone._exec_nvidia_smi()
             - initialize a Config, Log, Ipmi, and GpuZone classes
             - ASSERT: if the GpuZone class attributes are different from the default configuration values
-        """
+        '''
         count = 1
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
@@ -106,18 +106,18 @@ class TestGpuZone:
         assert my_gpuzone.gpu_device_ids == [0], error
         assert my_gpuzone.nvidia_smi_path == '/usr/bin/nvidia-smi', error
 
-    @pytest.mark.parametrize("device_ids, error", [
+    @pytest.mark.parametrize('device_ids, error', [
         # gpu_device_ids= invalid value(s)
         ('#, 0, 1',     'GpuZone.__init__() 5'),
         ('-1, 0, 1',    'GpuZone.__init__() 6'),
         ('0, 101, 1',   'GpuZone.__init__() 7')
     ])
     def test_init_n1(self, mocker: MockerFixture, device_ids: str, error: str):
-        """Negative unit test for GpuZone.__init__() method. It contains the following steps:
+        '''Negative unit test for GpuZone.__init__() method. It contains the following steps:
             - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path()
             - initialize a Config, Log, Ipmi, and GpuZone classes
             - ASSERT: if no assertion is raised for invalid values at initialization
-        """
+        '''
         my_td = TestData()
         count=3
         nvidia_smi_cmd = my_td.create_nvidia_smi_command(count)
@@ -137,17 +137,17 @@ class TestGpuZone:
         del my_td
 
     #pylint: disable=protected-access
-    @pytest.mark.parametrize("args, error", [
+    @pytest.mark.parametrize('args, error', [
         (['--query-gpu=temperature.gpu', '--format=csv,noheader,nounits'],  'GpuZone._exec_nvidia_smi() 1'),
         (['0', '1', '2', '3'],                                              'GpuZone._exec_nvidia_smi() 2')
     ])
     def test_exec_nvidia_smi_p(self, mocker: MockerFixture, args:List[str], error: str):
-        """Positive unit test for GpuZone._exec_nvidia_smi() method. It contains the following steps:
+        '''Positive unit test for GpuZone._exec_nvidia_smi() method. It contains the following steps:
             - mock subprocess.run() function
             - initialize an empty GpuZone class
             - call GpuZone._exec_nvidia_smi() method
             - ASSERT: if subprocess.run() called with different parameters from specified argument list
-        """
+        '''
         expected_args: List[str]
 
         my_gpuzone = GpuZone.__new__(GpuZone)
@@ -162,17 +162,17 @@ class TestGpuZone:
         assert mock_subprocess_run.call_count == 1, error
 
     #pylint: disable=R0801
-    @pytest.mark.parametrize("nvidia_smi_path, exception, error", [
+    @pytest.mark.parametrize('nvidia_smi_path, exception, error', [
         # The real subprocess.run() executed (without sudo)
         ('/nonexistent/command', FileNotFoundError, 'GpuZone._exec_nvidia_smi() 3')
     ])
     def test_exec_nvidia_smi_n(self, nvidia_smi_path: str, exception: Any, error: str):
-        """Negative unit test for GpuZone._exec_nvidia_smi() method. It contains the following steps:
+        '''Negative unit test for GpuZone._exec_nvidia_smi() method. It contains the following steps:
             - mock subprocess.run() function if needed
             - initialize an empty GpuZone class
             - call GpuZone._exec_nvidia_smi() method
             - ASSERT: if no assertion was raised
-        """
+        '''
         my_gpuzone = GpuZone.__new__(GpuZone)
         my_gpuzone.nvidia_smi_path = nvidia_smi_path
         with pytest.raises(Exception) as cm:
@@ -180,18 +180,18 @@ class TestGpuZone:
         assert cm.type == exception, error
     # pylint: enable=R0801
 
-    @pytest.mark.parametrize("count, temperatures, error", [
+    @pytest.mark.parametrize('count, temperatures, error', [
         (1, [32],                               'GpuZone._get_nth_temp() 1'),
         (2, [33, 34],                           'GpuZone._get_nth_temp() 2'),
         (4, [33, 34, 35, 38],                   'GpuZone._get_nth_temp() 3'),
         (8, [33, 34, 35, 38, 36, 37, 31, 30],   'GpuZone._get_nth_temp() 4')
     ])
     def test_get_nth_temp_p1(self, mocker: MockerFixture, count: int, temperatures: List[float], error: str):
-        """Positive unit test for GpuZone._get_nth_temp() method. It contains the following steps:
+        '''Positive unit test for GpuZone._get_nth_temp() method. It contains the following steps:
             - mock print() function
             - initialize an empty GpuZone class
             - ASSERT: if the read temperature is different from the expected one
-        """
+        '''
         my_td = TestData()
         nvidia_smi_cmd = my_td.create_nvidia_smi_command(count, temperatures)
         my_gpuzone = GpuZone.__new__(GpuZone)

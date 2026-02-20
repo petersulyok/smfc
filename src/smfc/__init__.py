@@ -12,6 +12,6 @@ from smfc.constzone import ConstZone
 from smfc.service import Service
 from smfc.cmd import main
 
-__all__ = [ "Log", "Ipmi", "FanController", "CpuZone", "HdZone", "GpuZone", "ConstZone", "Service", "main"]
+__all__ = [ 'Log', 'Ipmi', 'FanController', 'CpuZone', 'HdZone', 'GpuZone', 'ConstZone', 'Service', 'main']
 
 # End.

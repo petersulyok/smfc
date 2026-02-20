@@ -11,7 +11,7 @@ from smfc.log import Log
 
 
 class CpuZone(FanController):
-    """CPU zone fan control."""
+    '''CPU zone fan control.'''
 
     # Constant values for the configuration parameters.
     CS_CPU_ZONE: str = 'CPU zone'
@@ -27,7 +27,7 @@ class CpuZone(FanController):
     CV_CPU_ZONE_MAX_LEVEL: str = 'max_level'
 
     def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config:ConfigParser) -> None:
-        """Initialize the CpuZone class and raise exception in case of invalid configuration.
+        '''Initialize the CpuZone class and raise exception in case of invalid configuration.
         Args:
             log (Log): reference to a Log class instance
             udevc (Context): reference to an udev database connection (instance of Context from pyudev)
@@ -36,7 +36,7 @@ class CpuZone(FanController):
         Raises:
             ValueError: multiple hwmon devices reported, one expected
             RuntimeError: No HWMON device found for CPU(s)
-        """
+        '''
         count: int  # CPU count.
 
         # Build the list of paths for hwmon devices.
@@ -81,7 +81,7 @@ class CpuZone(FanController):
         value: float  # Temperature value
 
         try:
-            with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
+            with open(self.hwmon_path[index], 'r', encoding='UTF-8') as f:
                 value = float(f.read()) / 1000
         except (IOError, FileNotFoundError, ValueError) as e:
             raise e

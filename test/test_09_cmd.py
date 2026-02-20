@@ -10,10 +10,10 @@ from smfc import main
 
 # pylint: disable=too-few-public-methods
 class TestMain:
-    """Unit test for smfc.main() function."""
+    '''Unit test for smfc.main() function.'''
 
     def test_main(self, mocker:MockerFixture) -> None:
-        """This is a unit test for function Service.main()."""
+        '''This is a unit test for function Service.main().'''
         mock_service_run = MagicMock()
         mocker.patch('smfc.Service.run', mock_service_run)
         main()

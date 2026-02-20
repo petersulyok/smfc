@@ -15,20 +15,20 @@ from smfc import Log, Ipmi, FanController, CpuZone, HdZone, GpuZone, ConstZone, 
 from .test_00_data import TestData, MockedContextError, MockedContextGood
 
 class TestService:
-    """Unit test for smfc.Service() class"""
+    '''Unit test for smfc.Service() class'''
 
     sleep_counter: int
 
-    @pytest.mark.parametrize("ipmi, log, error", [
+    @pytest.mark.parametrize('ipmi, log, error', [
         (True, True,   'Service.exit_func() 1'),
         (False, False, 'Service.exit_func() 2')
     ])
     def test_exit_func(self, mocker:MockerFixture, ipmi: bool, log: bool, error: str) -> None:
-        """Positive unit test for Service.exit_func() method. It contains the following steps:
+        '''Positive unit test for Service.exit_func() method. It contains the following steps:
             - mock atexit.unregister(), Ipmi.set_fan_mode(), Log.msg_to_stdout() functions
             - execute Service.exit_func()
             - ASSERT: if mocked functions not called expected times
-        """
+        '''
         mock_atexit_unregister = MagicMock()
         mocker.patch('atexit.unregister', mock_atexit_unregister)
         mock_ipmi_set_fan_mode = MagicMock()
@@ -47,26 +47,26 @@ class TestService:
             if log:
                 assert mock_log_msg.call_count == 1, error
 
-    @pytest.mark.parametrize("module_list, cpuzone, hdzone, gpuzone, standby, error", [
-        ("something\ncoretemp\n",           True,  False, False, False, "Service.check_dependencies() 1"),
-        ("something\nk10temp\n",            True,  False, True,  False, "Service.check_dependencies() 2"),
-        ("coretemp\nsomething\nk10temp\n",  True,  False, False, False, "Service.check_dependencies() 3"),
-        ("something\ndrivetemp\n",          False, True,  True,  False, "Service.check_dependencies() 4"),
-        ("something\ndrivetemp\n",          False, True,  False, True,  "Service.check_dependencies() 5"),
-        ("something\n",                     False, True,  False, False, "Service.check_dependencies() 6"),
-        ("something\ndrivetemp\nx",         False, True,  True,  True,  "Service.check_dependencies() 7"),
-        ("coretemp\ndrivetemp\n",           True,  True,  False, True,  "Service.check_dependencies() 8")
+    @pytest.mark.parametrize('module_list, cpuzone, hdzone, gpuzone, standby, error', [
+        ('something\ncoretemp\n',           True,  False, False, False, 'Service.check_dependencies() 1'),
+        ('something\nk10temp\n',            True,  False, True,  False, 'Service.check_dependencies() 2'),
+        ('coretemp\nsomething\nk10temp\n',  True,  False, False, False, 'Service.check_dependencies() 3'),
+        ('something\ndrivetemp\n',          False, True,  True,  False, 'Service.check_dependencies() 4'),
+        ('something\ndrivetemp\n',          False, True,  False, True,  'Service.check_dependencies() 5'),
+        ('something\n',                     False, True,  False, False, 'Service.check_dependencies() 6'),
+        ('something\ndrivetemp\nx',         False, True,  True,  True,  'Service.check_dependencies() 7'),
+        ('coretemp\ndrivetemp\n',           True,  True,  False, True,  'Service.check_dependencies() 8')
     ])
     def test_check_dependencies_p(self, mocker: MockerFixture, module_list: str, cpuzone: bool, hdzone: bool,
                                   gpuzone: bool, standby: bool, error: str):
-        """Positive unit test for Service.check_dependencies() method. It contains the following steps:
+        '''Positive unit test for Service.check_dependencies() method. It contains the following steps:
             - mock print(), argparse.ArgumentParser._print_message() and builtins.open() functions
             - execute Service.check_dependencies()
             - ASSERT: if returns an error message
-        """
+        '''
 
         def mocked_open(path: str, *args, **kwargs):
-            return original_open(modules, *args, **kwargs) if path == "/proc/modules" else \
+            return original_open(modules, *args, **kwargs) if path == '/proc/modules' else \
                    original_open(path, *args, **kwargs)
 
         my_td = TestData()
@@ -105,7 +105,7 @@ class TestService:
         assert service.check_dependencies() == '', error
         del my_td
 
-    @pytest.mark.parametrize("error", ["Service.check_dependencies() 9"])
+    @pytest.mark.parametrize('error', ['Service.check_dependencies() 9'])
     def test_check_dependecies_n(self, mocker:MockerFixture, error: str):
         """Negative unit test fot Service.check_dependencies() method. It contains the following steps:
             - mock print() and builtins.open() functions
@@ -114,12 +114,12 @@ class TestService:
         """
 
         def mocked_open(path: str, *args, **kwargs):
-            return original_open(modules, *args, **kwargs) if path == "/proc/modules" else \
+            return original_open(modules, *args, **kwargs) if path == '/proc/modules' else \
                    original_open(path, *args, **kwargs)
 
         my_td = TestData()
         ipmi_command = my_td.create_ipmi_command()
-        modules = my_td.create_text_file("coretemp\ndrivetemp\n")
+        modules = my_td.create_text_file('coretemp\ndrivetemp\n')
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
         mock_open = MagicMock(side_effect=mocked_open)
@@ -174,7 +174,7 @@ class TestService:
         assert error_str.find('ipmitool') != -1, error
         del my_td
 
-    @pytest.mark.parametrize("command_line, exit_code, error", [
+    @pytest.mark.parametrize('command_line, exit_code, error', [
         ('-h',                                                      0, 'Service.run() 1'),
         ('-v',                                                      0, 'Service.run() 2'),
         ('-l 10',                                                   2, 'Service.run() 3'),
@@ -185,11 +185,11 @@ class TestService:
         ('-o 0 -l 3 -c ./nonexistent_folder/nonexistent_file.conf', 6, 'Service.run() 8')
     ])
     def test_run_026n(self, mocker:MockerFixture, command_line: str, exit_code: int, error: str):
-        """Negative unit test for Service.run() method. It contains the following steps:
+        '''Negative unit test for Service.run() method. It contains the following steps:
             - mock print(), argparse.ArgumentParser._print_message() functions
             - execute Service.run()
             - ASSERT: if sys.exit() did not return code 0 (-h -v), 2 (invalid arguments), 6 (invalid configuration file)
-        """
+        '''
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
         mocker_argumentparser_print = MagicMock()
@@ -200,35 +200,35 @@ class TestService:
             service.run()
         assert cm.value.code == exit_code, error
 
-    @pytest.mark.parametrize("level, output, exit_code, error", [
+    @pytest.mark.parametrize('level, output, exit_code, error', [
         (10, 0, 5, 'Service.run() 9'),
         (0,  9, 5, 'Service.run() 10')
     ])
     def test_run_5n(self, mocker:MockerFixture, level: int, output: int, exit_code: int, error: str):
-        """Negative unit test for Service.run() method. It contains the following steps:
+        '''Negative unit test for Service.run() method. It contains the following steps:
             - mock print(), argparse.ArgumentParser.parse_args() functions
             - execute Service.run()
             - ASSERT: if sys.exit() did not return code 5 (log initialization error)
-        """
+        '''
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
         mock_parser_parse_args = MagicMock()
         mocker.patch('argparse.ArgumentParser.parse_args', mock_parser_parse_args)
-        mock_parser_parse_args.return_value = Namespace(config_file="smfc.conf", ne=False, s=False, l=level, o=output)
+        mock_parser_parse_args.return_value = Namespace(config_file='smfc.conf', ne=False, s=False, l=level, o=output)
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
         assert cm.value.code == exit_code, error
 
-    @pytest.mark.parametrize("exit_code, error", [
+    @pytest.mark.parametrize('exit_code, error', [
         (7, 'Service.run() 11')
     ])
     def test_run_7n(self, mocker:MockerFixture, exit_code: int, error: str):
-        """Negative unit test for Service.run() method. It contains the following steps:
+        '''Negative unit test for Service.run() method. It contains the following steps:
             - mock print(), argparse.ArgumentParser.parse_args(), smfc.Service.check_dependencies() functions
             - execute Service.run()
             - ASSERT: if sys.exit() did not return code 7 (check dependency error)
-        """
+        '''
         my_td = TestData()
         my_config = ConfigParser()
         my_config[CpuZone.CS_CPU_ZONE] = {
@@ -250,7 +250,7 @@ class TestService:
         mocker.patch('argparse.ArgumentParser.parse_args', mock_parser_parse_args)
         mock_parser_parse_args.return_value = Namespace(config_file=conf_file, ne=True, nd=False, s=False, l=0, o=0)
         mock_check_dependencies = MagicMock()
-        mock_check_dependencies.return_value = "ERROR"
+        mock_check_dependencies.return_value = 'ERROR'
         mocker.patch('smfc.Service.check_dependencies', mock_check_dependencies)
         service = Service()
         with pytest.raises(SystemExit) as cm:
@@ -258,7 +258,7 @@ class TestService:
         assert cm.value.code == exit_code, error
         del my_td
 
-    @pytest.mark.parametrize("ipmi_command, mode_delay, level_delay, exit_code, error", [
+    @pytest.mark.parametrize('ipmi_command, mode_delay, level_delay, exit_code, error', [
         ('NON_EXIST', 0,  0,  8,  'Service.run() 12'),
         ('GOOD',      -1, 0,  8,  'Service.run() 13'),
         ('GOOD',      0,  -1, 8,  'Service.run() 14'),
@@ -267,11 +267,11 @@ class TestService:
     ])
     def test_run_810n(self, mocker:MockerFixture, ipmi_command: str, mode_delay: int, level_delay: int, exit_code: int,
                       error: str):
-        """Negative unit test for Service.run() method. It contains the following steps:
+        '''Negative unit test for Service.run() method. It contains the following steps:
             - mock print(), pyudev.Context.__init__() functions
             - execute Service.run()
             - ASSERT: if sys.exit() did not return code 8 (Ipmi initialization error) or 10 (no enabled zone)
-        """
+        '''
         my_td = TestData()
         my_config = ConfigParser()
         if ipmi_command == 'NON_EXIST':
@@ -308,15 +308,15 @@ class TestService:
         assert cm.value.code == exit_code, error
         del my_td
 
-    @pytest.mark.parametrize("exit_code, error", [
+    @pytest.mark.parametrize('exit_code, error', [
         (9, 'Service.run() 17')
     ])
     def test_run_9n(self, mocker:MockerFixture, exit_code: int, error: str):
-        """Negative unit test for Service.run() method. It contains the following steps:
+        '''Negative unit test for Service.run() method. It contains the following steps:
             - mock print(), pyudev.Context.__init__() functions
             - execute Service.run()
             - ASSERT: if sys.exit() did not return code 9 (pyudev.Context() init error)
-        """
+        '''
         my_td = TestData()
         my_config = ConfigParser()
         ipmi_command = my_td.create_ipmi_command()
@@ -348,22 +348,22 @@ class TestService:
         assert cm.value.code == exit_code, error
         del my_td
 
-    @pytest.mark.parametrize("cpuzone, hdzone, gpuzone, constzone, exit_code, error", [
+    @pytest.mark.parametrize('cpuzone, hdzone, gpuzone, constzone, exit_code, error', [
         (True,  False, True,  False, 100, 'Service.run() 18'),
         (False, True,  False, True,  100, 'Service.run() 19'),
         (True,  False, True,  False, 100, 'Service.run() 20')
     ])
     def test_run_100p(self, mocker:MockerFixture, cpuzone: bool, hdzone: bool, gpuzone: bool, constzone: bool,
                       exit_code: int, error: str):
-        """Positive unit test for Service.run() method. It contains the following steps:
+        '''Positive unit test for Service.run() method. It contains the following steps:
             - mock print(), time.sleep() functions
             - execute smfc.run()
             - The main loop will be executed 10 times then exit with code 100
-        """
+        '''
 
         # pylint: disable=unused-argument
         def mocked_sleep(*args):
-            """Mocked time.sleep() function. Exists at the 10th call."""
+            '''Mocked time.sleep() function. Exists at the 10th call.'''
             self.sleep_counter += 1
             if self.sleep_counter >= 10:
                 sys.exit(100)

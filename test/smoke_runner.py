@@ -17,39 +17,39 @@ from .test_00_data import TestData, MockedContextGood
 
 @fixture()
 def cpu_num(request) -> int:
-    """Read number of CPUs from command-line."""
-    return int(request.config.getoption("--cpu-num"))
+    '''Read number of CPUs from command-line.'''
+    return int(request.config.getoption('--cpu-num'))
 
 
 @fixture()
 def hd_num(request) -> int:
-    """Read number of HDDs from command-line."""
-    return int(request.config.getoption("--hd-num"))
+    '''Read number of HDDs from command-line.'''
+    return int(request.config.getoption('--hd-num'))
 
 
 @fixture()
 def gpu_num(request) -> int:
-    """Read number of GPU from command-line."""
-    return int(request.config.getoption("--gpu-num"))
+    '''Read number of GPU from command-line.'''
+    return int(request.config.getoption('--gpu-num'))
 
 
 @fixture()
 def config_file(request) -> str:
-    """Read the configuration file name from the command-line."""
-    return request.config.getoption("--conf-file")
+    '''Read the configuration file name from the command-line.'''
+    return request.config.getoption('--conf-file')
 
 
 #pylint: disable=too-few-public-methods
 class TestSmoke:
-    """Smoke test class."""
+    '''Smoke test class.'''
 
     #pylint: disable=redefined-outer-name
     def test_smoke(self, mocker: MockerFixture, cpu_num, hd_num, gpu_num, config_file):
-        """This is a smoke test for smfc program. It contains the following steps:
+        '''This is a smoke test for smfc program. It contains the following steps:
             - mock pyudev.Context.__init__(), CpuZone.__init__(), HdZone.__init__(), GpuZone.__init__() functions
             - execute smfc.run()
             - The main loop will be stopped if the user presses CTRL-C
-        """
+        '''
         my_td: TestData = None  # Test data
 
         def exit_func() -> None:

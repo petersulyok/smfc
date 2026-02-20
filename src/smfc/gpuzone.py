@@ -14,7 +14,7 @@ from smfc.log import Log
 
 
 class GpuZone(FanController):
-    """Class for GPU zone fan control."""
+    '''Class for GPU zone fan control.'''
 
     # GpuZone specific parameters.
     gpu_device_ids: List[int]           # GPU device IDs (indexes)
@@ -38,14 +38,14 @@ class GpuZone(FanController):
     CV_GPU_ZONE_NVIDIA_SMI_PATH: str = 'nvidia_smi_path'
 
     def __init__(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
-        """Initialize the GpuZone class. Abort in case of configuration errors.
+        '''Initialize the GpuZone class. Abort in case of configuration errors.
         Args:
             log (Log): reference to a Log class instance
             ipmi (Ipmi): reference to an Ipmi class instance
             config (configparser.ConfigParser): reference to the configuration (default=None)
         Raises:
             ValueError: invalid parameters
-        """
+        '''
         gpu_id_list: str    # String for gpu_device_ids=
         count: int          # GPU count.
 
@@ -84,12 +84,12 @@ class GpuZone(FanController):
             self.log.msg(Log.LOG_CONFIG, f'   {self.CV_GPU_ZONE_NVIDIA_SMI_PATH} = {self.nvidia_smi_path}')
 
     def _exec_nvidia_smi(self, arguments: List[str]) -> subprocess.CompletedProcess:
-        """Execution of the `nvidia-smi` command.
+        '''Execution of the `nvidia-smi` command.
             Args:
                 arguments (List[str]): list of argument of `nvidia-smi` command
             Raises:
                 FileNotFoundError: command not found
-        """
+        '''
         r: subprocess.CompletedProcess  # Result of the executed process
         args: List[str] = []            # List of arguments
 
@@ -103,7 +103,7 @@ class GpuZone(FanController):
         return r
 
     def _get_nth_temp(self, index: int) -> float:
-        """Get the temperature of the nth element in the GPU device list.
+        '''Get the temperature of the nth element in the GPU device list.
         Args:
             index (int): index in GPU device list
         Returns:
@@ -112,7 +112,7 @@ class GpuZone(FanController):
             FileNotFoundError:  file or command cannot be found
             ValueError:         invalid temperature value
             IndexError:         invalid index
-        """
+        '''
         current_time = time.monotonic()
         if (current_time - self.nvidia_smi_called) >= self.polling:
             r: subprocess.CompletedProcess  # result of the executed process

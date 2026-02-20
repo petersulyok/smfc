@@ -20,7 +20,7 @@ from smfc.log import Log
 
 
 class Service:
-    """Service class contains all resources/functions for the execution."""
+    '''Service class contains all resources/functions for the execution.'''
 
     # Service data.
     config: ConfigParser        # Instance for a parsed configuration
@@ -38,8 +38,8 @@ class Service:
     const_zone_enabled: bool    # Const zone fan controller enabled
 
     def exit_func(self) -> None:
-        """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
-           all fans back to rhw default speed 100% to avoid overheating while `smfc` is not running."""
+        '''This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
+           all fans back to rhw default speed 100% to avoid overheating while `smfc` is not running.'''
         # Configure fans.
         if hasattr(self, 'ipmi'):
             self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
@@ -50,7 +50,7 @@ class Service:
         atexit.unregister(self.exit_func)
 
     def check_dependencies(self) -> str:
-        """Check run-time dependencies of smfc:
+        '''Check run-time dependencies of smfc:
               - ipmitool command
               - if CPU zone enabled: `coretemp` or `k10temp` kernel module
               - if HD zone enabled: `drivetemp` kernel module or `smartctl` command
@@ -58,7 +58,7 @@ class Service:
         Returns:
              (str): error string (empty = no errors)
 
-        """
+        '''
         path: str
         no_smartctl: bool = False
         no_drivetemp: bool = False
@@ -110,7 +110,7 @@ class Service:
         return ''
 
     def run(self) -> None:
-        """Run function: main execution function of the systemd service.
+        '''Run function: main execution function of the systemd service.
 
         Program exit codes:
         0 - printing help or version text (argument parser)
@@ -121,7 +121,7 @@ class Service:
         8 - IPMI initialization error
         9 - udev initialization error
         10 - none of the fan controllers is enabled
-        """
+        '''
         app_parser: ArgumentParser     # Instance for an ArgumentParser class
         parsed_results: Namespace      # Results of parsed command line arguments
         old_mode: int                  # Old IPMI fan mode
@@ -131,7 +131,7 @@ class Service:
         # Syntax definition of the command-line parameters.
         app_parser.add_argument('-c', action='store', dest='config_file', default='smfc.conf',
                                 help='configuration file (default is /etc/smfc/smfc.conf)')
-        app_parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + version("smfc"))
+        app_parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + version('smfc'))
         app_parser.add_argument('-l', type=int, choices=[0, 1, 2, 3, 4], default=1,
                                 help='set log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG')
         app_parser.add_argument('-o', type=int, choices=[0, 1, 2], default=2,

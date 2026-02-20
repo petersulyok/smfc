@@ -17,11 +17,11 @@ from smfc import Log, Ipmi, FanController, HdZone
 from .test_00_data import TestData, MockDevices, factory_mockdevice
 
 class TestHdZone:
-    """Unit test class for smfc.HdZone() class"""
+    '''Unit test class for smfc.HdZone() class'''
 
     @pytest.mark.parametrize(
-        "count, ipmi_zone, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, sb_limit, "
-        "sudo, error", [
+        'count, ipmi_zone, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, sb_limit, '
+        'sudo, error', [
         # Test valid parameters (hd=1 case is not tested because it turns off standby guard).
         (1, '0', FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, True,  'HdZone.__init__() 1'),
         (2, '1', FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 2, False, 'HdZone.__init__() 2'),
@@ -31,11 +31,11 @@ class TestHdZone:
     def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: str, temp_calc: int, steps: int,
                      sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
                      max_level: int, sb_limit: int, sudo: bool, error: str):
-        """Positive unit test for HdZone.__init__() method. It contains the following steps:
+        '''Positive unit test for HdZone.__init__() method. It contains the following steps:
             - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path()
             - initialize a Config, Log, Context, Ipmi, and HdZone classes
             - ASSERT: if the HdZone class attributes are different from values passed to __init__
-        """
+        '''
         my_td = TestData()
         cmd_smart = my_td.create_command_file('echo "ACTIVE"')
         my_td.create_hd_data(count)
@@ -89,15 +89,15 @@ class TestHdZone:
             assert my_hdzone.standby_guard_enabled is True, error
         del my_td
 
-    @pytest.mark.parametrize("error", [
+    @pytest.mark.parametrize('error', [
         'HdZone.__init__() 5'
     ])
     def test_init_p2(self, mocker: MockerFixture, error: str):
-        """Positive unit test for HdZone.__init__() method. It contains the following steps:
+        '''Positive unit test for HdZone.__init__() method. It contains the following steps:
             - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path()
             - initialize a Config, Log, Context, Ipmi, and HdZone classes
             - ASSERT: if the HdZone class attributes are different from the default configuration values
-        """
+        '''
         my_td = TestData()
         count = 4
         my_td.create_hd_data(count)
@@ -136,7 +136,7 @@ class TestHdZone:
         del my_td
 
     @pytest.mark.parametrize(
-        "count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, sb_limit, error", [
+        'count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, sb_limit, error', [
         # hd_names= not specified (count = 0)
         (0,     FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2,  'HdZone.__init__() 6'),
         # standby_hd_limit < 0
@@ -149,11 +149,11 @@ class TestHdZone:
     def test_init_n1(self, mocker: MockerFixture, count: int, temp_calc: int, steps: int, sensitivity: float,
                      polling: float, min_temp: float, max_temp: float, min_level: int, max_level: int, sb_limit: int,
                      error: str):
-        """Negative unit test for HdZone.__init__() method. It contains the following steps:
+        '''Negative unit test for HdZone.__init__() method. It contains the following steps:
             - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path()
             - initialize a Config, Log, Ipmi, and HdZone classes
             - ASSERT: if no assertion is raised for invalid values at initialization
-        """
+        '''
         my_td = TestData()
         cmd_smart = my_td.create_command_file('echo "ACTIVE"')
         if count == 100:
@@ -192,7 +192,7 @@ class TestHdZone:
         del my_td
 
     #pylint: disable=protected-access
-    @pytest.mark.parametrize("args, sudo, error", [
+    @pytest.mark.parametrize('args, sudo, error', [
         (['-a', '/dev/sda'],                    True,  'HdZone._exec_smartctl() 1'),
         (['-a', '/dev/sda'],                    False, 'HdZone._exec_smartctl() 2'),
         (['-i', '-n', 'standby', '/dev/sda'],   True,  'HdZone._exec_smartctl() 3'),
@@ -201,12 +201,12 @@ class TestHdZone:
         (['-s', '/dev/sda'],                    False, 'HdZone._exec_smartctl() 6')
     ])
     def test_exec_smartctl_p(self, mocker: MockerFixture, args:List[str], sudo: bool, error: str):
-        """Positive unit test for HdZone._exec_smartctl() method. It contains the following steps:
+        '''Positive unit test for HdZone._exec_smartctl() method. It contains the following steps:
             - mock subprocess.run() function
             - initialize an empty HdZone class
             - call HdZone._exec_smartctl() method
             - ASSERT: if subprocess.run() called different from specified argument list
-        """
+        '''
         expected_args: List[str]
 
         my_hdzone = HdZone.__new__(HdZone)
@@ -225,7 +225,7 @@ class TestHdZone:
         assert mock_subprocess_run.call_count == 1, error
 
     #pylint: disable=R0801
-    @pytest.mark.parametrize("smartctl_command, sudo, rc, exception, error", [
+    @pytest.mark.parametrize('smartctl_command, sudo, rc, exception, error', [
         # The real subprocess.run() executed (without sudo)
         ('/nonexistent/command', False, 0, FileNotFoundError, 'HdZone._exec_smartctl() 7'),
         # The mocked subprocess.run() executed and returns non-zero return code
@@ -233,12 +233,12 @@ class TestHdZone:
     ])
     def test_exec_smartctl_n(self, mocker: MockerFixture, smartctl_command, sudo: bool, rc: int, exception: Any,
                              error: str):
-        """Negative unit test for HdZone._exec_smartctl() method. It contains the following steps:
+        '''Negative unit test for HdZone._exec_smartctl() method. It contains the following steps:
             - mock subprocess.run() function if needed
             - initialize an empty HdZone class
             - call HdZone._exec_smartctl() method
             - ASSERT: if no assertion was raised
-        """
+        '''
         if rc:
             mock_subprocess_run = MagicMock()
             mocker.patch('subprocess.run', mock_subprocess_run)
@@ -252,18 +252,18 @@ class TestHdZone:
         assert cm.type == exception, error
     # pylint: enable=R0801
 
-    @pytest.mark.parametrize("count, temperatures, error", [
+    @pytest.mark.parametrize('count, temperatures, error', [
         (1, [32],                               'HdZone._get_nth_temp() 1'),
         (2, [33, 34],                           'HdZone._get_nth_temp() 2'),
         (4, [33, 34, 35, 38],                   'HdZone._get_nth_temp() 3'),
         (8, [33, 34, 35, 38, 36, 37, 31, 30],   'HdZone._get_nth_temp() 4')
     ])
     def test_get_ntf_temp_p1(self, mocker: MockerFixture, count: int, temperatures: List[float], error: str):
-        """Positive unit test for HdZone._get_nth_temp() method. It contains the following steps:
+        '''Positive unit test for HdZone._get_nth_temp() method. It contains the following steps:
             - mock print() function
             - initialize an empty HdZone class
             - ASSERT: if the read temperature (from HWMON) is different from the expected value
-        """
+        '''
         my_td = TestData()
         my_td.create_hd_data(count, temperatures)
         my_hdzone = HdZone.__new__(HdZone)
@@ -275,37 +275,37 @@ class TestHdZone:
             assert temp == temperatures[i], error
         del my_td
 
-    @pytest.mark.parametrize("count, temperatures, error", [
+    @pytest.mark.parametrize('count, temperatures, error', [
         (1, [32],                               'HdZone._get_nth_temp() 5'),
         (2, [33, 34],                           'HdZone._get_nth_temp() 6'),
         (4, [33, 34, 35, 38],                   'HdZone._get_nth_temp() 7'),
         (8, [33, 34, 35, 38, 36, 37, 31, 30],   'HdZone._get_nth_temp() 8')
     ])
     def test_get_nth_temp_p2(self, mocker: MockerFixture, count: int, temperatures: List[float], error: str):
-        """Positive unit test for HdZone._get_nth_temp() method. It contains the following steps:
+        '''Positive unit test for HdZone._get_nth_temp() method. It contains the following steps:
             - mock print(), subprocess.run() functions
             - initialize an empty HdZone class
             - ASSERT: if the read temperature (from smartctl) is different from the expected value
-        """
+        '''
         #pylint: disable=line-too-long
         smartctl_output = [
             # SCSI disks
-            "smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.1.0-32-amd64] (local build)\n"
-            "Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org\n"
-            "\n"
-            "Current Drive Temperature:     XX C\n",
+            'smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.1.0-32-amd64] (local build)\n'
+            'Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org\n'
+            '\n'
+            'Current Drive Temperature:     XX C\n',
 
             # SATA SMART attributes 1
-            "smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.1.0-32-amd64] (local build)\n"
-            "Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org\n"
-            "\n"
-            "190 Airflow_Temperature_Cel 0x0032   075   045   000    Old_age   Always       -       XX\n",
+            'smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.1.0-32-amd64] (local build)\n'
+            'Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org\n'
+            '\n'
+            '190 Airflow_Temperature_Cel 0x0032   075   045   000    Old_age   Always       -       XX\n',
 
             # SATA SMART attributes 2
-            "smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.1.0-32-amd64] (local build)\n"
-            "Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org\n"
-            "\n"
-            "194 Temperature_Celsius     0x0002   232   232   000    Old_age   Always       -       XX (Min/Max 17/45)\n"
+            'smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.1.0-32-amd64] (local build)\n'
+            'Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org\n'
+            '\n'
+            '194 Temperature_Celsius     0x0002   232   232   000    Old_age   Always       -       XX (Min/Max 17/45)\n'
         ]
         # pylint: enable=line-too-long
         my_td = TestData()
@@ -326,7 +326,7 @@ class TestHdZone:
         del my_hdzone
         del my_td
 
-    @pytest.mark.parametrize("operation, exception, error", [
+    @pytest.mark.parametrize('operation, exception, error', [
         # 0. hwmon - FileNotFoundError
         (0, FileNotFoundError,  'HdZone._get_nth_temp() 9'),
         # 1. hwmon - IndexError
@@ -341,12 +341,12 @@ class TestHdZone:
         (5, ValueError,         'HdZone._get_nth_temp() 14')
     ])
     def test_get_nth_temp_n1(self, mocker: MockerFixture, operation: int, exception: Any, error: str):
-        """Primitive negative test function. It contains the following steps:
+        '''Primitive negative test function. It contains the following steps:
             - mock print(), subprocess.run() functions
             - initialize an empty HdZone class
             - call HdZone._get_nth_temp()
             - ASSERT: if no assertion raised
-        """
+        '''
         index = 0
         my_td = TestData()
         my_td.create_hd_data(1, [32])
@@ -386,7 +386,7 @@ class TestHdZone:
         del my_td
     #pylint: enable=protected-access
 
-    @pytest.mark.parametrize("states, result, error", [
+    @pytest.mark.parametrize('states, result, error', [
         ([True, True, True, True, True, True, True, True],         'SSSSSSSS', 'hz get_standby_state_str 1'),
         ([False, False, False, False, False, False, False, False], 'AAAAAAAA', 'hz get_standby_state_str 2'),
         ([True, False, False, False, False, False, False, False],  'SAAAAAAA', 'hz get_standby_state_str 3'),
@@ -399,18 +399,18 @@ class TestHdZone:
         ([False, False, False, False, False, False, False, True],  'AAAAAAAS', 'hz get_standby_state_str 10')
     ])
     def test_get_standby_state_str(self, states: List[bool], result: str, error: str):
-        """Positive unit test for HdZone.get_standby_state_str() method. It contains the following steps:
+        '''Positive unit test for HdZone.get_standby_state_str() method. It contains the following steps:
             - initialize an empty HdZone class
             - calls HdZone.get_standby_state_str()
             - ASSERT: if HdZone.get_standby_state_str() returns different from expected result
-        """
+        '''
         my_hdzone = HdZone.__new__(HdZone)
         my_hdzone.count = 8
         my_hdzone.standby_array_states = states
         assert my_hdzone.get_standby_state_str() == result, error
         del my_hdzone
 
-    @pytest.mark.parametrize("states, in_standby, error", [
+    @pytest.mark.parametrize('states, in_standby, error', [
         ([True, True, True, True, True, True, True, True],          8, 'HdZone.check_standby_state() 1'),
         ([False, True, True, True, True, True, True, True],         7, 'HdZone.check_standby_state() 2'),
         ([True, False, True, True, True, True, True, True],         7, 'HdZone.check_standby_state() 3'),
@@ -429,43 +429,43 @@ class TestHdZone:
         ([False, False, False, False, False, False, False, False],  0, 'HdZone.check_standby_state() 16')
     ])
     def test_check_standby_state(self, mocker:MockerFixture, states: List[bool], in_standby: int, error: str):
-        """Positive unit test for HdZone.check_standby_state() method. It contains the following steps:
+        '''Positive unit test for HdZone.check_standby_state() method. It contains the following steps:
             - mock print(), HdZone._exec_smartctl() functions
             - initialize an empty HdZone classes
             - call HdZone.check_standby_state()
             - ASSERT: if result is different from the expected one
-        """
+        '''
         smartctl_output = [
 
             # Device in STANDBY mode.
-            "smartctl 7.2 2020-12-30 r5155 [x86_64-linux-5.10.0-0.bpo.5-amd64] (local build)\n"
-            "Copyright (C) 2002-20, Bruce Allen, Christian Franke, www.smartmontools.org\n"
-            "\n"
-            "Device is in STANDBY mode, exit(2)\n",
+            'smartctl 7.2 2020-12-30 r5155 [x86_64-linux-5.10.0-0.bpo.5-amd64] (local build)\n'
+            'Copyright (C) 2002-20, Bruce Allen, Christian Franke, www.smartmontools.org\n'
+            '\n'
+            'Device is in STANDBY mode, exit(2)\n',
 
             # Device is ACTIVE.
-            "smartctl 7.2 2020-12-30 r5155 [x86_64-linux-5.10.0-0.bpo.5-amd64] (local build)\n"
-            "Copyright (C) 2002-20, Bruce Allen, Christian Franke, www.smartmontools.org\n"
-            "\n"
-            "=== START OF INFORMATION SECTION ===\n"
-            "Model Family:     Samsung based SSDs\n"
-            "Device Model:     Samsung SSD 870 QVO 8TB\n"
-            "Serial Number:    S5SSNG0NB01828M\n"
-            "LU WWN Device Id: 5 002538 f70b0ee2f\n"
-            "Firmware Version: SVQ01B6Q\n"
-            "User Capacity:    8,001,563,222,016 bytes [8.00 TB]\n"
-            "Sector Size:      512 bytes logical/physical\n"
-            "Rotation Rate:    Solid State Device\n"
-            "Form Factor:      2.5 inches\n"
-            "TRIM Command:     Available, deterministic, zeroed\n"
-            "Device is:        In smartctl database [for details use: -P show]\n"
-            "ATA Version is:   ACS-4 T13/BSR INCITS 529 revision 5\n"
-            "SATA Version is:  SATA 3.3, 6.0 Gb/s (current: 6.0 Gb/s)\n"
-            "Local Time is:    Sat May 15 14:26:26 2021 CEST\n"
-            "SMART support is: Available - device has SMART capability.\n"
-            "SMART support is: Enabled\n"
-            "Power mode is:    ACTIVE or IDLE\n"
-            "\n"
+            'smartctl 7.2 2020-12-30 r5155 [x86_64-linux-5.10.0-0.bpo.5-amd64] (local build)\n'
+            'Copyright (C) 2002-20, Bruce Allen, Christian Franke, www.smartmontools.org\n'
+            '\n'
+            '=== START OF INFORMATION SECTION ===\n'
+            'Model Family:     Samsung based SSDs\n'
+            'Device Model:     Samsung SSD 870 QVO 8TB\n'
+            'Serial Number:    S5SSNG0NB01828M\n'
+            'LU WWN Device Id: 5 002538 f70b0ee2f\n'
+            'Firmware Version: SVQ01B6Q\n'
+            'User Capacity:    8,001,563,222,016 bytes [8.00 TB]\n'
+            'Sector Size:      512 bytes logical/physical\n'
+            'Rotation Rate:    Solid State Device\n'
+            'Form Factor:      2.5 inches\n'
+            'TRIM Command:     Available, deterministic, zeroed\n'
+            'Device is:        In smartctl database [for details use: -P show]\n'
+            'ATA Version is:   ACS-4 T13/BSR INCITS 529 revision 5\n'
+            'SATA Version is:  SATA 3.3, 6.0 Gb/s (current: 6.0 Gb/s)\n'
+            'Local Time is:    Sat May 15 14:26:26 2021 CEST\n'
+            'SMART support is: Available - device has SMART capability.\n'
+            'SMART support is: Enabled\n'
+            'Power mode is:    ACTIVE or IDLE\n'
+            '\n'
         ]
         results: List[subprocess.CompletedProcess] = []
 
@@ -491,7 +491,7 @@ class TestHdZone:
         assert my_hdzone.check_standby_state() == in_standby, error
         del my_td
 
-    @pytest.mark.parametrize("states, count, error", [
+    @pytest.mark.parametrize('states, count, error', [
         ([False, False, False, False, False, False, False, False],  8, 'HdZone.go_standby_state() 1'),
         ([True, False, False, False, False, False, False, False],   7, 'HdZone.go_standby_state() 2'),
         ([True, True, False, False, False, False, False, False],    6, 'HdZone.go_standby_state() 3'),
@@ -503,12 +503,12 @@ class TestHdZone:
         ([True, True, True, True, True, True, True, True],          0, 'HdZone.go_standby_state() 9')
     ])
     def test_go_standby_state(self, mocker: MockerFixture, states: List[bool], count: int, error: str):
-        """Positive unit test for HdZone.go_standby_state() method. It contains the following steps:
+        '''Positive unit test for HdZone.go_standby_state() method. It contains the following steps:
             - mock HdZone._exec_smartctl() function
             - initialize an empty HdZone classes
             - calls HdZone.go_standby_state()
             - ASSERT: if the array state is not in fully standby
-        """
+        '''
         my_td = TestData()
         my_td.create_hd_data(8)
         my_hdzone = HdZone.__new__(HdZone)
@@ -525,7 +525,7 @@ class TestHdZone:
         assert my_hdzone.standby_array_states == [True, True, True, True, True, True, True, True], error
         del my_td
 
-    @pytest.mark.parametrize("old_state, states, new_state, error", [
+    @pytest.mark.parametrize('old_state, states, new_state, error', [
         # 1. No state changes.
         (False, [False, False, False, False, False, False, False, False],   False, 'HdZone.run_standby_guard() 1'),
         (True,  [True, True, True, True, True, True, True, True],           True,  'HdZone.run_standby_guard() 2'),
@@ -539,12 +539,12 @@ class TestHdZone:
     ])
     def test_run_standby_guard(self, mocker:MockerFixture, old_state: bool, states: List[bool], new_state: bool,
                                error: str):
-        """Positive unit test for HdZone.run_standby_guard() method. It contains the following steps:
+        '''Positive unit test for HdZone.run_standby_guard() method. It contains the following steps:
             - mock HdZone._exec_smartctl() function
             - initialize a Log and an empty HdZone classes
             - calls HdZone.run_standby_guard()
             - ASSERT: if the expected standby_flags are different
-        """
+        '''
         my_td = TestData()
         my_td.create_hd_data(8)
         my_hdzone = HdZone.__new__(HdZone)

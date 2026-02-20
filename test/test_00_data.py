@@ -13,7 +13,7 @@ from pyudev import DeviceNotFoundByFileError
 
 
 class TestData:
-    """Class for test data handling."""
+    '''Class for test data handling.'''
 
     td_dir: str = ''                    # Test data directory
     cpu_files: List[str] = []           # CPU hwmon files
@@ -23,15 +23,15 @@ class TestData:
     hd_files: List[str] = []            # HD hwmon files
 
     def __init__(self):
-        """Initialize the class. It creates a temporary directory."""
+        '''Initialize the class. It creates a temporary directory.'''
         self.td_dir = tempfile.mkdtemp()
 
     def __del__(self):
-        """It deletes the temporary directory with is all content."""
+        '''It deletes the temporary directory with is all content.'''
         shutil.rmtree(self.td_dir)
 
     def create_cpu_data(self, count: int, temp_list: List[float] = None) -> None:
-        """Generic method to create temporary test data files (similarly to hwmon naming convention and content)."""
+        '''Generic method to create temporary test data files (similarly to hwmon naming convention and content).'''
         hwmon_file: str
 
         self.cpu_files = []
@@ -39,7 +39,7 @@ class TestData:
             hwmon_file = os.path.join(self.td_dir, 'cpu', 'coretemp.' + str(i), 'hwmon')
             os.makedirs(hwmon_file, exist_ok=True)
             hwmon_file = os.path.join(hwmon_file, 'temp1_input')
-            with open(hwmon_file, "w+t", encoding="UTF-8") as f:
+            with open(hwmon_file, 'w+t', encoding='UTF-8') as f:
                 if temp_list:
                     v = temp_list[i]
                 else:
@@ -48,7 +48,7 @@ class TestData:
             self.cpu_files.append(hwmon_file)
 
     def create_hd_data(self, count: int, temp_list: List[float] = None) -> None:
-        """Generic method to create temporary test data files (similarly to hwmon naming convention and content)."""
+        '''Generic method to create temporary test data files (similarly to hwmon naming convention and content).'''
         letters: List[str] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q' ]
         hwmon_path: str
         disk_name: str
@@ -64,26 +64,26 @@ class TestData:
             hwmon_path = os.path.join(self.td_dir, 'disks', str(i)+':0:0:0', 'hwmon')
             os.makedirs(hwmon_path, exist_ok=True)
             hwmon_path = os.path.join(hwmon_path, 'temp1_input')
-            with open(hwmon_path, "w+t", encoding="UTF-8") as f:
+            with open(hwmon_path, 'w+t', encoding='UTF-8') as f:
                 if temp_list:
                     v = temp_list[i]
                 else:
                     v = random.uniform(32.0, 45.0)
                 v *= 1000
-                f.write(f"{v:.0f}")
+                f.write(f'{v:.0f}')
             self.hd_files.append(hwmon_path)
 
     def create_config_file(self, my_config: configparser.ConfigParser) -> str:
-        """Creates a config file. """
+        '''Creates a config file. '''
         h, name = tempfile.mkstemp(prefix='config', suffix='.conf', dir=self.td_dir)
-        with os.fdopen(h, "w+t") as f:
+        with os.fdopen(h, 'w+t') as f:
             my_config.write(f)
         return name
 
     def create_command_file(self, content: str = 'echo OK') -> str:
-        """Creates an executable bash script. """
+        '''Creates an executable bash script. '''
         h, name = tempfile.mkstemp(suffix='.sh', dir=self.td_dir)
-        with os.fdopen(h, "w+t") as f:
+        with os.fdopen(h, 'w+t') as f:
             f.write(str('#!/bin/bash\n'))
             f.write(str(content + '\n'))
         os.system('chmod +x ' + name)
@@ -91,12 +91,12 @@ class TestData:
 
     @staticmethod
     def delete_file(path: str) -> None:
-        """Deletes the specified file."""
+        '''Deletes the specified file.'''
         os.remove(path)
 
     def create_ipmi_command(self) -> str:
-        """Creates a bash script emulating ipmitool."""
-        return self.create_command_file("""
+        '''Creates a bash script emulating ipmitool.'''
+        return self.create_command_file('''
 # ipmitool emulation
 
 if [[ $1 = "sdr" ]] ; then
@@ -122,11 +122,11 @@ fi
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x01" ]] ; then
 	exit 0
 fi
-        """)
+        ''')
 
     def create_smart_command(self) -> str:
-        """Creates a shell script emulating `smartctl`."""
-        return self.create_command_file("""
+        '''Creates a shell script emulating `smartctl`.'''
+        return self.create_command_file('''
 # smartctl emulation script.
 
 # Print header
@@ -192,11 +192,11 @@ if [[ $1 = "-s" && $2 = "standby,now" ]] ; then
 fi
 
 exit 0
-"""
+'''
         )
 
     def create_nvidia_smi_command(self, count: int, temp_list: List[float] = None) -> str:
-        """Creates a shell script emulating `nvidia-smi`."""
+        '''Creates a shell script emulating `nvidia-smi`.'''
         file_content = 'cat << EOF\n'
         for i in range(0, count):
             if temp_list:
@@ -208,9 +208,9 @@ exit 0
         return self.create_command_file(file_content)
 
     def create_text_file(self, content: str) -> str:
-        """Creates a text file with the specified content."""
+        '''Creates a text file with the specified content.'''
         h, name = tempfile.mkstemp(prefix='text', suffix='.txt', dir=self.td_dir)
-        with os.fdopen(h, "w+t") as f:
+        with os.fdopen(h, 'w+t') as f:
             f.write(content)
         return name
 
@@ -218,7 +218,7 @@ exit 0
 #pylint: disable=missing-function-docstring
 #pylint: disable=too-few-public-methods
 class MockDevice:
-    """Mock class for pyudev.Device() class"""
+    '''Mock class for pyudev.Device() class'''
 
     _sys_path: str
 
@@ -238,12 +238,12 @@ class MockDevice:
 
 
 def factory_mockdevice():
-    """Can generate MockDevice() class."""
+    '''Can generate MockDevice() class.'''
     return MockDevice()
 
 
 class MockContext:
-    """Mock class for pyudev.Context() class."""
+    '''Mock class for pyudev.Context() class.'''
     mocked_devices: List[MockDevice]
 
     def __init__(self, devices=None):
@@ -259,23 +259,23 @@ class MockContext:
 
 
 class MockDevices:
-    """Mock class for pyudev.Devices() class."""
+    '''Mock class for pyudev.Devices() class.'''
 
     @classmethod
     def from_device_file(cls, context=None, filename=None):
-        if filename == "raise":
+        if filename == 'raise':
             raise DeviceNotFoundByFileError()
         return MockDevice(context)
 
 
 class MockedContextError:
-    """Mock class for pyudev.Context() class will generate ImportError exception."""
+    '''Mock class for pyudev.Context() class will generate ImportError exception.'''
     def __init__(self):
         raise ImportError
 
 
 class MockedContextGood:
-    """Mock class for pyudev.Context() class will not generate any exception."""
+    '''Mock class for pyudev.Context() class will not generate any exception.'''
     def __init__(self):
         pass
 

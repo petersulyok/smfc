@@ -11,21 +11,21 @@ from smfc import Log, Ipmi, ConstZone
 
 
 class TestConstZone:
-    """Unit test class for smfc.ConstZone() class"""
+    '''Unit test class for smfc.ConstZone() class'''
 
     @pytest.mark.parametrize(
-        "ipmi_zone, polling, level, error", [
+        'ipmi_zone, polling, level, error', [
         ('0',       30, 45, 'ConstZone.__init__() 1'),
         ('0, 1',    35, 55, 'ConstZone.__init__() 2'),
         ('0, 1, 2', 40, 60, 'ConstZone.__init__() 3'),
         ('0 1 2',   45, 65, 'ConstZone.__init__() 4')
     ])
     def test_init_p1(self, mocker:MockerFixture, ipmi_zone: str, polling: float, level: int, error: str):
-        """Positive unit test for ConstZone.__init__() method. It contains the following steps:
+        '''Positive unit test for ConstZone.__init__() method. It contains the following steps:
             - mock print() function
             - initialize a Config, Log, Ipmi, and ConstZone classes
             - ASSERT: if the ConstZone class attributes contain different from passed values to __init__
-        """
+        '''
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
         my_config = ConfigParser()
@@ -45,15 +45,15 @@ class TestConstZone:
         assert my_constzone.polling == polling, error
         assert my_constzone.level == level, error
 
-    @pytest.mark.parametrize("error", [
+    @pytest.mark.parametrize('error', [
         ('ConstZone.__init__() 5')
     ])
     def test_init_p2(self, mocker:MockerFixture, error: str):
-        """Positive unit test ConstZone.__init__() method. It contains the following steps:
+        '''Positive unit test ConstZone.__init__() method. It contains the following steps:
             - mock print() function
             - initialize a Config, Log, Ipmi, and ConstZone classes
             - ASSERT: if the ConstZone class attributes contain different from default configuration values
-        """
+        '''
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
         my_config = ConfigParser()
@@ -70,7 +70,7 @@ class TestConstZone:
         assert my_constzone.polling == 30, error
         assert my_constzone.level == 50, error
 
-    @pytest.mark.parametrize("ipmi_zone, polling, level, error", [
+    @pytest.mark.parametrize('ipmi_zone, polling, level, error', [
         # invalid IPMI zone
         ('!',       30, 40,     'ConstZone.__init__() 6'),
         ('-1',      30, 40,     'ConstZone.__init__() 7'),
@@ -82,11 +82,11 @@ class TestConstZone:
         ('0',       30, 102,    'ConstZone.__init__() 11'),
     ])
     def test_init_n(self, mocker:MockerFixture, ipmi_zone: str, polling: float, level: int, error: str):
-        """Negative unit test for ConstZone.__init__() method. It contains the following steps:
+        '''Negative unit test for ConstZone.__init__() method. It contains the following steps:
             - mock print() function
             - initialize a Config, Log, Ipmi, and ConstZone classes
             - ASSERT: if no ValueError assertion will be generated due to invalid configuration
-        """
+        '''
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
         my_config = ConfigParser()
@@ -103,7 +103,7 @@ class TestConstZone:
         assert cm.type is ValueError, error
 
     @pytest.mark.parametrize(
-        "ipmi_zone, read_level, level, error", [
+        'ipmi_zone, read_level, level, error', [
         ('0',       30, 30, 'ConstZone.run() 1'),
         ('0, 1',    30, 30, 'ConstZone.run() 2'),
         ('0  1  2', 30, 30, 'ConstZone.run() 3'),
@@ -112,12 +112,12 @@ class TestConstZone:
         ('0, 1, 2', 30, 40, 'ConstZone.run() 6')
     ])
     def test_run_p(self, mocker:MockerFixture, ipmi_zone: str, read_level: int, level: int, error: str):
-        """Positive unit test for ConstZone.__init__() method. It contains the following steps:
+        '''Positive unit test for ConstZone.__init__() method. It contains the following steps:
             - mock print() function
             - initialize a Config, Log, Ipmi, and ConstZone classes
             - call ConstZone.run() function
             - ASSERT: if the number of Ipmi.get_fan_level() and Ipmi.set_fan_level() calls different from expected.
-        """
+        '''
         mock_print = MagicMock()
         mocker.patch('builtins.print', mock_print)
         mock_getfanlevel = MagicMock()

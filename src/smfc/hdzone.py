@@ -14,7 +14,7 @@ from smfc.log import Log
 
 
 class HdZone(FanController):
-    """Class for HD zone fan control."""
+    '''Class for HD zone fan control.'''
 
     # HdZone specific parameters.
     hd_device_names: List[str]          # Device names of the hard disks (e.g. '/dev/disk/by-id/...').
@@ -47,7 +47,7 @@ class HdZone(FanController):
 
 
     def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
-        """Initialize the HdZone class. Abort in case of configuration errors.
+        '''Initialize the HdZone class. Abort in case of configuration errors.
 
         Args:
             log (Log): reference to a Log class instance
@@ -57,7 +57,7 @@ class HdZone(FanController):
 
         Raises:
             ValueError: Parameter `hd_names=` is not specified in the configuration
-        """
+        '''
         hd_names: str   # String for hd_names=
         count: int      # HDD count.
 
@@ -65,7 +65,7 @@ class HdZone(FanController):
         hd_names = config[self.CS_HD_ZONE].get(self.CV_HD_ZONE_HD_NAMES)
         if not hd_names:
             raise ValueError('Parameter hd_names= is not specified.')
-        if "\n" in hd_names:
+        if '\n' in hd_names:
             self.hd_device_names = hd_names.splitlines()
         else:
             self.hd_device_names = hd_names.split()
@@ -81,7 +81,7 @@ class HdZone(FanController):
             try:
                 block_dev = Devices.from_device_file(udevc, self.hd_device_names[i])
             except DeviceNotFoundByFileError:
-                raise ValueError(f'hd_names= parameter error: \'{self.hd_device_names[i]}\' cannot be reached.') \
+                raise ValueError(f"hd_names= parameter error: '{self.hd_device_names[i]}' cannot be reached.") \
                     from DeviceNotFoundByFileError
             # Add the hwmon path string for NVME/SATA/HDD disks or '' for SAS/SCSI disks.
             self.hwmon_path.append(self.get_hwmon_path(udevc, block_dev.parent))
@@ -134,18 +134,18 @@ class HdZone(FanController):
                 self.log.msg(Log.LOG_CONFIG, '   Standby guard is disabled')
 
     def callback_func(self) -> None:
-        """Call-back function execute standby guard."""
+        '''Call-back function execute standby guard.'''
         if self.standby_guard_enabled:
             self.run_standby_guard()
 
     def _exec_smartctl(self, arguments: List[str]) -> subprocess.CompletedProcess:
-        """Execution of the `smartctl` command.
+        '''Execution of the `smartctl` command.
             Args:
                 arguments (List[str]): list of argument of `smartctl` command
             Raises:
                 FileNotFoundError: command not found
                 RuntimeError: sudo error
-        """
+        '''
         r :   subprocess.CompletedProcess
         args: List[str]
 
@@ -166,7 +166,7 @@ class HdZone(FanController):
         return r
 
     def _get_nth_temp(self, index: int) -> float:
-        """Get the temperature of the nth element in the hwmon list. This is a specific implementation for HD zone.
+        '''Get the temperature of the nth element in the hwmon list. This is a specific implementation for HD zone.
         Args:
             index (int): index in hwmon list
         Returns:
@@ -176,7 +176,7 @@ class HdZone(FanController):
             IOError:            file cannot be opened
             ValueError:         invalid temperature value
             IndexError:         invalid index
-        """
+        '''
         value: float = 100      # Read temperature value.
 
         # Use 'smartctl' command for reading HD temperature in case of empty HWMON path.
@@ -226,7 +226,7 @@ class HdZone(FanController):
         # Read temperature from a HWMON file.
         else:
             try:
-                with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
+                with open(self.hwmon_path[index], 'r', encoding='UTF-8') as f:
                     value = float(f.read()) / 1000
             except (IOError, FileNotFoundError, ValueError, IndexError) as e:
                 raise type(e)(f'ERROR: Cannot read temperature from HWMON file '
@@ -235,10 +235,10 @@ class HdZone(FanController):
         return value
 
     def get_standby_state_str(self) -> str:
-        """Get a string representing the power state of the HD array with a character.
+        '''Get a string representing the power state of the HD array with a character.
         Returns:
             str:   standby state string where all HD represented with a character (A-ACTIVE, S-STANDBY)
-        """
+        '''
         result: str = ''    # Result string
 
         for i in range(self.count):
@@ -260,7 +260,7 @@ class HdZone(FanController):
         for i in range(self.count):
             self.standby_array_states[i] = False
             r = self._exec_smartctl(['-i', '-n', 'standby', self.hd_device_names[i]])
-            if str(r.stdout).find("STANDBY") != -1:
+            if str(r.stdout).find('STANDBY') != -1:
                 self.standby_array_states[i] = True
         self.log.msg(Log.LOG_DEBUG, f'Standby guard: current state is {self.get_standby_state_str()}.')
         return self.standby_array_states.count(True)
@@ -276,14 +276,14 @@ class HdZone(FanController):
                 self.standby_array_states[i] = True
 
     def run_standby_guard(self):
-        """Monitor changes in the power state of an HD array and help them to move to STANDBY state together.
+        '''Monitor changes in the power state of an HD array and help them to move to STANDBY state together.
         This feature is implemented in the following way:
             * step 1: Checks the power state of all HDs in array
             * step 2: Check if the array is going to STANDBY (i.e. was ACTIVE before and reached the limit with number
                       of HDs in STANDBY state), put the remaining active members to STANDBY state and log the event
             * step 3: Check if the array is waking up (i.e. was in STANDBY state before and there is any ACTIVE
                       HD(s) in the array) and log the event
-        """
+        '''
         hds_in_standby: int     # HDDs in standby mode
         hours: float            # Elapsed time in minutes
         cur_time: float         # New timestamp for STANDBY change
