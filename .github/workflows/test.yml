@@ -22,38 +22,32 @@ jobs:
           - "3.14"
         include:
           - coverage: true
-            python-version: "3.13"
+            python-version: "3.14"
 
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v6
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
           cache-local-path: ${{ github.workspace }}/.cache/uv
           cache-dependency-glob: "uv.lock"
-
       - name: Install the project
         run: uv sync --all-extras --dev
-
       - name: Run test with pytest
         run: uv run pytest
-
       - name: Run linters
         run: |
           uv run pylint src test
           uv run ruff check
-
       - name: Generate coverage report
         if: "matrix.coverage"
         run: |
           uv run pytest --cov=src --cov=test --cov-report=xml
-
       - name: Upload coverage to Codecov
         if: "matrix.coverage"
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: true
           files: ./coverage.xml
