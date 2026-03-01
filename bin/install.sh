@@ -116,12 +116,12 @@ else
   # Display the installation type.
   verbose_echo "Remote installation from GitHub."
 
-  # GitHUb URL
-  GITHUB_URL="https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main"
+  # Read the latest smfc version from PyPI.
+  SMFC_VERSION=$(pip index versions smfc 2>/dev/null | head -1 | sed 's/.*(\(.*\))/\1/')
+  verbose_echo "smfc version from PyPI: $SMFC_VERSION"
 
-  # Read the smfc version from GitHub.
-  SMFC_VERSION=$(curl --silent "$GITHUB_URL/pyproject.toml"|grep "version = "|cut -d "\"" -f2)
-  verbose_echo "smfc version from GitHub: $SMFC_VERSION"
+  # GitHub URL (tag-based).
+  GITHUB_URL="https://raw.githubusercontent.com/petersulyok/smfc/refs/tags/v$SMFC_VERSION"
 
   # Install smfc package from Pypi.org
   pip install $PIP_PARAM smfc==$SMFC_VERSION
