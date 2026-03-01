@@ -66,7 +66,7 @@ In `smfc`, the following fan controllers are implemented:
 | GPU            | Nvidia GPUs             | GPU indices must be specified in `[GPU] gpu_device_ids=` parameter  | 1 (Peripheral zone) |
 | CONST          | None                    | Constant fan level can be specified in `[CONST] level=` parameter   | 1 (Peripheral zone) |
 
-These fan controllers can be enabled and disabled independently. They can be used in a free combination with one or more IPMI zones, but different fan controllers should control different IPMI zones (i.e. no overlapping is allowed)!
+These fan controllers can be enabled and disabled independently. They can be used in a free combination with one or more IPMI zones. Multiple fan controllers can share the same IPMI zone -- `smfc` will automatically apply the **highest** fan level requested by any controller in that zone (see [chapter 1.3](#13-shared-ipmi-zone-arbitration) for details).
 _CONST fan controller_ is an exception here, it does not require a temperature source, it can provide a constant fan level for one or more IPMI zones.
 In `smfc` configuration file each fan controller has an individual section.
 
@@ -74,13 +74,29 @@ In `smfc`, a temperature-driven fan controller implements the following control 
 
  1. it reads the temperature
  2. it calculates a new fan level based on the user-defined control function and the temperature value
- 3. it configures the new fan level for the IPMI zone(s) with IPMI commands (i.e. `ipmitool`)
+ 3. the service applies the fan level for the IPMI zone(s) with IPMI commands (i.e. `ipmitool`)
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="600">
 
 If the temperature source has multiple instances (e.g. multiple CPUs, HDDs or GPUs) then the user can configure a calculation method (i.e. minimum, average, maximum) for the calculation of the final temperature value (see `temp_calc=` parameter).
 
-Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating! 
+Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating!
+
+#### 1.3 Shared IPMI zone arbitration
+When multiple fan controllers are assigned to the same IPMI zone, `smfc` uses a two-phase approach in each control loop iteration:
+
+ 1. **Compute phase**: each enabled fan controller reads its temperature source and calculates its desired fan level independently.
+ 2. **Apply phase**: the service collects all desired levels, groups them by IPMI zone, and applies the **maximum** level per zone. Only one IPMI command is sent per zone, and only when the level has actually changed.
+
+This means the hottest component always wins. For example, if HD fan controller wants 45% on zone 1 and NVME fan controller wants 70% on the same zone, `smfc` will set zone 1 to 70%. When the NVME cools down below the HD temperature, the HD controller's level will take over.
+
+The CONST fan controller also participates in the arbitration -- its constant level acts as a guaranteed minimum for its zone(s). For example, configuring `[CONST] level=40` on zone 1 ensures that zone never drops below 40%, even if all temperature-driven controllers would request a lower value.
+
+The log output at INFO level shows which controller won each zone when the level changes:
+
+```
+Zone 1: fan level > 70% (winner: NVME)
+```
 
 ### 2. User-defined control function
 Fan controllers are using user-defined control functions where a temperature interval is being mapped to a fan rotation level interval.
@@ -397,7 +413,7 @@ You have to think over and answer the following questions:
 1. What are the most important heat sources in your machine? Typically, these could be CPU(s), hard disks, or GPUs.
 2. Which fan controller would you like to use and configure in `smfc`?
 3. What is the expected temperature interval (minimum/maximum C degree) for the selected temperature source(s)? Use some test tools to measure it (e.g. [`s-tui`](https://github.com/amanusk/s-tui), [`fio`](https://fio.readthedocs.io/en/latest/fio_doc.html), [`iozone`](https://www.iozone.org/)) if you don't have their track records.  
-4. Which IPMI zone(s) will be connected to these fan controllers/temperature sources)? Check how many IPMI zones you have, how the fans are connected on your motherboard, and how they are cooling the selected temperature source(s). 
+4. Which IPMI zone(s) will be connected to these fan controllers/temperature sources)? Check how many IPMI zones you have, how the fans are connected on your motherboard, and how they are cooling the selected temperature source(s). Multiple controllers can share the same zone -- the highest requested level will be applied automatically.
 5. What is the stable level interval for fans in the selected IPMI zone(s)? Probably this part requires the most patience! You have assumptions here that need to be verified. If you experience IPMI assertions and your fans are spinning up then you have to refine the level interval or threshold configuration and try again. You will have several cycles here, this is normal. 
 
 #### 10.2 Sample configuration file
