@@ -525,7 +525,7 @@ class TestService:
         """Test that _collect_desired_levels() gathers levels from enabled controllers,
         skipping those with last_level == 0 (except ConstFc)."""
         mock_print = MagicMock()
-        mocker.patch('builtins.print', mock_print)
+        mocker.patch("builtins.print", mock_print)
         service = Service()
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
@@ -556,16 +556,16 @@ class TestService:
 
         levels = service._collect_desired_levels()  # pylint: disable=protected-access
         names = [name for name, _, _ in levels]
-        assert CpuFc.CS_CPU_FC in names, 'CPU controller should be collected'
-        assert HdFc.CS_HD_FC not in names, 'HD controller with level 0 should be skipped'
-        assert ConstFc.CS_CONST_FC in names, 'ConstFc with level 0 should still be collected'
+        assert CpuFc.CS_CPU_FC in names, "CPU controller should be collected"
+        assert HdFc.CS_HD_FC not in names, "HD controller with level 0 should be skipped"
+        assert ConstFc.CS_CONST_FC in names, "ConstFc with level 0 should still be collected"
 
     def test_apply_fan_levels_shared_zone(self, mocker: MockerFixture):
         """Test that _apply_fan_levels() applies the maximum level when two controllers share a zone."""
         mock_print = MagicMock()
-        mocker.patch('builtins.print', mock_print)
+        mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
-        mocker.patch('smfc.Ipmi.set_fan_level', mock_set_fan_level)
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
         service = Service()
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
@@ -591,14 +591,14 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # Zone 1 should be set to 70% (the higher level wins)
         mock_set_fan_level.assert_called_once_with(1, 70)
-        assert service.applied_levels[1] == 70, 'Zone 1 should cache level 70'
+        assert service.applied_levels[1] == 70, "Zone 1 should cache level 70"
 
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
         """Test that _apply_fan_levels() skips IPMI call when level hasn't changed."""
         mock_print = MagicMock()
-        mocker.patch('builtins.print', mock_print)
+        mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
-        mocker.patch('smfc.Ipmi.set_fan_level', mock_set_fan_level)
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
         service = Service()
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
@@ -617,7 +617,7 @@ class TestService:
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         # No IPMI call since level hasn't changed
-        assert mock_set_fan_level.call_count == 0, 'Should skip IPMI call when level is cached'
+        assert mock_set_fan_level.call_count == 0, "Should skip IPMI call when level is cached"
 
     @pytest.mark.parametrize("exit_code, error", [(10, "Service.run() 22")])
     def test_run_old_section_names(self, mocker: MockerFixture, exit_code: int, error: str):

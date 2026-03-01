@@ -119,11 +119,11 @@ class Service:
         """
         levels: List[Tuple[str, List[int], int]] = []
         for fc, enabled, is_const in [
-            (getattr(self, 'cpu_fc', None), self.cpu_fc_enabled, False),
-            (getattr(self, 'hd_fc', None), self.hd_fc_enabled, False),
-            (getattr(self, 'nvme_fc', None), self.nvme_fc_enabled, False),
-            (getattr(self, 'gpu_fc', None), self.gpu_fc_enabled, False),
-            (getattr(self, 'const_fc', None), self.const_fc_enabled, True),
+            (getattr(self, "cpu_fc", None), self.cpu_fc_enabled, False),
+            (getattr(self, "hd_fc", None), self.hd_fc_enabled, False),
+            (getattr(self, "nvme_fc", None), self.nvme_fc_enabled, False),
+            (getattr(self, "gpu_fc", None), self.gpu_fc_enabled, False),
+            (getattr(self, "const_fc", None), self.const_fc_enabled, True),
         ]:
             if enabled and fc is not None:
                 # Skip controllers with last_level == 0 (not yet computed), except ConstFc
@@ -145,7 +145,7 @@ class Service:
             if self.applied_levels.get(zone) != level:
                 self.ipmi.set_fan_level(zone, level)
                 self.applied_levels[zone] = level
-                self.log.msg(Log.LOG_INFO, f'Zone {zone}: fan level > {level}% (winner: {winner})')
+                self.log.msg(Log.LOG_INFO, f"Zone {zone}: fan level > {level}% (winner: {winner})")
 
     def run(self) -> None:
         """Run function: main execution function of the systemd service.

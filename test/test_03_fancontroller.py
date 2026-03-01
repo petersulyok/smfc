@@ -359,29 +359,29 @@ class TestFanController:
         my_fc.ipmi = my_ipmi
         my_fc.deferred_apply = True
         mock_set_multiple_fan_levels = MagicMock()
-        mocker.patch('smfc.Ipmi.set_multiple_fan_levels', mock_set_multiple_fan_levels)
+        mocker.patch("smfc.Ipmi.set_multiple_fan_levels", mock_set_multiple_fan_levels)
         my_fc.set_fan_level(50)
-        assert mock_set_multiple_fan_levels.call_count == 0, 'deferred_apply should skip IPMI call'
+        assert mock_set_multiple_fan_levels.call_count == 0, "deferred_apply should skip IPMI call"
 
     def test_run_deferred(self, mocker: MockerFixture):
         """Test that run() updates last_level but skips IPMI call when deferred_apply is True."""
         mock_print = MagicMock()
-        mocker.patch('builtins.print', mock_print)
+        mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
-        mocker.patch('smfc.FanController.set_fan_level', mock_set_fan_level)
+        mocker.patch("smfc.FanController.set_fan_level", mock_set_fan_level)
         mock_temp = MagicMock()
         mock_temp.return_value = 55.0
-        mocker.patch('smfc.FanController._get_nth_temp', mock_temp)
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
-        my_fc = FanController(my_log, my_ipmi, '0', CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 1, 1, 30, 50, 35,
+        my_fc = FanController(my_log, my_ipmi, "0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 1, 1, 30, 50, 35,
                               100)
         my_fc.deferred_apply = True
         my_fc.last_level = 0
         my_fc.last_time = time.monotonic() - 2
         my_fc.run()
         # Level should be updated (max_level since temp > max_temp)
-        assert my_fc.last_level == 100, 'deferred run should still update last_level'
+        assert my_fc.last_level == 100, "deferred run should still update last_level"
         # But set_fan_level should not call IPMI (deferred_apply skips it inside set_fan_level)
         if mock_set_fan_level.call_count > 0:
             # set_fan_level was called but should not have triggered IPMI

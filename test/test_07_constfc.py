@@ -146,23 +146,23 @@ class TestConstFc:
             assert mock_setfanlevel.call_count == len(my_constfc.ipmi_zone), error
 
     @pytest.mark.parametrize(
-        'ipmi_zone, level, error',
+        "ipmi_zone, level, error",
         [
-            ('0', 45, 'ConstFc.run() deferred 1'),
-            ('0, 1', 55, 'ConstFc.run() deferred 2'),
+            ("0", 45, "ConstFc.run() deferred 1"),
+            ("0, 1", 55, "ConstFc.run() deferred 2"),
         ],
     )
     def test_run_deferred(self, mocker: MockerFixture, ipmi_zone: str, level: int, error: str):
         """Test that ConstFc.run() in deferred mode sets last_level but skips IPMI calls."""
         mock_print = MagicMock()
-        mocker.patch('builtins.print', mock_print)
+        mocker.patch("builtins.print", mock_print)
         mock_getfanlevel = MagicMock()
-        mocker.patch('smfc.Ipmi.get_fan_level', mock_getfanlevel)
+        mocker.patch("smfc.Ipmi.get_fan_level", mock_getfanlevel)
         mock_setfanlevel = MagicMock()
-        mocker.patch('smfc.Ipmi.set_fan_level', mock_setfanlevel)
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_setfanlevel)
         my_config = ConfigParser()
         my_config[ConstFc.CS_CONST_FC] = {
-            ConstFc.CV_CONST_FC_ENABLED: '1',
+            ConstFc.CV_CONST_FC_ENABLED: "1",
             ConstFc.CV_CONST_FC_IPMI_ZONE: ipmi_zone,
             ConstFc.CV_CONST_FC_POLLING: str(3.0),
             ConstFc.CV_CONST_FC_LEVEL: str(level),
