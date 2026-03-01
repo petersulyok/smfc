@@ -26,9 +26,9 @@ class TestNvmeFc:
             (1, "3", FanController.CALC_MAX, 5, 3, 5, 32, 48, 36, 99,  "NvmeFc.__init__() 4"),
         ],
     )
-    def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: str, temp_calc: int, steps: int, 
-                     sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int, 
-                     max_level: int, error: str,):
+    def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: str, temp_calc: int, steps: int,
+                     sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
+                     max_level: int, error: str):
         """Positive unit test for NvmeFc.__init__() method. It contains the following steps:
         - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path()
         - initialize a Config, Log, Context, Ipmi, and NvmeFc classes

@@ -137,7 +137,8 @@ class TestIpmi:
             ([],                        "-I lanplus",   True,  "Ipmi.exec() 8"),
         ],
     )
-    def test_exec_ipmitool_p(self, mocker: MockerFixture, args: List[str], remote_args: str, sudo: bool, error: str) -> None:
+    def test_exec_ipmitool_p(self, mocker: MockerFixture, args: List[str], remote_args: str, sudo: bool,
+                             error: str) -> None:
         """Positive unit test for Ipmi.exec() method. It contains the following steps:
         - mock print(), subprocess.run() functions
         - create an Ipmi classes
