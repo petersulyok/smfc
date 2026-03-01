@@ -10,7 +10,7 @@ Super Micro fan control for Linux (home) servers.
 
 ## TL;DR
 
-This is a `systemd service` running on Linux and can control fans with help of IPMI on Super Micro X10-X13/H10-H13 (and some X9) motherboards.
+This is a `systemd service` running on Linux and can control fans with the help of IPMI on Super Micro X10-X13/H10-H13 (and some X9) motherboards.
 
 ### 1. Prerequisites
  - a Super Micro motherboard with ASPEED AST2400/2500/2600 chip
@@ -18,7 +18,7 @@ This is a `systemd service` running on Linux and can control fans with help of I
  - a Linux distribution with:
    - `systemd` and `bash`
    - `coretemp` kernel module for Intel CPUs or `k10temp` kernel module for AMD CPUs
-   - `drivetemp` kernel module (kernel version 5.6+ required) modules for SATA HDDs/SSDs
+   - `drivetemp` kernel module (kernel version 5.6+ required) for SATA HDDs/SSDs
  - `ipmitool`
  - optional: `smartmontools` for SAS/SCSI disks and *standby guard* feature
  - optional: `nvidia-smi` for GPU fan controller 
@@ -53,27 +53,28 @@ provide individual fan configuration features in IPMI, while other vendors do it
 
 On Super Micro server boards, there could be more IPMI zones with different fan names (see [issue #31](https://github.com/petersulyok/smfc/issues/31)). 
 
-> `smfc v3.8.0` and earlier versions implemented a feature (called _Swapped Zones_) to swap IPMI zone 0 and 1. From `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convince for the user (see `ipmi_zone=` parameter for more details).  
+> `smfc v3.8.0` and earlier versions implemented a feature (called _Swapped Zones_) to swap IPMI zone 0 and 1. From `smfc v4.0.0` the IPMI zones can be assigned freely to fan controllers providing more freedom and convenience for the user (see `ipmi_zone=` parameter for more details).  
 
 #### 1.2 Fan controllers
 In `smfc`, the following fan controllers are implemented:
 
-| Fan controller | Temperature source      | Configuration                                                           | Default IPMI zone   |
-|----------------|-------------------------|-------------------------------------------------------------------------|---------------------|
-| CPU zone       | Intel/AMD CPU(s)        | CPUs are identified automatically                                       | 0 (CPU zone)        |
-| HD zone        | SATA and SCSI HDDs/SSDs | Hard disks' names must be specified in `[HD zone] hd_names=` parameter  | 1 (Peripheral zone) | 
-| GPU zone       | Nvidia GPUs             | GPU indices must be specified in `[GPU zone] gpu_device_ids=` parameter | 1 (Peripheral zone) |
-| Constant zone  | None                    | Constant fan level can be specified in `[CONST zone] level=` parameter  | 1 (Peripheral zone) |
+| Fan controller | Temperature source      | Configuration                                                       | Default IPMI zone   |
+|----------------|-------------------------|---------------------------------------------------------------------|---------------------|
+| CPU            | Intel/AMD CPU(s)        | CPUs are identified automatically                                   | 0 (CPU zone)        |
+| HD             | SATA and SCSI HDDs/SSDs | Hard disks' names must be specified in `[HD] hd_names=` parameter   | 1 (Peripheral zone) |
+| NVME           | NVMe SSDs               | NVMe device names must be specified in `[NVME] nvme_names=` parameter | 1 (Peripheral zone) |
+| GPU            | Nvidia GPUs             | GPU indices must be specified in `[GPU] gpu_device_ids=` parameter  | 1 (Peripheral zone) |
+| CONST          | None                    | Constant fan level can be specified in `[CONST] level=` parameter   | 1 (Peripheral zone) |
 
-These fan controllers can be enabled and disabled independently. They can be used in a free combination with on or more IPMI zones, but different fan controllers should control different IPMI zones (i.e. no overlapping is allowed)!
-_Constant zone_ is an exception here, it does not require a temperature source, it can provide a constant fan level for one or more IPMI zones.
+These fan controllers can be enabled and disabled independently. They can be used in a free combination with one or more IPMI zones, but different fan controllers should control different IPMI zones (i.e. no overlapping is allowed)!
+_CONST fan controller_ is an exception here, it does not require a temperature source, it can provide a constant fan level for one or more IPMI zones.
 In `smfc` configuration file each fan controller has an individual section.
 
 In `smfc`, a temperature-driven fan controller implements the following control logic:
 
- 1. it reads the zone's temperature
- 2. it calculates a new fan level based on the user-defined control function and the temperature value of the zone 
- 3. it configures the new fan level for the zone(s) with IPMI commands (i.e. `ipmitool`)
+ 1. it reads the temperature
+ 2. it calculates a new fan level based on the user-defined control function and the temperature value
+ 3. it configures the new fan level for the IPMI zone(s) with IPMI commands (i.e. `ipmitool`)
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="600">
 
@@ -106,7 +107,7 @@ The fan controllers implement the following strategies to avoid/minimize the unn
  3. The configuration parameter `polling=` defines the frequency of the temperature reading. The bigger polling time, the lower frequency of the fan speed change.
 
 ### 3. Standby guard
-For HD zone fan controller, an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
+For the HD fan controller, an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
 	
  - SATA hard disks are organized into a RAID array
  - the RAID array will go to standby mode recurrently
@@ -125,7 +126,7 @@ The `smfc` service was originally designed for `SATA` hard drives, but `smfc v3.
 
 Some additional notes:
 
-- For `NVME` SSDs no kernel driver needs to be loaded the kernel can handle this disk type automatically
+- For `NVME` SSDs, no kernel driver needs to be loaded; the kernel can handle this disk type automatically
 - For `SATA` disks the `drivetemp` kernel module should be loaded. **This is the fastest way to read disk temperature**, and the kernel module can report the temperature while hard disks are in sleep mode!
 - For `SAS/SCSI` disks the `smartctl` command will be used to read disk temperature
 - If `drivetemp` module is not loaded or an HDD is not compatible with `drivetemp` module then `smfc` will use `smartctl` automatically.   
@@ -146,7 +147,7 @@ Feel free to create a short feedback in [discussion #55](https://github.com/pete
 
 
 ### 6. IPMI fan control and sensor thresholds
-On Super Micro X10-X11 motherboards IPMI uses six sensor thresholds to specify the safe and unsafe fan rotational speed intervals (these are RPM values rounded to nearest hundreds, defined for each fan separately):
+On Super Micro X10-X11 motherboards IPMI uses six sensor thresholds to specify the safe and unsafe fan rotational speed intervals (these are RPM values rounded to the nearest hundreds, defined for each fan separately):
 
 ```
 Lower Non-Recoverable  
@@ -163,19 +164,19 @@ but newer Super Micro X13 motherboards (with AST2600 BMC chip) have only one sen
 Lower Critical  
 ```
 
-Originally, this chapter was created Super Micro X10-X11 motherboards, but can be easily adopted to X13 motherboards as well (see more details in #33).
+Originally, this chapter was created for Super Micro X10-X11 motherboards, but can be easily adopted to X13 motherboards as well (see more details in #33).
 
 Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control, where all fans in the zone:
 
    1. initially configured to full speed (100%)
    2. then their speed can be safely configured in `[Lower Critical, Upper Critical]` interval
-   3. if any fan speed oversteps either `Lower Critical` or `Upper Critical` threshold then IPMI will generate an _assertion event_ and will set the all fan speeds back to 100% in the zone
+   3. if any fan speed oversteps either `Lower Critical` or `Upper Critical` threshold then IPMI will generate an _assertion event_ and will set all fan speeds back to 100% in the zone
 
 Please also consider the fact that **fans are mechanical devices, their rotational speed is not stable** (it could be fluctuating). To avoid IPMI's assertion mechanism described here please follow the next steps: 
 
   1. Per fan: check the minimum and maximum rotational speeds of your fan on its vendor website
   2. Per fan: configure proper IMPI sensor thresholds adjusted to the fan speed interval
-  3. Per zone: define safe `min_level`/`max_level` values for `smfc` respecting the variance of the all fans in the IPMI zone (it could take several iterations and adjustments) 
+  3. Per zone: define safe `min_level`/`max_level` values for `smfc` respecting the variance of all fans in the IPMI zone (it could take several iterations and adjustments) 
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/ipmi_sensor_threshold.png" align="center" width="600">
 
@@ -196,7 +197,7 @@ min_level = 35 (i.e. 500 rpm)
 
 
 Notes:
-  - Use the following `ipmitool` command to display the current IMPI sensor thresholds for fans:
+  - Use the following `ipmitool` command to display the current IPMI sensor thresholds for fans:
     ```
     root@home:~# ipmitool sensor|grep FAN
     FAN1             | 500.000    | RPM        | ok    | 0.000     | 100.000   | 200.000   | 1600.000  | 1700.000  | 1800.000  
@@ -239,7 +240,7 @@ You can read more about:
 If low noise and low heat generation are important attributes of your Linux box, then you may consider the following chapters.
 
 #### 7.1 CPU
-Most of the modern CPUs has multiple energy saving features. You can check your BIOS and enable them to minimize the heat generation.
+Most modern CPUs have multiple energy-saving features. You can check your BIOS and enable them to minimize the heat generation.
 
 Intel(R) CPUs:
  - Intel(R) Speed Shift Technology
@@ -280,7 +281,7 @@ In file `/etc/hdparm.conf` you can specify all parameters persistently:
 	...
 
 Important notes: 
- 1. If you plan to spin down your hard disks or RAID array (i.e. put them to standby mode) you have to set up the configuration parameter `[HD zone] polling=` minimum twice bigger as the `spindown_time` specified here.
+ 1. If you plan to spin down your hard disks or RAID array (i.e. put them to standby mode) you have to set up the configuration parameter `[HD] polling=` to at least twice as big as the `spindown_time` specified here.
  2. In file `/etc/hdparm.conf` you must define HD names in `/dev/disk/by-id/...` form to avoid inconsistency.
 
 ### 8. Kernel modules
@@ -297,7 +298,7 @@ Notes:
 
 
 ### 9. Installation and uninstallation
-For the installation and uninstallation, you need root privilege. There are several ways to install and `smfc`, this chapter will show them.
+For the installation and uninstallation, you need root privilege. There are several ways to install and uninstall `smfc`, this chapter will show them.
 
 #### 9.1. Manual installation and uninstallation
 There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` in two different ways:
@@ -332,7 +333,7 @@ Notes for the script:
 Suse Leap 15, Proxmox 9, and Arch Linux)
 - Installation process will stop for any error
 - The default installation method is the remote installation
-- Using `--local` parameter will do installation locally, from the current folder (i.e. GitHUb repository needs to be cloned)
+- Using `--local` parameter will do installation locally, from the current folder (i.e. GitHub repository needs to be cloned)
 - The default action is following:
   - the existing previous configuration file will be renamed
   - a new configuration file will be installed
@@ -376,13 +377,13 @@ usage: uninstall.sh [-h|--help] [-k|--keep-config] [-v|--verbose]
            -v, --verbose      verbose output
 ```
 
-This script can be executed locally and remotely as it described for installation here. Here is an example for remote execution: 
+This script can be executed locally and remotely as described for installation above. Here is an example for remote execution: 
 
 ```
 curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/uninstall.sh|bash /dev/stdin --verbose
 ```
 
-The script will remove the installed `smfc` files and the pyton package.
+The script will remove the installed `smfc` files and the python package.
 
 #### 9.2. Docker installation
 `smfc` is also available as a docker image, see more details in [Docker.md](../docker/Docker.md). In this case, your job is only to provide your configuration file on host computer, `smfc` will be executed automatically when the container is starting. 
@@ -396,11 +397,11 @@ You have to think over and answer the following questions:
 1. What are the most important heat sources in your machine? Typically, these could be CPU(s), hard disks, or GPUs.
 2. Which fan controller would you like to use and configure in `smfc`?
 3. What is the expected temperature interval (minimum/maximum C degree) for the selected temperature source(s)? Use some test tools to measure it (e.g. [`s-tui`](https://github.com/amanusk/s-tui), [`fio`](https://fio.readthedocs.io/en/latest/fio_doc.html), [`iozone`](https://www.iozone.org/)) if you don't have their track records.  
-4. Which IPMI zone(s) will be connected to these fan controllers/temperate sources)? Check how many IPMI zones you have, how the fans are connected on your motherboard, and how they are cooling the selected temperature source(s). 
+4. Which IPMI zone(s) will be connected to these fan controllers/temperature sources)? Check how many IPMI zones you have, how the fans are connected on your motherboard, and how they are cooling the selected temperature source(s). 
 5. What is the stable level interval for fans in the selected IPMI zone(s)? Probably this part requires the most patience! You have assumptions here that need to be verified. If you experience IPMI assertions and your fans are spinning up then you have to refine the level interval or threshold configuration and try again. You will have several cycles here, this is normal. 
 
 #### 10.2 Sample configuration file
-The configration file contains sections. The first one for IPMI configuration, the rest for fan controllers.
+The configuration file contains sections. The first one for IPMI configuration, the rest for fan controllers.
 Edit `/etc/smfc/smfc.conf` and specify your configuration parameters here:
 
 ```
@@ -423,8 +424,8 @@ fan_level_delay=2
 #remote_parameters=-U USERNAME -P PASSWORD -H HOST
 
 
-# CPU zone: this fan controller works based on CPU(s) temperature.
-[CPU zone]
+# CPU fancontroller: works based on CPU(s) temperature.
+[CPU]
 # Fan controller enabled (bool, default=0)
 enabled=1
 # IPMI zone(s) (comma- or space-separated list of int, default=0))
@@ -447,8 +448,8 @@ min_level=35
 max_level=100
 
 
-# HD zone: this fan controller works based on HDDs/SSDs temperature.
-[HD zone]
+# HD fancontroller: works based on HDDs/SSDs temperature.
+[HD]
 # Fan controller enabled (bool, default=0)
 enabled=1
 # IPMI zone(s) (comma- or space-separated list of int, default=1))
@@ -483,8 +484,8 @@ standby_guard_enabled=0
 standby_hd_limit=1
 
 
-# GPU zone: this fan controller works based on GPU(s) temperature.
-[GPU zone]
+# GPU fancontroller: works based on GPU(s) temperature.
+[GPU]
 # Fan controller enabled (bool, default=0)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1))
@@ -501,9 +502,9 @@ polling=2
 min_temp=40.0
 # Maximum GPU temperature (float, C, default=70.0)
 max_temp=70.0
-# Minimum GPU zone fan level (int, %, default=35)
+# Minimum GPU fan level (int, %, default=35)
 min_level=35
-# Maximum GPU zone fan level (int, %, default=100)
+# Maximum GPU fan level (int, %, default=100)
 max_level=100
 # GPU device IDs (comma- or space-separated list of int, default=0)
 # These are indices in nvidia-smi temperature report.
@@ -512,8 +513,8 @@ gpu_device_ids=0
 nvidia_smi_path=/usr/bin/nvidia-smi
 
 
-# Const zone: this fan controller sets constant fan level (without any heat source) for IPMI zones(s).
-[CONST zone]
+# CONST fancontroller: sets constant fan level (without any heat source) for IPMI zones(s).
+[CONST]
 # Fan controller enabled (bool, default=0)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1))
@@ -525,9 +526,9 @@ level=50
 ```
 
 Important notes:
-1. `[IPMI zone] remote_parameters=-U USERNAME -P PASSWORD -H HOST` parameter can be used for remote access for the IPMI interface. It could be useful for a VM setup where the hard disks are configured with PCI passthrough (e.g. a TrueNAS running in a VM on Proxmox), but IPMI needs to be accessed "remotely". Please note that the HOST is the BMC network address (not the VM host address). 
-2. `[HD zone] hd_names=` is a compulsory parameter for this fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent could be changed after a reboot!
-3. `[CPU zone] / [HD zone] min_level= / max_level=` should be configured in alignment with threshold configuration (see more in [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)). Be patient, several refinement cycles could happen.
+1. `[Ipmi] remote_parameters=-U USERNAME -P PASSWORD -H HOST` parameter can be used for remote access for the IPMI interface. It could be useful for a VM setup where the hard disks are configured with PCI passthrough (e.g. a TrueNAS running in a VM on Proxmox), but IPMI needs to be accessed "remotely". Please note that the HOST is the BMC network address (not the VM host address).
+2. `[HD] hd_names=` is a compulsory parameter for this fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent could be changed after a reboot!
+3. `[CPU] / [HD] min_level= / max_level=` should be configured in alignment with threshold configuration (see more in [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)). Be patient, several refinement cycles could happen.
 4. Several sample configuration files are provided in `./config/samples` folder.
 5. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
 
@@ -552,9 +553,9 @@ root@nas:~# systemctl status smfc
      CGroup: /system.slice/smfc.service
              └─8464 /usr/bin/python3 /usr/local/bin/smfc -c /etc/smfc/smfc.conf -l 3
 
-Jun 29 19:17:29 nas smfc.service[8464]: CPU zone: new fan level > 48%/34.0C @ IPMI [0] zone(s).
-Jun 29 19:21:07 nas smfc.service[8464]: CPU zone: new fan level > 61%/38.0C @ IPMI [0] zone(s).
-Jun 29 19:21:11 nas smfc.service[8464]: CPU zone: new fan level > 48%/34.0C @ IPMI [0] zone(s).
+Jun 29 19:17:29 nas smfc.service[8464]: CPU: new fan level > 48%/34.0C @ IPMI [0] zone(s).
+Jun 29 19:21:07 nas smfc.service[8464]: CPU: new fan level > 61%/38.0C @ IPMI [0] zone(s).
+Jun 29 19:21:11 nas smfc.service[8464]: CPU: new fan level > 48%/34.0C @ IPMI [0] zone(s).
 ```
 
 The `smfc` program has the following parameters:
@@ -597,7 +598,7 @@ With the help of command `journalctl` you can check logs easily. For example:
 ## 13. FAQ
 
 ### Q: My fans are spinning up and loud. What's wrong?
-Most probably, there was an assertion (i.e the rotational speed of a fan went above or below of a IPMI threshold) and IPMI switched back that zone to full rotational speed.
+Most probably, there was an assertion (i.e., the rotational speed of a fan went above or below an IPMI threshold) and IPMI switched back that zone to full rotational speed.
 You can check the current fan rotational speeds:
 
 	ipmitool sdr
@@ -613,7 +614,7 @@ root@home:~# ipmitool sel list
    5 | 10/19/2023 | 05:20:59 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
 ```
 
-If the problematic fan (causing the alert) is identified, then you must adjust its threshold. This process could take several adjustment cycle. Be patent :)
+If the problematic fan (causing the alert) is identified, then you must adjust its threshold. This process could take several adjustment cycle. Be patient :)
 You may read [this chapter](https://github.com/petersulyok/smfc#7-ipmi-fan-control-and-sensor-thresholds) for more details. 
 
 ### Q: How does the author test/use this service?
@@ -628,8 +629,8 @@ The configuration is the following:
 
  - Proxmox 9
  - 8 x [WD Red 12TB (WD120EFAX)](https://shop.westerndigital.com/en-ie/products/outlet/internal-drives/wd-red-plus-sata-3-5-hdd#WD120EFAX) hard disks in ZFS RAID
- - 4 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN3, FAN4) in CPU zone 
- - 2 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) on an Y-adapter + [Noctua NF-A14 PWM](https://noctua.at/en/products/fan/nf-a14-pwm) fans (FANA, FANB) in HD zone
+ - 4 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN3, FAN4) in IPMI CPU zone
+ - 2 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) on an Y-adapter + [Noctua NF-A14 PWM](https://noctua.at/en/products/fan/nf-a14-pwm) fans (FANA, FANB) in IPMI HD zone
 
 ## 15. References
 Further readings:

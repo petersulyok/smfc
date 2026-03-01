@@ -70,23 +70,25 @@ Important notes:
 
 Several smoke tests have been provided for `smfc` where the service is executed with different configuration files. Notes:  
   
-* all smoke tests should be executed from the project root folder and can be stopped by pressing `CTLR+C`:
+* all smoke tests should be executed from the project root folder and can be stopped by pressing `CTRL+C`:
 
 	`$ ./test/run_test_cpu_1.sh`
 
-* the following smoke scripts and zone configurations can be executed:  
-   
-   | Test script               | CPU zone  | HD zone  | GPU zone  | CONST zone | Standby guard |
-   |---------------------------|-----------|----------|-----------|------------|---------------|
-   | `run_test_cpu_1.sh`       | 1 x CPU   | 1 x HD   | disabled  | enabled    | enabled       |
-   | `run_test_cpu_2.sh`       | 2 x CPUs  | disabled | 1 GPU     | disabled   | disabled      |
-   | `run_test_cpu_4.sh`       | 4 x CPUs  | 4 x HDs  | 4 GPUs    | disabled   | enabled       |
-   | `run_test_hd_1.sh`        | disabled  | 1 x HD   | disabled  | enabled    | enabled       |
-   | `run_test_hd_2.sh`        | 1 x CPU   | 2 x HDs  | disabled  | disabled   | disabled      |
-   | `run_test_hd_4.sh`        | disabled  | 4 x HDs  | 2 GPUs    | disabled   | disabled      |
-   | `run_test_hd_8.sh`        | 4 x CPUs  | 8 x HDs  | disabled  | disabled   | enabled       |
-   | `run_test_const_level.sh` | disabled  | disabled | disabled  | enabled    | enabled       |
-   | `run_test_gpu_8.sh`       | 1 x CPU   | disabled | 8 GPUs    | enabled    | disabled      |
+* the following smoke scripts and fan controller configurations can be executed:
+
+   | Test script               | CPU      | HD       | NVME      | GPU      | CONST      | Standby guard |
+   |---------------------------|----------|----------|-----------|----------|------------|---------------|
+   | `run_test_cpu_1.sh`       | 1 x CPU  | 1 x HD   | disabled  | disabled | enabled    | enabled       |
+   | `run_test_cpu_2.sh`       | 2 x CPUs | disabled | disabled  | 1 GPU    | disabled   | disabled      |
+   | `run_test_cpu_4.sh`       | 4 x CPUs | 4 x HDs  | disabled  | 4 GPUs   | disabled   | enabled       |
+   | `run_test_hd_1.sh`        | disabled | 1 x HD   | disabled  | disabled | enabled    | enabled       |
+   | `run_test_hd_2.sh`        | 1 x CPU  | 2 x HDs  | disabled  | disabled | disabled   | disabled      |
+   | `run_test_hd_4.sh`        | disabled | 4 x HDs  | disabled  | 2 GPUs   | disabled   | disabled      |
+   | `run_test_hd_8.sh`        | 4 x CPUs | 8 x HDs  | disabled  | disabled | disabled   | enabled       |
+   | `run_test_const_level.sh` | 1 x CPU  | disabled | disabled  | disabled | enabled    | enabled       |
+   | `run_test_gpu_8.sh`       | 1 x CPU  | disabled | disabled  | 8 GPUs   | enabled    | disabled      |
+   | `run_test_nvme_4.sh`      | 2 x CPU  | disabled | 4 x NVME  | disabled | enabled    | disabled      |
+
 
 ## Unit tests  
 
@@ -94,75 +96,83 @@ The whole project (all source code) is completely unit tested. The unit tests ar
 
 
       $ pytest
-      ========================================================================================== test session starts ===========================================================================================
-      platform linux -- Python 3.13.7, pytest-8.3.5, pluggy-1.5.0
+      =========================================== test session starts ===========================================
+      platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
       rootdir: /home/petersulyok/git/github/smfc
       configfile: pyproject.toml
       plugins: cov-6.0.0, mock-3.14.0
-      collected 382 items                                                                                                                                                                                      
-        
-      test/test_01_log.py .........................................................................................................                                                                      [ 27%]
-      test/test_02_ipmi.py .......................................................................                                                                                                       [ 46%]
-      test/test_03_fancontroller.py .................................................                                                                                                                    [ 58%]
-      test/test_04_cpuzone.py .....................                                                                                                                                                      [ 64%]
-      test/test_05_hdzone.py .........................................................................                                                                                                   [ 83%]
-      test/test_06_gpuzone.py ..............                                                                                                                                                             [ 87%]
-      test/test_07_constzone.py .................                                                                                                                                                        [ 91%]
-      test/test_08_service.py ...............................                                                                                                                                            [ 99%]
-      test/test_09_cmd.py .                                                                                                                                                                              [100%]
-        
-      ========================================================================================== 382 passed in 1.32s ===========================================================================================
-	
+      collected 400 items                                                                                       
+      
+      test/test_01_log.py ............................................................................... [ 19%]
+      ..........................                                                                          [ 26%]
+      test/test_02_ipmi.py .......................................................................        [ 44%]
+      test/test_03_fancontroller.py .................................................                     [ 56%]
+      test/test_04_cpufc.py .....................                                                         [ 61%]
+      test/test_05_hdfc.py ...........................................................................    [ 80%]
+      test/test_06_gpufc.py ..............                                                                [ 83%]
+      test/test_07_constfc.py .................                                                           [ 88%]
+      test/test_08_service.py .................................                                           [ 96%]
+      test/test_09_cmd.py .                                                                               [ 96%]
+      test/test_10_nvmefc.py ..............                                                               [100%]
+      
+      =========================================== 400 passed in 1.49s ===========================================
+
 
 The code coverage could be also measured and displayed during the test execution:
 
 
-      $ pytest --cov=src --cov=test
-      ========================================================================================== test session starts ===========================================================================================
-      platform linux -- Python 3.13.7, pytest-8.3.5, pluggy-1.5.0
+      $ pytest --cov=test --cov=src
+      =========================================== test session starts ===========================================
+      platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
       rootdir: /home/petersulyok/git/github/smfc
       configfile: pyproject.toml
       plugins: cov-6.0.0, mock-3.14.0
-      collected 382 items                                                                                                                                                                                      
-        
-      test/test_01_log.py .........................................................................................................                                                                      [ 27%]
-      test/test_02_ipmi.py .......................................................................                                                                                                       [ 46%]
-      test/test_03_fancontroller.py .................................................                                                                                                                    [ 58%]
-      test/test_04_cpuzone.py .....................                                                                                                                                                      [ 64%]
-      test/test_05_hdzone.py .........................................................................                                                                                                   [ 83%]
-      test/test_06_gpuzone.py ..............                                                                                                                                                             [ 87%]
-      test/test_07_constzone.py .................                                                                                                                                                        [ 91%]
-      test/test_08_service.py ...............................                                                                                                                                            [ 99%]
-      test/test_09_cmd.py .                                                                                                                                                                              [100%]
-        
-      ---------- coverage: platform linux, python 3.13.7-final-0 -----------
+      collected 400 items                                                                                       
+      
+      test/test_01_log.py ............................................................................... [ 19%]
+      ..........................                                                                          [ 26%]
+      test/test_02_ipmi.py .......................................................................        [ 44%]
+      test/test_03_fancontroller.py .................................................                     [ 56%]
+      test/test_04_cpufc.py .....................                                                         [ 61%]
+      test/test_05_hdfc.py ...........................................................................    [ 80%]
+      test/test_06_gpufc.py ..............                                                                [ 83%]
+      test/test_07_constfc.py .................                                                           [ 88%]
+      test/test_08_service.py .................................                                           [ 96%]
+      test/test_09_cmd.py .                                                                               [ 96%]
+      test/test_10_nvmefc.py ..............                                                               [100%]
+      
+      ---------- coverage: platform linux, python 3.14.3-final-0 -----------
       Name                            Stmts   Miss  Cover
       ---------------------------------------------------
-      src/smfc/__init__.py               10      0   100%
+      src/smfc/__init__.py               11      0   100%
       src/smfc/cmd.py                     4      0   100%
-      src/smfc/constzone.py              47      0   100%
-      src/smfc/cpuzone.py                34      0   100%
-      src/smfc/fancontroller.py         147      0   100%
-      src/smfc/gpuzone.py                62      0   100%
-      src/smfc/hdzone.py                148      0   100%
-      src/smfc/ipmi.py                  136      0   100%
-      src/smfc/log.py                    60      0   100%
-      src/smfc/service.py               159      0   100%
+      src/smfc/constfc.py                46      0   100%
+      src/smfc/cpufc.py                  34      0   100%
+      src/smfc/fancontroller.py         127      0   100%
+      src/smfc/gpufc.py                  58      0   100%
+      src/smfc/hdfc.py                  143      0   100%
+      src/smfc/ipmi.py                  130      0   100%
+      src/smfc/log.py                    57      0   100%
+      src/smfc/nvmefc.py                 47      0   100%
+      src/smfc/service.py               160      0   100%
       test/__init__.py                    0      0   100%
-      test/test_00_data.py              116      0   100%
+      test/test_00_data.py              134      0   100%
       test/test_01_log.py                52      0   100%
       test/test_02_ipmi.py              247      0   100%
       test/test_03_fancontroller.py     134      0   100%
-      test/test_04_cpuzone.py           142      0   100%
-      test/test_05_hdzone.py            277      0   100%
-      test/test_06_gpuzone.py           111      0   100%
-      test/test_07_constzone.py          67      0   100%
-      test/test_08_service.py           266      0   100%
+      test/test_04_cpufc.py             142      0   100%
+      test/test_05_hdfc.py              293      0   100%
+      test/test_06_gpufc.py             111      0   100%
+      test/test_07_constfc.py            67      0   100%
+      test/test_08_service.py           303      0   100%
       test/test_09_cmd.py                 9      0   100%
+      test/test_10_nvmefc.py            144      0   100%
       ---------------------------------------------------
-      TOTAL                            2228      0   100%
-       
-      ========================================================================================== 382 passed in 1.52s ===========================================================================================
+      TOTAL                            2453      0   100%
+      
+      
+      =========================================== 400 passed in 2.37s ===========================================
+
 
 For a more detailed HTML coverage report run this command:
 

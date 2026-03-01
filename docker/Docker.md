@@ -4,8 +4,8 @@ This page describes the most important docker-specific information for `smfc`. P
 # Content
 There are two images created for `smfc`:
 
-- **Standard image** is an Alpine Linux-based image with the small image size, but the GPU zone is not supported.
-- **GPU-enabled image** is a Debian-based image with larger image size, but the GPU zone is working (i.e. with the help of NVIDIA Container Toolkit, the `nvidia-smi` command is available in the container and can report GPU data running on the host).
+- **Standard image** is an Alpine Linux-based image with the small image size, but the GPU fan controller is not supported.
+- **GPU-enabled image** is a Debian-based image with larger image size, but the GPU fan controller is working (i.e. with the help of NVIDIA Container Toolkit, the `nvidia-smi` command is available in the container and can report GPU data running on the host).
 
 Generic notes for the docker images:
   1. `smfc` is executed here as a simple foreground process (not as a `systemd` service).
@@ -116,7 +116,7 @@ and can be terminated:
 docker stop smfc  
 ```
 
-## usage #2: docker-compose (recommended)
+## Usage #2: docker-compose (recommended)
 `docker-compose` requires this file:
 ```
 version: "2"

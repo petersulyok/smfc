@@ -80,13 +80,18 @@ omit = [
 ]
 
 # ruff options
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
 [tool.ruff.lint]
 select = ["Q"]
+fixable = ["Q"]
 
 [tool.ruff.lint.flake8-quotes]
-inline-quotes = "single"
-multiline-quotes = "single"
-docstring-quotes = "single"
+inline-quotes = "double"
+multiline-quotes = "double"
+docstring-quotes = "double"
 
 # pylint options
 [tool.pylint.main]

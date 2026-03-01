@@ -5,12 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [next release] - ??? 
+## [4.3.0] - 2026.02.28
+
+### New
+- New NVME fan controller added, NVME disks are handled separately
 
 ### Changed
-- Python support moved with maintenance window. Current supported versions are: `3.10` - `3.14`
+- Python support moved with maintenance window, current versions are: `3.10` - `3.14`.
+  Please note that other Python versions may also work but not tested.
+- Many typos and grammar erros are corrected in the MD files.
+- `zone` tag has been removed from the name of the fan controllers in the code and the configuration files.
 
+### Removed
+- HD fan controller doesn't accept NVME disks
 
+ 
 ## [v4.2.1] - 2025-10-26 
 
 ### Fixed
@@ -48,14 +57,14 @@ The final release is identical with the beta-14 version and some documentation u
 - `smfc` is using `udev` (`pyudev` package) for device management (thanks to @abbaad): 
   - Automatic discovery of HWMON files for both Intel and AMD CPUs, including the number of CPUs, no manual configuration required. 
   - Automatic discovery of HWMON files for HDDs/SSDs based on `hd_names=` parameter, including the number of HDDS/SSDs, no manual configuration required.
-  - Automatic use of `smartctl` if no HWMON file found for a hard disks (e.g. SCSI disk).
+  - Automatic use of `smartctl` if no HWMON file found for a hard disk (e.g. SCSI disk).
 - `smfc` is a Python package, uploaded to pypi.org
 - `smfc` has new command-line options (-s, -nd, -ne)
 - `smfc` is using `uv` for Python project management
 - `smfc` implements new fan controllers:
   - `[GPU zone]`: supporting nvidia GPUs (using `nvidia-smi` command)
   - `[CONST zone]` constant fan level in the zone(s)
-- `smfc` implements free IPMI zone assignment, where a fan controller can control fans on one or more IPMI zones (see `ipmi_zone= parameter`)
+- `smfc` implements free IPMI zone assignment, where a fan controller can control fans on one or more IPMI zones (see `ipmi_zone=` parameter)
 - `CHANGELOG.md` added
 
 ### Change
@@ -117,7 +126,7 @@ The final release is identical with the beta-14 version and some documentation u
 ## [v4.0.0b10] - 2025-05-23 Pre-release 
 
 ### New
-- A new fan controller, called CONST zone, implemented to provide constant fan level in one or more IPMI zones. It does not have any temperature source
+- A new fan controller, called CONST zone, was implemented to provide constant fan level in one or more IPMI zones. It does not have any temperature source
 and does not read any temperature. The zone configuration is the following:
 
 ```
@@ -127,7 +136,7 @@ and does not read any temperature. The zone configuration is the following:
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1))
 ipmi_zone=1
-# Polling interval for checking level and restting if needed (int, sec, default=30)
+# Polling interval for checking level and resetting if needed (int, sec, default=30)
 polling=30
 # Constant fan level (int, %, default=50)
 level=50
@@ -222,7 +231,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 - `smfc` is using `udev` (`pyudev`) for device management (thanks to @abbaad): 
   - Automatic discovery of HWMON files for both Intel and AMD CPUs, including the number of CPUs, no manual configuration required. 
   - Automatic discovery of HWMON files for HDDs/SSDs based on `hd_names=` parameter, including the number of HDDS/SSDs, no manual configuration required.
-  - Automatic use of `smartctl` if no HWMON file found for a hard disks (e.g. SCSI disk).
+  - Automatic use of `smartctl` if no HWMON file found for a hard disk (e.g. SCSI disk).
 - New command line parameters for `smfc`:
   - `-s`: use of `sudo` with `ipmitool` and `smartctl` commands.
   - `-nd`: do not check dependencies.
@@ -281,7 +290,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ### Changed
 
-- `smfc.service`: `openipmi.service` added as a prerequisite. Sometime `smfc` was initialized earlier than the IPMI interface. This is not relevant for docker.
+- `smfc.service`: `openipmi.service` added as a prerequisite. Sometimes `smfc` was initialized earlier than the IPMI interface. This is not relevant for docker.
 
 
 ## [v3.6.0] - 2024-12-12
@@ -484,7 +493,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
  
 - Default values of configuration parameters adjusted
 - Unit tests are updated and refactored
-- Smoke tests are covers more configuration cases
+- Smoke tests cover more configuration cases
 
 ### Fixed
 

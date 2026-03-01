@@ -10,14 +10,16 @@ from smfc import main
 
 # pylint: disable=too-few-public-methods
 class TestMain:
-    '''Unit test for smfc.main() function.'''
+    """Unit test for smfc.main() function."""
 
-    def test_main(self, mocker:MockerFixture) -> None:
-        '''This is a unit test for function Service.main().'''
+    def test_main(self, mocker: MockerFixture) -> None:
+        """This is a unit test for function Service.main()."""
         mock_service_run = MagicMock()
-        mocker.patch('smfc.Service.run', mock_service_run)
+        mocker.patch("smfc.Service.run", mock_service_run)
         main()
         mock_service_run.assert_called_once()
+
+
 # pylint: enable=too-few-public-methods
 
 

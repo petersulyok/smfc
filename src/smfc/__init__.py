@@ -5,13 +5,14 @@
 from smfc.log import Log
 from smfc.ipmi import Ipmi
 from smfc.fancontroller import FanController
-from smfc.cpuzone import CpuZone
-from smfc.hdzone import HdZone
-from smfc.gpuzone import GpuZone
-from smfc.constzone import ConstZone
+from smfc.cpufc import CpuFc
+from smfc.hdfc import HdFc
+from smfc.nvmefc import NvmeFc
+from smfc.gpufc import GpuFc
+from smfc.constfc import ConstFc
 from smfc.service import Service
 from smfc.cmd import main
 
-__all__ = [ 'Log', 'Ipmi', 'FanController', 'CpuZone', 'HdZone', 'GpuZone', 'ConstZone', 'Service', 'main']
+__all__ = [ "Log", "Ipmi", "FanController", "CpuFc", "HdFc", "NvmeFc", "GpuFc", "ConstFc", "Service", "main"]
 
 # End.
