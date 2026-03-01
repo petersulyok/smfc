@@ -7,6 +7,7 @@ import atexit
 import os
 import sys
 import time
+from typing import Dict, List, Tuple
 from importlib.metadata import version
 from configparser import ConfigParser
 from argparse import ArgumentParser, Namespace
@@ -39,6 +40,7 @@ class Service:
     nvme_fc_enabled: bool       # NVME fan controller enabled
     gpu_fc_enabled: bool        # GPU fan controller enabled
     const_fc_enabled: bool      # CONST fan controller enabled
+    applied_levels: Dict[int, int]  # Cache of last applied fan levels per IPMI zone
 
     def exit_func(self) -> None:
         """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
@@ -108,6 +110,42 @@ class Service:
 
         # All required run-time dependencies are available.
         return ""
+
+    def _collect_desired_levels(self) -> List[Tuple[str, List[int], int]]:
+        """Collect desired fan levels from all enabled controllers.
+
+        Returns:
+            List[Tuple[str, List[int], int]]: list of (name, ipmi_zones, last_level) tuples
+        """
+        levels: List[Tuple[str, List[int], int]] = []
+        for fc, enabled, is_const in [
+            (getattr(self, 'cpu_fc', None), self.cpu_fc_enabled, False),
+            (getattr(self, 'hd_fc', None), self.hd_fc_enabled, False),
+            (getattr(self, 'nvme_fc', None), self.nvme_fc_enabled, False),
+            (getattr(self, 'gpu_fc', None), self.gpu_fc_enabled, False),
+            (getattr(self, 'const_fc', None), self.const_fc_enabled, True),
+        ]:
+            if enabled and fc is not None:
+                # Skip controllers with last_level == 0 (not yet computed), except ConstFc
+                if fc.last_level > 0 or is_const:
+                    levels.append((fc.name, fc.ipmi_zone, fc.last_level))
+        return levels
+
+    def _apply_fan_levels(self) -> None:
+        """Apply the maximum desired fan level per IPMI zone across all controllers."""
+        desired = self._collect_desired_levels()
+        # Build zone -> (max_level, winner_name) mapping
+        zone_levels: Dict[int, Tuple[int, str]] = {}
+        for name, zones, level in desired:
+            for zone in zones:
+                if zone not in zone_levels or level > zone_levels[zone][0]:
+                    zone_levels[zone] = (level, name)
+        # Apply only changed levels
+        for zone, (level, winner) in zone_levels.items():
+            if self.applied_levels.get(zone) != level:
+                self.ipmi.set_fan_level(zone, level)
+                self.applied_levels[zone] = level
+                self.log.msg(Log.LOG_INFO, f'Zone {zone}: fan level > {level}% (winner: {winner})')
 
     def run(self) -> None:
         """Run function: main execution function of the systemd service.
@@ -241,34 +279,42 @@ class Service:
             self.log.msg(Log.LOG_ERROR, f"pyudev error: Could not interface with libudev: {e}.")
             sys.exit(9)
 
+        # Initialize the applied levels cache for zone arbitration.
+        self.applied_levels = {}
+
         # Create an instance for CPU fan controller if enabled.
         if self.cpu_fc_enabled:
             self.log.msg(Log.LOG_DEBUG, "CPU fan controller enabled")
             self.cpu_fc = CpuFc(self.log, self.udevc, self.ipmi, self.config)
+            self.cpu_fc.deferred_apply = True
             time.sleep(self.ipmi.fan_level_delay)
 
         # Create an instance for HD fan controller if enabled.
         if self.hd_fc_enabled:
             self.log.msg(Log.LOG_DEBUG, "HD fan controller enabled")
             self.hd_fc = HdFc(self.log, self.udevc, self.ipmi, self.config, self.sudo)
+            self.hd_fc.deferred_apply = True
             time.sleep(self.ipmi.fan_level_delay)
 
         # Create an instance for NVME fancontroller if enabled.
         if self.nvme_fc_enabled:
             self.log.msg(Log.LOG_DEBUG, "NVME fan controller enabled")
             self.nvme_fc = NvmeFc(self.log, self.udevc, self.ipmi, self.config)
+            self.nvme_fc.deferred_apply = True
             time.sleep(self.ipmi.fan_level_delay)
 
         # Create an instance for GPU fan controller if enabled.
         if self.gpu_fc_enabled:
             self.log.msg(Log.LOG_DEBUG, "GPU fan controller enabled")
             self.gpu_fc = GpuFc(self.log, self.ipmi, self.config)
+            self.gpu_fc.deferred_apply = True
             time.sleep(self.ipmi.fan_level_delay)
 
         # Create an instance for CONST fan controller if enabled.
         if self.const_fc_enabled:
             self.log.msg(Log.LOG_DEBUG, "CONST fan controller enabled")
             self.const_fc = ConstFc(self.log, self.ipmi, self.config)
+            self.const_fc.deferred_apply = True
             time.sleep(self.ipmi.fan_level_delay)
 
         # Calculate the default sleep time for the main loop.
@@ -293,8 +339,9 @@ class Service:
         wait = min(polling_set) / 2
         self.log.msg(Log.LOG_DEBUG, f"Main loop sleep time = {wait} sec")
 
-        # Main execution loop.
+        # Main execution loop (two-phase: compute desired levels, then apply with arbitration).
         while True:
+            # Phase 1: each controller computes its desired fan level.
             if self.cpu_fc_enabled:
                 self.cpu_fc.run()
             if self.hd_fc_enabled:
@@ -305,6 +352,8 @@ class Service:
                 self.gpu_fc.run()
             if self.const_fc_enabled:
                 self.const_fc.run()
+            # Phase 2: apply maximum fan level per zone.
+            self._apply_fan_levels()
             time.sleep(wait)
 
 

@@ -57,6 +57,8 @@ class ConstFc(FanController):
         if self.level not in range(0, 101):
             raise ValueError("invalid level")
         self.last_time = 0.0
+        self.last_level = self.level
+        self.deferred_apply = False
 
         # Print configuration at DEBUG log level.
         if self.log.log_level >= Log.LOG_CONFIG:
@@ -72,9 +74,10 @@ class ConstFc(FanController):
 
         * Step 1: Read current time. If the elapsed time is bigger than the polling time period,
           then go to step 2, otherwise return.
-        * Step 2: Loop through IPMI zones: read current fan level in the zone, if the level is different from the
+        * Step 2: In deferred mode, just ensure last_level is set and return.
+        * Step 3: Loop through IPMI zones: read current fan level in the zone, if the level is different from the
           expected one then we set fan level in the zone again, otherwise return.
-        * Step 3: Log the fan level.
+        * Step 4: Log the fan level.
         """
         current_time: float  # Current system timestamp (measured)
 
@@ -82,6 +85,11 @@ class ConstFc(FanController):
         current_time = time.monotonic()
         if (current_time - self.last_time) >= self.polling:
             self.last_time = current_time
+
+            # Step 2: in deferred mode, just store the desired level for arbitration.
+            if self.deferred_apply:
+                self.last_level = self.level
+                return
 
             # Check in all IPMI zones if the current fan level is the expected one,
             # otherwise set the fan level again.

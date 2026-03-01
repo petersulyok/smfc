@@ -42,6 +42,7 @@ class FanController:
     last_time: float        # Last system time we polled temperature (timestamp)
     last_temp: float        # Last measured temperature value (C)
     last_level: int         # Last configured fan level (0..100%)
+    deferred_apply: bool    # If True, skip IPMI calls (used for zone arbitration)
 
     # Function variable for selected temperature calculation method
     get_temp_func: Callable[[], float]
@@ -124,6 +125,7 @@ class FanController:
         self.last_temp = 0
         self.last_level = 0
         self.last_time = time.monotonic() - (polling + 1)
+        self.deferred_apply = False
         # Print configuration at DEBUG log level.
         if self.log.log_level >= Log.LOG_CONFIG:
             self.log.msg(Log.LOG_CONFIG, f"{self.name} fan controller was initialized with:")
@@ -220,7 +222,8 @@ class FanController:
         Args:
             level (int): new fan level [0..100]
         """
-        self.ipmi.set_multiple_fan_levels(self.ipmi_zone, level)
+        if not self.deferred_apply:
+            self.ipmi.set_multiple_fan_levels(self.ipmi_zone, level)
 
     def callback_func(self) -> None:
         """Call-back function for a child class."""

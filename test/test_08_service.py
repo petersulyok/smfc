@@ -521,6 +521,104 @@ class TestService:
         assert cm.value.code == exit_code, error
         del my_td
 
+    def test_collect_desired_levels(self, mocker: MockerFixture):
+        """Test that _collect_desired_levels() gathers levels from enabled controllers,
+        skipping those with last_level == 0 (except ConstFc)."""
+        mock_print = MagicMock()
+        mocker.patch('builtins.print', mock_print)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {}
+
+        # Create two mock controllers on the same zone
+        service.cpu_fc_enabled = True
+        service.cpu_fc = FanController.__new__(FanController)
+        service.cpu_fc.name = CpuFc.CS_CPU_FC
+        service.cpu_fc.ipmi_zone = [0]
+        service.cpu_fc.last_level = 60
+
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+        service.hd_fc.last_level = 0  # Should be skipped (not yet computed)
+
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+
+        # ConstFc with last_level=0 should NOT be skipped
+        service.const_fc_enabled = True
+        service.const_fc = ConstFc.__new__(ConstFc)
+        service.const_fc.name = ConstFc.CS_CONST_FC
+        service.const_fc.ipmi_zone = [1]
+        service.const_fc.last_level = 0
+
+        levels = service._collect_desired_levels()  # pylint: disable=protected-access
+        names = [name for name, _, _ in levels]
+        assert CpuFc.CS_CPU_FC in names, 'CPU controller should be collected'
+        assert HdFc.CS_HD_FC not in names, 'HD controller with level 0 should be skipped'
+        assert ConstFc.CS_CONST_FC in names, 'ConstFc with level 0 should still be collected'
+
+    def test_apply_fan_levels_shared_zone(self, mocker: MockerFixture):
+        """Test that _apply_fan_levels() applies the maximum level when two controllers share a zone."""
+        mock_print = MagicMock()
+        mocker.patch('builtins.print', mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch('smfc.Ipmi.set_fan_level', mock_set_fan_level)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {}
+
+        # Two controllers on zone 1: HD at 45%, NVME at 70%
+        service.cpu_fc_enabled = False
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+        service.hd_fc.last_level = 45
+
+        service.nvme_fc_enabled = True
+        service.nvme_fc = FanController.__new__(FanController)
+        service.nvme_fc.name = NvmeFc.CS_NVME_FC
+        service.nvme_fc.ipmi_zone = [1]
+        service.nvme_fc.last_level = 70
+
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        # Zone 1 should be set to 70% (the higher level wins)
+        mock_set_fan_level.assert_called_once_with(1, 70)
+        assert service.applied_levels[1] == 70, 'Zone 1 should cache level 70'
+
+    def test_apply_fan_levels_cache(self, mocker: MockerFixture):
+        """Test that _apply_fan_levels() skips IPMI call when level hasn't changed."""
+        mock_print = MagicMock()
+        mocker.patch('builtins.print', mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch('smfc.Ipmi.set_fan_level', mock_set_fan_level)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {1: 70}  # Already applied 70% to zone 1
+
+        service.cpu_fc_enabled = False
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+        service.hd_fc.last_level = 70
+
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        # No IPMI call since level hasn't changed
+        assert mock_set_fan_level.call_count == 0, 'Should skip IPMI call when level is cached'
+
     @pytest.mark.parametrize("exit_code, error", [(10, "Service.run() 22")])
     def test_run_old_section_names(self, mocker: MockerFixture, exit_code: int, error: str):
         """Test backward compatibility: old config section names (with 'zone' tag) are migrated to new names.
