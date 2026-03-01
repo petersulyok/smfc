@@ -95,7 +95,7 @@ if [ "$LOCAL_INSTALL" = "yes" ]; then
   verbose_echo "Local installation from current folder."
 
   # Read smfc version from the current folder.
-  SMFC_VERSION=$(grep "version = " ./pyproject.toml|cut -d "\"" -f2)
+  SMFC_VERSION=$(grep "^version = " ./pyproject.toml|cut -d "\"" -f2)
   verbose_echo "smfc version: $SMFC_VERSION."
 
   # Install smfc package from `./dist` folder
