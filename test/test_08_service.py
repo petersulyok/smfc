@@ -357,6 +357,7 @@ class TestService:
             (False, True,  False, False, True,  100, "Service.run() 19"),
             (True,  False, False, True,  False, 100, "Service.run() 20"),
             (True,  False, True,  False, False, 100, "Service.run() 21"),
+            (True,  True,  True,  True,  True,  100, "Service.run() 22"),
         ],
     )
     def test_run_100p(self, mocker: MockerFixture, cpufc: bool, hdfc: bool, nvmefc: bool, gpufc: bool,
@@ -378,7 +379,7 @@ class TestService:
             nonlocal my_td
             self.hwmon_path = my_td.cpu_files
             count = len(my_td.cpu_files)
-            FanController.__init__(self, log, ipmi, f"{Ipmi.CPU_ZONE}", CpuFc.CS_CPU_FC, count,
+            FanController.__init__(self, log, ipmi, f"{Ipmi.CPU_ZONE} {Ipmi.HD_ZONE}", CpuFc.CS_CPU_FC, count,
                                    1, 5, 5, 0, 30, 60, 35, 100,)
 
         def mocked_hdfc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
@@ -404,7 +405,7 @@ class TestService:
             count = 1
             self.nvidia_smi_path = cmd_nvidia
             self.nvidia_smi_called = 0
-            FanController.__init__(self, log, ipmi, "2", GpuFc.CS_GPU_FC, count,
+            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", GpuFc.CS_GPU_FC, count,
                                    1, 5, 2, 0, 45, 70, 35, 100)
 
         def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
@@ -422,6 +423,8 @@ class TestService:
             self.ipmi_zone = [Ipmi.HD_ZONE]
             self.polling = 30
             self.level = 50
+            self.last_level = self.level
+            self.deferred_apply = False
             self.last_time = 0
 
         # pragma pylint: enable=unused-argument
@@ -561,11 +564,14 @@ class TestService:
         assert ConstFc.CS_CONST_FC in names, "ConstFc with level 0 should still be collected"
 
     def test_apply_fan_levels_shared_zone(self, mocker: MockerFixture):
-        """Test that _apply_fan_levels() applies the maximum level when two controllers share a zone."""
+        """Test that _apply_fan_levels() applies the maximum level when two controllers share a zone
+        and logs the winner and losers."""
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
         mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
         service = Service()
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
@@ -591,7 +597,43 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # Zone 1 should be set to 70% (the higher level wins)
         mock_set_fan_level.assert_called_once_with(1, 70)
-        assert service.applied_levels[1] == 70, "Zone 1 should cache level 70"
+        assert service.applied_levels[1] == 70, 'Zone 1 should cache level 70'
+        # Log should mention the winner and losers for shared zones
+        log_output = str(mock_log_msg.call_args_list)
+        assert 'winner: NVME' in log_output, 'Shared zone log should mention winner'
+        assert 'losers: HD=45%' in log_output, 'Shared zone log should mention losers'
+
+    def test_apply_fan_levels_single_zone(self, mocker: MockerFixture):
+        """Test that _apply_fan_levels() does not log winner when a zone has only one controller."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {}
+
+        # Single controller on zone 0
+        service.cpu_fc_enabled = True
+        service.cpu_fc = FanController.__new__(FanController)
+        service.cpu_fc.name = CpuFc.CS_CPU_FC
+        service.cpu_fc.ipmi_zone = [0]
+        service.cpu_fc.last_level = 60
+
+        service.hd_fc_enabled = False
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        mock_set_fan_level.assert_called_once_with(0, 60)
+        assert service.applied_levels[0] == 60
+        # Log should NOT mention winner for non-shared zones
+        log_output = str(mock_log_msg.call_args_list)
+        assert "winner" not in log_output, "Non-shared zone log should not mention winner"
 
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
         """Test that _apply_fan_levels() skips IPMI call when level hasn't changed."""
@@ -619,7 +661,131 @@ class TestService:
         # No IPMI call since level hasn't changed
         assert mock_set_fan_level.call_count == 0, "Should skip IPMI call when level is cached"
 
-    @pytest.mark.parametrize("exit_code, error", [(10, "Service.run() 22")])
+    def test_check_shared_zones_detected(self, mocker: MockerFixture):
+        """Test that _check_shared_zones() returns True when HD and NVME share zone 1."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+
+        service.cpu_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+
+        service.nvme_fc_enabled = True
+        service.nvme_fc = FanController.__new__(FanController)
+        service.nvme_fc.name = NvmeFc.CS_NVME_FC
+        service.nvme_fc.ipmi_zone = [1]
+
+        result = service._check_shared_zones()  # pylint: disable=protected-access
+        assert result == {1}, 'Should detect shared zone 1'
+        log_output = str(mock_log_msg.call_args_list)
+        assert 'Shared IPMI zone 1' in log_output, 'Should log shared zone 1'
+
+    def test_check_shared_zones_none(self, mocker: MockerFixture):
+        """Test that _check_shared_zones() returns empty set when CPU on zone 0 and HD on zone 1."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+
+        service.cpu_fc_enabled = True
+        service.cpu_fc = FanController.__new__(FanController)
+        service.cpu_fc.name = CpuFc.CS_CPU_FC
+        service.cpu_fc.ipmi_zone = [0]
+
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+
+        result = service._check_shared_zones()  # pylint: disable=protected-access
+        assert result == set(), 'Should not detect shared zones'
+
+    def test_check_shared_zones_multi_zone(self, mocker: MockerFixture):
+        """Test that _check_shared_zones() returns {1} when CPU on zones [0,1] and HD on zone [1]."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+
+        service.cpu_fc_enabled = True
+        service.cpu_fc = FanController.__new__(FanController)
+        service.cpu_fc.name = CpuFc.CS_CPU_FC
+        service.cpu_fc.ipmi_zone = [0, 1]
+
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+
+        result = service._check_shared_zones()  # pylint: disable=protected-access
+        assert result == {1}, 'Should detect shared zone 1'
+        log_output = str(mock_log_msg.call_args_list)
+        assert 'Shared IPMI zone 1' in log_output, 'Should log shared zone 1'
+
+    def test_check_shared_zones_selective_deferred(self, mocker: MockerFixture):
+        """Test that only controllers on shared zones get deferred_apply=True,
+        while controllers on non-shared zones remain deferred_apply=False."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+
+        # CPU on zone 0 (exclusive), HD on zone 1, NVME on zone 1 (shared)
+        service.cpu_fc_enabled = True
+        service.cpu_fc = FanController.__new__(FanController)
+        service.cpu_fc.name = CpuFc.CS_CPU_FC
+        service.cpu_fc.ipmi_zone = [0]
+        service.cpu_fc.deferred_apply = False
+
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+        service.hd_fc.deferred_apply = False
+
+        service.nvme_fc_enabled = True
+        service.nvme_fc = FanController.__new__(FanController)
+        service.nvme_fc.name = NvmeFc.CS_NVME_FC
+        service.nvme_fc.ipmi_zone = [1]
+        service.nvme_fc.deferred_apply = False
+
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+
+        service.shared_zones = service._check_shared_zones()  # pylint: disable=protected-access
+        assert service.shared_zones == {1}
+        # Apply deferred only to controllers on shared zones
+        if service.shared_zones:
+            if service.cpu_fc_enabled and set(service.cpu_fc.ipmi_zone) & service.shared_zones:
+                service.cpu_fc.deferred_apply = True
+            if service.hd_fc_enabled and set(service.hd_fc.ipmi_zone) & service.shared_zones:
+                service.hd_fc.deferred_apply = True
+            if service.nvme_fc_enabled and set(service.nvme_fc.ipmi_zone) & service.shared_zones:
+                service.nvme_fc.deferred_apply = True
+        assert service.cpu_fc.deferred_apply is False, 'CPU on zone 0 should not be deferred'
+        assert service.hd_fc.deferred_apply is True, 'HD on shared zone 1 should be deferred'
+        assert service.nvme_fc.deferred_apply is True, 'NVME on shared zone 1 should be deferred'
+
+    @pytest.mark.parametrize("exit_code, error", [(10, "Service.run() 23")])
     def test_run_old_section_names(self, mocker: MockerFixture, exit_code: int, error: str):
         """Test backward compatibility: old config section names (with 'zone' tag) are migrated to new names.
         - create config with old-style section names ([CPU zone], [HD zone], etc.)

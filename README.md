@@ -83,19 +83,35 @@ If the temperature source has multiple instances (e.g. multiple CPUs, HDDs or GP
 Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating!
 
 #### 1.3 Shared IPMI zone arbitration
-When multiple fan controllers are assigned to the same IPMI zone, `smfc` uses a two-phase approach in each control loop iteration:
+When multiple fan controllers are assigned to the same IPMI zone, `smfc` detects this at startup and automatically switches to a two-phase arbitration loop for those controllers. Controllers on non-shared zones are not affected -- they apply their fan levels directly.
 
- 1. **Compute phase**: each enabled fan controller reads its temperature source and calculates its desired fan level independently.
+At startup, `smfc` logs the detected shared zones at INFO level:
+
+```
+Shared IPMI zone 1: ['HD', 'NVME', 'CONST']
+```
+
+For shared zones, the control loop uses a two-phase approach in each iteration:
+
+ 1. **Compute phase**: each fan controller on a shared zone reads its temperature source and calculates its desired fan level, but defers the IPMI call.
  2. **Apply phase**: the service collects all desired levels, groups them by IPMI zone, and applies the **maximum** level per zone. Only one IPMI command is sent per zone, and only when the level has actually changed.
 
-This means the hottest component always wins. For example, if HD fan controller wants 45% on zone 1 and NVME fan controller wants 70% on the same zone, `smfc` will set zone 1 to 70%. When the NVME cools down below the HD temperature, the HD controller's level will take over.
+Controllers on non-shared zones skip the apply phase entirely -- they execute their own IPMI calls directly during the compute phase, just like they would if no sharing existed.
+
+This means the hottest component always wins on a shared zone. For example, if HD fan controller wants 45% on zone 1 and NVME fan controller wants 70% on the same zone, `smfc` will set zone 1 to 70%. When the NVME cools down below the HD temperature, the HD controller's level will take over.
 
 The CONST fan controller also participates in the arbitration -- its constant level acts as a guaranteed minimum for its zone(s). For example, configuring `[CONST] level=40` on zone 1 ensures that zone never drops below 40%, even if all temperature-driven controllers would request a lower value.
 
-The log output at INFO level shows which controller won each zone when the level changes:
+When a shared zone's level changes, the log output at INFO level shows the winning controller and lists all other controllers with their requested levels:
 
 ```
-Zone 1: fan level > 70% (winner: NVME)
+Zone 1: fan level > 70% (winner: NVME, losers: HD=45%, CONST=40%)
+```
+
+For non-shared zones, only the applied level is logged:
+
+```
+Zone 0: fan level > 60%
 ```
 
 ### 2. User-defined control function
