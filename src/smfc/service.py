@@ -119,17 +119,16 @@ class Service:
             List[Tuple[str, List[int], int]]: list of (name, ipmi_zones, last_level) tuples
         """
         levels: List[Tuple[str, List[int], int]] = []
-        for fc, enabled, is_const in [
-            (getattr(self, "cpu_fc", None), self.cpu_fc_enabled, False),
-            (getattr(self, "hd_fc", None), self.hd_fc_enabled, False),
-            (getattr(self, "nvme_fc", None), self.nvme_fc_enabled, False),
-            (getattr(self, "gpu_fc", None), self.gpu_fc_enabled, False),
-            (getattr(self, "const_fc", None), self.const_fc_enabled, True),
-        ]:
-            if enabled and fc is not None:
-                # Skip controllers with last_level == 0 (not yet computed), except ConstFc
-                if fc.last_level > 0 or is_const:
-                    levels.append((fc.name, fc.ipmi_zone, fc.last_level))
+        if self.cpu_fc_enabled and self.cpu_fc.last_level > 0:
+            levels.append((CpuFc.CS_CPU_FC, self.cpu_fc.ipmi_zone, self.cpu_fc.last_level))
+        if self.hd_fc_enabled and self.hd_fc.last_level > 0:
+            levels.append((HdFc.CS_HD_FC, self.hd_fc.ipmi_zone, self.hd_fc.last_level))
+        if self.nvme_fc_enabled and self.nvme_fc.last_level > 0:
+            levels.append((NvmeFc.CS_NVME_FC, self.nvme_fc.ipmi_zone, self.nvme_fc.last_level))
+        if self.gpu_fc_enabled and self.gpu_fc.last_level > 0:
+            levels.append((GpuFc.CS_GPU_FC, self.gpu_fc.ipmi_zone, self.gpu_fc.last_level))
+        if self.const_fc_enabled:
+            levels.append((ConstFc.CS_CONST_FC, self.const_fc.ipmi_zone, self.const_fc.last_level))
         return levels
 
     def _apply_fan_levels(self) -> None:
@@ -153,8 +152,6 @@ class Service:
                     losers = ", ".join(f"{n}={l}%" for n, l in contributors if n != winner)
                     self.log.msg(Log.LOG_INFO,
                                  f"Zone {zone}: fan level > {level}% (winner: {winner}, losers: {losers})")
-                else:
-                    self.log.msg(Log.LOG_INFO, f"Zone {zone}: fan level > {level}%")
 
     def _check_shared_zones(self) -> Set[int]:
         """Check if any IPMI zones are shared between enabled controllers.
@@ -163,16 +160,21 @@ class Service:
             Set[int]: set of zone IDs used by 2+ controllers (empty if none shared)
         """
         zone_owners: Dict[int, List[str]] = {}
-        for fc, enabled in [
-            (getattr(self, "cpu_fc", None), self.cpu_fc_enabled),
-            (getattr(self, "hd_fc", None), self.hd_fc_enabled),
-            (getattr(self, "nvme_fc", None), self.nvme_fc_enabled),
-            (getattr(self, "gpu_fc", None), self.gpu_fc_enabled),
-            (getattr(self, "const_fc", None), self.const_fc_enabled),
-        ]:
-            if enabled and fc is not None:
-                for zone in fc.ipmi_zone:
-                    zone_owners.setdefault(zone, []).append(fc.name)
+        if self.cpu_fc_enabled:
+            for zone in self.cpu_fc.ipmi_zone:
+                zone_owners.setdefault(zone, []).append(CpuFc.CS_CPU_FC)
+        if self.hd_fc_enabled:
+            for zone in self.hd_fc.ipmi_zone:
+                zone_owners.setdefault(zone, []).append(HdFc.CS_HD_FC)
+        if self.nvme_fc_enabled:
+            for zone in self.nvme_fc.ipmi_zone:
+                zone_owners.setdefault(zone, []).append(NvmeFc.CS_NVME_FC)
+        if self.gpu_fc_enabled:
+            for zone in self.gpu_fc.ipmi_zone:
+                zone_owners.setdefault(zone, []).append(GpuFc.CS_GPU_FC)
+        if self.const_fc_enabled:
+            for zone in self.const_fc.ipmi_zone:
+                zone_owners.setdefault(zone, []).append(ConstFc.CS_CONST_FC)
         shared: Set[int] = set()
         for zone, names in zone_owners.items():
             if len(names) > 1:

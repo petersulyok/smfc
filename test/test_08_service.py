@@ -604,7 +604,7 @@ class TestService:
         assert "losers: HD=45%" in log_output, "Shared zone log should mention losers"
 
     def test_apply_fan_levels_single_zone(self, mocker: MockerFixture):
-        """Test that _apply_fan_levels() does not log winner when a zone has only one controller."""
+        """Test that _apply_fan_levels() does not log anything when a zone has only one controller."""
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -631,9 +631,8 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(0, 60)
         assert service.applied_levels[0] == 60
-        # Log should NOT mention winner for non-shared zones
-        log_output = str(mock_log_msg.call_args_list)
-        assert "winner" not in log_output, "Non-shared zone log should not mention winner"
+        # No log for non-shared zones
+        mock_log_msg.assert_not_called()
 
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
         """Test that _apply_fan_levels() skips IPMI call when level hasn't changed."""
