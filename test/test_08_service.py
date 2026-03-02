@@ -597,11 +597,11 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # Zone 1 should be set to 70% (the higher level wins)
         mock_set_fan_level.assert_called_once_with(1, 70)
-        assert service.applied_levels[1] == 70, 'Zone 1 should cache level 70'
+        assert service.applied_levels[1] == 70, "Zone 1 should cache level 70"
         # Log should mention the winner and losers for shared zones
         log_output = str(mock_log_msg.call_args_list)
-        assert 'winner: NVME' in log_output, 'Shared zone log should mention winner'
-        assert 'losers: HD=45%' in log_output, 'Shared zone log should mention losers'
+        assert "winner: NVME" in log_output, "Shared zone log should mention winner"
+        assert "losers: HD=45%" in log_output, "Shared zone log should mention losers"
 
     def test_apply_fan_levels_single_zone(self, mocker: MockerFixture):
         """Test that _apply_fan_levels() does not log winner when a zone has only one controller."""
@@ -685,9 +685,9 @@ class TestService:
         service.nvme_fc.ipmi_zone = [1]
 
         result = service._check_shared_zones()  # pylint: disable=protected-access
-        assert result == {1}, 'Should detect shared zone 1'
+        assert result == {1}, "Should detect shared zone 1"
         log_output = str(mock_log_msg.call_args_list)
-        assert 'Shared IPMI zone 1' in log_output, 'Should log shared zone 1'
+        assert "Shared IPMI zone 1" in log_output, "Should log shared zone 1"
 
     def test_check_shared_zones_none(self, mocker: MockerFixture):
         """Test that _check_shared_zones() returns empty set when CPU on zone 0 and HD on zone 1."""
@@ -711,7 +711,7 @@ class TestService:
         service.const_fc_enabled = False
 
         result = service._check_shared_zones()  # pylint: disable=protected-access
-        assert result == set(), 'Should not detect shared zones'
+        assert result == set(), "Should not detect shared zones"
 
     def test_check_shared_zones_multi_zone(self, mocker: MockerFixture):
         """Test that _check_shared_zones() returns {1} when CPU on zones [0,1] and HD on zone [1]."""
@@ -737,9 +737,9 @@ class TestService:
         service.const_fc_enabled = False
 
         result = service._check_shared_zones()  # pylint: disable=protected-access
-        assert result == {1}, 'Should detect shared zone 1'
+        assert result == {1}, "Should detect shared zone 1"
         log_output = str(mock_log_msg.call_args_list)
-        assert 'Shared IPMI zone 1' in log_output, 'Should log shared zone 1'
+        assert "Shared IPMI zone 1" in log_output, "Should log shared zone 1"
 
     def test_check_shared_zones_selective_deferred(self, mocker: MockerFixture):
         """Test that only controllers on shared zones get deferred_apply=True,
@@ -781,9 +781,9 @@ class TestService:
                 service.hd_fc.deferred_apply = True
             if service.nvme_fc_enabled and set(service.nvme_fc.ipmi_zone) & service.shared_zones:
                 service.nvme_fc.deferred_apply = True
-        assert service.cpu_fc.deferred_apply is False, 'CPU on zone 0 should not be deferred'
-        assert service.hd_fc.deferred_apply is True, 'HD on shared zone 1 should be deferred'
-        assert service.nvme_fc.deferred_apply is True, 'NVME on shared zone 1 should be deferred'
+        assert service.cpu_fc.deferred_apply is False, "CPU on zone 0 should not be deferred"
+        assert service.hd_fc.deferred_apply is True, "HD on shared zone 1 should be deferred"
+        assert service.nvme_fc.deferred_apply is True, "NVME on shared zone 1 should be deferred"
 
     @pytest.mark.parametrize("exit_code, error", [(10, "Service.run() 23")])
     def test_run_old_section_names(self, mocker: MockerFixture, exit_code: int, error: str):

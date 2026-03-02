@@ -150,10 +150,11 @@ class Service:
                 self.applied_levels[zone] = level
                 contributors = zone_contributors.get(zone, [])
                 if len(contributors) > 1:
-                    losers = ', '.join(f'{n}={l}%' for n, l in contributors if n != winner)
-                    self.log.msg(Log.LOG_INFO, f'Zone {zone}: fan level > {level}% (winner: {winner}, losers: {losers})')
+                    losers = ", ".join(f"{n}={l}%" for n, l in contributors if n != winner)
+                    self.log.msg(Log.LOG_INFO,
+                                 f"Zone {zone}: fan level > {level}% (winner: {winner}, losers: {losers})")
                 else:
-                    self.log.msg(Log.LOG_INFO, f'Zone {zone}: fan level > {level}%')
+                    self.log.msg(Log.LOG_INFO, f"Zone {zone}: fan level > {level}%")
 
     def _check_shared_zones(self) -> Set[int]:
         """Check if any IPMI zones are shared between enabled controllers.
@@ -163,11 +164,11 @@ class Service:
         """
         zone_owners: Dict[int, List[str]] = {}
         for fc, enabled in [
-            (getattr(self, 'cpu_fc', None), self.cpu_fc_enabled),
-            (getattr(self, 'hd_fc', None), self.hd_fc_enabled),
-            (getattr(self, 'nvme_fc', None), self.nvme_fc_enabled),
-            (getattr(self, 'gpu_fc', None), self.gpu_fc_enabled),
-            (getattr(self, 'const_fc', None), self.const_fc_enabled),
+            (getattr(self, "cpu_fc", None), self.cpu_fc_enabled),
+            (getattr(self, "hd_fc", None), self.hd_fc_enabled),
+            (getattr(self, "nvme_fc", None), self.nvme_fc_enabled),
+            (getattr(self, "gpu_fc", None), self.gpu_fc_enabled),
+            (getattr(self, "const_fc", None), self.const_fc_enabled),
         ]:
             if enabled and fc is not None:
                 for zone in fc.ipmi_zone:
@@ -175,7 +176,7 @@ class Service:
         shared: Set[int] = set()
         for zone, names in zone_owners.items():
             if len(names) > 1:
-                self.log.msg(Log.LOG_INFO, f'Shared IPMI zone {zone}: {names}')
+                self.log.msg(Log.LOG_INFO, f"Shared IPMI zone {zone}: {names}")
                 shared.add(zone)
         return shared
 
