@@ -88,9 +88,11 @@ Several smoke tests have been provided for `smfc` where the service is executed 
    | `run_test_const_level.sh` | 1 x CPU  | disabled | disabled  | disabled | enabled    | enabled       |
    | `run_test_gpu_8.sh`       | 1 x CPU  | disabled | disabled  | 8 GPUs   | enabled    | disabled      |
    | `run_test_nvme_4.sh`      | 2 x CPU  | disabled | 4 x NVME  | disabled | enabled    | disabled      |
+   | `run_test_shared_zones.sh`| 1 x CPU  | disabled | 2 x NVMEs | disabled | disabled   | disabled      |
 
+   Note: `run_test_shared_zones.sh` tests the shared IPMI zone arbitration where CPU and NVME fan controllers both use IPMI zone 0.
 
-## Unit tests  
+## Unit tests
 
 The whole project (all source code) is completely unit tested. The unit tests are executed with `pytest`:
 
