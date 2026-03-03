@@ -163,7 +163,7 @@ Some additional notes:
 - For `SAS/SCSI` disks the `smartctl` command will be used to read disk temperature
 - If `drivetemp` module is not loaded or an HDD is not compatible with `drivetemp` module then `smfc` will use `smartctl` automatically.   
 - Different disks types can be mixed in `hd_names=` configuration parameter but the *Standby guard* feature will not be supported in this case.
-- It is NOT RECOMMENDED to mix NVME SSD and SATA/SCSI disks in `hd_names=` parameter, because they are operating in quite different temperature intervals (e.g. 30-40C vs 40-80C).
+- NVME SSDs can be used in [NVME] fan controller and [HD] fan controller does not accept them.
 
 
 ### 5. Super Micro compatibility
@@ -456,7 +456,7 @@ fan_level_delay=2
 #remote_parameters=-U USERNAME -P PASSWORD -H HOST
 
 
-# CPU fancontroller: works based on CPU(s) temperature.
+# CPU fan controller: works based on CPU(s) temperature.
 [CPU]
 # Fan controller enabled (bool, default=0)
 enabled=1
@@ -480,7 +480,7 @@ min_level=35
 max_level=100
 
 
-# HD fancontroller: works based on HDDs/SSDs temperature.
+# HD fan controller: works based on SATA or SAS HDDs/SSDs temperature.
 [HD]
 # Fan controller enabled (bool, default=0)
 enabled=1
@@ -516,7 +516,36 @@ standby_guard_enabled=0
 standby_hd_limit=1
 
 
-# GPU fancontroller: works based on GPU(s) temperature.
+# NVME fan controller: works based on NVMe SSD(s) temperature.
+[NVME]
+# Fan controller enabled (bool, default=0)
+enabled=0
+# IPMI zone(s) (comma- or space-separated list of int, default=1))
+ipmi_zone=1
+# Calculation of NVMe temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
+temp_calc=1
+# Discrete steps in mapping of temperatures to fan level (int, default=4)
+steps=4
+# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
+sensitivity=2.0
+# Polling interval for reading temperature (int, sec, default=10)
+polling=10
+# Minimum NVMe temperature (float, C, default=35.0)
+min_temp=35.0
+# Maximum NVMe temperature (float, C, default=70.0)
+max_temp=70.0
+# Minimum NVMe fan level (int, %, default=35)
+min_level=35
+# Maximum NVMe fan level (int, %, default=100)
+max_level=100
+# Names of the NVMe devices (str multi-line list, default=)
+# MUST BE specified in '/dev/disk/by-id/...' form, for example:
+# nvme_names=/dev/disk/by-id/nvme-ADATA_LEGEND_650_2OFF29AO8DKR
+#	/dev/disk/by-id/nvme-CT4000P3PSSD7_2446E89408FA
+nvme_names=
+
+
+# GPU fan controller: works based on Nvidia GPU(s) temperature.
 [GPU]
 # Fan controller enabled (bool, default=0)
 enabled=0
@@ -545,7 +574,7 @@ gpu_device_ids=0
 nvidia_smi_path=/usr/bin/nvidia-smi
 
 
-# CONST fancontroller: sets constant fan level (without any heat source) for IPMI zones(s).
+# CONST fan controller: sets constant fan level (without any heat source) for IPMI zones(s).
 [CONST]
 # Fan controller enabled (bool, default=0)
 enabled=0
@@ -559,10 +588,11 @@ level=50
 
 Important notes:
 1. `[Ipmi] remote_parameters=-U USERNAME -P PASSWORD -H HOST` parameter can be used for remote access for the IPMI interface. It could be useful for a VM setup where the hard disks are configured with PCI passthrough (e.g. a TrueNAS running in a VM on Proxmox), but IPMI needs to be accessed "remotely". Please note that the HOST is the BMC network address (not the VM host address).
-2. `[HD] hd_names=` is a compulsory parameter for this fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent could be changed after a reboot!
-3. `[CPU] / [HD] min_level= / max_level=` should be configured in alignment with threshold configuration (see more in [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)). Be patient, several refinement cycles could happen.
-4. Several sample configuration files are provided in `./config/samples` folder.
-5. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
+2. `[HD] hd_names=` is a compulsory parameter for HD fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent could be changed after a reboot!
+3. `[NVME] nvme_names=` is a compulsory parameter for NVME fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/nvme0n1` form is not persistent could be changed after a reboot!
+4. `[CPU] / [HD] / [NVME] min_level= / max_level=` should be configured in alignment with threshold configuration (see more details in [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)). Be patient, several refinement cycles could happen.
+5. Several sample configuration files are provided in `./config/samples` folder.
+6. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
 
 
 ### 11. How to run `smfc`?
@@ -627,7 +657,7 @@ With the help of command `journalctl` you can check logs easily. For example:
 
 		journalctl -b -u smfc
 
-## 13. FAQ
+### 13. FAQ
 
 ### Q: My fans are spinning up and loud. What's wrong?
 Most probably, there was an assertion (i.e., the rotational speed of a fan went above or below an IPMI threshold) and IPMI switched back that zone to full rotational speed.
@@ -664,29 +694,29 @@ The configuration is the following:
  - 4 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN3, FAN4) in IPMI CPU zone
  - 2 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) on an Y-adapter + [Noctua NF-A14 PWM](https://noctua.at/en/products/fan/nf-a14-pwm) fans (FANA, FANB) in IPMI HD zone
 
-## 15. References
+### 15. References
 Further readings:
 
-### Super Micro
+#### Super Micro
  - [BMC IPMI User's Guide 1.1b (X10/X11/H11)](https://www.supermicro.com/manuals/other/IPMI_Users_Guide.pdf)
  - [BMC resources](https://www.supermicro.com/en/solutions/management-software/bmc-resources)
  - [IPMI Utilities](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities)
  - [IPMICFG download](https://www.supermicro.com/wdl/utility/IPMICFG/)
  - [IPMICFG User's Guide 1.15 ](https://www.supermicro.com/wdl/utility/IPMICFG/IPMICFG_UserGuide.pdf)
 
-### Forums/blogs
+#### Forums/blogs
  - [\[STH forums\] Reference Material: Supermicro X9/X10/X11 Fan Speed Control](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/)
    - [\[STH forums\] Addition to X9 motherboards](https://forums.servethehome.com/index.php?threads/supermicro-x9-x10-x11-fan-speed-control.10059/post-339801) 
  - [\[TrueNAS forums\] How To: Change IPMI Sensor Thresholds using ipmitool](https://www.truenas.com/community/resources/how-to-change-ipmi-sensor-thresholds-using-ipmitool.35/)
  - [\[TrueNAS forums\] Script to control fan speed in response to hard drive temperatures](https://www.truenas.com/community/threads/script-to-control-fan-speed-in-response-to-hard-drive-temperatures.41294/)
  - [\[Pcfe's blog\] Set fan thresholds on my Super Micro H11DSi-NT](https://blog.pcfe.net/hugo/posts/2018-08-14-epyc-ipmi-fans/)
 
-### Linux kernel
+#### Linux kernel
  - [coretemp] [documentation](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html)
  - [drivetemp] [documentation](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) and its [GitHub respository](https://github.com/groeck/drivetemp)
  - How to install [hddtemp](https://www.cyberciti.biz/tips/howto-monitor-hard-drive-temperature.html) from a source package
 
-### Similar projects
+#### Similar projects
  - [\[GitHub\] Kevin Horton's nas_fan_control](https://github.com/khorton/nas_fan_control)
  - [\[GitHub\] Rob Urban's fork nas_fan control](https://github.com/roburban/nas_fan_control)
  - [\[GitHub\] sretalla's fork nas_fan control](https://github.com/sretalla/nas_fan_control)
