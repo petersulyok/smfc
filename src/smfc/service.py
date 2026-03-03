@@ -161,7 +161,7 @@ class Service:
                     self.log.msg(Log.LOG_INFO, msg)
                 elif len(contributors) == 1:
                     n, l, t = contributors[0]
-                    temp_str = f"/{t:.1f}C" if t > 0.0 else ""
+                    temp_str = f"{t:.1f}C" if t > 0.0 else ""
                     self.log.msg(Log.LOG_INFO, f"IPMI zone {zone}: new level = {l}% ({n}={temp_str})")
 
 
