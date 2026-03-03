@@ -157,12 +157,13 @@ class Service:
                             winner_str = s
                         else:
                             loser_parts.append(s)
-                    msg = f"Shared IPMI zone {zone}: new level = {level}% (winner: {winner_str}, losers: {', '.join(loser_parts)})"
+                    msg = f"Shared IPMI zone [{zone}]: new level = {level}% (winner: {winner_str},"\
+                          f" losers: {', '.join(loser_parts)})"
                     self.log.msg(Log.LOG_INFO, msg)
                 elif len(contributors) == 1:
                     n, l, t = contributors[0]
                     temp_str = f"{t:.1f}C" if t > 0.0 else ""
-                    self.log.msg(Log.LOG_INFO, f"IPMI zone {zone}: new level = {l}% ({n}={temp_str})")
+                    self.log.msg(Log.LOG_INFO, f"IPMI zone [{zone}]: new level = {l}% ({n}={temp_str})")
 
 
     def _check_shared_zones(self) -> Set[int]:

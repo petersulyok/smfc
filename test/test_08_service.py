@@ -638,7 +638,7 @@ class TestService:
         assert service.applied_levels[0] == 60
         # Single-contributor zone should log the fan level with temperature
         log_output = str(mock_log_msg.call_args_list)
-        assert "CPU: new fan level > 60%/45.0C @ IPMI zone 0" in log_output
+        assert "IPMI zone [0]: new level = 60% (CPU=45.0C)" in log_output
 
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
         """Test that _apply_fan_levels() skips IPMI call when level hasn't changed."""
@@ -781,8 +781,6 @@ class TestService:
         assert service.shared_zones == {1}
         # Apply deferred only to controllers on shared zones
         if service.shared_zones:
-            if service.cpu_fc_enabled and set(service.cpu_fc.ipmi_zone) & service.shared_zones:
-                service.cpu_fc.deferred_apply = True
             if service.hd_fc_enabled and set(service.hd_fc.ipmi_zone) & service.shared_zones:
                 service.hd_fc.deferred_apply = True
             if service.nvme_fc_enabled and set(service.nvme_fc.ipmi_zone) & service.shared_zones:
