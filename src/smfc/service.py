@@ -157,7 +157,7 @@ class Service:
                             winner_str = s
                         else:
                             loser_parts.append(s)
-                    msg = f"Shared zone {zone}: fan level > {level}% (winner: {winner_str}, losers: {', '.join(loser_parts)})"
+                    msg = f"Shared IPMI zone {zone}: fan level > {level}% (winner: {winner_str}, losers: {', '.join(loser_parts)})"
                     self.log.msg(Log.LOG_INFO, msg)
                 elif len(contributors) == 1:
                     n, l, t = contributors[0]
