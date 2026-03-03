@@ -268,8 +268,10 @@ class FanController:
                 if current_level != self.last_level:
                     self.last_level = current_level
                     self.set_fan_level(current_level)
-                    self.log.msg(Log.LOG_INFO, f"{self.name}: new fan level > {current_level}%/{current_temp:.1f}C"
-                                 f" @ IPMI {self.ipmi_zone} zone(s).")
+                    if not self.deferred_apply:
+                        self.log.msg(Log.LOG_INFO,
+                                     f"{self.name}: new fan level > {current_level}%/{current_temp:.1f}C"
+                                     f" @ IPMI {self.ipmi_zone} zone(s).")
 
     def print_temp_level_mapping(self) -> None:
         """Print out the user-defined temperature to level mapping value in log DEBUG level."""

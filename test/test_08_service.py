@@ -540,12 +540,14 @@ class TestService:
         service.cpu_fc.name = CpuFc.CS_CPU_FC
         service.cpu_fc.ipmi_zone = [0]
         service.cpu_fc.last_level = 60
+        service.cpu_fc.last_temp = 45.0
 
         service.hd_fc_enabled = True
         service.hd_fc = FanController.__new__(FanController)
         service.hd_fc.name = HdFc.CS_HD_FC
         service.hd_fc.ipmi_zone = [1]
         service.hd_fc.last_level = 0  # Should be skipped (not yet computed)
+        service.hd_fc.last_temp = 0.0
 
         service.nvme_fc_enabled = False
         service.gpu_fc_enabled = False
@@ -558,7 +560,7 @@ class TestService:
         service.const_fc.last_level = 0
 
         levels = service._collect_desired_levels()  # pylint: disable=protected-access
-        names = [name for name, _, _ in levels]
+        names = [name for name, _, _, _ in levels]
         assert CpuFc.CS_CPU_FC in names, "CPU controller should be collected"
         assert HdFc.CS_HD_FC not in names, "HD controller with level 0 should be skipped"
         assert ConstFc.CS_CONST_FC in names, "ConstFc with level 0 should still be collected"
@@ -584,12 +586,14 @@ class TestService:
         service.hd_fc.name = HdFc.CS_HD_FC
         service.hd_fc.ipmi_zone = [1]
         service.hd_fc.last_level = 45
+        service.hd_fc.last_temp = 38.0
 
         service.nvme_fc_enabled = True
         service.nvme_fc = FanController.__new__(FanController)
         service.nvme_fc.name = NvmeFc.CS_NVME_FC
         service.nvme_fc.ipmi_zone = [1]
         service.nvme_fc.last_level = 70
+        service.nvme_fc.last_temp = 42.5
 
         service.gpu_fc_enabled = False
         service.const_fc_enabled = False
@@ -598,13 +602,13 @@ class TestService:
         # Zone 1 should be set to 70% (the higher level wins)
         mock_set_fan_level.assert_called_once_with(1, 70)
         assert service.applied_levels[1] == 70, "Zone 1 should cache level 70"
-        # Log should mention the winner and losers for shared zones
+        # Log should mention the winner and losers for shared zones with temperatures
         log_output = str(mock_log_msg.call_args_list)
-        assert "winner: NVME" in log_output, "Shared zone log should mention winner"
-        assert "losers: HD=45%" in log_output, "Shared zone log should mention losers"
+        assert "winner: NVME=70%/42.5C" in log_output, "Shared zone log should mention winner with temp"
+        assert "losers: HD=45%/38.0C" in log_output, "Shared zone log should mention losers with temp"
 
     def test_apply_fan_levels_single_zone(self, mocker: MockerFixture):
-        """Test that _apply_fan_levels() does not log anything when a zone has only one controller."""
+        """Test that _apply_fan_levels() logs the fan level for a single-controller zone."""
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -622,6 +626,7 @@ class TestService:
         service.cpu_fc.name = CpuFc.CS_CPU_FC
         service.cpu_fc.ipmi_zone = [0]
         service.cpu_fc.last_level = 60
+        service.cpu_fc.last_temp = 45.0
 
         service.hd_fc_enabled = False
         service.nvme_fc_enabled = False
@@ -631,8 +636,9 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(0, 60)
         assert service.applied_levels[0] == 60
-        # No log for non-shared zones
-        mock_log_msg.assert_not_called()
+        # Single-contributor zone should log the fan level with temperature
+        log_output = str(mock_log_msg.call_args_list)
+        assert "CPU: new fan level > 60%/45.0C @ IPMI zone 0" in log_output
 
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
         """Test that _apply_fan_levels() skips IPMI call when level hasn't changed."""
@@ -651,6 +657,7 @@ class TestService:
         service.hd_fc.name = HdFc.CS_HD_FC
         service.hd_fc.ipmi_zone = [1]
         service.hd_fc.last_level = 70
+        service.hd_fc.last_temp = 40.0
 
         service.nvme_fc_enabled = False
         service.gpu_fc_enabled = False

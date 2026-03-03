@@ -112,23 +112,23 @@ class Service:
         # All required run-time dependencies are available.
         return ""
 
-    def _collect_desired_levels(self) -> List[Tuple[str, List[int], int]]:
+    def _collect_desired_levels(self) -> List[Tuple[str, List[int], int, float]]:
         """Collect desired fan levels from all enabled controllers.
 
         Returns:
-            List[Tuple[str, List[int], int]]: list of (name, ipmi_zones, last_level) tuples
+            List[Tuple[str, List[int], int, float]]: list of (name, ipmi_zones, last_level, last_temp) tuples
         """
-        levels: List[Tuple[str, List[int], int]] = []
+        levels: List[Tuple[str, List[int], int, float]] = []
         if self.cpu_fc_enabled and self.cpu_fc.last_level > 0:
-            levels.append((CpuFc.CS_CPU_FC, self.cpu_fc.ipmi_zone, self.cpu_fc.last_level))
+            levels.append((CpuFc.CS_CPU_FC, self.cpu_fc.ipmi_zone, self.cpu_fc.last_level, self.cpu_fc.last_temp))
         if self.hd_fc_enabled and self.hd_fc.last_level > 0:
-            levels.append((HdFc.CS_HD_FC, self.hd_fc.ipmi_zone, self.hd_fc.last_level))
+            levels.append((HdFc.CS_HD_FC, self.hd_fc.ipmi_zone, self.hd_fc.last_level, self.hd_fc.last_temp))
         if self.nvme_fc_enabled and self.nvme_fc.last_level > 0:
-            levels.append((NvmeFc.CS_NVME_FC, self.nvme_fc.ipmi_zone, self.nvme_fc.last_level))
+            levels.append((NvmeFc.CS_NVME_FC, self.nvme_fc.ipmi_zone, self.nvme_fc.last_level, self.nvme_fc.last_temp))
         if self.gpu_fc_enabled and self.gpu_fc.last_level > 0:
-            levels.append((GpuFc.CS_GPU_FC, self.gpu_fc.ipmi_zone, self.gpu_fc.last_level))
+            levels.append((GpuFc.CS_GPU_FC, self.gpu_fc.ipmi_zone, self.gpu_fc.last_level, self.gpu_fc.last_temp))
         if self.const_fc_enabled:
-            levels.append((ConstFc.CS_CONST_FC, self.const_fc.ipmi_zone, self.const_fc.last_level))
+            levels.append((ConstFc.CS_CONST_FC, self.const_fc.ipmi_zone, self.const_fc.last_level, 0.0))
         return levels
 
     def _apply_fan_levels(self) -> None:
@@ -136,10 +136,10 @@ class Service:
         desired = self._collect_desired_levels()
         # Build zone -> (max_level, winner_name) mapping and collect all contributors per zone
         zone_levels: Dict[int, Tuple[int, str]] = {}
-        zone_contributors: Dict[int, List[Tuple[str, int]]] = {}
-        for name, zones, level in desired:
+        zone_contributors: Dict[int, List[Tuple[str, int, float]]] = {}
+        for name, zones, level, temp in desired:
             for zone in zones:
-                zone_contributors.setdefault(zone, []).append((name, level))
+                zone_contributors.setdefault(zone, []).append((name, level, temp))
                 if zone not in zone_levels or level > zone_levels[zone][0]:
                     zone_levels[zone] = (level, name)
         # Apply only changed levels
@@ -149,9 +149,20 @@ class Service:
                 self.applied_levels[zone] = level
                 contributors = zone_contributors.get(zone, [])
                 if len(contributors) > 1:
-                    losers = ", ".join(f"{n}={l}%" for n, l in contributors if n != winner)
-                    self.log.msg(Log.LOG_INFO,
-                                 f"Zone {zone}: fan level > {level}% (winner: {winner}, losers: {losers})")
+                    winner_str = ""
+                    loser_parts = []
+                    for n, l, t in contributors:
+                        s = f"{n}={l}%/{t:.1f}C" if t > 0.0 else f"{n}={l}%"
+                        if n == winner:
+                            winner_str = s
+                        else:
+                            loser_parts.append(s)
+                    msg = f"Shared zone {zone}: fan level > {level}% (winner: {winner_str}, losers: {', '.join(loser_parts)})"
+                    self.log.msg(Log.LOG_INFO, msg)
+                elif len(contributors) == 1:
+                    n, l, t = contributors[0]
+                    temp_str = f"/{t:.1f}C" if t > 0.0 else ""
+                    self.log.msg(Log.LOG_INFO, f"{n}: new fan level > {l}%{temp_str} @ IPMI zone {zone}.")
 
     def _check_shared_zones(self) -> Set[int]:
         """Check if any IPMI zones are shared between enabled controllers.
