@@ -8,7 +8,7 @@ This project is using `uv` for Python project management, see more details about
 * create virtual Python environment: `uv venv`
 * install all dependencies: `uv sync`
 
-`uv` has a lock file (`uv.lock`) storing all dependencies, this should be part of version control.
+`uv` has a lock file (`uv.lock`) for storing dependencies, this should be part of version control.
 
 Building a development environment from scratch (with Python 3.12) contains the following steps:
 ```
@@ -57,7 +57,7 @@ This chapter describes the test environment of `smfc` project.
 Important notes:  
   
 * All test related content can be found in `test` folder
-* Only `python3` and `bash` are required for the execution of the tests (was tested on Linux, macOS), all external commands `ipmitool` and `smartctl` are substituted by scripts
+* Only `python3` and `bash` commands are required for the execution of the tests (was tested on Linux, macOS), all external commands `ipmitool` and `smartctl` are substituted by scripts
 * Test are executed by `pytest`
 * All development dependencies (defined in `pyproject.toml`) will be installed after the execution of these commands:
 
