@@ -58,15 +58,16 @@ On Super Micro server boards, there could be more IPMI zones with different fan 
 #### 1.2 Fan controllers
 In `smfc`, the following fan controllers are implemented:
 
-| Fan controller | Temperature source      | Configuration                                                       | Default IPMI zone   |
-|----------------|-------------------------|---------------------------------------------------------------------|---------------------|
-| CPU            | Intel/AMD CPU(s)        | CPUs are identified automatically                                   | 0 (CPU zone)        |
-| HD             | SATA and SCSI HDDs/SSDs | Hard disks' names must be specified in `[HD] hd_names=` parameter   | 1 (Peripheral zone) |
+| Fan controller | Temperature source      | Configuration                                                         | Default IPMI zone   |
+|----------------|-------------------------|-----------------------------------------------------------------------|---------------------|
+| CPU            | Intel/AMD CPU(s)        | CPUs are identified automatically                                     | 0 (CPU zone)        |
+| HD             | SATA and SCSI HDDs/SSDs | Hard disks' names must be specified in `[HD] hd_names=` parameter     | 1 (Peripheral zone) |
 | NVME           | NVMe SSDs               | NVMe device names must be specified in `[NVME] nvme_names=` parameter | 1 (Peripheral zone) |
-| GPU            | Nvidia GPUs             | GPU indices must be specified in `[GPU] gpu_device_ids=` parameter  | 1 (Peripheral zone) |
-| CONST          | None                    | Constant fan level can be specified in `[CONST] level=` parameter   | 1 (Peripheral zone) |
+| GPU            | Nvidia GPUs             | GPU indices must be specified in `[GPU] gpu_device_ids=` parameter    | 1 (Peripheral zone) |
+| CONST          | None                    | Constant fan level can be specified in `[CONST] level=` parameter     | 1 (Peripheral zone) |
 
-These fan controllers can be enabled and disabled independently. They can be used in a free combination with one or more IPMI zones. Multiple fan controllers can share the same IPMI zone -- `smfc` will automatically apply the **highest** fan level requested by any controller in that zone (see [chapter 1.3](#13-shared-ipmi-zone-arbitration) for details).
+These fan controllers can be enabled and disabled independently. They can be used in a free combination with one or more IPMI zones. Multiple fan controllers
+can share the same IPMI zone -- `smfc` will automatically apply the **highest** fan level requested by any controller in that zone (see [chapter 1.3](#13-shared-ipmi-zone-arbitration) for details).
 _CONST fan controller_ is an exception here, it does not require a temperature source, it can provide a constant fan level for one or more IPMI zones.
 In `smfc` configuration file each fan controller has an individual section.
 
@@ -78,7 +79,7 @@ In `smfc`, a temperature-driven fan controller implements the following control 
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="600">
 
-If the temperature source has multiple instances (e.g. multiple CPUs, HDDs or GPUs) then the user can configure a calculation method (i.e. minimum, average, maximum) for the calculation of the final temperature value (see `temp_calc=` parameter).
+If the temperature source has multiple instances (e.g. multiple CPUs, HDDs, NVMEs or GPUs) then the user can configure a calculation method (i.e. minimum, average, maximum) for the calculation of the final temperature value (see `temp_calc=` parameter).
 
 Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating!
 
@@ -105,13 +106,13 @@ The CONST fan controller also participates in the arbitration -- its constant le
 When a shared zone's level changes, the log output at INFO level shows the winning controller and lists all other controllers with their requested levels:
 
 ```
-Zone 1: fan level > 70% (winner: NVME, losers: HD=45%, CONST=40%)
+Shared IPMI zone [1]: new level = 70% (winner: NVME=70%/52.0C, losers: HD=45%/38.5C, CONST=40%)
 ```
 
 For non-shared zones, only the applied level is logged:
 
 ```
-Zone 0: fan level > 60%
+IPMI zone [0]: new level = 60% (CPU=45.0C)
 ```
 
 ### 2. User-defined control function
@@ -604,20 +605,21 @@ systemctl start smfc.service
 systemctl stop smfc.service
 systemctl restart smfc.service
 systemctl status smfc.service
-root@nas:~# systemctl status smfc
 ● smfc.service - Super Micro Fan Control
      Loaded: loaded (/etc/systemd/system/smfc.service; enabled; preset: enabled)
-     Active: active (running) since Mon 2025-06-23 17:55:50 CEST; 6 days ago
-   Main PID: 8464 (smfc)
-      Tasks: 1 (limit: 76863)
-     Memory: 10.4M
-        CPU: 7min 35.345s
+     Active: active (running) since Tue 2026-03-03 21:32:22 CET; 7min ago
+ Invocation: b613d841e1cf43f4ace80d472623ed4c
+   Main PID: 82521 (smfc)
+      Tasks: 1 (limit: 154231)
+     Memory: 12M (peak: 19.5M)
+        CPU: 1.271s
      CGroup: /system.slice/smfc.service
-             └─8464 /usr/bin/python3 /usr/local/bin/smfc -c /etc/smfc/smfc.conf -l 3
+             └─82521 /usr/bin/python3 /usr/local/bin/smfc -c /etc/smfc/smfc.conf -l 3
 
-Jun 29 19:17:29 nas smfc.service[8464]: CPU: new fan level > 48%/34.0C @ IPMI [0] zone(s).
-Jun 29 19:21:07 nas smfc.service[8464]: CPU: new fan level > 61%/38.0C @ IPMI [0] zone(s).
-Jun 29 19:21:11 nas smfc.service[8464]: CPU: new fan level > 48%/34.0C @ IPMI [0] zone(s).
+Mar 03 21:37:27 nas smfc.service[82521]: Shared IPMI zone [0]: new level = 67% (winner: CPU=67%/51.0C, losers: NVME=35%/37.9C)
+Mar 03 21:37:30 nas smfc.service[82521]: Shared IPMI zone [0]: new level = 35% (winner: CPU=35%/31.0C, losers: NVME=35%/37.9C)
+Mar 03 21:38:46 nas smfc.service[82521]: Shared IPMI zone [0]: new level = 67% (winner: CPU=67%/49.0C, losers: NVME=35%/37.9C)
+Mar 03 21:38:49 nas smfc.service[82521]: Shared IPMI zone [0]: new level = 35% (winner: CPU=35%/31.0C, losers: NVME=35%/37.9C)
 ```
 
 The `smfc` program has the following parameters:
