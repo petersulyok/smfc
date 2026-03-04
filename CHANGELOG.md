@@ -5,17 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.3.0] - 2026.03.01
+## [5.0.0] - 2026.03.04
 
 ### New
+- Shared IPMI zones implemented, multiple fan controllers can share an IPMI zone.
 - New NVME fan controller added
+- Python 3.14 support added 
 
 ### Changed
+- Logging changed to IPMI zone oriented way (this is a consequence of shared IPMI zones) 
 - Python maintenance window moved, current supported versions are: `3.10` - `3.14`.
-  Please note that other Python versions may also work but not tested.
+Please note that other Python versions may also work but not tested.
 - Many typos and grammar errors are corrected in the MD files.
-- `zone` tag has been removed from the name of the fan controllers in the code and the configuration files. This is an
-incompatible change, so the older sections names will be supported for a while.
+- Naming of fan controllers and IPMI zones is differentiated in a better way (see more details about the background [here](https://github.com/petersulyok/smfc/discussions/105)).
+It means:
+  - Fan controller section names have been changed, `zone` tags have been removed from there in the configuration files.
+While this is an incompatible change and the old section names are deprecated, they will be supported for a while. You are
+highly encouraged to update your configuration file.
+  - Source code and files names have been refactored, `Zone` tags have been removed.
+  - MD files and pictures are also updated.
 
 ### Removed
 - HD fan controller doesn't accept NVME disks
