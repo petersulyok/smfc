@@ -269,8 +269,8 @@ class Service:
             if self.config.has_section(old_name) and not self.config.has_section(new_name):
                 self.config[new_name] = self.config[old_name]
                 self.config.remove_section(old_name)
-                self.log.msg(Log.LOG_INFO, f"Deprecated section name [{self.config[old_name]}]," \
-                                           " please update your configuration file.")
+                self.log.msg(Log.LOG_INFO, f"Deprecated section name [{old_name}], " \
+                                           "please update your configuration file.")
         # Read [CPU] enabled= parameter if the section exists.
         self.cpu_fc_enabled = (
             (self.config[CpuFc.CS_CPU_FC].getboolean(CpuFc.CV_CPU_FC_ENABLED, fallback=False))
