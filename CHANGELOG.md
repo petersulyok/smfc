@@ -9,14 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New
 - Shared IPMI zones implemented, multiple fan controllers can share an IPMI zone.
-- New NVME fan controller added
-- Python 3.14 support added 
+- New NVME fan controller added.
+- Python 3.14 support added.
+- `./bin/create_python_env.sh` added again (using `uv`) to stup the Python development environment.
 
 ### Changed
-- Logging changed to IPMI zone oriented way (this is a consequence of shared IPMI zones) 
+- Logging changed to IPMI zone oriented way (this is a consequence of shared IPMI zones).
 - Python maintenance window moved, current supported versions are: `3.10` - `3.14`.
 Please note that other Python versions may also work but not tested.
 - Many typos and grammar errors are corrected in the MD files.
+- During the remote installation, `./bin/install.sh` will read additional `smfc` content from a targeted GitHub
+version tag, not from git HEAD. It can secure the installation when the GitHub main/HEAD is changed. 
 - Naming of fan controllers and IPMI zones is differentiated in a better way (see more details about the background [here](https://github.com/petersulyok/smfc/discussions/105)).
 It means:
   - Fan controller section names have been changed, `zone` tags have been removed from there in the configuration files.
