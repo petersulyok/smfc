@@ -440,7 +440,7 @@ Edit `/etc/smfc/smfc.conf` and specify your configuration parameters here:
 ```
 #
 #   smfc.conf (C) 2020-2026, Peter Sulyok
-#   smfc 4.x service configuration parameters
+#   smfc 5.x service configuration parameters
 #
 #   Please read the documentation here: https://github.com/petersulyok/smfc
 #
