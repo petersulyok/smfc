@@ -723,5 +723,6 @@ Further readings:
  - [\[GitHub\] Rob Urban's fork nas_fan control](https://github.com/roburban/nas_fan_control)
  - [\[GitHub\] sretalla's fork nas_fan control](https://github.com/sretalla/nas_fan_control)
  - [\[GitHub\] Andrew Gunnerson's ipmi-fan-control](https://github.com/chenxiaolong/ipmi-fan-control)
+ - [\[GitHub\] supermicro-fancontrol by jvdillion](https://github.com/jvdillon/supermicro-fancontrol)
 
 > Written with [StackEdit](https://stackedit.io/).
