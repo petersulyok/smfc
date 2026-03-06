@@ -149,7 +149,7 @@ This feature is monitoring the power state of SATA hard disks (with the help of 
 SCSI disks are not compatible with this feature.
 
 ### 4. Hard disk compatibility
-The `smfc` service was originally designed for `SATA` hard drives, but `smfc v3.0.0` is also compatible with `NVME` and `SAS/SCSI` disks. The following table summarizes how the temperature is read for different disk types: 
+The following table summarizes how the temperature is read for different disk types: 
 
 | Disk type  | Temperature source   | Kernel module | Command    |
 |------------|----------------------|---------------|------------|
@@ -157,14 +157,18 @@ The `smfc` service was originally designed for `SATA` hard drives, but `smfc v3.
 | `NVME`     | Linux kernel (HWMON) | -             | -          |
 | `SAS/SCSI` | `smartctl`           | -             | `smartctl` |
 
+
+> The `smfc` service was originally designed for `SATA` hard drives, but from `smfc v3.0.0`, it is also compatible with `NVME` and `SAS/SCSI` disks.
+> `smfc v5.0.0` introduced a new NVME fan controller and separated the use of SATA and SAS/SCSI HDDs/SSDs and NVME SSD disks.  
+
 Some additional notes:
 
-- For `NVME` SSDs, no kernel driver needs to be loaded; the kernel can handle this disk type automatically
 - For `SATA` disks the `drivetemp` kernel module should be loaded. **This is the fastest way to read disk temperature**, and the kernel module can report the temperature while hard disks are in sleep mode!
-- For `SAS/SCSI` disks the `smartctl` command will be used to read disk temperature
+- For `SAS/SCSI` disks the `smartctl` command will be used to read disk temperature.
 - If `drivetemp` module is not loaded or an HDD is not compatible with `drivetemp` module then `smfc` will use `smartctl` automatically.   
 - Different disks types can be mixed in `hd_names=` configuration parameter but the *Standby guard* feature will not be supported in this case.
-- NVME SSDs can be used in [NVME] fan controller and [HD] fan controller does not accept them.
+- For `NVME` SSDs, no kernel driver needs to be loaded; the kernel can handle this disk type automatically
+- NVME SSDs can be used in [NVME] fan controller and [HD] fan controller does not accept them anymore.
 
 
 ### 5. Super Micro compatibility
@@ -175,6 +179,8 @@ In case of X9 motherboards the compatibility is not guaranteed, it depends on th
 The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
 
 Newer X13/H13 motherboards (with AST2600 chips) are compatible with `smfc` (see mode details in [issue #33](https://github.com/petersulyok/smfc/issues/33) about an X13SAE-F motherboard). The only difference is in the implementation of thresholds, AST2600 chip implements only `Lower Critical` threshold, so setting up thresholds is different.  
+
+In case of the newer X14/H14 motherboards the compatibility is open. 
 
 Feel free to create a short feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55) on your compatibility experience.
 
