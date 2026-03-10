@@ -136,3 +136,17 @@ dmypy.json
 
 # ruff
 .ruff_cache
+
+# Debian packaging build artifacts
+.pybuild/
+debian/.debhelper/
+debian/smfc/
+debian/debhelper-build-stamp
+debian/files
+debian/smfc.substvars
+debian/smfc.postinst.debhelper
+debian/smfc.postrm.debhelper
+debian/smfc.prerm.debhelper
+deb-output/
+*.buildinfo
+*.changes
