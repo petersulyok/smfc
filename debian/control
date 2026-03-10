@@ -1,0 +1,24 @@
+Source: smfc
+Section: utils
+Priority: optional
+Maintainer: Peter Sulyok <peter@sulyok.net>
+Build-Depends: debhelper-compat (= 13),
+               dh-python,
+               pybuild-plugin-pyproject,
+               python3-all,
+               python3-setuptools
+Standards-Version: 4.6.2
+Homepage: https://github.com/petersulyok/smfc
+Rules-Requires-Root: no
+
+Package: smfc
+Architecture: all
+Depends: ${python3:Depends},
+         ${misc:Depends},
+         python3-pyudev,
+         ipmitool
+Recommends: smartmontools
+Suggests: nvidia-utils-server | nvidia-utils
+Description: Super Micro Fan Control for Linux
+ smfc is a systemd service to control fans in Linux on Super Micro
+ X10-X13/H10-H13 motherboards with IPMI fan function.

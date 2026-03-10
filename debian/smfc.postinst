@@ -1,0 +1,56 @@
+#!/bin/sh
+set -e
+
+CONF_FILE="/etc/smfc/smfc.conf"
+
+smfc_detect_hd_names() {
+    if [ -d /dev/disk/by-id ] && grep -q '^hd_names=$' "$CONF_FILE"; then
+        hd_disks=$(ls /dev/disk/by-id/ | grep -v -E '\-part|^wwn-|\-eui|nvme|^dm-|^lvm-|^md-|^zd-|_1+$' || true)
+        if [ -n "$hd_disks" ]; then
+            replacement=""
+            first=1
+            for disk in $hd_disks; do
+                if [ "$first" = 1 ]; then
+                    replacement="/dev/disk/by-id/${disk}"
+                    first=0
+                else
+                    replacement="${replacement}\n\t/dev/disk/by-id/${disk}"
+                fi
+            done
+            sed -i "s|^hd_names=$|hd_names=${replacement}|" "$CONF_FILE"
+        fi
+    fi
+}
+
+smfc_detect_nvme_names() {
+    if [ -d /dev/disk/by-id ] && grep -q '^nvme_names=$' "$CONF_FILE"; then
+        nvme_disks=$(ls /dev/disk/by-id/ | grep -E '^nvme-' | grep -v -E '\-part|\-eui|_1+$' || true)
+        if [ -n "$nvme_disks" ]; then
+            replacement=""
+            first=1
+            for disk in $nvme_disks; do
+                if [ "$first" = 1 ]; then
+                    replacement="/dev/disk/by-id/${disk}"
+                    first=0
+                else
+                    replacement="${replacement}\n\t/dev/disk/by-id/${disk}"
+                fi
+            done
+            sed -i "s|^nvme_names=$|nvme_names=${replacement}|" "$CONF_FILE"
+        fi
+    fi
+}
+
+case "$1" in
+    configure)
+        # Only auto-detect disks on fresh install (not upgrade)
+        if [ -z "$2" ]; then
+            smfc_detect_hd_names
+            smfc_detect_nvme_names
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

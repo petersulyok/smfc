@@ -1,0 +1,9 @@
+smfc (5.0.0) unstable; urgency=medium
+
+  * Shared IPMI zones: multiple fan controllers can share an IPMI zone.
+  * New NVMe fan controller added.
+  * Python 3.14 support added.
+  * Fan controller section names refactored (zone tags removed).
+  * Logging changed to IPMI zone oriented way.
+
+ -- Peter Sulyok <peter@sulyok.net>  Wed, 04 Mar 2026 00:00:00 +0000

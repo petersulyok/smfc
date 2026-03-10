@@ -1,0 +1,8 @@
+config/smfc.conf etc/smfc
+config/smfc etc/default
+config/samples/smfc-sample1.conf usr/share/doc/smfc/examples
+config/samples/smfc-sample2.conf usr/share/doc/smfc/examples
+config/samples/smfc-sample3.conf usr/share/doc/smfc/examples
+config/samples/smfc-sample4.conf usr/share/doc/smfc/examples
+config/samples/smfc-sample5.conf usr/share/doc/smfc/examples
+config/samples/smfc-sample6.conf usr/share/doc/smfc/examples
