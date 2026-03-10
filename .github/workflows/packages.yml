@@ -1,0 +1,45 @@
+name: Build packages
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-deb:
+    name: Build DEB package
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debhelper dh-python pybuild-plugin-pyproject python3-all python3-setuptools python3-build
+      - name: Build DEB package
+        run: dpkg-buildpackage -us -uc -b
+      - name: Upload DEB package
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-package
+          path: ../smfc_*.deb
+
+  build-rpm:
+    name: Build RPM package
+    runs-on: ubuntu-latest
+    container: fedora:latest
+
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install build dependencies
+        run: dnf install -y rpm-build python3-devel python3-setuptools python3-pip python3-wheel python3-pyproject-rpm-macros systemd-rpm-macros
+      - name: Create source tarball
+        run: |
+          mkdir -p ~/rpmbuild/SOURCES
+          tar czf ~/rpmbuild/SOURCES/smfc-${{ github.event.release.tag_name || '5.0.0' }}.tar.gz --transform='s,^./,smfc-${{ github.event.release.tag_name || '5.0.0' }}/,' --exclude='.git' --exclude='.venv' .
+      - name: Build RPM package
+        run: rpmbuild -bb smfc.spec
+      - name: Upload RPM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-package
+          path: ~/rpmbuild/RPMS/noarch/smfc-*.rpm
