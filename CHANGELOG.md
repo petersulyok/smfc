@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026.03.17
+
+### New
+- BMC information (device ID, firmware revision, manufacturer, product info) is retrieved and logged during IPMI initialization.
+- DEB and RPM package creation added with GitHub workflow for automated builds.
+
+### Changed
+- `RuntimeError` is now handled during IPMI initialization in the service layer.
+- Documentation updated for DEB/RPM packaging, hard disk and Super Micro compatibility.
+
+### Fixed
+- Inconsistent log level references in comments (`DEBUG` vs `CONFIG`) corrected in `constfc.py` and `fancontroller.py`.
+- `openipmi.service` target removed from `smfc.service`.
+
+
 ## [5.0.0] - 2026.03.04
 
 ### New
