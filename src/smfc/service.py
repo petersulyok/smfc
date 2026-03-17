@@ -309,7 +309,7 @@ class Service:
         try:
             self.ipmi = Ipmi(self.log, self.config, self.sudo)
             old_mode = self.ipmi.get_fan_mode()
-        except (ValueError, FileNotFoundError) as e:
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
             self.log.msg(Log.LOG_ERROR, f"{e}.")
             sys.exit(8)
         # Log the old fan mode and zone levels in DEBUG log mode.
