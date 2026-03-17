@@ -13,12 +13,20 @@ from smfc.log import Log
 class Ipmi:
     """IPMI interface class can set/get IPMI fan mode, and can set IPMI fan level using ipmitool."""
 
-    log: Log                # Reference to a Log class instance
-    command: str            # Full path for ipmitool command.
-    fan_mode_delay: float   # Delay time after execution of IPMI set fan mode function
-    fan_level_delay: float  # Delay time after execution of IPMI set fan level function
-    remote_parameters: str  # Remote IPMI parameters
-    sudo: bool              # Use `sudo` command for `ipmitool` command
+    log: Log                    # Reference to a Log class instance
+    command: str                # Full path for ipmitool command.
+    fan_mode_delay: float       # Delay time after execution of IPMI set fan mode function
+    fan_level_delay: float      # Delay time after execution of IPMI set fan level function
+    remote_parameters: str      # Remote IPMI parameters
+    sudo: bool                  # Use `sudo` command for `ipmitool` command
+    bmc_device_id: int          # BMC device ID
+    bmc_device_rev: int         # BMC device revision
+    bmc_firmware_rev: str       # BMC firmware revision
+    bmc_ipmi_version: str       # BMC IPMI version
+    bmc_manufacturer_id: int    # BMC manufacturer ID
+    bmc_manufacturer_name: str  # BMC manufacturer name
+    bmc_product_id: int         # BMC product ID
+    bmc_product_name: str       # BMC product name
 
     # Constant values for IPMI fan modes:
     STANDARD_MODE: int = 0
@@ -90,13 +98,39 @@ class Ipmi:
         # Check 3: fan_mode_delay must be positive.
         if self.fan_level_delay < 0:
             raise ValueError(f"Negative fan_level_delay= parameter ({self.fan_level_delay})")
-        # Print the configuration out at DEBUG log level.
+
+        # Retrieve and parse BMC information.
+        r = self._exec_ipmitool(["bmc", "info"])
+        fields: dict = {}
+        for line in r.stdout.splitlines():
+            if ":" in line:
+                key, _, value = line.partition(":")
+                fields[key.strip()] = value.strip()
+        try:
+            self.bmc_device_id = int(fields["Device ID"])
+            self.bmc_device_rev = int(fields["Device Revision"])
+            self.bmc_firmware_rev = fields["Firmware Revision"]
+            self.bmc_ipmi_version = fields["IPMI Version"]
+            self.bmc_manufacturer_id = int(fields["Manufacturer ID"])
+            self.bmc_manufacturer_name = fields["Manufacturer Name"]
+            self.bmc_product_id = int(fields["Product ID"].split()[0])
+            self.bmc_product_name = fields["Product Name"]
+        except (KeyError, ValueError, IndexError) as e:
+            raise RuntimeError(f"Cannot parse BMC info: {e}") from e
+
+        # Print the configuration out at CONFIG log level.
         if self.log.log_level >= Log.LOG_CONFIG:
             self.log.msg(Log.LOG_CONFIG, "Ipmi module was initialized with:")
             self.log.msg(Log.LOG_CONFIG, f"   {Ipmi.CV_IPMI_COMMAND} = {self.command}")
             self.log.msg(Log.LOG_CONFIG, f"   {Ipmi.CV_IPMI_FAN_MODE_DELAY} = {self.fan_mode_delay}")
             self.log.msg(Log.LOG_CONFIG, f"   {Ipmi.CV_IPMI_FAN_LEVEL_DELAY} = {self.fan_level_delay}")
             self.log.msg(Log.LOG_CONFIG, f"   {Ipmi.CV_IPMI_REMOTE_PARAMETERS} = {self.remote_parameters}")
+            self.log.msg(Log.LOG_CONFIG, "BMC information:")
+            mfr_msg = f"   manufacturer name and id = {self.bmc_manufacturer_name} ({self.bmc_manufacturer_id})"
+            self.log.msg(Log.LOG_CONFIG, mfr_msg)
+            self.log.msg(Log.LOG_CONFIG, f"   product name and id = {self.bmc_product_name} ({self.bmc_product_id})")
+            self.log.msg(Log.LOG_CONFIG, f"   IPMI version = {self.bmc_ipmi_version}")
+            self.log.msg(Log.LOG_CONFIG, f"   firmware revision = {self.bmc_firmware_rev}")
 
     def _exec_ipmitool(self, args: List[str]) -> subprocess.CompletedProcess:
         """Execute `ipmitool` command.

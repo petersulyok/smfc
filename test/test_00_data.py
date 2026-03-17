@@ -149,6 +149,23 @@ class TestData:
 
 if [[ $1 = "sdr" ]] ; then
 	echo OK
+	exit 0
+fi
+
+if [[ $1 = "bmc" && $2 = "info" ]] ; then
+    cat << 'BMCEOF'
+Device ID                 : 32
+Device Revision           : 1
+Firmware Revision         : 1.74
+IPMI Version              : 2.0
+Manufacturer ID           : 10876
+Manufacturer Name         : Super Micro Computer Inc.
+Product ID                : 6929 (0x1b11)
+Product Name              : X11SCH-LN4F
+Device Available          : yes
+Provides Device SDRs      : yes
+BMCEOF
+    exit 0
 fi
 
 # IPMI get fan mode (raw 0x30 0x45 0x00)

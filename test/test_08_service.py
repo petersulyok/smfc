@@ -431,7 +431,22 @@ class TestService:
 
         my_td = TestData()
         # Force mode initial fan mode 0 for setting new FULL mode during the test.
-        cmd_ipmi = my_td.create_command_file('echo "0"')
+        cmd_ipmi = my_td.create_command_file(
+            "if [[ $1 = \"bmc\" && $2 = \"info\" ]] ; then\n"
+            "cat << 'BMCEOF'\n"
+            "Device ID                 : 32\n"
+            "Device Revision           : 1\n"
+            "Firmware Revision         : 1.74\n"
+            "IPMI Version              : 2.0\n"
+            "Manufacturer ID           : 10876\n"
+            "Manufacturer Name         : Super Micro Computer Inc.\n"
+            "Product ID                : 6929 (0x1b11)\n"
+            "Product Name              : X11SCH-LN4F\n"
+            "BMCEOF\n"
+            "exit 0\n"
+            "fi\n"
+            "echo \"0\""
+        )
         cmd_smart = my_td.create_smart_command()
         # create_command_file('echo "ACTIVE"'))
         cmd_nvidia = my_td.create_nvidia_smi_command(1)

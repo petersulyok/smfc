@@ -13,6 +13,20 @@ from smfc import Log, Ipmi
 from .test_00_data import TestData
 
 
+BMC_INFO_OUTPUT = (
+    "Device ID                 : 32\n"
+    "Device Revision           : 1\n"
+    "Firmware Revision         : 1.74\n"
+    "IPMI Version              : 2.0\n"
+    "Manufacturer ID           : 10876\n"
+    "Manufacturer Name         : Super Micro Computer Inc.\n"
+    "Product ID                : 6929 (0x1b11)\n"
+    "Product Name              : X11SCH-LN4F\n"
+    "Device Available          : yes\n"
+    "Provides Device SDRs      : yes\n"
+)
+
+
 class TestIpmi:
     """Unit test class for smfc.Ipmi() class"""
 
@@ -37,7 +51,10 @@ class TestIpmi:
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_ipmi_exec = MagicMock()
-        mock_ipmi_exec.return_value = subprocess.CompletedProcess([], returncode=0)
+        mock_ipmi_exec.side_effect = [
+            subprocess.CompletedProcess([], returncode=0),
+            subprocess.CompletedProcess([], returncode=0, stdout=BMC_INFO_OUTPUT),
+        ]
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
         my_config = ConfigParser()
         my_config[Ipmi.CS_IPMI] = {
@@ -52,8 +69,16 @@ class TestIpmi:
         assert my_ipmi.fan_mode_delay == mode_delay, error
         assert my_ipmi.fan_level_delay == level_delay, error
         assert my_ipmi.remote_parameters == remote_pars, error
-        assert mock_print.call_count == 5, error  # Ipmi-5
+        assert mock_print.call_count == 10, error  # Ipmi-10
         assert my_ipmi.sudo == sudo, error
+        assert my_ipmi.bmc_device_id == 32, error
+        assert my_ipmi.bmc_device_rev == 1, error
+        assert my_ipmi.bmc_firmware_rev == "1.74", error
+        assert my_ipmi.bmc_ipmi_version == "2.0", error
+        assert my_ipmi.bmc_manufacturer_id == 10876, error
+        assert my_ipmi.bmc_manufacturer_name == "Super Micro Computer Inc.", error
+        assert my_ipmi.bmc_product_id == 6929, error
+        assert my_ipmi.bmc_product_name == "X11SCH-LN4F", error
         del my_td
 
     @pytest.mark.parametrize(
@@ -80,6 +105,8 @@ class TestIpmi:
         # pylint: disable=W0613
         def mocked_ipmi_exec(self, args: List[str]) -> subprocess.CompletedProcess:
             nonlocal case
+            if args == ["bmc", "info"]:
+                return subprocess.CompletedProcess([], returncode=0, stdout=BMC_INFO_OUTPUT)
             if case == 2:
                 raise FileNotFoundError
             if case == 3:
@@ -221,22 +248,15 @@ class TestIpmi:
     )
     def test_get_fan_mode_p1(self, mocker: MockerFixture, expected_mode: int, error: str) -> None:
         """Positive unit test for Ipmi.get_fan_mode() method. It contains the following steps:
-        - create a shell script with an expected output
-        - mock print() function
-        - initialize a Config, Log, Ipmi classes
+        - mock _exec_ipmitool() function
+        - create an empty Ipmi class
         - ASSERT: if the get_fan_mode() returns different value from the expected one
-        - delete all instances
         """
-        my_td = TestData()
-        command = my_td.create_command_file(f'echo " {expected_mode:02}"')
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
-        my_config = ConfigParser()
-        my_config[Ipmi.CS_IPMI] = {Ipmi.CV_IPMI_COMMAND: command}
-        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-        my_ipmi = Ipmi(my_log, my_config, False)
+        mock_ipmi_exec = MagicMock()
+        mock_ipmi_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {expected_mode:02}")
+        mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
+        my_ipmi = Ipmi.__new__(Ipmi)
         assert my_ipmi.get_fan_mode() == expected_mode, error
-        del my_td
 
     @pytest.mark.parametrize(
         "value, exception, error",
@@ -245,24 +265,20 @@ class TestIpmi:
             ("", ValueError, "Ipmi.get_fan_mode() 6"),
         ],
     )
-    def test_get_fan_mode_n1(self, value: str, exception: Any, error: str) -> None:
+    def test_get_fan_mode_n1(self, mocker: MockerFixture, value: str, exception: Any, error: str) -> None:
         """Negative unit test for Ipmi.get_fan_mode() method. It contains the following steps:
-        - create a shell script providing invalid value
-        - initialize a Config, Log, Ipmi classes
+        - mock _exec_ipmitool() function with invalid output
+        - create an empty Ipmi class
         - call get_fan_mode() function
-        - ASSERT: if the no ValueError exception raised (other exceptions are tested in .exec() method)
-        - delete all instances
+        - ASSERT: if no ValueError exception raised (other exceptions are tested in .exec() method)
         """
-        my_td = TestData()
-        command = my_td.create_command_file('echo " ' + value + '"')
-        my_config = ConfigParser()
-        my_config[Ipmi.CS_IPMI] = {Ipmi.CV_IPMI_COMMAND: command}
-        my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-        my_ipmi = Ipmi(my_log, my_config, False)
+        mock_ipmi_exec = MagicMock()
+        mock_ipmi_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {value}")
+        mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
+        my_ipmi = Ipmi.__new__(Ipmi)
         with pytest.raises(Exception) as cm:
             my_ipmi.get_fan_mode()
         assert cm.type == exception, error
-        del my_td
 
     @pytest.mark.parametrize(
         "fm, fms, error",
@@ -468,22 +484,15 @@ class TestIpmi:
     )
     def test_get_fan_level_p1(self, mocker: MockerFixture, zone: int, expected_level: int, error: str) -> None:
         """Positive unit test for Ipmi.get_fan_level() method. It contains the following steps:
-        - create a shell script with the expected output
-        - mock print() function
-        - initialize a Config, Log, Ipmi classes
+        - mock _exec_ipmitool() function
+        - create an empty Ipmi class
         - ASSERT: if the get_fan_level() returns different from the expected value
-        - delete all instances
         """
-        my_td = TestData()
-        command = my_td.create_command_file(f'echo " {expected_level:x}"')
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
-        my_config = ConfigParser()
-        my_config[Ipmi.CS_IPMI] = {Ipmi.CV_IPMI_COMMAND: command}
-        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-        my_ipmi = Ipmi(my_log, my_config, False)
+        mock_ipmi_exec = MagicMock()
+        mock_ipmi_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {expected_level:x}")
+        mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
+        my_ipmi = Ipmi.__new__(Ipmi)
         assert my_ipmi.get_fan_level(zone) == expected_level, error
-        del my_td
 
     @pytest.mark.parametrize(
         "zone, level, error",
@@ -496,24 +505,20 @@ class TestIpmi:
             (200, "", "Ipmi.get_fan_level() 12"),
         ],
     )
-    def test_get_fan_level_n1(self, zone: int, level: str, error: str) -> None:
-        """Negative unit test for Ipmi.get_fan_mode() method. It contains the following steps:
-        - create a shell script providing invalid value
-        - initialize a Config, Log, Ipmi classes
+    def test_get_fan_level_n1(self, mocker: MockerFixture, zone: int, level: str, error: str) -> None:
+        """Negative unit test for Ipmi.get_fan_level() method. It contains the following steps:
+        - mock _exec_ipmitool() function with invalid output
+        - create an empty Ipmi class
         - call get_fan_level() function
         - ASSERT: if no ValueError exception raised (other exceptions are tested in .exec() method)
-        - delete all instances
         """
-        my_td = TestData()
-        command = my_td.create_command_file('echo " ' + level + '"')
-        my_config = ConfigParser()
-        my_config[Ipmi.CS_IPMI] = {Ipmi.CV_IPMI_COMMAND: command}
-        my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
-        my_ipmi = Ipmi(my_log, my_config, False)
+        mock_ipmi_exec = MagicMock()
+        mock_ipmi_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {level}")
+        mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
+        my_ipmi = Ipmi.__new__(Ipmi)
         with pytest.raises(Exception) as cm:
             my_ipmi.get_fan_level(zone)
         assert cm.type is ValueError, error
-        del my_td
 
     @pytest.mark.parametrize(
         "exception, error",
