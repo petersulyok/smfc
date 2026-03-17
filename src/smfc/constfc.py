@@ -60,7 +60,7 @@ class ConstFc(FanController):
         self.last_level = self.level
         self.deferred_apply = False
 
-        # Print configuration at DEBUG log level.
+        # Print configuration at CONFIG log level.
         if self.log.log_level >= Log.LOG_CONFIG:
             self.log.msg(Log.LOG_CONFIG, f"{self.name} fan controller was initialized with:")
             self.log.msg(Log.LOG_CONFIG, f"   ipmi zone = {self.ipmi_zone}")
