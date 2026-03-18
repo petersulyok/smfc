@@ -4,10 +4,15 @@ on:
   release:
     types: [published]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-n-publish:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
 
     steps:
       - uses: actions/checkout@v6
@@ -20,7 +25,6 @@ jobs:
       - name: Build a binary wheel and a source tarball
         run: uv build
       - name: Publish a Python distribution package to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
-          password: ${{ secrets.PYPI_SMFC_UPLOAD }}
           skip-existing: true
