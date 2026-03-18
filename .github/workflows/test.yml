@@ -50,4 +50,4 @@ jobs:
         run: |
           curl -Os https://cli.codecov.io/latest/linux/codecov
           chmod +x codecov
-          ./codecov upload-process -t ${{ secrets.CODECOV_TOKEN }} -f ./coverage.xml --fail-on-error -v
+          ./codecov --verbose upload-process -t ${{ secrets.CODECOV_TOKEN }} -f ./coverage.xml --fail-on-error
