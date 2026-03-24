@@ -8,14 +8,15 @@ on:
 jobs:
   build-deb:
     name: Build DEB package
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
+    container: debian:trixie
 
     steps:
       - uses: actions/checkout@v6
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential debhelper dh-python pybuild-plugin-pyproject python3-all python3-setuptools python3-build
+          apt-get update
+          apt-get install -y build-essential debhelper dh-python pybuild-plugin-pyproject python3-all python3-setuptools python3-build
       - name: Build DEB package
         run: dpkg-buildpackage -us -uc -b
       - name: Upload DEB package
