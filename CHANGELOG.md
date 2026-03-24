@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [5.0.0] - 2026.03.04
 
 ### New
-- Shared IPMI zones implemented, multiple fan controllers can share an IPMI zone. Big thanks for @fz6 for this [PR](https://github.com/petersulyok/smfc/pull/85) and the inspiration!
+- Shared IPMI zones implemented, multiple fan controllers can share an IPMI zone (inspired by PR [#89](https://github.com/petersulyok/smfc/pull/89) by @fz6)
 - New NVME fan controller added.
 - Python 3.14 support added.
 - `./bin/create_python_env.sh` added again (using `uv`) to setup the Python development environment.
