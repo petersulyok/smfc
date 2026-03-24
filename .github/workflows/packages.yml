@@ -15,7 +15,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y debhelper dh-python pybuild-plugin-pyproject python3-all python3-setuptools python3-build
+          sudo apt-get install -y build-essential debhelper dh-python pybuild-plugin-pyproject python3-all python3-setuptools python3-build
       - name: Build DEB package
         run: dpkg-buildpackage -us -uc -b
       - name: Upload DEB package
