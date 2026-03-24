@@ -18,12 +18,14 @@ jobs:
           apt-get update
           apt-get install -y build-essential debhelper dh-python pybuild-plugin-pyproject python3-all python3-setuptools python3-build
       - name: Build DEB package
-        run: dpkg-buildpackage -us -uc -b
+        run: |
+          dpkg-buildpackage -us -uc -b
+          cp ../smfc_*.deb .
       - name: Upload DEB package
         uses: actions/upload-artifact@v4
         with:
           name: deb-package
-          path: ../smfc_*.deb
+          path: smfc_*.deb
 
   build-rpm:
     name: Build RPM package
