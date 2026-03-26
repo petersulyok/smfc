@@ -196,7 +196,7 @@ class TestSmoke:
         my_td = TestData()
         atexit.register(exit_func)
         # Force mode initial fan mode 0 for setting new FULL mode during the test.
-        cmd_ipmi = my_td.create_command_file('echo "0"')
+        cmd_ipmi = my_td.create_ipmi_command()
         cmd_smart = my_td.create_smart_command()
         if cpu_num:
             my_td.create_cpu_data(cpu_num)
