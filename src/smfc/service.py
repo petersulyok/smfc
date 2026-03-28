@@ -45,7 +45,7 @@ class Service:
 
     def exit_func(self) -> None:
         """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
-        all fans back to rhw default speed 100% to avoid overheating while `smfc` is not running."""
+        all fans back to the default speed 100% to avoid overheating while `smfc` is not running."""
         # Configure fans.
         if hasattr(self, "ipmi"):
             self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
@@ -62,7 +62,7 @@ class Service:
               - if HD fan controller enabled: either `drivetemp` kernel module or `smartctl` command
               - if GPU fan controller enabled: `nvidia-smi` command
         Returns:
-             (str): error string (empty = no errors)
+            str: error string (empty = no errors)
         """
         path: str
         no_smartctl: bool = False

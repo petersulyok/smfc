@@ -42,6 +42,12 @@ class Platform(ABC):
     _exec: Callable[[List[str]], subprocess.CompletedProcess]
 
     def __init__(self, name: str, exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess]) -> None:
+        """Initialize the Platform with a name and an ipmitool execution callback.
+
+        Args:
+            name (str): platform name (e.g. from BMC product name or config)
+            exec_ipmitool (Callable): function that executes ipmitool commands
+        """
         self._name = name
         self._exec = exec_ipmitool
 

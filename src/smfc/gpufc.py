@@ -38,13 +38,13 @@ class GpuFc(FanController):
     CV_GPU_FC_NVIDIA_SMI_PATH: str = "nvidia_smi_path"
 
     def __init__(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
-        """Initialization of GPU fan controller class. Abort in case of configuration errors.
+        """Initialize the GPU fan controller class and raise exception in case of invalid configuration.
         Args:
             log (Log): reference to a Log class instance
             ipmi (Ipmi): reference to an Ipmi class instance
-            config (configparser.ConfigParser): reference to the configuration (default=None)
+            config (ConfigParser): reference to the configuration
         Raises:
-            ValueError: invalid parameters
+            ValueError: invalid configuration parameters
         """
         gpu_id_list: str    # String for gpu_device_ids=
         count: int          # GPU count.
@@ -84,9 +84,11 @@ class GpuFc(FanController):
             self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_NVIDIA_SMI_PATH} = {self.nvidia_smi_path}")
 
     def _exec_nvidia_smi(self, arguments: List[str]) -> subprocess.CompletedProcess:
-        """Execution of the `nvidia-smi` command.
+        """Execute the `nvidia-smi` command.
         Args:
-            arguments (List[str]): list of argument of `nvidia-smi` command
+            arguments (List[str]): list of arguments of `nvidia-smi` command
+        Returns:
+            subprocess.CompletedProcess: result of the executed subprocess
         Raises:
             FileNotFoundError: command not found
         """

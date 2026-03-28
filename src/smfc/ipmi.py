@@ -147,7 +147,7 @@ class Ipmi:
     def _exec_ipmitool(self, args: List[str]) -> subprocess.CompletedProcess:
         """Execute `ipmitool` command.
         Args:
-            args(List[str]): command line parameters
+            args (List[str]): command line parameters
         Returns:
             subprocess.CompletedProcess: result of the executed subprocess
         Raises:
@@ -197,7 +197,7 @@ class Ipmi:
         Args:
             mode (int): fan mode
         Returns:
-            str: name of the fan mode ('UNKNOWN', 'STANDARD', 'FULL', 'OPTIMAL', 'PUE' 'HEAVY IO')
+            str: name of the fan mode ('UNKNOWN', 'STANDARD', 'FULL', 'OPTIMAL', 'PUE', 'HEAVY IO')
         """
         fan_mode_name: str  # Name of the fan mode
 

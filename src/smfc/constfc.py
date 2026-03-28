@@ -30,7 +30,7 @@ class ConstFc(FanController):
         Args:
             log (Log): reference to a Log class instance
             ipmi (Ipmi): reference to an Ipmi class instance
-            config (ConfigParser): reference to the configuration (default=None)
+            config (ConfigParser): reference to the configuration
         Raises:
             ValueError: invalid configuration parameters
         """

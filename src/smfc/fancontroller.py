@@ -145,13 +145,14 @@ class FanController:
 
     @staticmethod
     def get_hwmon_path(udevc: Context, parent_dev: Device) -> str:
-        """A helper function to get HWMON path of a given parent device's associated hwmon
+        """Get the HWMON path of a given parent device.
 
         Args:
             udevc (Context): pyudev Context
             parent_dev (Device): parent device
+
         Returns:
-            str: path for a HWMON device
+            str: path for a HWMON device (empty string if not found)
         """
         try:
             [hwmon_device] = udevc.list_devices(subsystem="hwmon", parent=parent_dev)
@@ -161,7 +162,14 @@ class FanController:
         return (os.path.join(hwmon_device.sys_path, "temp1_input") if hwmon_device is not None else "")
 
     def _get_nth_temp(self, index: int) -> float:
-        """Get the temperature of the 'nth' element in the hwmon list. This is an empty implementation."""
+        """Get the temperature of the nth element in the hwmon list. Must be overridden by child classes.
+
+        Args:
+            index (int): index in hwmon list
+
+        Returns:
+            float: temperature value (C)
+        """
 
     def get_1_temp(self) -> float:
         """Get a single temperature of a controlled entity in the IPMI zone.
@@ -185,7 +193,7 @@ class FanController:
             minimum = min(self._get_nth_temp(i), minimum)
         return minimum
 
-    def get_avg_temp(self):
+    def get_avg_temp(self) -> float:
         """Get the average temperature of the controlled entities in the IPMI zone.
 
         Returns:

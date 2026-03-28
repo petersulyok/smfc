@@ -32,16 +32,16 @@ class NvmeFc(FanController):
     CV_NVME_FC_NVME_NAMES: str = "nvme_names"
 
     def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
-        """Initialization of the NvmeFc class. Abort in case of configuration errors.
+        """Initialize the NVME fan controller class and raise exception in case of invalid configuration.
 
         Args:
             log (Log): reference to a Log class instance
             udevc (Context): reference to an udev database connection (instance of Context from pyudev)
             ipmi (Ipmi): reference to an Ipmi class instance
-            config (configparser.ConfigParser): reference to the configuration
+            config (ConfigParser): reference to the configuration
 
         Raises:
-            ValueError: Parameter `nvme_names=` is not specified in the configuration
+            ValueError: invalid configuration parameters (e.g. missing nvme_names)
         """
         nvme_names: str  # String for nvme_names=
         count: int  # NVMe count.

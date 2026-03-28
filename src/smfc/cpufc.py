@@ -32,7 +32,7 @@ class CpuFc(FanController):
             log (Log): reference to a Log class instance
             udevc (Context): reference to an udev database connection (instance of Context from pyudev)
             ipmi (Ipmi): reference to an Ipmi class instance
-            config (ConfigParser): reference to the configuration (default=None)
+            config (ConfigParser): reference to the configuration
         Raises:
             ValueError: multiple hwmon devices reported, one expected
             RuntimeError: No HWMON device found for CPU(s)

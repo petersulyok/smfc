@@ -46,16 +46,17 @@ class HdFc(FanController):
     CV_HD_FC_STANDBY_HD_LIMIT: str = "standby_hd_limit"
 
     def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
-        """Initialization of HdFc class. Abort in case of configuration errors.
+        """Initialize the HD fan controller class and raise exception in case of invalid configuration.
 
         Args:
             log (Log): reference to a Log class instance
             udevc (Context): reference to an udev database connection (instance of Context from pyudev)
             ipmi (Ipmi): reference to an Ipmi class instance
-            config (configparser.ConfigParser): reference to the configuration (default=None)
+            config (ConfigParser): reference to the configuration
+            sudo (bool): sudo flag
 
         Raises:
-            ValueError: Parameter `hd_names=` is not specified in the configuration
+            ValueError: invalid configuration parameters (e.g. missing hd_names, NVMe drives specified)
         """
         hd_names: str   # String for hd_names=
         count: int      # HDD count.
@@ -138,14 +139,16 @@ class HdFc(FanController):
                 self.log.msg(Log.LOG_CONFIG, "   Standby guard is disabled")
 
     def callback_func(self) -> None:
-        """Call-back function execute standby guard."""
+        """Call-back function to execute standby guard."""
         if self.standby_guard_enabled:
             self.run_standby_guard()
 
     def _exec_smartctl(self, arguments: List[str]) -> subprocess.CompletedProcess:
-        """Execution of the `smartctl` command.
+        """Execute the `smartctl` command.
         Args:
-            arguments (List[str]): list of argument of `smartctl` command
+            arguments (List[str]): list of arguments of `smartctl` command
+        Returns:
+            subprocess.CompletedProcess: result of the executed subprocess
         Raises:
             FileNotFoundError: command not found
             RuntimeError: sudo error
