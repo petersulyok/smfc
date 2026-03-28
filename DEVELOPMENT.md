@@ -203,14 +203,18 @@ The project implemented the following GitHub workflows:
 ## Creation of a new GitHub release
 Follow these steps to create a new release:
 
-* Change the version number in `pyproject.toml` and `./doc/smfc.1` files
+* Change the version number in the following files:
+  * `pyproject.toml` — Python package version
+  * `./doc/smfc.1` — man page version
+  * `smfc.spec` — RPM `Version:` field, and add a new `%changelog` entry
+  * `debian/changelog` — prepend a new entry with the new version
 * Run `uv sync` for updating version number in `uv.lock` file
 * Commit all changes
 * Run unit tests with `pytest`, and correct all errors
 * Run linters `pylint` and `ruff`, and correct all warnings
 * Update CHANGELOG.md with the new release information
 * Commit all changes and test again
-* Create a new release on GitHub with the same version number, and the new package will be published on PyPI automatically
+* Create a new release on GitHub with the same version number, and the new package will be published on PyPI automatically. DEB and RPM packages will be built automatically by the `packages.yml` workflow.
 * Build new images for docker and upload them
 
 ## Building and uploading of Docker images
