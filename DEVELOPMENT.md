@@ -203,12 +203,9 @@ The project implemented the following GitHub workflows:
 ## Creation of a new GitHub release
 Follow these steps to create a new release:
 
-* Change the version number in the following files:
-  * `pyproject.toml` — Python package version
-  * `./doc/smfc.1` — man page version
-  * `smfc.spec` — RPM `Version:` field, and add a new `%changelog` entry
-  * `debian/changelog` — prepend a new entry with the new version
-* Run `uv sync` for updating version number in `uv.lock` file
+* Run `./bin/update_version_number.sh X.Y.Z` to update the version number in all release-specific files
+  (`pyproject.toml`, `doc/smfc.1`, `smfc.spec`, `debian/changelog`, `uv.lock`)
+* Update the changelog entries in `smfc.spec` and `debian/changelog` with the actual release notes
 * Commit all changes
 * Run unit tests with `pytest`, and correct all errors
 * Run linters `pylint` and `ruff`, and correct all warnings
