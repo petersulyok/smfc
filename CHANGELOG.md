@@ -5,19 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [5.1.0] - 2026.03.17
+## [5.1.0] - 2026.03.28
 
 ### New
 - BMC information (device ID, firmware revision, manufacturer, product info) is retrieved and logged during IPMI initialization.
-- DEB and RPM package creation added with GitHub workflow for automated builds.
+- Platform abstraction implemented to support multiple Super Micro motherboards with different IPMI raw commands (PR #97 by @samuel-emrys merged).
+New `[Ipmi] platform_name=` configuration parameter added (values: `auto`, `generic`, `X10QBi`).
+- DEB and RPM package creation added. See PACKAGES.md for more details. GitHub workflow will create DEB and RPM packages for new releases. 
 
 ### Changed
-- `RuntimeError` is now handled during IPMI initialization in the service layer.
+- Docstrings consistency check and update across source and test files.
+- Docker files updated to Debian 13 (slim).
+- @fz6 added to contributors (for shared IPMI zones work in PR #89).
 - Documentation updated for DEB/RPM packaging, hard disk and Super Micro compatibility.
 
 ### Fixed
 - Inconsistent log level references in comments (`DEBUG` vs `CONFIG`) corrected in `constfc.py` and `fancontroller.py`.
 - `openipmi.service` target removed from `smfc.service`.
+- Smoketest execution fixed.
 
 
 ## [5.0.0] - 2026.03.04
