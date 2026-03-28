@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        5.1.1
+Version:        5.1.2
 Release:        1%{?dist}
 Summary:        Super Micro Fan Control for Linux
 License:        GPL-3.0-only
@@ -94,6 +94,15 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Sat Mar 28 2026 Peter Sulyok <peter@sulyok.net> - 5.1.2-1
+- New ./bin/update_version_number.sh script created
+- DEB and RPM artifact names configured correctly
+- Release process updated in DEVELOPMENT.md
+
+* Sat Mar 28 2026 Peter Sulyok <peter@sulyok.net> - 5.1.1-1
+- DEB and RPM package creation: version numbers updated, RPM GitHub workflow fixed
+- Release process updated in DEVELOPMENT.md
+
 * Sat Mar 28 2026 Peter Sulyok <peter@sulyok.net> - 5.1.0-1
 - Platform abstraction for multiple Super Micro motherboards (PR #97)
 - New platform_name= configuration parameter (auto, generic, X10QBi)
