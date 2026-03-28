@@ -7,7 +7,7 @@ import subprocess
 from typing import List
 import pytest
 from mock import MagicMock, call
-from smfc.platform import FanMode, GenericPlatform, X10QBi, create_platform
+from smfc.platform import FanMode, GenericPlatform, Platform, X10QBi, create_platform
 
 
 class TestX10QBi:
@@ -255,9 +255,20 @@ class TestCreatePlatform:
         assert isinstance(platform, X10QBi)
         assert platform.name == "X10QBi"
 
-    def test_create_generic(self) -> None:
+    def test_create_generic_explicit(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
-        - call create_platform() with an unknown platform name
+        - call create_platform() with 'generic' platform name
+        - ASSERT: if the returned platform is not a GenericPlatform instance
+        - ASSERT: if the platform name is 'generic'
+        """
+        mock_exec = MagicMock()
+        platform = create_platform(Platform.PLATFORM_GENERIC, mock_exec)
+        assert isinstance(platform, GenericPlatform)
+        assert platform.name == Platform.PLATFORM_GENERIC
+
+    def test_create_generic_fallback(self) -> None:
+        """Positive unit test for create_platform() function. It contains the following steps:
+        - call create_platform() with an unknown platform name (BMC product name)
         - ASSERT: if the returned platform is not a GenericPlatform instance
         - ASSERT: if the platform name is different from expected
         """

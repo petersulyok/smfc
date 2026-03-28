@@ -8,7 +8,7 @@ import time
 from configparser import ConfigParser
 from typing import List
 from smfc.log import Log
-from smfc.platform import Platform, FanMode, create_platform
+from smfc.platform import FanMode, Platform, create_platform
 
 
 class Ipmi:
@@ -122,6 +122,14 @@ class Ipmi:
         except (KeyError, ValueError, IndexError) as e:
             raise RuntimeError(f"Cannot parse BMC info: {e}") from e
 
+        # Initialize platform-specific fan control.
+        self.platform_name = config[Ipmi.CS_IPMI].get(Ipmi.CV_IPMI_PLATFORM_NAME, fallback=Platform.PLATFORM_AUTO)
+        if self.platform_name == Platform.PLATFORM_AUTO:
+            self.platform_name = self.bmc_product_name
+        self.platform = create_platform(self.platform_name, self._exec_ipmitool)
+        self.log.msg(Log.LOG_CONFIG, f"   platform = {self.platform.name} ({type(self.platform).__name__})")
+        self.platform.set_fan_manual_mode()
+
         # Print the configuration out at CONFIG log level.
         if self.log.log_level >= Log.LOG_CONFIG:
             self.log.msg(Log.LOG_CONFIG, "Ipmi module was initialized with:")
@@ -129,20 +137,14 @@ class Ipmi:
             self.log.msg(Log.LOG_CONFIG, f"   {Ipmi.CV_IPMI_FAN_MODE_DELAY} = {self.fan_mode_delay}")
             self.log.msg(Log.LOG_CONFIG, f"   {Ipmi.CV_IPMI_FAN_LEVEL_DELAY} = {self.fan_level_delay}")
             self.log.msg(Log.LOG_CONFIG, f"   {Ipmi.CV_IPMI_REMOTE_PARAMETERS} = {self.remote_parameters}")
+            self.log.msg(Log.LOG_CONFIG, f"   {Ipmi.CV_IPMI_PLATFORM_NAME} = {self.platform.name} "
+                                         f"({type(self.platform).__name__})")
             self.log.msg(Log.LOG_CONFIG, "BMC information:")
-            mfr_msg = f"   manufacturer name and id = {self.bmc_manufacturer_name} ({self.bmc_manufacturer_id})"
-            self.log.msg(Log.LOG_CONFIG, mfr_msg)
+            self.log.msg(Log.LOG_CONFIG, f"   manufacturer name and id = {self.bmc_manufacturer_name} "
+                                         f"({self.bmc_manufacturer_id})")
             self.log.msg(Log.LOG_CONFIG, f"   product name and id = {self.bmc_product_name} ({self.bmc_product_id})")
             self.log.msg(Log.LOG_CONFIG, f"   IPMI version = {self.bmc_ipmi_version}")
             self.log.msg(Log.LOG_CONFIG, f"   firmware revision = {self.bmc_firmware_rev}")
-
-        # Initialize platform-specific fan control.
-        self.platform_name = config[Ipmi.CS_IPMI].get(Ipmi.CV_IPMI_PLATFORM_NAME, fallback="")
-        if not self.platform_name:
-            self.platform_name = self.bmc_product_name
-        self.platform = create_platform(self.platform_name, self._exec_ipmitool)
-        self.log.msg(Log.LOG_CONFIG, f"   platform = {self.platform.name} ({type(self.platform).__name__})")
-        self.platform.set_fan_manual_mode()
 
     def _exec_ipmitool(self, args: List[str]) -> subprocess.CompletedProcess:
         """Execute `ipmitool` command.

@@ -38,6 +38,9 @@ class Platform(ABC):
     """Abstract base class for platforms with different ipmitool raw functionality.
     Concrete subclasses implement platform-specific fan control commands.
     """
+    PLATFORM_AUTO: str = "auto"
+    PLATFORM_GENERIC: str = "generic"
+
     _name: str
     _exec: Callable[[List[str]], subprocess.CompletedProcess]
 
@@ -239,12 +242,16 @@ class X10QBi(Platform):
 def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess]) -> Platform:
     """Factory method to create the appropriate Platform object for the given platform name.
     Args:
-        platform_name (str): The platform name (e.g. from BMC product name or config)
+        platform_name (str): The platform name, one of:
+            - 'generic': force the GenericPlatform (X10-X13/H10-H13)
+            - 'X10QBi': force the X10QBi platform
+            - any other string: looked up in the platform registry, falls back to GenericPlatform
         exec_ipmitool (Callable): Function that executes ipmitool commands
     Returns:
         Platform: The platform-specific implementation (defaults to GenericPlatform)
     """
     platform_factory = {
+        Platform.PLATFORM_GENERIC: GenericPlatform,
         "X10QBi": X10QBi,
     }
     return platform_factory.get(platform_name, GenericPlatform)(platform_name, exec_ipmitool)
