@@ -444,7 +444,24 @@ curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main
 
 The script will remove the installed `smfc` files and the python package.
 
-#### 9.2. Docker installation
+#### 9.2. DEB and RPM package installation
+Pre-built DEB and RPM packages are available as build artifacts from the [GitHub packages workflow](https://github.com/petersulyok/smfc/actions/workflows/packages.yml) on each release. You can also build them locally from the repository.
+
+For Debian/Ubuntu systems:
+
+```
+sudo dpkg -i smfc_*.deb
+```
+
+For Fedora/RHEL systems:
+
+```
+sudo dnf install smfc-*.rpm
+```
+
+The packages install the same files as the manual installation (service unit, configuration, man page, and sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](PACKAGES.md) for build instructions and compatible distributions.
+
+#### 9.3. Docker installation
 `smfc` is also available as a docker image, see more details in [Docker.md](../docker/Docker.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting. 
 
 ### 10. Configuration file
