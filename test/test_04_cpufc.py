@@ -87,7 +87,7 @@ class TestCpuFc:
 
     @pytest.mark.parametrize("error", [("CpuFc.__init__() 10")])
     def test_init_p2(self, mocker: MockerFixture, error: str):
-        """Positive unit test CpuFc.__init__() method. It contains the following steps:
+        """Positive unit test for CpuFc.__init__() method. It contains the following steps:
         - mock print(), pyudev.Context.list_devices(), smfc.FanController.get_hwmon_path() functions
         - initialize a Config, Log, Ipmi, and CpuFc classes
         - ASSERT: if the CpuFc class attributes contain different from default configuration values

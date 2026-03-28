@@ -181,7 +181,8 @@ class TestFanController:
     )
     def test_get_xxx_temp(self, mocker: MockerFixture, count: int, code: int, temps: List[float], expected: float,
                           error: str):
-        """Primitive positive test function. It contains the following steps:
+        """Positive unit test for FanController.get_1_temp(), get_min_temp(), get_avg_temp(),
+        get_max_temp() methods. It contains the following steps:
         - mock FanController._get_nth_temp() function
         - initialize an empty FanController class
         - ASSERT: if get_xxx_temp() functions return different from expected temperature
@@ -245,11 +246,10 @@ class TestFanController:
     )
     def test_run(self, mocker: MockerFixture, steps: int, sensitivity: float, polling: float, min_temp: float,
                  max_temp: float, min_level: int, max_level, temp: float, level: int, error: str,) -> None:
-        """Primitive positive test function. It contains the following steps:
+        """Positive unit test for FanController.run() method. It contains the following steps:
         - mock print() and FanController._get_nth_temp() functions
         - initialize an empty FanController class
-        - ASSERT: if the run() generates different fan level based on the input zone temperature
-        - delete the instances
+        - ASSERT: if run() generates different fan level based on the input zone temperature
         """
 
         # Test data set 1 for a generic configuration (dynamic mapping):

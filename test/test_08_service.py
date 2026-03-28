@@ -122,7 +122,7 @@ class TestService:
 
     @pytest.mark.parametrize("error", ["Service.check_dependencies() 9"])
     def test_check_dependecies_n(self, mocker: MockerFixture, error: str):
-        """Negative unit test fot Service.check_dependencies() method. It contains the following steps:
+        """Negative unit test for Service.check_dependencies() method. It contains the following steps:
         - mock print() and builtins.open() functions
         - execute Service.check_dependencies()
         - ASSERT: if it didn't return the specific error message

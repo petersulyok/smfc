@@ -22,7 +22,12 @@ class TestX10QBi:
         ],
     )
     def test_get_fan_mode_p(self, mode: int, error: str) -> None:
-        """Positive test for X10QBi.get_fan_mode()."""
+        """Positive unit test for X10QBi.get_fan_mode() method. It contains the following steps:
+        - create an X10QBi instance with a mock exec function
+        - call get_fan_mode()
+        - ASSERT: if the returned fan mode is different from the expected value
+        - ASSERT: if the mock exec was called with different parameters than expected
+        """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {mode:02}")
         platform = X10QBi("X10QBi", mock_exec)
@@ -39,7 +44,12 @@ class TestX10QBi:
         ],
     )
     def test_get_fan_level_p(self, zone: int, hex_output: str, expected_level: int, error: str) -> None:
-        """Positive test for X10QBi.get_fan_level() with valid zones (16-19)."""
+        """Positive unit test for X10QBi.get_fan_level() method. It contains the following steps:
+        - create an X10QBi instance with a mock exec function
+        - call get_fan_level() with valid zones (16-19)
+        - ASSERT: if the returned fan level is different from the expected value
+        - ASSERT: if the mock exec was called with different parameters than expected
+        """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=hex_output)
         platform = X10QBi("X10QBi", mock_exec)
@@ -56,7 +66,11 @@ class TestX10QBi:
         ],
     )
     def test_get_fan_level_n(self, zone: int, error: str) -> None:
-        """Negative test for X10QBi.get_fan_level() with invalid zones."""
+        """Negative unit test for X10QBi.get_fan_level() method. It contains the following steps:
+        - create an X10QBi instance with a mock exec function
+        - call get_fan_level() with invalid zones (outside 16-19)
+        - ASSERT: if ValueError exception was not raised
+        """
         mock_exec = MagicMock()
         platform = X10QBi("X10QBi", mock_exec)
         with pytest.raises(ValueError) as cm:
@@ -64,7 +78,12 @@ class TestX10QBi:
         assert cm.type is ValueError, error
 
     def test_set_fan_manual_mode(self) -> None:
-        """Test X10QBi.set_fan_manual_mode() makes 11 IPMI calls (10 TMFR + 1 FOMC)."""
+        """Positive unit test for X10QBi.set_fan_manual_mode() method. It contains the following steps:
+        - create an X10QBi instance with a mock exec function
+        - call set_fan_manual_mode()
+        - ASSERT: if the mock exec was not called 11 times (10 TMFR + 1 FOMC)
+        - ASSERT: if the mock exec was called with different parameters than expected
+        """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
         platform = X10QBi("X10QBi", mock_exec)
@@ -94,7 +113,12 @@ class TestX10QBi:
         ],
     )
     def test_set_fan_mode_p(self, mode: int, error: str) -> None:
-        """Positive test for X10QBi.set_fan_mode() with valid modes."""
+        """Positive unit test for X10QBi.set_fan_mode() method. It contains the following steps:
+        - create an X10QBi instance with a mock exec function
+        - call set_fan_mode() with valid modes (STANDARD, FULL, HEAVY_IO)
+        - ASSERT: if the mock exec was called with different parameters than expected
+        - ASSERT: if the mock exec was called more than once
+        """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
         platform = X10QBi("X10QBi", mock_exec)
@@ -112,7 +136,11 @@ class TestX10QBi:
         ],
     )
     def test_set_fan_mode_n(self, mode: int, error: str) -> None:
-        """Negative test for X10QBi.set_fan_mode() with invalid modes (OPTIMAL, PUE not supported)."""
+        """Negative unit test for X10QBi.set_fan_mode() method. It contains the following steps:
+        - create an X10QBi instance with a mock exec function
+        - call set_fan_mode() with invalid modes (OPTIMAL, PUE not supported)
+        - ASSERT: if ValueError exception was not raised
+        """
         mock_exec = MagicMock()
         platform = X10QBi("X10QBi", mock_exec)
         with pytest.raises(ValueError) as cm:
@@ -129,7 +157,12 @@ class TestX10QBi:
         ],
     )
     def test_set_fan_level_p(self, zone: int, level: int, expected_normalised: int, error: str) -> None:
-        """Positive test for X10QBi.set_fan_level() with level normalization (0-100 -> 0-255)."""
+        """Positive unit test for X10QBi.set_fan_level() method. It contains the following steps:
+        - create an X10QBi instance with a mock exec function
+        - call set_fan_level() with valid zones and levels
+        - ASSERT: if the mock exec call count is different from expected (11 manual mode + 1 set level)
+        - ASSERT: if the last mock exec call has different parameters than expected (normalised level 0-255)
+        """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
         platform = X10QBi("X10QBi", mock_exec)
@@ -150,7 +183,11 @@ class TestX10QBi:
         ],
     )
     def test_set_fan_level_n(self, zone: int, level: int, error: str) -> None:
-        """Negative test for X10QBi.set_fan_level() with invalid parameters."""
+        """Negative unit test for X10QBi.set_fan_level() method. It contains the following steps:
+        - create an X10QBi instance with a mock exec function
+        - call set_fan_level() with invalid zone or level parameters
+        - ASSERT: if ValueError exception was not raised
+        """
         mock_exec = MagicMock()
         platform = X10QBi("X10QBi", mock_exec)
         with pytest.raises(ValueError) as cm:
@@ -167,7 +204,12 @@ class TestX10QBi:
     )
     def test_set_multiple_fan_levels_p(self, zones: List[int], level: int, expected_normalised: int,
                                        error: str) -> None:
-        """Positive test for X10QBi.set_multiple_fan_levels() with level normalization."""
+        """Positive unit test for X10QBi.set_multiple_fan_levels() method. It contains the following steps:
+        - create an X10QBi instance with a mock exec function
+        - call set_multiple_fan_levels() with valid zones and level
+        - ASSERT: if the mock exec call count is different from expected (11 manual mode + N zones)
+        - ASSERT: if the mock exec zone-setting calls have different parameters than expected
+        """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
         platform = X10QBi("X10QBi", mock_exec)
@@ -187,7 +229,11 @@ class TestX10QBi:
         ],
     )
     def test_set_multiple_fan_levels_n(self, zones: List[int], level: int, error: str) -> None:
-        """Negative test for X10QBi.set_multiple_fan_levels() with invalid parameters."""
+        """Negative unit test for X10QBi.set_multiple_fan_levels() method. It contains the following steps:
+        - create an X10QBi instance with a mock exec function
+        - call set_multiple_fan_levels() with invalid zone or level parameters
+        - ASSERT: if ValueError exception was not raised
+        """
         mock_exec = MagicMock()
         platform = X10QBi("X10QBi", mock_exec)
         with pytest.raises(ValueError) as cm:
@@ -199,14 +245,22 @@ class TestCreatePlatform:
     """Unit test class for create_platform() factory function."""
 
     def test_create_x10qbi(self) -> None:
-        """Test that create_platform returns X10QBi for 'X10QBi' name."""
+        """Positive unit test for create_platform() function. It contains the following steps:
+        - call create_platform() with 'X10QBi' platform name
+        - ASSERT: if the returned platform is not an X10QBi instance
+        - ASSERT: if the platform name is different from expected
+        """
         mock_exec = MagicMock()
         platform = create_platform("X10QBi", mock_exec)
         assert isinstance(platform, X10QBi)
         assert platform.name == "X10QBi"
 
     def test_create_generic(self) -> None:
-        """Test that create_platform returns GenericPlatform for unknown names."""
+        """Positive unit test for create_platform() function. It contains the following steps:
+        - call create_platform() with an unknown platform name
+        - ASSERT: if the returned platform is not a GenericPlatform instance
+        - ASSERT: if the platform name is different from expected
+        """
         mock_exec = MagicMock()
         platform = create_platform("X11SCH-LN4F", mock_exec)
         assert isinstance(platform, GenericPlatform)

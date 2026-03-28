@@ -372,11 +372,11 @@ class TestIpmi:
         ],
     )
     def test_set_fan_level_p1(self, mocker: MockerFixture, zone: int, level: int, error: str) -> None:
-        """Positive unit test function. It contains the following steps:
-        - mock print(), subprocess.run() functions
-        - initialize a Config, Log, Ipmi classes
-        - ASSERT: if set_fan_level() calls subprocess.run() command with other parameters than expected
-        - delete the instances
+        """Positive unit test for Ipmi.set_fan_level() method. It contains the following steps:
+        - mock Ipmi._exec_ipmitool() and time.sleep() functions
+        - create an empty Ipmi class
+        - ASSERT: if set_fan_level() calls Ipmi._exec_ipmitool() with other parameters than expected
+        - ASSERT: if set_fan_level() calls time.sleep() with other parameters than expected
         """
         mock_ipmi_exec = MagicMock()
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
@@ -428,11 +428,11 @@ class TestIpmi:
         ],
     )
     def test_set_multiple_fan_levels_p1(self, mocker: MockerFixture, zones: List[int], level: int, error: str) -> None:
-        """Positive unit test function. It contains the following steps:
-        - mock print(), subprocess.run() functions
-        - initialize a Config, Log, Ipmi classes
-        - ASSERT: if set_multiple_fan_levels() calls subprocess.run() command with other parameters than expected
-        - delete the instances
+        """Positive unit test for Ipmi.set_multiple_fan_levels() method. It contains the following steps:
+        - mock Ipmi._exec_ipmitool() and time.sleep() functions
+        - create an empty Ipmi class
+        - ASSERT: if set_multiple_fan_levels() calls Ipmi._exec_ipmitool() with other parameters than expected
+        - ASSERT: if set_multiple_fan_levels() calls time.sleep() with other parameters than expected
         """
         mock_ipmi_exec = MagicMock()
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
@@ -537,11 +537,10 @@ class TestIpmi:
     )
     def test_exceptions(self, exception: Any, error: str) -> None:
         """Negative unit test for Ipmi.get_fan_mode(), Ipmi.set_fan_mode(), Ipmi.set_fan_level(),
-        Ipmi.get_fan_level() methods. It contains the following steps:
-         - create a shell script providing invalid value
-         - initialize an empty Ipmi class
-         - call all functions above
-         - ASSERT: if the expected exception was not raised
+        Ipmi.set_multiple_fan_levels(), Ipmi.get_fan_level() methods. It contains the following steps:
+        - create an empty Ipmi class with a raising exec function
+        - call all functions above
+        - ASSERT: if the expected exception was not raised
         """
 
         def raising_exec(args: List[str]) -> subprocess.CompletedProcess:

@@ -13,7 +13,11 @@ class TestMain:
     """Unit test for smfc.main() function."""
 
     def test_main(self, mocker: MockerFixture) -> None:
-        """This is a unit test for function Service.main()."""
+        """Positive unit test for main() function. It contains the following steps:
+        - mock Service.run() function
+        - call main()
+        - ASSERT: if Service.run() was not called
+        """
         mock_service_run = MagicMock()
         mocker.patch("smfc.Service.run", mock_service_run)
         main()

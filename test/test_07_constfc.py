@@ -115,11 +115,11 @@ class TestConstFc:
         ],
     )
     def test_run_p(self, mocker: MockerFixture, ipmi_zone: str, read_level: int, level: int, error: str):
-        """Positive unit test for ConstFc.__init__() method. It contains the following steps:
-        - mock print() function
+        """Positive unit test for ConstFc.run() method. It contains the following steps:
+        - mock print(), Ipmi.get_fan_level(), Ipmi.set_fan_level() functions
         - initialize a Config, Log, Ipmi, and ConstFc classes
-        - call ConstFc.run() function
-        - ASSERT: if the number of Ipmi.get_fan_level() and Ipmi.set_fan_level() calls different from expected.
+        - call ConstFc.run()
+        - ASSERT: if the number of Ipmi.get_fan_level() and Ipmi.set_fan_level() calls different from expected
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -153,7 +153,12 @@ class TestConstFc:
         ],
     )
     def test_run_deferred(self, mocker: MockerFixture, ipmi_zone: str, level: int, error: str):
-        """Test that ConstFc.run() in deferred mode sets last_level but skips IPMI calls."""
+        """Positive unit test for ConstFc.run() method in deferred mode. It contains the following steps:
+        - mock print(), Ipmi.get_fan_level(), Ipmi.set_fan_level() functions
+        - initialize a Config, Log, Ipmi, and ConstFc classes
+        - call ConstFc.run() with deferred=True
+        - ASSERT: if last_level is not set or IPMI calls were made
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_getfanlevel = MagicMock()
