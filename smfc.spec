@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        5.0.0
+Version:        5.1.1
 Release:        1%{?dist}
 Summary:        Super Micro Fan Control for Linux
 License:        GPL-3.0-only
@@ -94,6 +94,12 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Sat Mar 28 2026 Peter Sulyok <peter@sulyok.net> - 5.1.0-1
+- Platform abstraction for multiple Super Micro motherboards (PR #97)
+- New platform_name= configuration parameter (auto, generic, X10QBi)
+- BMC information retrieved and logged during IPMI initialization
+- DEB and RPM package creation added
+
 * Wed Mar 04 2026 Peter Sulyok <peter@sulyok.net> - 5.0.0-1
 - Shared IPMI zones: multiple fan controllers can share an IPMI zone
 - New NVMe fan controller added
