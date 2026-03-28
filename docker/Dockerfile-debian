@@ -1,4 +1,4 @@
-FROM debian:12-slim
+FROM debian:13-slim
 ARG BUILD_IMAGE_VERSION
 LABEL org.opencontainers.image.version=${BUILD_IMAGE_VERSION}
 LABEL org.opencontainers.image.title="smfc"
