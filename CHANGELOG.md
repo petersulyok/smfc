@@ -8,8 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [5.1.1] - 2026.03.28
 
 ### Fixed
-- Version numbers updated in DEB and RPM package creation
-- RPM creation fixed
+- DEB and RPM package creation: version numbers updated, RPM GitHub workflow fixed
 - Release process updated in DEVELOPMENT.md
 
 ## [5.1.0] - 2026.03.28
