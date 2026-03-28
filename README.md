@@ -10,7 +10,7 @@ Super Micro fan control for Linux (home) servers.
 
 ## TL;DR
 
-This is a `systemd service` running on Linux and can control fans with the help of IPMI on Super Micro X10-X13/H10-H13 (and some X9) motherboards.
+This is a `systemd service` running on Linux that can control fans with the help of IPMI on Super Micro X10-X13/H10-H13 (and some X9) motherboards.
 
 ### 1. Prerequisites
  - a Super Micro motherboard with ASPEED AST2400/2500/2600 chip
@@ -30,16 +30,16 @@ This is a `systemd service` running on Linux and can control fans with the help 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`)
  4. Install `smfc` service (see [chapter 9.](https://github.com/petersulyok/smfc?tab=readme-ov-file#9-installation-and-uninstallation) for more details)
     or run `smfc` in docker (see more details in [Docker.md](docker/Docker.md))
- 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapters 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration-file) for more details).
+ 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapter 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration-file) for more details).
  6. Start `smfc` service (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc) for more details)
  7. Check results in system log
- 8. Leave a feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
+ 8. Leave feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
 
 Feel free to visit [Discussions](https://github.com/petersulyok/smfc/discussions) and raise your questions or share your experience on this project.
 
 ## Details
 ### 1. How does it work?
-This service was designed for Super Micro motherboards having IPMI functionality, implementing fan controllers controlling
+This service was designed for Super Micro motherboards with IPMI functionality. It implements fan controllers that control
 fan speed dynamically in one or more IPMI zones. The service operates the fans in IPMI FULL mode, where the fan rotation level
 can be adjusted with IPMI raw commands (read [more details here](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/)).
 
@@ -116,7 +116,7 @@ IPMI zone [0]: new level = 60% (CPU=45.0C)
 ```
 
 ### 2. User-defined control function
-Fan controllers are using user-defined control functions where a temperature interval is being mapped to a fan rotation level interval.
+Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval.
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/userdefined_control_function.png" align="center" width="500">
 
@@ -145,7 +145,7 @@ For the HD fan controller, an additional optional feature was implemented, calle
  - SATA hard disks are organized into a RAID array
  - the RAID array will go to standby mode recurrently
 
-This feature is monitoring the power state of SATA hard disks (with the help of the `smartctl`) and will put the whole array to standby mode if a few members are already stepped into that. With this feature, the situation can be avoided where the array is partially in standby mode while other members are still active.
+This feature monitors the power state of SATA hard disks (with the help of `smartctl`) and will put the whole array into standby mode if a few members have already stepped into that state. With this feature, the situation can be avoided where the array is partially in standby mode while other members are still active.
 SCSI disks are not compatible with this feature.
 
 ### 4. Hard disk compatibility
@@ -172,17 +172,37 @@ Some additional notes:
 
 
 ### 5. Super Micro compatibility
-Originally, this software was designed to work with Super Micro X10-X12/H10-H12 motherboards with a BMC chip (i.e. ASPEED AST2400/2500) and with IPMI functionality. Unfortunately, there are motherboards (e.g. X10QBi see [issue #69](https://github.com/petersulyok/smfc/issues/69)) that are not compatible with `smfc`.
-
-In case of X9 motherboards the compatibility is not guaranteed, it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employ a BMC chip). 
-
-The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
-
-Newer X13/H13 motherboards (with AST2600 chips) are compatible with `smfc` (see mode details in [issue #33](https://github.com/petersulyok/smfc/issues/33) about an X13SAE-F motherboard). The only difference is in the implementation of thresholds, AST2600 chip implements only `Lower Critical` threshold, so setting up thresholds is different.  
-
-In case of the newer X14/H14 motherboards the compatibility is open. 
-
 Feel free to create a short feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55) on your compatibility experience.
+
+#### 5.1 Super Micro X10-X13/H10-H13 motherboards
+Originally, this software was designed to work with Super Micro X10-X12/H10-H12 motherboards with IPMI functionality,
+where the BMC chip is ASPEED AST2400 or AST2500. Most motherboards in this set are compatible with the Super Micro IPMI
+raw commands used here and are supported out of the box.
+
+Newer X13/H13 motherboards with AST2600 chips are also compatible with `smfc` (see more details in [issue #33](https://github.com/petersulyok/smfc/issues/33) about
+an X13SAE-F motherboard). The only difference is in the implementation of thresholds: the AST2600 chip implements only the
+`Lower Critical` threshold, so setting up thresholds is different.
+
+Some motherboards require platform-specific IPMI raw commands for fan control. `smfc` implements a **platform abstraction**
+(since `smfc v5.1.0`) that handles these differences. The platform is auto-detected from BMC product name, or can be overridden with the
+`platform_name=` configuration parameter (see [chapter 10.2](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#102-sample-configuration-file)). Currently supported platforms:
+
+| `platform_name=` parameter | Platform                                     | Notes                                                                                            |
+|----------------------------|----------------------------------------------|--------------------------------------------------------------------------------------------------|
+| `auto`                     | automatic discovery based on BMC information | Default behaviour                                                                                |
+| `generic`                  | Generic X10-X13/H10-H13 Super Micro boards   | Uses standard Super Micro IPMI raw commands                                                      |
+| `X10QBi`                   | Super Micro X10QBi motherboard               | Nuvoton NCT7904D fan controller, 4 fan zones (0x10-0x13), see [issue #69](https://github.com/petersulyok/smfc/issues/69) and [PR #97](https://github.com/petersulyok/smfc/pull/97) |
+
+With this abstraction layer, new Super Micro motherboards can also be added to `smfc` with a good understanding of their IPMI raw commands and fan control logic.
+
+#### 5.2 Super Micro X14/H14 motherboards
+For the newer X14/H14 motherboards, compatibility is still being investigated. There are some issues (#98) and discussions (#92, #106) about this to get better understanding.
+
+#### 5.3 Super Micro X9 motherboards
+For X9 motherboards, compatibility is not guaranteed; it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employ a BMC chip).
+
+#### 5.4 Super Micro X8 motherboards
+The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
 
 
 ### 6. IPMI fan control and sensor thresholds
@@ -203,7 +223,7 @@ but newer Super Micro X13 motherboards (with AST2600 BMC chip) have only one sen
 Lower Critical  
 ```
 
-Originally, this chapter was created for Super Micro X10-X11 motherboards, but can be easily adopted to X13 motherboards as well (see more details in #33).
+Originally, this chapter was created for Super Micro X10-X11 motherboards, but can be easily adapted to X13 motherboards as well (see more details in #33).
 
 Like many other utilities (created by NAS and home server community), `smfc` also uses **IPMI FULL mode** for fan control, where all fans in the zone:
 
@@ -214,7 +234,7 @@ Like many other utilities (created by NAS and home server community), `smfc` als
 Please also consider the fact that **fans are mechanical devices, their rotational speed is not stable** (it could be fluctuating). To avoid IPMI's assertion mechanism described here please follow the next steps: 
 
   1. Per fan: check the minimum and maximum rotational speeds of your fan on its vendor website
-  2. Per fan: configure proper IMPI sensor thresholds adjusted to the fan speed interval
+  2. Per fan: configure proper IPMI sensor thresholds adjusted to the fan speed interval
   3. Per zone: define safe `min_level`/`max_level` values for `smfc` respecting the variance of all fans in the IPMI zone (it could take several iterations and adjustments) 
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/ipmi_sensor_threshold.png" align="center" width="600">
@@ -229,7 +249,7 @@ Lower Non-Critical = 200 rpm
 Lower Critical = 100 rpm
 Lower Non-Recoverable = 0 rpm
 Max RPM = 1500 rpm
-Min PRM = 300 rpm
+Min RPM = 300 rpm
 max_level = 100 (i.e. 1500 rpm)
 min_level = 35 (i.e. 500 rpm)
 ```
@@ -260,7 +280,7 @@ Notes:
     root@home:~# ipmitool sensor thresh FAN1 lower 0 100 200
     root@home:~# ipmitool sensor thresh FAN1 upper 1600 1700 1800
     ```
-  - You can also edit and run `ipmi/set_ipmi_treshold.sh` to configure all IPMI sensor thresholds
+  - You can also edit and run `ipmi/set_ipmi_threshold.sh` to configure all IPMI sensor thresholds
   - If you install new BMC firmware on your Super Micro motherboard, you have to configure IPMI thresholds again
   - If you do not see fans when executing `ipmitool sensors`, you may want to reset the BMC to factory default using the Web UI or using `ipmitool mc reset cold`
   - Noctua specifies the variance of minimum and maximum fan rotational speeds (e.g. see the [specification of Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm/specification)). For example:
@@ -324,7 +344,7 @@ Important notes:
  2. In file `/etc/hdparm.conf` you must define HD names in `/dev/disk/by-id/...` form to avoid inconsistency.
 
 ### 8. Kernel modules
-One or more of following Linux kernel modules needs to be loaded for `smfc`:
+One or more of the following Linux kernel modules need to be loaded for `smfc`:
 
  - [`coretemp`](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html): temperature report for Intel(R) CPUs
  - [`k10temp`](https://docs.kernel.org/hwmon/k10temp.html): temperature report for AMD(R) CPUs
@@ -337,7 +357,7 @@ Notes:
 
 
 ### 9. Installation and uninstallation
-For the installation and uninstallation, you need root privilege. There are several ways to install and uninstall `smfc`, this chapter will show them.
+For the installation and uninstallation, you need root privileges. There are several ways to install and uninstall `smfc`, this chapter will show them.
 
 #### 9.1. Manual installation and uninstallation
 There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` in two different ways:
@@ -373,7 +393,7 @@ Suse Leap 15, Proxmox 9, and Arch Linux)
 - Installation process will stop for any error
 - The default installation method is the remote installation
 - Using `--local` parameter will do installation locally, from the current folder (i.e. GitHub repository needs to be cloned)
-- The default action is following:
+- The default action is the following:
   - the existing previous configuration file will be renamed
   - a new configuration file will be installed
   - `hd_names=` configuration parameter will be pre-filled with the list of existing hard disks for user's convenience
@@ -425,7 +445,7 @@ curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main
 The script will remove the installed `smfc` files and the python package.
 
 #### 9.2. Docker installation
-`smfc` is also available as a docker image, see more details in [Docker.md](../docker/Docker.md). In this case, your job is only to provide your configuration file on host computer, `smfc` will be executed automatically when the container is starting. 
+`smfc` is also available as a docker image, see more details in [Docker.md](../docker/Docker.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting. 
 
 ### 10. Configuration file
 After successful installation, create/edit your new configuration file. If you just upgraded to a new `smfc` version, you can preserve the existing one. 
@@ -461,7 +481,12 @@ fan_mode_delay=10
 fan_level_delay=2
 # IPMI parameters for remote access (string, default='')
 #remote_parameters=-U USERNAME -P PASSWORD -H HOST
-
+# Super Micro platform (string, default='auto')
+# Potential values:
+#  auto    - automatic discovery based on BMC information
+#  generic - Generic X10-X13/H10-H13 Super Micro platform
+#  X10QBi  - Super Micro X10QBi platform
+platform_name=auto
 
 # CPU fan controller: works based on CPU(s) temperature.
 [CPU]
@@ -595,15 +620,15 @@ level=50
 
 Important notes:
 1. `[Ipmi] remote_parameters=-U USERNAME -P PASSWORD -H HOST` parameter can be used for remote access for the IPMI interface. It could be useful for a VM setup where the hard disks are configured with PCI passthrough (e.g. a TrueNAS running in a VM on Proxmox), but IPMI needs to be accessed "remotely". Please note that the HOST is the BMC network address (not the VM host address).
-2. `[HD] hd_names=` is a compulsory parameter for HD fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent could be changed after a reboot!
-3. `[NVME] nvme_names=` is a compulsory parameter for NVME fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/nvme0n1` form is not persistent could be changed after a reboot!
+2. `[HD] hd_names=` is a compulsory parameter for HD fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent and could change after a reboot!
+3. `[NVME] nvme_names=` is a compulsory parameter for NVME fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/nvme0n1` form is not persistent and could change after a reboot!
 4. `[CPU] / [HD] / [NVME] min_level= / max_level=` should be configured in alignment with threshold configuration (see more details in [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)). Be patient, several refinement cycles could happen.
 5. Several sample configuration files are provided in `./config/samples` folder.
 6. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
 
 
 ### 11. How to run `smfc`?
-After a manual installation `smfc` can be started and stopped as a standard `systemd` service. Remember to reload `systemd` configuration after a new installation or if you changed the service definition file:
+After manual installation, `smfc` can be started and stopped as a standard `systemd` service. Remember to reload `systemd` configuration after a new installation or if you changed the service definition file:
 
 ```
 systemctl daemon-reload
@@ -647,7 +672,7 @@ options:
 
 `smfc` command-line options can be specified in `/etc/default/smfc` file if you run `smfc` as a systemd service. 
 
-If you are testing your configuration, you can start `smfc.py` directly in a terminal (logging to the standard output on debug log level):
+If you are testing your configuration, you can start `smfc` directly in a terminal (logging to the standard output on debug log level):
 
 	smfc -o 0 -l 3
 
@@ -684,7 +709,7 @@ root@home:~# ipmitool sel list
    5 | 10/19/2023 | 05:20:59 PM CEST | Fan #0x46 | Lower Critical going low  | Asserted
 ```
 
-If the problematic fan (causing the alert) is identified, then you must adjust its threshold. This process could take several adjustment cycle. Be patient :)
+If the problematic fan (causing the alert) is identified, then you must adjust its threshold. This process could take several adjustment cycles. Be patient :)
 You may read [this chapter](https://github.com/petersulyok/smfc#7-ipmi-fan-control-and-sensor-thresholds) for more details. 
 
 ### Q: How does the author test/use this service?
@@ -721,7 +746,7 @@ Further readings:
 
 #### Linux kernel
  - [coretemp] [documentation](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html)
- - [drivetemp] [documentation](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) and its [GitHub respository](https://github.com/groeck/drivetemp)
+ - [drivetemp] [documentation](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) and its [GitHub repository](https://github.com/groeck/drivetemp)
  - How to install [hddtemp](https://www.cyberciti.biz/tips/howto-monitor-hard-drive-temperature.html) from a source package
 
 #### Similar projects
