@@ -55,8 +55,9 @@ sudo dnf install rpm-build python3-devel python3-setuptools python3-pip python3-
 ### Build commands
 
 ```bash
+VERSION=$(grep '^Version:' smfc.spec | awk '{print $2}')
 mkdir -p ~/rpmbuild/SOURCES
-tar czf ~/rpmbuild/SOURCES/smfc-5.0.0.tar.gz --transform='s,^./,smfc-5.0.0/,' --exclude='.git' --exclude='.venv' .
+tar czf ~/rpmbuild/SOURCES/smfc-${VERSION}.tar.gz --transform="s,^./,smfc-${VERSION}/," --exclude='.git' --exclude='.venv' .
 rpmbuild -bb smfc.spec
 ```
 
@@ -74,7 +75,7 @@ The `.rpm` file will be created in `~/rpmbuild/RPMS/noarch/`.
   - `/usr/share/doc/smfc/examples/` — sample configuration files
 - Configuration files are marked with `%config(noreplace)`. On upgrade, `rpm` will not overwrite locally modified files.
 - The `smfc.service` systemd unit is automatically enabled and started on install, stopped on removal.
-- The version in the `tar.gz` filename and the `--transform` path must match the `Version` field in `smfc.spec`.
+- The build commands above extract the version from `smfc.spec` automatically, so the tarball name always matches.
 - On RHEL, CentOS Stream, Rocky Linux, and AlmaLinux the [EPEL](https://docs.fedoraproject.org/en-US/epel/) repository is required for the `python3-pyudev` dependency.
 
 ### Compatible distributions
