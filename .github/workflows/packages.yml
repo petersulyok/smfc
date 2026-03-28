@@ -23,7 +23,7 @@ jobs:
       - name: Upload DEB package
         uses: actions/upload-artifact@v4
         with:
-          name: deb-package
+          name: smfc-${{ github.event.release.tag_name }}-deb
           path: smfc_*.deb
 
   build-rpm:
@@ -45,5 +45,5 @@ jobs:
       - name: Upload RPM package
         uses: actions/upload-artifact@v4
         with:
-          name: rpm-package
+          name: smfc-${{ github.event.release.tag_name }}-rpm
           path: ~/rpmbuild/RPMS/noarch/smfc-*.rpm
