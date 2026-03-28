@@ -1,3 +1,18 @@
+smfc (5.1.1) unstable; urgency=medium
+
+  * DEB creation files updated with proper version numbers and changelog.
+
+-- Peter Sulyok <peter@sulyok.net>  Sat, 28 Mar 2026 00:00:00 +0000
+
+smfc (5.1.0) unstable; urgency=medium
+
+  * Platform abstraction for multiple Super Micro motherboards (PR #97).
+  * New platform_name= configuration parameter (auto, generic, X10QBi).
+  * BMC information retrieved and logged during IPMI initialization.
+  * DEB and RPM package creation added.
+
+ -- Peter Sulyok <peter@sulyok.net>  Sat, 28 Mar 2026 00:00:00 +0000
+
 smfc (5.0.0) unstable; urgency=medium
 
   * Shared IPMI zones: multiple fan controllers can share an IPMI zone.
