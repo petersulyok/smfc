@@ -75,10 +75,10 @@ docker-compose down
 
 # GPU-enabled image
 This image contains the following components: 
-- `Debian Linux` 12 (slim)
-- `Python` 3.11.2
-- `ipmitool` 1.8.19-4
-- `smartmontools` 7.3-1
+- `Debian Linux` 13 (slim)
+- `Python` 3.13.5
+- `ipmitool` 1.8.19-9
+- `smartmontools` 7.4-3
 
 ## How to enable nvidia GPU in the docker image?
 Install the NVIDIA driver and the NVIDIA Container Toolkit on your host as it is [described here](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html). 
@@ -174,6 +174,7 @@ Please note that the dockerfile will install `smfc` from `pypi.org`, so the vers
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
+  - **5.1.0** (2026.03.28): Updated to smfc 5.1.0 (Alpine 3.23.3/Debian 13)
   - **5.0.0** (2026.03.04): Updated to smfc 5.0.0 (Alpine 3.23.3/Debian 12)
   - **4.2.1** (2025.10.26): Updated to smfc 4.2.1 (Alpine 3.22.2/Debian 12) 
   - **4.1.0** (2025.08.28): Updated to smfc 4.1.0 (Alpine 3.22.1/Debian 12)
