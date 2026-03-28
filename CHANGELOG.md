@@ -16,8 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
        IPMI version = 2.0
        firmware revision = 1.74
   ```
-- Platform abstraction implemented to support multiple Super Micro motherboards with different IPMI raw commands (PR #97 by @samuel-emrys merged).
-New `[Ipmi] platform_name=` configuration parameter added (values: `auto`, `generic`, `X10QBi`).
+- Platform abstraction implemented to support multiple Super Micro motherboards with different IPMI raw commands (PR #97 by @samuel-emrys merged). New `[Ipmi] platform_name=` configuration parameter added (values: `auto`, `generic`, `X10QBi`). Support for incompatible Super Micro X10QBi motherboard also added.
 - DEB and RPM package creation added. See PACKAGES.md for more details. GitHub workflow will create DEB and RPM packages for new releases. 
 
 ### Changed
