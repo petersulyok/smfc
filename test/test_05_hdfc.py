@@ -386,11 +386,11 @@ class TestHdFc:
     def test_get_nth_temp_n1(
         self, mocker: MockerFixture, operation: int, exception: Any, error: str
     ):
-        """Primitive negative test function. It contains the following steps:
+        """Negative unit test for HdFc._get_nth_temp() method. It contains the following steps:
         - mock print(), subprocess.run() functions
         - initialize an empty HdFc class
         - call HdFc._get_nth_temp()
-        - ASSERT: if no assertion raised
+        - ASSERT: if no exception raised
         """
         index = 0
         my_td = TestData()
