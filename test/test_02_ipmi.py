@@ -10,6 +10,7 @@ import pytest
 from mock import MagicMock, call
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi
+from smfc.platform import GenericPlatform
 from .test_00_data import TestData
 
 
@@ -69,7 +70,7 @@ class TestIpmi:
         assert my_ipmi.fan_mode_delay == mode_delay, error
         assert my_ipmi.fan_level_delay == level_delay, error
         assert my_ipmi.remote_parameters == remote_pars, error
-        assert mock_print.call_count == 10, error  # Ipmi-10
+        assert mock_print.call_count == 11, error  # Ipmi-11 (10 base + 1 platform info)
         assert my_ipmi.sudo == sudo, error
         assert my_ipmi.bmc_device_id == 32, error
         assert my_ipmi.bmc_device_rev == 1, error
@@ -256,6 +257,7 @@ class TestIpmi:
         mock_ipmi_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {expected_mode:02}")
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
         assert my_ipmi.get_fan_mode() == expected_mode, error
 
     @pytest.mark.parametrize(
@@ -276,6 +278,7 @@ class TestIpmi:
         mock_ipmi_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {value}")
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
         with pytest.raises(Exception) as cm:
             my_ipmi.get_fan_mode()
         assert cm.type == exception, error
@@ -318,10 +321,11 @@ class TestIpmi:
         - ASSERT: if set_fan_mode() calls Ipmi.exec() and time.sleep() other parameters from expected
         - ASSERT: if set_fan_mode() calls Ipmi.exec() and time.sleep() more from expected times
         """
-        my_ipmi = Ipmi.__new__(Ipmi)
-        my_ipmi.fan_mode_delay = 0
         mock_ipmi_exec = MagicMock()
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
+        my_ipmi.fan_mode_delay = 0
         mock_time_sleep = MagicMock()
         mocker.patch("time.sleep", mock_time_sleep)
         my_ipmi.set_fan_mode(fan_mode)
@@ -349,6 +353,7 @@ class TestIpmi:
         mock_ipmi_exec = MagicMock()
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
         my_ipmi.fan_mode_delay = 0
         my_ipmi.sudo = False
         with pytest.raises(ValueError) as cm:
@@ -373,10 +378,11 @@ class TestIpmi:
         - ASSERT: if set_fan_level() calls subprocess.run() command with other parameters than expected
         - delete the instances
         """
-        my_ipmi = Ipmi.__new__(Ipmi)
-        my_ipmi.fan_level_delay = 0
         mock_ipmi_exec = MagicMock()
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
+        my_ipmi.fan_level_delay = 0
         mock_time_sleep = MagicMock()
         mocker.patch("time.sleep", mock_time_sleep)
         my_ipmi.set_fan_level(zone, level)
@@ -406,6 +412,7 @@ class TestIpmi:
         mock_ipmi_exec = MagicMock()
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
         my_ipmi.fan_level_delay = 0
         my_ipmi.sudo = False
         with pytest.raises(ValueError) as cm:
@@ -427,10 +434,11 @@ class TestIpmi:
         - ASSERT: if set_multiple_fan_levels() calls subprocess.run() command with other parameters than expected
         - delete the instances
         """
-        my_ipmi = Ipmi.__new__(Ipmi)
-        my_ipmi.fan_level_delay = 0
         mock_ipmi_exec = MagicMock()
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
+        my_ipmi.fan_level_delay = 0
         mock_time_sleep = MagicMock()
         mocker.patch("time.sleep", mock_time_sleep)
         my_ipmi.set_multiple_fan_levels(zones, level)
@@ -465,6 +473,7 @@ class TestIpmi:
         mock_ipmi_exec = MagicMock()
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
         my_ipmi.fan_level_delay = 0
         my_ipmi.sudo = False
         with pytest.raises(ValueError) as cm:
@@ -492,6 +501,7 @@ class TestIpmi:
         mock_ipmi_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {expected_level:x}")
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
         assert my_ipmi.get_fan_level(zone) == expected_level, error
 
     @pytest.mark.parametrize(
@@ -516,6 +526,7 @@ class TestIpmi:
         mock_ipmi_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {level}")
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
         with pytest.raises(Exception) as cm:
             my_ipmi.get_fan_level(zone)
         assert cm.type is ValueError, error
@@ -524,7 +535,7 @@ class TestIpmi:
         "exception, error",
         [(RuntimeError, "Ipmi exceptions 1"), (FileNotFoundError, "Ipmi exceptions 2")],
     )
-    def test_exceptions(self, mocker: MockerFixture, exception: Any, error: str) -> None:
+    def test_exceptions(self, exception: Any, error: str) -> None:
         """Negative unit test for Ipmi.get_fan_mode(), Ipmi.set_fan_mode(), Ipmi.set_fan_level(),
         Ipmi.get_fan_level() methods. It contains the following steps:
          - create a shell script providing invalid value
@@ -533,11 +544,11 @@ class TestIpmi:
          - ASSERT: if the expected exception was not raised
         """
 
-        def mocked_ipmi_exec(self, args: List[str]) -> subprocess.CompletedProcess:
+        def raising_exec(args: List[str]) -> subprocess.CompletedProcess:
             raise exception
 
-        mocker.patch("smfc.Ipmi._exec_ipmitool", mocked_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
+        my_ipmi.platform = GenericPlatform("test", raising_exec)
         my_ipmi.fan_mode_delay = 0
         my_ipmi.fan_level_delay = 0
         my_ipmi.sudo = False
