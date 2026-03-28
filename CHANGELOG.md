@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New
 - BMC information (device ID, firmware revision, manufacturer, product info) is retrieved and logged during IPMI initialization.
+  ```
+  BMC information:
+       manufacturer name and id = Super Micro Computer Inc. (10876)
+       product name and id = X11SCH-LN4F (6929)
+       IPMI version = 2.0
+       firmware revision = 1.74
+  ```
 - Platform abstraction implemented to support multiple Super Micro motherboards with different IPMI raw commands (PR #97 by @samuel-emrys merged).
 New `[Ipmi] platform_name=` configuration parameter added (values: `auto`, `generic`, `X10QBi`).
 - DEB and RPM package creation added. See PACKAGES.md for more details. GitHub workflow will create DEB and RPM packages for new releases. 
