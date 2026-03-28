@@ -37,8 +37,9 @@ jobs:
         run: dnf install -y rpm-build python3-devel python3-setuptools python3-pip python3-wheel pyproject-rpm-macros systemd-rpm-macros
       - name: Create source tarball
         run: |
+          VERSION=$(grep '^Version:' smfc.spec | awk '{print $2}')
           mkdir -p ~/rpmbuild/SOURCES
-          tar czf ~/rpmbuild/SOURCES/smfc-${{ github.event.release.tag_name || '5.0.0' }}.tar.gz --transform='s,^./,smfc-${{ github.event.release.tag_name || '5.0.0' }}/,' --exclude='.git' --exclude='.venv' .
+          tar czf ~/rpmbuild/SOURCES/smfc-${VERSION}.tar.gz --transform="s,^./,smfc-${VERSION}/," --exclude='.git' --exclude='.venv' .
       - name: Build RPM package
         run: rpmbuild -bb smfc.spec
       - name: Upload RPM package
