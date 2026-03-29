@@ -3,20 +3,19 @@
 This project is using `uv` for Python project management, see more details about [installation of `uv`](https://docs.astral.sh/uv/getting-started/installation/).
 `uv` can provide everything that multiple tools (e.g. `pip`, `pyenv`, `venv`) provide, but much faster. For example:
 
-* install a Python run-time: `uv python install 3.13`
-* use a specific Python version: `uv python pin 3.13`
+* install a Python run-time: `uv python install 3.14`
+* use a specific Python version: `uv python pin 3.14`
 * create virtual Python environment: `uv venv`
 * install all dependencies: `uv sync`
 
 `uv` has a lock file (`uv.lock`) for storing dependencies, this should be part of version control.
 
-Building a development environment from scratch (with Python 3.12) contains the following steps:
+Building a development environment from scratch (with Python 3.14) contains the following steps:
 ```
-      pipx install uv
-      pipx ensurepath
+      curl -LsSf https://astral.sh/uv/install.sh | sh
       git clone https://github.com/petersulyok/smfc.git
-      uv python install 3.12
-      uv python pin 3.12
+      uv python install 3.14
+      uv python pin 3.14
       uv sync
       source .venv/bin/activate
 ```
@@ -41,6 +40,11 @@ Dependencies are listed in `pyproject.toml` file and the proper version numbers 
         "ruff",
         "pylint"
 	]
+```
+
+All the steps above (installing `uv`, Python, and dependencies) can be automated with the `./bin/create_python_env.sh` script:
+```
+      ./bin/create_python_env.sh 3.14
 ```
 
 ## Linting
@@ -98,82 +102,92 @@ The whole project (all source code) is completely unit tested. The unit tests ar
 
 
       $ pytest
-      =========================================== test session starts ===========================================
+      ============================== test session starts ==============================
       platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
       rootdir: /home/petersulyok/git/github/smfc
       configfile: pyproject.toml
       plugins: cov-6.0.0, mock-3.14.0
-      collected 400 items                                                                                       
-      
-      test/test_01_log.py ............................................................................... [ 19%]
-      ..........................                                                                          [ 26%]
-      test/test_02_ipmi.py .......................................................................        [ 44%]
-      test/test_03_fancontroller.py .................................................                     [ 56%]
-      test/test_04_cpufc.py .....................                                                         [ 61%]
-      test/test_05_hdfc.py ...........................................................................    [ 80%]
-      test/test_06_gpufc.py ..............                                                                [ 83%]
-      test/test_07_constfc.py .................                                                           [ 88%]
-      test/test_08_service.py .................................                                           [ 96%]
-      test/test_09_cmd.py .                                                                               [ 96%]
-      test/test_10_nvmefc.py ..............                                                               [100%]
-      
-      =========================================== 400 passed in 1.49s ===========================================
+      collected 451 items
+
+      test/test_01_log.py .................................................... [ 11%]
+      .....................................................                    [ 23%]
+      test/test_02_ipmi.py ................................................... [ 34%]
+      ....................                                                     [ 39%]
+      test/test_03_fancontroller.py .......................................... [ 48%]
+      .........                                                                [ 50%]
+      test/test_04_cpufc.py .....................                              [ 54%]
+      test/test_05_hdfc.py ................................................... [ 66%]
+      ........................                                                 [ 71%]
+      test/test_06_gpufc.py ..............                                     [ 74%]
+      test/test_07_constfc.py ...................                              [ 78%]
+      test/test_08_service.py ..........................................       [ 88%]
+      test/test_09_cmd.py .                                                    [ 88%]
+      test/test_10_nvmefc.py ..............                                    [ 91%]
+      test/test_11_platform.py ......................................          [100%]
+
+      ============================== 451 passed in 1.10s ==============================
 
 
 The code coverage could be also measured and displayed during the test execution:
 
 
       $ pytest --cov=test --cov=src
-      =========================================== test session starts ===========================================
+      ============================== test session starts ==============================
       platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
       rootdir: /home/petersulyok/git/github/smfc
       configfile: pyproject.toml
       plugins: cov-6.0.0, mock-3.14.0
-      collected 400 items                                                                                       
-      
-      test/test_01_log.py ............................................................................... [ 19%]
-      ..........................                                                                          [ 26%]
-      test/test_02_ipmi.py .......................................................................        [ 44%]
-      test/test_03_fancontroller.py .................................................                     [ 56%]
-      test/test_04_cpufc.py .....................                                                         [ 61%]
-      test/test_05_hdfc.py ...........................................................................    [ 80%]
-      test/test_06_gpufc.py ..............                                                                [ 83%]
-      test/test_07_constfc.py .................                                                           [ 88%]
-      test/test_08_service.py .................................                                           [ 96%]
-      test/test_09_cmd.py .                                                                               [ 96%]
-      test/test_10_nvmefc.py ..............                                                               [100%]
-      
+      collected 451 items
+
+      test/test_01_log.py .................................................... [ 11%]
+      .....................................................                    [ 23%]
+      test/test_02_ipmi.py ................................................... [ 34%]
+      ....................                                                     [ 39%]
+      test/test_03_fancontroller.py .......................................... [ 48%]
+      .........                                                                [ 50%]
+      test/test_04_cpufc.py .....................                              [ 54%]
+      test/test_05_hdfc.py ................................................... [ 66%]
+      ........................                                                 [ 71%]
+      test/test_06_gpufc.py ..............                                     [ 74%]
+      test/test_07_constfc.py ...................                              [ 78%]
+      test/test_08_service.py ..........................................       [ 88%]
+      test/test_09_cmd.py .                                                    [ 88%]
+      test/test_10_nvmefc.py ..............                                    [ 91%]
+      test/test_11_platform.py ......................................          [100%]
+
       ---------- coverage: platform linux, python 3.14.3-final-0 -----------
       Name                            Stmts   Miss  Cover
       ---------------------------------------------------
-      src/smfc/__init__.py               11      0   100%
+      src/smfc/__init__.py               12      0   100%
       src/smfc/cmd.py                     4      0   100%
-      src/smfc/constfc.py                46      0   100%
+      src/smfc/constfc.py                51      0   100%
       src/smfc/cpufc.py                  34      0   100%
-      src/smfc/fancontroller.py         127      0   100%
+      src/smfc/fancontroller.py         130      0   100%
       src/smfc/gpufc.py                  58      0   100%
       src/smfc/hdfc.py                  143      0   100%
-      src/smfc/ipmi.py                  130      0   100%
+      src/smfc/ipmi.py                  128      0   100%
       src/smfc/log.py                    57      0   100%
       src/smfc/nvmefc.py                 47      0   100%
-      src/smfc/service.py               160      0   100%
+      src/smfc/platform.py               97      0   100%
+      src/smfc/service.py               241      0   100%
       test/__init__.py                    0      0   100%
       test/test_00_data.py              134      0   100%
       test/test_01_log.py                52      0   100%
-      test/test_02_ipmi.py              247      0   100%
-      test/test_03_fancontroller.py     134      0   100%
+      test/test_02_ipmi.py              253      0   100%
+      test/test_03_fancontroller.py     163      0   100%
       test/test_04_cpufc.py             142      0   100%
       test/test_05_hdfc.py              293      0   100%
       test/test_06_gpufc.py             111      0   100%
-      test/test_07_constfc.py            67      0   100%
-      test/test_08_service.py           303      0   100%
+      test/test_07_constfc.py            86      0   100%
+      test/test_08_service.py           510      0   100%
       test/test_09_cmd.py                 9      0   100%
       test/test_10_nvmefc.py            144      0   100%
+      test/test_11_platform.py           98      0   100%
       ---------------------------------------------------
-      TOTAL                            2453      0   100%
-      
-      
-      =========================================== 400 passed in 2.37s ===========================================
+      TOTAL                            2997      0   100%
+
+
+      ============================== 451 passed in 2.12s ==============================
 
 
 For a more detailed HTML coverage report run this command:
@@ -194,8 +208,13 @@ The project implemented the following GitHub workflows:
    * generates coverage data and upload it to [codecov.io](https://codecov.io/)
 
 2. Publish Python distribution packages to PyPI (`publish.yml`). A published release triggers this action:
-   * build distribution package on Python `3.13`
+   * build distribution package on Python `3.14`
    * upload the new package to PyPI
+
+3. Build DEB and RPM packages (`packages.yml`). A published release triggers this action:
+   * build DEB package on `debian:trixie`
+   * build RPM package on `fedora:latest`
+   * upload both packages as release artifacts
 
 
 # Release process
