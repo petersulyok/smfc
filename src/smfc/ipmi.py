@@ -8,7 +8,7 @@ import time
 from configparser import ConfigParser
 from typing import List
 from smfc.log import Log
-from smfc.platform import FanMode, Platform
+from smfc.platform import FanMode, Platform, PlatformName
 from smfc.platform_factory import create_platform
 
 
@@ -75,7 +75,7 @@ class Ipmi:
         self.fan_mode_delay = config[Ipmi.CS_IPMI].getint(Ipmi.CV_IPMI_FAN_MODE_DELAY, fallback=10)
         self.fan_level_delay = config[Ipmi.CS_IPMI].getint(Ipmi.CV_IPMI_FAN_LEVEL_DELAY, fallback=2)
         self.remote_parameters = config[Ipmi.CS_IPMI].get(Ipmi.CV_IPMI_REMOTE_PARAMETERS, fallback="")
-        self.platform_name = config[Ipmi.CS_IPMI].get(Ipmi.CV_IPMI_PLATFORM_NAME, fallback=Platform.PLATFORM_AUTO)
+        self.platform_name = config[Ipmi.CS_IPMI].get(Ipmi.CV_IPMI_PLATFORM_NAME, fallback=PlatformName.AUTO)
         self.sudo = sudo
 
         # Validate configuration
@@ -125,7 +125,7 @@ class Ipmi:
             raise RuntimeError(f"Cannot parse BMC info: {e}") from e
 
         # Initialize platform-specific fan control.
-        if self.platform_name == Platform.PLATFORM_AUTO:
+        if self.platform_name == PlatformName.AUTO:
             self.platform_name = self.bmc_product_name
         self.platform = create_platform(self.platform_name, self._exec_ipmitool)
         self.log.msg(Log.LOG_CONFIG, f"   platform = {self.platform.name} ({type(self.platform).__name__})")

@@ -7,7 +7,7 @@ import subprocess
 from typing import List
 import pytest
 from mock import MagicMock, call
-from smfc.platform import FanMode, Platform
+from smfc.platform import FanMode, PlatformName
 from smfc.genericx9 import GenericX9Platform
 
 
@@ -32,7 +32,7 @@ class TestGenericX9Platform:
         """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {mode:02}")
-        platform = GenericX9Platform(Platform.PLATFORM_GENERIC_X9, mock_exec)
+        platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
         assert platform.get_fan_mode() == mode, error
         mock_exec.assert_called_with(["raw", "0x30", "0x45", "0x00"])
 
@@ -54,7 +54,7 @@ class TestGenericX9Platform:
         """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=hex_output)
-        platform = GenericX9Platform(Platform.PLATFORM_GENERIC_X9, mock_exec)
+        platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
         assert platform.get_fan_level(zone) == expected_level, error
         reg = 0x10 + zone
         mock_exec.assert_called_with(["raw", "0x30", "0x90", "0x5a", "0x03", f"0x{reg:x}", "0x01"])
@@ -73,7 +73,7 @@ class TestGenericX9Platform:
         - ASSERT: if ValueError exception was not raised
         """
         mock_exec = MagicMock()
-        platform = GenericX9Platform(Platform.PLATFORM_GENERIC_X9, mock_exec)
+        platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
         with pytest.raises(ValueError) as cm:
             platform.get_fan_level(zone)
         assert cm.type is ValueError, error
@@ -85,7 +85,7 @@ class TestGenericX9Platform:
         - ASSERT: if the mock exec was called (should be a no-op)
         """
         mock_exec = MagicMock()
-        platform = GenericX9Platform(Platform.PLATFORM_GENERIC_X9, mock_exec)
+        platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
         platform.set_fan_manual_mode()
         mock_exec.assert_not_called()
 
@@ -107,7 +107,7 @@ class TestGenericX9Platform:
         """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
-        platform = GenericX9Platform(Platform.PLATFORM_GENERIC_X9, mock_exec)
+        platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
         platform.set_fan_mode(mode)
         mock_exec.assert_called_with(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
         assert mock_exec.call_count == 1, error
@@ -127,7 +127,7 @@ class TestGenericX9Platform:
         - ASSERT: if ValueError exception was not raised
         """
         mock_exec = MagicMock()
-        platform = GenericX9Platform(Platform.PLATFORM_GENERIC_X9, mock_exec)
+        platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
         with pytest.raises(ValueError) as cm:
             platform.set_fan_mode(mode)
         assert cm.type is ValueError, error
@@ -150,7 +150,7 @@ class TestGenericX9Platform:
         """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
-        platform = GenericX9Platform(Platform.PLATFORM_GENERIC_X9, mock_exec)
+        platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
         platform.set_fan_level(zone, level)
         assert mock_exec.call_count == 1, error
         reg = 0x10 + zone
@@ -174,7 +174,7 @@ class TestGenericX9Platform:
         - ASSERT: if ValueError exception was not raised
         """
         mock_exec = MagicMock()
-        platform = GenericX9Platform(Platform.PLATFORM_GENERIC_X9, mock_exec)
+        platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
         with pytest.raises(ValueError) as cm:
             platform.set_fan_level(zone, level)
         assert cm.type is ValueError, error
@@ -197,7 +197,7 @@ class TestGenericX9Platform:
         """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
-        platform = GenericX9Platform(Platform.PLATFORM_GENERIC_X9, mock_exec)
+        platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
         platform.set_multiple_fan_levels(zones, level)
         assert mock_exec.call_count == len(zones), error
         level_hex = f"0x{expected_normalised:02x}"
@@ -220,7 +220,7 @@ class TestGenericX9Platform:
         - ASSERT: if ValueError exception was not raised
         """
         mock_exec = MagicMock()
-        platform = GenericX9Platform(Platform.PLATFORM_GENERIC_X9, mock_exec)
+        platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
         with pytest.raises(ValueError) as cm:
             platform.set_multiple_fan_levels(zones, level)
         assert cm.type is ValueError, error

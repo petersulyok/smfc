@@ -5,7 +5,7 @@
 #
 import subprocess
 from abc import ABC, abstractmethod
-from enum import IntEnum
+from enum import Enum, IntEnum
 from typing import Callable, List
 
 
@@ -34,13 +34,18 @@ class FanMode(IntEnum):
     HEAVY_IO = 4
 
 
+class PlatformName(str, Enum):
+    """Valid platform name values for the platform_name configuration parameter."""
+    AUTO = "auto"
+    GENERIC = "generic"
+    GENERIC_X9 = "genericx9"
+    X10QBI = "X10QBi"
+
+
 class Platform(ABC):
     """Abstract base class for platforms with different ipmitool raw functionality.
     Concrete subclasses implement platform-specific fan control commands.
     """
-    PLATFORM_AUTO: str = "auto"
-    PLATFORM_GENERIC: str = "generic"
-    PLATFORM_GENERIC_X9: str = "genericx9"
 
     _name: str
     _exec: Callable[[List[str]], subprocess.CompletedProcess]

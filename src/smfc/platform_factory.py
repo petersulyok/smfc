@@ -8,7 +8,7 @@ from typing import Callable, List
 
 from smfc.generic import GenericPlatform
 from smfc.genericx9 import GenericX9Platform
-from smfc.platform import Platform
+from smfc.platform import Platform, PlatformName
 from smfc.x10qbi import X10QBi
 
 
@@ -25,9 +25,9 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
         Platform: The platform-specific implementation (defaults to GenericPlatform)
     """
     platform_factory = {
-        Platform.PLATFORM_GENERIC: GenericPlatform,
-        Platform.PLATFORM_GENERIC_X9: GenericX9Platform,
-        "X10QBi": X10QBi,
+        PlatformName.GENERIC: GenericPlatform,
+        PlatformName.GENERIC_X9: GenericX9Platform,
+        PlatformName.X10QBI: X10QBi,
     }
     return platform_factory.get(platform_name, GenericPlatform)(platform_name, exec_ipmitool)
 

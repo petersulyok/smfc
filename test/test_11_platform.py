@@ -4,7 +4,7 @@
 #   Unit tests for smfc.platform module (create_platform).
 #
 from mock import MagicMock
-from smfc.platform import Platform
+from smfc.platform import PlatformName
 from smfc.platform_factory import create_platform
 from smfc.generic import GenericPlatform
 from smfc.genericx9 import GenericX9Platform
@@ -21,9 +21,9 @@ class TestCreatePlatform:
         - ASSERT: if the platform name is different from expected
         """
         mock_exec = MagicMock()
-        platform = create_platform(Platform.PLATFORM_GENERIC_X9, mock_exec)
+        platform = create_platform(PlatformName.GENERIC_X9, mock_exec)
         assert isinstance(platform, GenericX9Platform)
-        assert platform.name == Platform.PLATFORM_GENERIC_X9
+        assert platform.name == PlatformName.GENERIC_X9
 
     def test_create_x10qbi(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
@@ -32,9 +32,9 @@ class TestCreatePlatform:
         - ASSERT: if the platform name is different from expected
         """
         mock_exec = MagicMock()
-        platform = create_platform("X10QBi", mock_exec)
+        platform = create_platform(PlatformName.X10QBI, mock_exec)
         assert isinstance(platform, X10QBi)
-        assert platform.name == "X10QBi"
+        assert platform.name == PlatformName.X10QBI
 
     def test_create_generic_explicit(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
@@ -43,9 +43,9 @@ class TestCreatePlatform:
         - ASSERT: if the platform name is 'generic'
         """
         mock_exec = MagicMock()
-        platform = create_platform(Platform.PLATFORM_GENERIC, mock_exec)
+        platform = create_platform(PlatformName.GENERIC, mock_exec)
         assert isinstance(platform, GenericPlatform)
-        assert platform.name == Platform.PLATFORM_GENERIC
+        assert platform.name == PlatformName.GENERIC
 
     def test_create_generic_fallback(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
