@@ -4,7 +4,8 @@
 #   Unit tests for smfc.platform module (create_platform).
 #
 from mock import MagicMock
-from smfc.platform import Platform, create_platform
+from smfc.platform import Platform
+from smfc.platform_factory import create_platform
 from smfc.generic import GenericPlatform
 from smfc.genericx9 import GenericX9Platform
 from smfc.x10qbi import X10QBi

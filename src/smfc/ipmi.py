@@ -8,7 +8,8 @@ import time
 from configparser import ConfigParser
 from typing import List
 from smfc.log import Log
-from smfc.platform import FanMode, Platform, create_platform
+from smfc.platform import FanMode, Platform
+from smfc.platform_factory import create_platform
 
 
 class Ipmi:
