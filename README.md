@@ -191,6 +191,7 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 |----------------------------|----------------------------------------------|--------------------------------------------------------------------------------------------------|
 | `auto`                     | automatic discovery based on BMC information | Default behaviour                                                                                |
 | `generic`                  | Generic X10-X13/H10-H13 Super Micro boards   | Uses standard Super Micro IPMI raw commands                                                      |
+| `genericx9`                | Generic Super Micro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                                                                                                    |
 | `X10QBi`                   | Super Micro X10QBi motherboard               | Nuvoton NCT7904D fan controller, 4 fan zones (0x10-0x13), see [issue #69](https://github.com/petersulyok/smfc/issues/69) and [PR #97](https://github.com/petersulyok/smfc/pull/97) |
 
 With this abstraction layer, new Super Micro motherboards can also be added to `smfc` with a good understanding of their IPMI raw commands and fan control logic.
@@ -199,7 +200,7 @@ With this abstraction layer, new Super Micro motherboards can also be added to `
 For the newer X14/H14 motherboards, compatibility is still being investigated. There are some issues (#98) and discussions (#92, #106) about this to get better understanding.
 
 #### 5.3 Super Micro X9 motherboards
-For X9 motherboards, compatibility is not guaranteed; it depends on the hardware components of the motherboard (i.e. not all X9 motherboards employ a BMC chip).
+Some X9 motherboards are supported (since `smfc v5.2.0`) via the `genericx9` platform, provided they support the specific IPMI raw commands used for fan control. There is no auto-detection for X9 boards, so you must set `platform_name=genericx9` in the configuration file.
 
 #### 5.4 Super Micro X8 motherboards
 The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
