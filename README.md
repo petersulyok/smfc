@@ -500,10 +500,12 @@ fan_level_delay=2
 #remote_parameters=-U USERNAME -P PASSWORD -H HOST
 # Super Micro platform (string, default='auto')
 # Potential values:
-#  auto    - automatic discovery based on BMC information
-#  generic - Generic X10-X13/H10-H13 Super Micro platform
-#  X10QBi  - Super Micro X10QBi platform
+#  auto       - automatic discovery based on BMC information
+#  generic    - Generic Super Micro X10-X13/H10-H13 platform
+#  genericx9  - Generic Super Micro X9 platform
+#  X10QBi     - Super Micro X10QBi platform
 platform_name=auto
+
 
 # CPU fan controller: works based on CPU(s) temperature.
 [CPU]
