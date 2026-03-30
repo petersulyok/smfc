@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.0] - 2026.03.30
+
+### New
+- Beta support added for some Supermicro X9 motherboards, where fan level can be set with IPMI raw command:
+  ```
+  ipmitool raw 0x30 0x91 0x5A 0x03 0x10 0x80
+  ```
+  Use `[Ipmi] platform_name=genericx9` configuration parameter to use this feature. Please test and give feedback.
+
+### Changed
+- Platform module refactored: monolithic `platform.py` split into separate modules (`platform.py`, `generic.py`,
+`genericx9.py`, `x10qbi.py`) with corresponding test files.
+
+### Fixed
+- X10QBi zone calculation: zones now use logical values (0-3) with internal register offset, instead of raw register addresses.
+
+
 ## [5.1.2] - 2026.03.28
 
 ### New
