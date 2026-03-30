@@ -128,163 +128,6 @@ class Platform(ABC):
         """
 
 
-class GenericPlatform(Platform):
-    """Platform implementation for the most common Supermicro X10/X11/X12/X13 motherboards."""
-
-    valid_fan_modes: List[FanMode] = [FanMode.STANDARD, FanMode.FULL, FanMode.OPTIMAL, FanMode.PUE, FanMode.HEAVY_IO]
-
-    def get_fan_mode(self) -> int:
-        r = self._exec(["raw", "0x30", "0x45", "0x00"])
-        return int(r.stdout)
-
-    def get_fan_level(self, zone: int) -> int:
-        validate_input_range(zone, "zone", 0, 100)
-        r = self._exec(["raw", "0x30", "0x70", "0x66", "0x00", f"0x{zone:x}"])
-        return int(r.stdout, 16)
-
-    def set_fan_manual_mode(self) -> None:
-        pass
-
-    def set_fan_mode(self, mode: int) -> None:
-        if mode not in self.valid_fan_modes:
-            raise ValueError(f"Invalid value: fan mode ({mode}).")
-        self._exec(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
-
-    def set_fan_level(self, zone: int, level: int) -> None:
-        validate_input_range(zone, "zone", 0, 100)
-        validate_input_range(level, "level", 0, 100)
-        self._exec(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{level:02x}"])
-
-    def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
-        # Validate zone parameters
-        for zone in zone_list:
-            validate_input_range(zone, "zone", 0, 100)
-        validate_input_range(level, "level", 0, 100)
-        for zone in zone_list:
-            self._exec(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{level:02x}"])
-
-
-class GenericX9Platform(Platform):
-    """Platform implementation for generic Supermicro X9 motherboards."""
-
-    DEVICE_ADDR: str = "0x5a"
-    BANK_3_REGISTER: str = "0x03"
-    valid_fan_modes: List[FanMode] = [FanMode.STANDARD, FanMode.FULL, FanMode.OPTIMAL, FanMode.HEAVY_IO]
-
-    def get_fan_mode(self) -> int:
-        r = self._exec(["raw", "0x30", "0x45", "0x00"])
-        return int(r.stdout)
-
-    def get_fan_level(self, zone: int) -> int:
-        # Valid zones: 0x10 (FANCTL1), 0x11 (FANCTL2), 0x12 (FANCTL3), 0x13 (FANCTL4)
-        validate_input_range(zone, "zone", 16, 19)
-        r = self._exec(["raw", "0x30", "0x90", self.DEVICE_ADDR, self.BANK_3_REGISTER, f"0x{zone:x}", "0x01"])
-        return int(r.stdout, 16)
-
-    def set_fan_manual_mode(self) -> None:
-        pass
-
-    def set_fan_mode(self, mode: int) -> None:
-        if mode not in self.valid_fan_modes:
-            raise ValueError(f"Invalid value: fan mode ({mode}).")
-        self._exec(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
-
-    def set_fan_level(self, zone: int, level: int) -> None:
-        # Valid zones: 0x10 (FANCTL1), 0x11 (FANCTL2), 0x12 (FANCTL3), 0x13 (FANCTL4)
-        # Duty cycle uses 0-255 scale (100% = 0xFF)
-        validate_input_range(zone, "zone", 16, 19)
-        validate_input_range(level, "level", 0, 100)
-        normalised_level = level * 255 // 100
-        self._exec(["raw", "0x30", "0x91", self.DEVICE_ADDR, self.BANK_3_REGISTER,
-                     f"0x{zone:02x}", f"0x{normalised_level:02x}"])
-
-    def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
-        # Valid zones: 0x10 (FANCTL1), 0x11 (FANCTL2), 0x12 (FANCTL3), 0x13 (FANCTL4)
-        for zone in zone_list:
-            validate_input_range(zone, "zone", 16, 19)
-        validate_input_range(level, "level", 0, 100)
-        normalised_level = level * 255 // 100
-        for zone in zone_list:
-            self._exec(["raw", "0x30", "0x91", self.DEVICE_ADDR, self.BANK_3_REGISTER,
-                         f"0x{zone:02x}", f"0x{normalised_level:02x}"])
-
-
-class X10QBi(Platform):
-    """Platform implementation for the Supermicro X10QBi motherboard (Nuvoton NCT7904D)."""
-
-    valid_fan_modes: List[FanMode] = [FanMode.STANDARD, FanMode.FULL, FanMode.HEAVY_IO]
-    BANK_3_REGISTER: str = "0x03"
-    BANK_4_REGISTER: str = "0x04"
-
-    def get_fan_mode(self) -> int:
-        r = self._exec(["raw", "0x30", "0x45", "0x00"])
-        return int(r.stdout)
-
-    def get_fan_level(self, zone: int) -> int:
-        # Valid zones: 0x10 (FANCTL1), 0x11 (FANCTL2), 0x12 (FANCTL3), 0x13 (FANCTL4)
-        validate_input_range(zone, "zone", 16, 19)
-        r = self._exec(["raw", "0x30", "0x90", "0x5c", "0x03", f"0x{zone:x}", "0x01"])
-        return int(r.stdout, 16)
-
-    def set_fan_manual_mode(self) -> None:
-        # Set Temperature Fan Mapping Relationships (TMFR)
-        # These map which of the 4 fan controllers are assigned to which
-        # of the 10 temperature sensors. Each temperature sensor can have
-        # any of the 4 fan controllers assigned.
-        # Set T1FMR - T10FMR to 0x00 (00000000)
-        # Bits 0-3 contain the settings for FANCTL1-FANCTL4 SMART FAN (F1SF etc).
-        # Set these to 0 to make sure they are not in SmartFan mode.
-        # Reference: Nuvoton NCT7904D Datasheet (p114)
-        tmfr_addresses = [
-            (self.BANK_3_REGISTER, "0x00"),  # T1FMR
-            (self.BANK_3_REGISTER, "0x01"),  # T2FMR
-            (self.BANK_3_REGISTER, "0x02"),  # T3FMR
-            (self.BANK_3_REGISTER, "0x03"),  # T4FMR
-            (self.BANK_4_REGISTER, "0x00"),  # T5FMR
-            (self.BANK_4_REGISTER, "0x01"),  # T6FMR
-            (self.BANK_4_REGISTER, "0x02"),  # T7FMR
-            (self.BANK_4_REGISTER, "0x03"),  # T8FMR
-            (self.BANK_4_REGISTER, "0x04"),  # T9FMR
-            (self.BANK_4_REGISTER, "0x05"),  # T10FMR
-        ]
-        for register, tmfr_address in tmfr_addresses:
-            self._exec(["raw", "0x30", "0x91", "0x5c", register, tmfr_address, "0x00"])
-
-        # Set FOMC (FANCTL1-4 Output Mode Control) to PWM output.
-        # Bit 3 controls output mode control (0 = set to PWM).
-        # Bits 4-7 control 3Wire-Fan Enable (0 = set to disable).
-        # Reference: Nuvoton NCT7904D Datasheet (p115)
-        self._exec(["raw", "0x30", "0x91", "0x5c", self.BANK_3_REGISTER, "0x07", "0x00"])
-
-    def set_fan_mode(self, mode: int) -> None:
-        if mode not in self.valid_fan_modes:
-            raise ValueError(f"Invalid value: fan mode ({mode}).")
-        self._exec(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
-
-    def set_fan_level(self, zone: int, level: int) -> None:
-        # Valid zones: 0x10 (FANCTL1), 0x11 (FANCTL2), 0x12 (FANCTL3), 0x13 (FANCTL4)
-        # Reference: Nuvoton NCT7904D Datasheet (p120)
-        validate_input_range(zone, "zone", 16, 19)
-        validate_input_range(level, "level", 0, 100)
-        # On the X10QBi, 100% is 0xFF (255), not 0x64 (100)
-        normalised_level = level * 255 // 100
-        self.set_fan_manual_mode()
-        self._exec(["raw", "0x30", "0x91", "0x5c", self.BANK_3_REGISTER, f"0x{zone:02x}", f"0x{normalised_level:02x}"])
-
-    def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
-        # Valid zones: 0x10 (FANCTL1), 0x11 (FANCTL2), 0x12 (FANCTL3), 0x13 (FANCTL4)
-        # Reference: Nuvoton NCT7904D Datasheet (p120)
-        for zone in zone_list:
-            validate_input_range(zone, "zone", 16, 19)
-        validate_input_range(level, "level", 0, 100)
-        # On the X10QBi, 100% is 0xFF (255), not 0x64 (100)
-        normalised_level = level * 255 // 100
-        self.set_fan_manual_mode()
-        for zone in zone_list:
-            zone_hex, level_hex = f"0x{zone:02x}", f"0x{normalised_level:02x}"
-            self._exec(["raw", "0x30", "0x91", "0x5c", self.BANK_3_REGISTER, zone_hex, level_hex])
-
-
 def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess]) -> Platform:
     """Factory method to create the appropriate Platform object for the given platform name.
     Args:
@@ -297,6 +140,10 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
     Returns:
         Platform: The platform-specific implementation (defaults to GenericPlatform)
     """
+    from smfc.generic import GenericPlatform
+    from smfc.genericx9 import GenericX9Platform
+    from smfc.x10qbi import X10QBi
+
     platform_factory = {
         Platform.PLATFORM_GENERIC: GenericPlatform,
         Platform.PLATFORM_GENERIC_X9: GenericX9Platform,

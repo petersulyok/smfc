@@ -10,7 +10,7 @@ import pytest
 from mock import MagicMock, call
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi
-from smfc.platform import GenericPlatform
+from smfc.generic import GenericPlatform
 from .test_00_data import TestData
 
 
