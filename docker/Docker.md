@@ -161,19 +161,10 @@ Use the following parameters to configure `smfc`:
 | `SMFC_ARGS` | environment variable | command-line arguments for `smfc` (only for -o, -l parameters!) |
 | `smfc.conf` | volume (ro)          | configuration file for `smfc`, mapped from host side            |
 
-# Build image locally
-The images can be built locally in the following way:
-```commandline
-git clone https://github.com/petersulyok/smfc.git
-cd smfc
-./docker/docker-build.sh 4.1.0 latest
-```
-It will generate the following tags: `4.1.0`, `latest`, `4.1.0-gpu`, `latest-gpu`.
-
-Please note that the dockerfile will install `smfc` from `pypi.org`, so the version must refer an official `smfc` release.
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
+  - **5.2.0** (2026.03.30): Updated to smfc 5.2.0 (Alpine 3.23.3/Debian 13)
   - **5.1.2** (2026.03.28): Updated to smfc 5.1.2 (Alpine 3.23.3/Debian 13)
   - **5.0.0** (2026.03.04): Updated to smfc 5.0.0 (Alpine 3.23.3/Debian 12)
   - **4.2.1** (2025.10.26): Updated to smfc 4.2.1 (Alpine 3.22.2/Debian 12) 
