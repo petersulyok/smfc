@@ -40,6 +40,7 @@ class Platform(ABC):
     """
     PLATFORM_AUTO: str = "auto"
     PLATFORM_GENERIC: str = "generic"
+    PLATFORM_GENERIC_X9: str = "genericx9"
 
     _name: str
     _exec: Callable[[List[str]], subprocess.CompletedProcess]
@@ -163,6 +164,51 @@ class GenericPlatform(Platform):
             self._exec(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{level:02x}"])
 
 
+class GenericX9Platform(Platform):
+    """Platform implementation for generic Supermicro X9 motherboards."""
+
+    DEVICE_ADDR: str = "0x5a"
+    BANK_3_REGISTER: str = "0x03"
+    valid_fan_modes: List[FanMode] = [FanMode.STANDARD, FanMode.FULL, FanMode.OPTIMAL, FanMode.HEAVY_IO]
+
+    def get_fan_mode(self) -> int:
+        r = self._exec(["raw", "0x30", "0x45", "0x00"])
+        return int(r.stdout)
+
+    def get_fan_level(self, zone: int) -> int:
+        # Valid zones: 0x10 (FANCTL1), 0x11 (FANCTL2), 0x12 (FANCTL3), 0x13 (FANCTL4)
+        validate_input_range(zone, "zone", 16, 19)
+        r = self._exec(["raw", "0x30", "0x90", self.DEVICE_ADDR, self.BANK_3_REGISTER, f"0x{zone:x}", "0x01"])
+        return int(r.stdout, 16)
+
+    def set_fan_manual_mode(self) -> None:
+        pass
+
+    def set_fan_mode(self, mode: int) -> None:
+        if mode not in self.valid_fan_modes:
+            raise ValueError(f"Invalid value: fan mode ({mode}).")
+        self._exec(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
+
+    def set_fan_level(self, zone: int, level: int) -> None:
+        # Valid zones: 0x10 (FANCTL1), 0x11 (FANCTL2), 0x12 (FANCTL3), 0x13 (FANCTL4)
+        # Duty cycle uses 0-255 scale (100% = 0xFF)
+        validate_input_range(zone, "zone", 16, 19)
+        validate_input_range(level, "level", 0, 100)
+        normalised_level = level * 255 // 100
+        self._exec(["raw", "0x30", "0x91", self.DEVICE_ADDR, self.BANK_3_REGISTER,
+                     f"0x{zone:02x}", f"0x{normalised_level:02x}"])
+
+    def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
+        # Valid zones: 0x10 (FANCTL1), 0x11 (FANCTL2), 0x12 (FANCTL3), 0x13 (FANCTL4)
+        for zone in zone_list:
+            validate_input_range(zone, "zone", 16, 19)
+        validate_input_range(level, "level", 0, 100)
+        normalised_level = level * 255 // 100
+        for zone in zone_list:
+            self._exec(["raw", "0x30", "0x91", self.DEVICE_ADDR, self.BANK_3_REGISTER,
+                         f"0x{zone:02x}", f"0x{normalised_level:02x}"])
+
+
 class X10QBi(Platform):
     """Platform implementation for the Supermicro X10QBi motherboard (Nuvoton NCT7904D)."""
 
@@ -244,6 +290,7 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
     Args:
         platform_name (str): The platform name, one of:
             - 'generic': force the GenericPlatform (X10-X13/H10-H13)
+            - 'genericx9': force the GenericX9Platform (X9 motherboards)
             - 'X10QBi': force the X10QBi platform
             - any other string: looked up in the platform registry, falls back to GenericPlatform
         exec_ipmitool (Callable): Function that executes ipmitool commands
@@ -252,6 +299,7 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
     """
     platform_factory = {
         Platform.PLATFORM_GENERIC: GenericPlatform,
+        Platform.PLATFORM_GENERIC_X9: GenericX9Platform,
         "X10QBi": X10QBi,
     }
     return platform_factory.get(platform_name, GenericPlatform)(platform_name, exec_ipmitool)
