@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [5.2.0] - 2026.03.30
 
 ### New
-- Beta support added for some Supermicro X9 motherboards, where fan level can be set with IPMI raw command:
+- Beta support added for some Supermicro X9 motherboards, where fan level can be set with the next IPMI raw command:
   ```
   ipmitool raw 0x30 0x91 0x5A 0x03 0x10 0x80
   ```

@@ -95,7 +95,9 @@ fi
 
 %changelog
 * Mon Mar 30 2026 Peter Sulyok <peter@sulyok.net> - 5.2.0-1
-- UPDATE WITH RELEASE NOTES
+- Beta support for some Supermicro X9 motherboards (platform_name=genericx9)
+- Platform module refactored: split into separate modules
+- X10QBi zone calculation fix: zones now use logical values (0-3)
 
 * Sat Mar 28 2026 Peter Sulyok <peter@sulyok.net> - 5.1.2-1
 - New ./bin/update_version_number.sh script created
