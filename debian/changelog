@@ -1,3 +1,9 @@
+smfc (5.2.0) unstable; urgency=medium
+
+  * UPDATE WITH RELEASE NOTES
+
+ -- Peter Sulyok <peter@sulyok.net>  Mon, 30 Mar 2026 20:08:50 +0200
+
 smfc (5.1.2) unstable; urgency=medium
 
   * New ./bin/update_version_number.sh script created.

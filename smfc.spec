@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        5.1.2
+Version:        5.2.0
 Release:        1%{?dist}
 Summary:        Super Micro Fan Control for Linux
 License:        GPL-3.0-only
@@ -94,6 +94,9 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Mon Mar 30 2026 Peter Sulyok <peter@sulyok.net> - 5.2.0-1
+- UPDATE WITH RELEASE NOTES
+
 * Sat Mar 28 2026 Peter Sulyok <peter@sulyok.net> - 5.1.2-1
 - New ./bin/update_version_number.sh script created
 - DEB and RPM artifact names configured correctly
