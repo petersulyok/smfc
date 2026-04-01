@@ -61,13 +61,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
        IPMI version = 2.0
        firmware revision = 1.74
   ```
-- Platform abstraction implemented to support multiple Supermicro motherboards with different IPMI raw commands (PR #97 by @samuel-emrys merged). New `[Ipmi] platform_name=` configuration parameter added (values: `auto`, `generic`, `X10QBi`). Support for incompatible Supermicro X10QBi motherboard also added.
+- Platform abstraction implemented to support multiple Supermicro motherboards with different IPMI raw commands ([PR #97](https://github.com/petersulyok/smfc/pull/97) by @samuel-emrys merged). New `[Ipmi] platform_name=` configuration parameter added (values: `auto`, `generic`, `X10QBi`). Support for incompatible Supermicro X10QBi motherboard also added.
 - DEB and RPM package creation added. See PACKAGES.md for more details. GitHub workflow will create DEB and RPM packages for new releases. 
 
 ### Changed
 - Docstrings consistency check and update across source and test files.
 - Docker files updated to Debian 13 (slim).
-- @fz6 added to contributors (for shared IPMI zones work in PR #89).
+- @fz6 added to contributors (for shared IPMI zones work in [PR #89](https://github.com/petersulyok/smfc/pull/89)).
 - Documentation updated for DEB/RPM packaging, hard disk and Supermicro compatibility.
 
 ### Fixed
@@ -106,7 +106,7 @@ highly encouraged to update your configuration file.
 ## [v4.2.1] - 2025-10-26 
 
 ### Fixed
-- Issue #95: SMFC fails to start as system service after reboot. If BMC is not fully initialized when `smfc` is starting
+- [Issue #95](https://github.com/petersulyok/smfc/issues/95): SMFC fails to start as system service after reboot. If BMC is not fully initialized when `smfc` is starting
 then `smfc` can stop with an error. It can happen if the BMC and the PC are booting at the same time. With this fix
 `smfc` waits maximum 120 seconds for BMC initialization and will check BMC again every 5 seconds.
 
@@ -174,13 +174,13 @@ The final release is identical with the beta-14 version and some documentation u
 - `hddtemp` removed
 
 ### Fix
-- Support of AMD CPUs (without manual configuration) - issue #25
+- Support of AMD CPUs (without manual configuration) - [issue #25](https://github.com/petersulyok/smfc/issues/25)
 
 
 ## [v4.0.0b14] - 2025-06-22 Pre-release 
 
 ### Fix
-- Fix: issue #76 corrected, where a parsing error blocked HdZone's initialization for newer SCSI disks.
+- Fix: [issue #76](https://github.com/petersulyok/smfc/issues/76) corrected, where a parsing error blocked HdZone's initialization for newer SCSI disks.
 
 
 ## [v4.0.0b13] - 2025-06-06 Pre-release 
@@ -302,7 +302,7 @@ and to implement the former _Swapped zones_ feature in a more generic way.
 - `swapped_zones=` parameter is not used anymore, this feature can be used with free IPMI zone assignment. 
 
 ### Fixed 
-- `install.sh` cannot save the existing configuration file (discussion #64)
+- `install.sh` cannot save the existing configuration file ([discussion #64](https://github.com/petersulyok/smfc/discussions/64))
 
 ## [v4.0.0b4] - 2025-04-18 
 
@@ -356,7 +356,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ### New/Added
 
-- Remote IPMI access is supported, see `[IPMI] remote_parameters=` in the configuration file (requested in issue #27)
+- Remote IPMI access is supported, see `[IPMI] remote_parameters=` in the configuration file (requested in [issue #27](https://github.com/petersulyok/smfc/issues/27))
 
 ### Changed
 
@@ -386,14 +386,14 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ### Fixed
 
-- Automatic HWMON path creation for NVME SSDs is fixed (reported in #43)
+- Automatic HWMON path creation for NVME SSDs is fixed (reported in [#43](https://github.com/petersulyok/smfc/issues/43))
 
 
 ## [v3.5.1] - 2024-08-23
 
 ### Changed
 
-- Documentation updated (IPMI thresholds for X13 motherboards, Swapped zones (#38), FAQ)
+- Documentation updated (IPMI thresholds for X13 motherboards, Swapped zones ([#38](https://github.com/petersulyok/smfc/issues/38)), FAQ)
 - Simplified log message for new fan level
 - Docker image updated
 
@@ -427,7 +427,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ### New/Added
 
-- New emergency exit implemented for exceptions and runtime errors. It will switch all fans back to speed 100% if smfc terminates (fix for issue #32)
+- New emergency exit implemented for exceptions and runtime errors. It will switch all fans back to speed 100% if smfc terminates (fix for [issue #32](https://github.com/petersulyok/smfc/issues/32))
 
 ### Changed
 
@@ -472,7 +472,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 - support for SAS/SCSI disks (with the help of hddtemp)
 - support for NVME SSDs
 - support mixed configuration for SATA, SAS/SCSI, and NVME disks
-- Recommendation added to AMD users (thanks to @staaled in #25)
+- Recommendation added to AMD users (thanks to @staaled in [#25](https://github.com/petersulyok/smfc/issues/25))
 - new script added to reset BMC and measure the time (ipmi/ipmi_bmc_reset.sh)
 - all tests and documentation updated
 
@@ -492,7 +492,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ### Fixed
 
-- after v2.4.0 refactoring, the HD zone could not be enabled and initialized (issue #18)
+- after v2.4.0 refactoring, the HD zone could not be enabled and initialized ([issue #18](https://github.com/petersulyok/smfc/issues/18))
 
 
 ## [v2.4.0] - 2023-05-19
@@ -504,7 +504,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ### Fixed
 
-- Note added to cover issue #8 by @fcladera
+- Note added to cover [issue #8](https://github.com/petersulyok/smfc/issues/8) by @fcladera
 
 
 ## [v2.3.1] - 2023-02-15
@@ -518,8 +518,8 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ### New/Added
 
-- Swapped zones feature implemented (see issue #7), smoke and unit tests are updated, the feature is documented
-- Documentation improved, issue #12 documented
+- Swapped zones feature implemented (see [issue #7](https://github.com/petersulyok/smfc/issues/7)), smoke and unit tests are updated, the feature is documented
+- Documentation improved, [issue #12](https://github.com/petersulyok/smfc/issues/12) documented
 - Test documentation updated
 
 
@@ -527,7 +527,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ### Fixed
 
-- new error handling for IPMI issues in `Ipmi.get_fan_mode()` (see issue #14).
+- new error handling for IPMI issues in `Ipmi.get_fan_mode()` (see [issue #14](https://github.com/petersulyok/smfc/issues/14)).
 
 
 ## [v2.2.1] - 2023-01-03
@@ -551,7 +551,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ### New/Added
 
-- Minimum requirement changed to Python 3.7 (see Issue #4 for more details)
+- Minimum requirement changed to Python 3.7 (see [Issue #4](https://github.com/petersulyok/smfc/issues/4) for more details)
 - `flake8` and `pylint` warnings corrected
 - Unit test execution moved to pytest
 - GitHub workflow implemented
@@ -580,7 +580,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ### Fixed
 
-- Issue #3 is fixed (`hd_names=` must be specified in /dev/disk/by-id/... form)
+- [Issue #3](https://github.com/petersulyok/smfc/issues/3) is fixed (`hd_names=` must be specified in /dev/disk/by-id/... form)
 
 
 ## [v1.2.0] - 2022-03-27
