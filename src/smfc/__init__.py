@@ -1,6 +1,6 @@
 #
 #    __init__.py (C) 2020-2026, Peter Sulyok
-#   smfc package: Super Micro fan control for Linux (home) servers.
+#   smfc package: Supermicro fan control for Linux (home) servers.
 #
 from smfc.log import Log
 from smfc.platform import FanMode, Platform, PlatformName

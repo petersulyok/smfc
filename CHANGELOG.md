@@ -54,14 +54,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
        IPMI version = 2.0
        firmware revision = 1.74
   ```
-- Platform abstraction implemented to support multiple Super Micro motherboards with different IPMI raw commands (PR #97 by @samuel-emrys merged). New `[Ipmi] platform_name=` configuration parameter added (values: `auto`, `generic`, `X10QBi`). Support for incompatible Super Micro X10QBi motherboard also added.
+- Platform abstraction implemented to support multiple Supermicro motherboards with different IPMI raw commands (PR #97 by @samuel-emrys merged). New `[Ipmi] platform_name=` configuration parameter added (values: `auto`, `generic`, `X10QBi`). Support for incompatible Supermicro X10QBi motherboard also added.
 - DEB and RPM package creation added. See PACKAGES.md for more details. GitHub workflow will create DEB and RPM packages for new releases. 
 
 ### Changed
 - Docstrings consistency check and update across source and test files.
 - Docker files updated to Debian 13 (slim).
 - @fz6 added to contributors (for shared IPMI zones work in PR #89).
-- Documentation updated for DEB/RPM packaging, hard disk and Super Micro compatibility.
+- Documentation updated for DEB/RPM packaging, hard disk and Supermicro compatibility.
 
 ### Fixed
 - Inconsistent log level references in comments (`DEBUG` vs `CONFIG`) corrected in `constfc.py` and `fancontroller.py`.

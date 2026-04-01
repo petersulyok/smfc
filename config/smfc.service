@@ -1,5 +1,5 @@
 [Unit]
-Description=Super Micro Fan Control
+Description=Supermicro Fan Control
 After=syslog.target
 
 [Service]

@@ -1,6 +1,6 @@
 #
 #   generic.py (C) 2025-2026, Samuel Dowling, Peter Sulyok
-#   smfc package: Super Micro fan control for Linux (home) servers.
+#   smfc package: Supermicro fan control for Linux (home) servers.
 #   Platform implementation for the most common Supermicro X10/X11/X12/X13 motherboards.
 #
 from typing import List

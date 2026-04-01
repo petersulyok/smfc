@@ -23,7 +23,7 @@ smfc (5.1.1) unstable; urgency=medium
 
 smfc (5.1.0) unstable; urgency=medium
 
-  * Platform abstraction for multiple Super Micro motherboards (PR #97).
+  * Platform abstraction for multiple Supermicro motherboards (PR #97).
   * New platform_name= configuration parameter (auto, generic, X10QBi).
   * BMC information retrieved and logged during IPMI initialization.
   * DEB and RPM package creation added.

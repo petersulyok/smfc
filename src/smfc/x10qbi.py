@@ -1,6 +1,6 @@
 #
 #   x10qbi.py (C) 2025-2026, Samuel Dowling, Peter Sulyok
-#   smfc package: Super Micro fan control for Linux (home) servers.
+#   smfc package: Supermicro fan control for Linux (home) servers.
 #   Platform implementation for the Supermicro X10QBi motherboard (Nuvoton NCT7904D).
 #
 from typing import List

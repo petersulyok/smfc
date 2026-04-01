@@ -1,6 +1,6 @@
 #
 #   platform_factory.py (C) 2025-2026, Samuel Dowling, Peter Sulyok
-#   smfc package: Super Micro fan control for Linux (home) servers.
+#   smfc package: Supermicro fan control for Linux (home) servers.
 #   Factory function for creating platform-specific implementations.
 #
 import subprocess

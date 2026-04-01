@@ -19,6 +19,6 @@ Depends: ${python3:Depends},
          ipmitool
 Recommends: smartmontools
 Suggests: nvidia-utils-server | nvidia-utils
-Description: Super Micro Fan Control for Linux
- smfc is a systemd service to control fans in Linux on Super Micro
+Description: Supermicro Fan Control for Linux
+ smfc is a systemd service to control fans in Linux on Supermicro
  X10-X13/H10-H13 motherboards with IPMI fan function.

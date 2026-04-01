@@ -1,6 +1,6 @@
 [project]
 name = "smfc"
-description = "Super Micro Fan Control for Linux"
+description = "Supermicro Fan Control for Linux"
 readme = "README.md"
 version = "5.2.0"
 authors = [

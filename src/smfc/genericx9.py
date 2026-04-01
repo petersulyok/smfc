@@ -1,6 +1,6 @@
 #
 #   genericx9.py (C) 2025-2026, Peter Sulyok
-#   smfc package: Super Micro fan control for Linux (home) servers.
+#   smfc package: Supermicro fan control for Linux (home) servers.
 #   Platform implementation for generic Supermicro X9 motherboards.
 #
 from typing import List

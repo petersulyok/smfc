@@ -1,7 +1,7 @@
 Name:           smfc
 Version:        5.2.0
 Release:        1%{?dist}
-Summary:        Super Micro Fan Control for Linux
+Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
 URL:            https://github.com/petersulyok/smfc
 Source0:        %{name}-%{version}.tar.gz
@@ -18,7 +18,7 @@ Requires:       ipmitool
 Recommends:     smartmontools
 
 %description
-smfc is a systemd service to control fans in Linux on Super Micro
+smfc is a systemd service to control fans in Linux on Supermicro
 X10-X13/H10-H13 motherboards with IPMI fan function.
 
 %prep
@@ -109,7 +109,7 @@ fi
 - Release process updated in DEVELOPMENT.md
 
 * Sat Mar 28 2026 Peter Sulyok <peter@sulyok.net> - 5.1.0-1
-- Platform abstraction for multiple Super Micro motherboards (PR #97)
+- Platform abstraction for multiple Supermicro motherboards (PR #97)
 - New platform_name= configuration parameter (auto, generic, X10QBi)
 - BMC information retrieved and logged during IPMI initialization
 - DEB and RPM package creation added
