@@ -77,9 +77,9 @@ class Log:
         string = "NONE"
         if level == Log.LOG_ERROR:
             string = "ERROR"
-        if level == Log.LOG_CONFIG:
+        elif level == Log.LOG_CONFIG:
             string = "CONFIG"
-        if level == Log.LOG_INFO:
+        elif level == Log.LOG_INFO:
             string = "INFO"
         elif level == Log.LOG_DEBUG:
             string = "DEBUG"
