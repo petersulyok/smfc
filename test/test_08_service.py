@@ -830,6 +830,213 @@ class TestService:
         # No IPMI call since level hasn't changed
         assert mock_set_fan_level.call_count == 0, "Should skip IPMI call when level is cached"
 
+    def test_apply_fan_levels_three_controllers(self, mocker: MockerFixture):
+        """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), and Log.msg_to_stdout() functions
+        - create 3 deferred controllers (CPU 40%, HD 60%, NVME 50%) on the same IPMI zone 1
+        - execute _apply_fan_levels()
+        - ASSERT: if the highest level (HD 60%) is not applied to zone 1
+        - ASSERT: if the log output does not contain the correct winner and losers
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {}
+
+        # Three controllers on zone 1: CPU 40%, HD 60%, NVME 50%
+        service.cpu_fc_enabled = True
+        service.cpu_fc = FanController.__new__(FanController)
+        service.cpu_fc.name = CpuFc.CS_CPU_FC
+        service.cpu_fc.ipmi_zone = [1]
+        service.cpu_fc.last_level = 40
+        service.cpu_fc.last_temp = 50.0
+        service.cpu_fc.deferred_apply = True
+
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+        service.hd_fc.last_level = 60
+        service.hd_fc.last_temp = 38.0
+        service.hd_fc.deferred_apply = True
+
+        service.nvme_fc_enabled = True
+        service.nvme_fc = FanController.__new__(FanController)
+        service.nvme_fc.name = NvmeFc.CS_NVME_FC
+        service.nvme_fc.ipmi_zone = [1]
+        service.nvme_fc.last_level = 50
+        service.nvme_fc.last_temp = 42.0
+        service.nvme_fc.deferred_apply = True
+
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        # HD at 60% should win (highest level among the three)
+        mock_set_fan_level.assert_called_once_with(1, 60)
+        assert service.applied_levels[1] == 60
+        log_output = str(mock_log_msg.call_args_list)
+        assert "winner: HD=60%/38.0C" in log_output
+        assert "CPU=40%/50.0C" in log_output
+        assert "NVME=50%/42.0C" in log_output
+
+    def test_apply_fan_levels_equal_levels(self, mocker: MockerFixture):
+        """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), and Log.msg_to_stdout() functions
+        - create 2 deferred controllers (CPU 70%, HD 70%) on the same IPMI zone 1 with equal levels
+        - execute _apply_fan_levels()
+        - ASSERT: if level 70% is not applied to zone 1
+        - ASSERT: if the first collected controller (CPU) is not the winner (tie-breaking uses > not >=)
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {}
+
+        # Two controllers on zone 1 with identical levels (70%)
+        service.cpu_fc_enabled = True
+        service.cpu_fc = FanController.__new__(FanController)
+        service.cpu_fc.name = CpuFc.CS_CPU_FC
+        service.cpu_fc.ipmi_zone = [1]
+        service.cpu_fc.last_level = 70
+        service.cpu_fc.last_temp = 55.0
+        service.cpu_fc.deferred_apply = True
+
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+        service.hd_fc.last_level = 70
+        service.hd_fc.last_temp = 40.0
+        service.hd_fc.deferred_apply = True
+
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        # Level 70% should be applied correctly
+        mock_set_fan_level.assert_called_once_with(1, 70)
+        assert service.applied_levels[1] == 70
+        # First collected controller (CPU) should be the winner (uses > not >=)
+        log_output = str(mock_log_msg.call_args_list)
+        assert "winner: CPU=70%/55.0C" in log_output
+        assert "losers: HD=70%/40.0C" in log_output
+
+    def test_apply_fan_levels_multi_zone_partial_shared(self, mocker: MockerFixture):
+        """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), and Log.msg_to_stdout() functions
+        - create CPU controller on zones [0, 1] at 55% and HD controller on zone [1] at 70%, both deferred
+        - execute _apply_fan_levels()
+        - ASSERT: if zone 0 is not set to CPU's 55% (single contributor)
+        - ASSERT: if zone 1 is not set to HD's 70% (winner of shared zone arbitration)
+        - ASSERT: if the log output does not contain correct single-zone and shared-zone messages
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {}
+
+        # CPU on zones [0, 1] at 55%, HD on zone [1] at 70%
+        service.cpu_fc_enabled = True
+        service.cpu_fc = FanController.__new__(FanController)
+        service.cpu_fc.name = CpuFc.CS_CPU_FC
+        service.cpu_fc.ipmi_zone = [0, 1]
+        service.cpu_fc.last_level = 55
+        service.cpu_fc.last_temp = 48.0
+        service.cpu_fc.deferred_apply = True
+
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+        service.hd_fc.last_level = 70
+        service.hd_fc.last_temp = 42.0
+        service.hd_fc.deferred_apply = True
+
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        # Zone 0: only CPU contributes → 55%
+        # Zone 1: CPU 55% vs HD 70% → HD wins at 70%
+        calls = mock_set_fan_level.call_args_list
+        assert len(calls) == 2, "Both zone 0 and zone 1 should get IPMI calls"
+        call_dict = {c.args[0]: c.args[1] for c in calls}
+        assert call_dict[0] == 55, "Zone 0 should be set to CPU's 55%"
+        assert call_dict[1] == 70, "Zone 1 should be set to HD's 70% (winner)"
+        assert service.applied_levels[0] == 55
+        assert service.applied_levels[1] == 70
+        # Zone 0 should log as single-contributor, zone 1 as shared
+        log_output = str(mock_log_msg.call_args_list)
+        assert "IPMI zone [0]: new level = 55% (CPU=48.0C)" in log_output
+        assert "winner: HD=70%/42.0C" in log_output
+
+    def test_apply_fan_levels_cache_oscillation(self, mocker: MockerFixture):
+        """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
+        - mock print() and Ipmi.set_fan_level() functions
+        - create HD controller on zone 1 with deferred apply
+        - execute _apply_fan_levels() three times with levels 70%, 50%, 70% (oscillation)
+        - ASSERT: if each level change does not trigger a new IPMI call (3 calls total)
+        - ASSERT: if the cache does not correctly reflect the current level after each step
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {}
+
+        service.cpu_fc_enabled = False
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+        service.hd_fc.last_temp = 40.0
+        service.hd_fc.deferred_apply = True
+
+        # Step 1: level = 70%
+        service.hd_fc.last_level = 70
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        assert mock_set_fan_level.call_count == 1
+        assert service.applied_levels[1] == 70
+
+        # Step 2: level drops to 50%
+        service.hd_fc.last_level = 50
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        assert mock_set_fan_level.call_count == 2
+        assert service.applied_levels[1] == 50
+
+        # Step 3: level returns to 70% — must trigger a new IPMI call
+        service.hd_fc.last_level = 70
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        assert mock_set_fan_level.call_count == 3, "Returning to previous level should trigger IPMI call"
+        assert service.applied_levels[1] == 70
+
     def test_check_shared_zones_detected(self, mocker: MockerFixture):
         """Test that _check_shared_zones() returns True when HD and NVME share zone 1."""
         mock_print = MagicMock()
