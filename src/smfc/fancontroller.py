@@ -47,6 +47,24 @@ class FanController:
     # Function variable for selected temperature calculation method
     get_temp_func: Callable[[], float]
 
+    @staticmethod
+    def parse_ipmi_zones(ipmi_zone: str) -> List[int]:
+        """Parse a comma- or space-separated string of IPMI zone IDs into a validated list.
+        Args:
+            ipmi_zone (str): IPMI zone(s) string
+        Returns:
+            List[int]: list of zone IDs
+        Raises:
+            ValueError: invalid zone string or zone value out of range
+        """
+        zone_str = re.sub(" +", " ", ipmi_zone.strip())
+        # May raise ValueError if zone string contains non-integer values.
+        zones = [int(s) for s in zone_str.split("," if "," in ipmi_zone else " ")]
+        for zone in zones:
+            if zone not in range(0, 101):
+                raise ValueError(f"invalid value: ipmi_zone={ipmi_zone}.")
+        return zones
+
     def __init__(self, log: Log, ipmi: Ipmi, ipmi_zone: str, name: str, count: int, temp_calc: int, steps: int,
                  sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
                  max_level: int) -> None:
@@ -71,13 +89,7 @@ class FanController:
         # Save and validate configuration parameters.
         self.log = log
         self.ipmi = ipmi
-        # Read the list of IPMI zones from a string (trim and remove multiple spaces, convert strings to integers)
-        zone_str = re.sub(" +", " ", ipmi_zone.strip())
-        # May raise ValueError if zone string contains non-integer values.
-        self.ipmi_zone = [int(s) for s in zone_str.split("," if "," in ipmi_zone else " ")]
-        for zone in self.ipmi_zone:
-            if zone not in range(0, 101):
-                raise ValueError(f"invalid value: ipmi_zone={ipmi_zone}.")
+        self.ipmi_zone = FanController.parse_ipmi_zones(ipmi_zone)
         self.name = name
         self.count = count
         if self.count <= 0:
