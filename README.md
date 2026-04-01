@@ -197,7 +197,7 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 With this abstraction layer, new Supermicro motherboards can also be added to `smfc` with a good understanding of their IPMI raw commands and fan control logic.
 
 #### 5.2 Supermicro X14/H14 motherboards
-For the newer X14/H14 motherboards, compatibility is still being investigated. There are some issues (#98) and discussions (#92, #106) about this to get better understanding.
+For the newer X14/H14 motherboards, compatibility is still being investigated. There are some issues ([#98](https://github.com/petersulyok/smfc/issues/98)) and discussions ([#92](https://github.com/petersulyok/smfc/discussions/92), [#106](https://github.com/petersulyok/smfc/discussions/106)) about this to get better understanding.
 
 #### 5.3 Supermicro X9 motherboards
 Some X9 motherboards are supported (since `smfc v5.2.0`) via the `genericx9` platform, provided they support the specific IPMI raw commands used for fan control. There is no auto-detection for X9 boards, so you must set `platform_name=genericx9` in the configuration file.
@@ -463,7 +463,7 @@ sudo dnf install smfc-*.rpm
 The packages install the same files as the manual installation (service unit, configuration, man page, and sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](PACKAGES.md) for build instructions and compatible distributions.
 
 #### 9.3. Docker installation
-`smfc` is also available as a docker image, see more details in [Docker.md](../docker/Docker.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting. 
+`smfc` is also available as a docker image, see more details in [Docker.md](docker/Docker.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting. 
 
 ### 10. Configuration file
 After successful installation, create/edit your new configuration file. If you just upgraded to a new `smfc` version, you can preserve the existing one. 
@@ -730,7 +730,7 @@ root@home:~# ipmitool sel list
 ```
 
 If the problematic fan (causing the alert) is identified, then you must adjust its threshold. This process could take several adjustment cycles. Be patient :)
-You may read [this chapter](https://github.com/petersulyok/smfc#7-ipmi-fan-control-and-sensor-thresholds) for more details. 
+You may read [this chapter](https://github.com/petersulyok/smfc#6-ipmi-fan-control-and-sensor-thresholds) for more details. 
 
 ### Q: How does the author test/use this service?
 The configuration is the following:
@@ -747,33 +747,38 @@ The configuration is the following:
  - 4 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN3, FAN4) in IPMI CPU zone
  - 2 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) on an Y-adapter + [Noctua NF-A14 PWM](https://noctua.at/en/products/fan/nf-a14-pwm) fans (FANA, FANB) in IPMI HD zone
 
-### 15. References
+### 14. References
 Further readings:
 
 #### Supermicro
  - [BMC IPMI User's Guide 1.1b (X10/X11/H11)](https://www.supermicro.com/manuals/other/IPMI_Users_Guide.pdf)
- - [BMC resources](https://www.supermicro.com/en/solutions/management-software/bmc-resources)
- - [IPMI Utilities](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities)
- - [IPMICFG download](https://www.supermicro.com/wdl/utility/IPMICFG/)
- - [IPMICFG User's Guide 1.15 ](https://www.supermicro.com/wdl/utility/IPMICFG/IPMICFG_UserGuide.pdf)
+ - [Supermicro Management Software download](https://www.supermicro.com/en/solutions/management-software/bmc-resources)
+ - [IPMI utilities overiew](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities)
+ - [IPMICFG User's Guide (1.18)](https://www.supermicro.com/Bios/sw_download/968/IPMICFG_UserGuide.pdf)
 
-#### Forums/blogs
+#### Forums and blogs
  - [\[STH forums\] Reference Material: Supermicro X9/X10/X11 Fan Speed Control](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/)
    - [\[STH forums\] Addition to X9 motherboards](https://forums.servethehome.com/index.php?threads/supermicro-x9-x10-x11-fan-speed-control.10059/post-339801) 
  - [\[TrueNAS forums\] How To: Change IPMI Sensor Thresholds using ipmitool](https://www.truenas.com/community/resources/how-to-change-ipmi-sensor-thresholds-using-ipmitool.35/)
  - [\[TrueNAS forums\] Script to control fan speed in response to hard drive temperatures](https://www.truenas.com/community/threads/script-to-control-fan-speed-in-response-to-hard-drive-temperatures.41294/)
  - [\[Pcfe's blog\] Set fan thresholds on my Supermicro H11DSi-NT](https://blog.pcfe.net/hugo/posts/2018-08-14-epyc-ipmi-fans/)
 
-#### Linux kernel
- - [coretemp] [documentation](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html)
- - [drivetemp] [documentation](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) and its [GitHub repository](https://github.com/groeck/drivetemp)
- - How to install [hddtemp](https://www.cyberciti.biz/tips/howto-monitor-hard-drive-temperature.html) from a source package
-
-#### Similar projects
- - [\[GitHub\] Kevin Horton's nas_fan_control](https://github.com/khorton/nas_fan_control)
- - [\[GitHub\] Rob Urban's fork nas_fan control](https://github.com/roburban/nas_fan_control)
+#### Tools, standards and Linux kernel components
+ - [IPMI v2.0 specification](https://www.intel.com/content/www/us/en/products/docs/servers/ipmi/ipmi-second-gen-interface-spec-v2-rev1-1.html) by Intel
+ - [ipmitool](https://github.com/ipmitool/ipmitool) — CLI for managing IPMI-enabled devices
+ - [smartmontools](https://www.smartmontools.org/) — S.M.A.R.T. monitoring tools for hard disks (`smartctl`)
+ - [nvidia-smi](https://developer.nvidia.com/system-management-interface) — NVIDIA System Management Interface for GPU monitoring
+ - [hwmon subsystem](https://www.kernel.org/doc/html/latest/hwmon/index.html) — hardware monitoring framework used for temperature readings
+ - [coretemp](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html) — Intel CPU temperature monitoring
+ - [k10temp](https://docs.kernel.org/hwmon/k10temp.html) — AMD CPU temperature monitoring
+ - [drivetemp](https://www.kernel.org/doc/html/latest/hwmon/drivetemp.html) — SATA disk temperature monitoring, and its [GitHub repository](https://github.com/groeck/drivetemp)
+ 
+#### Similar projects on GitHub
+ - [\[GitHub\] Kevin Horton's nas_fan_control](https://github.com/khorton/nas_fan_control)    
  - [\[GitHub\] sretalla's fork nas_fan control](https://github.com/sretalla/nas_fan_control)
- - [\[GitHub\] Andrew Gunnerson's ipmi-fan-control](https://github.com/chenxiaolong/ipmi-fan-control)
  - [\[GitHub\] supermicro-fancontrol by jvdillion](https://github.com/jvdillon/supermicro-fancontrol)
+ - [\[GitHub\] PureCypher's supermicro-fans](https://github.com/PureCypher/supermicro-fans)
+ - [\[GitHub\] luckylinux's supermicro-fan-control](https://github.com/luckylinux/supermicro-fan-control)
+ - [\[GitHub\] mrstux's hybrid_fan_control](https://github.com/mrstux/hybrid_fan_control)
 
 > Written with [StackEdit](https://stackedit.io/).
