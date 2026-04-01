@@ -549,6 +549,7 @@ class TestService:
         service.cpu_fc.ipmi_zone = [0]
         service.cpu_fc.last_level = 60
         service.cpu_fc.last_temp = 45.0
+        service.cpu_fc.deferred_apply = True
 
         service.hd_fc_enabled = True
         service.hd_fc = FanController.__new__(FanController)
@@ -556,6 +557,7 @@ class TestService:
         service.hd_fc.ipmi_zone = [1]
         service.hd_fc.last_level = 0  # Should be skipped (not yet computed)
         service.hd_fc.last_temp = 0.0
+        service.hd_fc.deferred_apply = True
 
         service.nvme_fc_enabled = False
         service.gpu_fc_enabled = False
@@ -566,6 +568,7 @@ class TestService:
         service.const_fc.name = ConstFc.CS_CONST_FC
         service.const_fc.ipmi_zone = [1]
         service.const_fc.last_level = 0
+        service.const_fc.deferred_apply = True
 
         levels = service._collect_desired_levels()  # pylint: disable=protected-access
         names = [name for name, _, _, _ in levels]
@@ -595,6 +598,7 @@ class TestService:
         service.hd_fc.ipmi_zone = [1]
         service.hd_fc.last_level = 45
         service.hd_fc.last_temp = 38.0
+        service.hd_fc.deferred_apply = True
 
         service.nvme_fc_enabled = True
         service.nvme_fc = FanController.__new__(FanController)
@@ -602,6 +606,7 @@ class TestService:
         service.nvme_fc.ipmi_zone = [1]
         service.nvme_fc.last_level = 70
         service.nvme_fc.last_temp = 42.5
+        service.nvme_fc.deferred_apply = True
 
         service.gpu_fc_enabled = False
         service.const_fc_enabled = False
@@ -635,6 +640,7 @@ class TestService:
         service.cpu_fc.ipmi_zone = [0]
         service.cpu_fc.last_level = 60
         service.cpu_fc.last_temp = 45.0
+        service.cpu_fc.deferred_apply = True
 
         service.hd_fc_enabled = False
         service.nvme_fc_enabled = False
@@ -671,6 +677,7 @@ class TestService:
         service.const_fc.name = ConstFc.CS_CONST_FC
         service.const_fc.ipmi_zone = [0]
         service.const_fc.last_level = 50
+        service.const_fc.deferred_apply = True
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(0, 50)
@@ -700,6 +707,7 @@ class TestService:
         service.hd_fc.ipmi_zone = [1]
         service.hd_fc.last_level = 45
         service.hd_fc.last_temp = 38.0
+        service.hd_fc.deferred_apply = True
 
         service.nvme_fc_enabled = False
         service.gpu_fc_enabled = False
@@ -708,6 +716,7 @@ class TestService:
         service.const_fc.name = ConstFc.CS_CONST_FC
         service.const_fc.ipmi_zone = [1]
         service.const_fc.last_level = 80
+        service.const_fc.deferred_apply = True
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(1, 80)
@@ -737,6 +746,7 @@ class TestService:
         service.hd_fc.ipmi_zone = [1]
         service.hd_fc.last_level = 70
         service.hd_fc.last_temp = 55.0
+        service.hd_fc.deferred_apply = True
 
         service.nvme_fc_enabled = False
         service.gpu_fc_enabled = False
@@ -745,6 +755,7 @@ class TestService:
         service.const_fc.name = ConstFc.CS_CONST_FC
         service.const_fc.ipmi_zone = [1]
         service.const_fc.last_level = 40
+        service.const_fc.deferred_apply = True
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(1, 70)
@@ -752,6 +763,44 @@ class TestService:
         log_output = str(mock_log_msg.call_args_list)
         assert "winner: HD=70%/55.0C" in log_output
         assert "losers: CONST=40%" in log_output, "CONST loser should have no temperature"
+
+    def test_apply_fan_levels_skips_non_deferred(self, mocker: MockerFixture):
+        """Test that _apply_fan_levels() skips non-deferred controllers."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {}
+
+        # CPU deferred on shared zone 0, HD non-deferred on non-shared zone 1
+        service.cpu_fc_enabled = True
+        service.cpu_fc = FanController.__new__(FanController)
+        service.cpu_fc.name = CpuFc.CS_CPU_FC
+        service.cpu_fc.ipmi_zone = [0]
+        service.cpu_fc.last_level = 60
+        service.cpu_fc.last_temp = 45.0
+        service.cpu_fc.deferred_apply = True
+
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+        service.hd_fc.last_level = 40
+        service.hd_fc.last_temp = 23.0
+        service.hd_fc.deferred_apply = False
+
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = False
+
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        # Only zone 0 should get an IPMI call, zone 1 is handled by HD directly
+        mock_set_fan_level.assert_called_once_with(0, 60)
+        assert 0 in service.applied_levels
+        assert 1 not in service.applied_levels
 
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
         """Test that _apply_fan_levels() skips IPMI call when level hasn't changed."""
@@ -771,6 +820,7 @@ class TestService:
         service.hd_fc.ipmi_zone = [1]
         service.hd_fc.last_level = 70
         service.hd_fc.last_temp = 40.0
+        service.hd_fc.deferred_apply = True
 
         service.nvme_fc_enabled = False
         service.gpu_fc_enabled = False

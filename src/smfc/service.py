@@ -113,21 +113,21 @@ class Service:
         return ""
 
     def _collect_desired_levels(self) -> List[Tuple[str, List[int], int, float]]:
-        """Collect desired fan levels from all enabled controllers.
+        """Collect desired fan levels from deferred controllers only (non-deferred controllers handle their own zones).
 
         Returns:
             List[Tuple[str, List[int], int, float]]: list of (name, ipmi_zones, last_level, last_temp) tuples
         """
         levels: List[Tuple[str, List[int], int, float]] = []
-        if self.cpu_fc_enabled and self.cpu_fc.last_level > 0:
+        if self.cpu_fc_enabled and self.cpu_fc.deferred_apply and self.cpu_fc.last_level > 0:
             levels.append((CpuFc.CS_CPU_FC, self.cpu_fc.ipmi_zone, self.cpu_fc.last_level, self.cpu_fc.last_temp))
-        if self.hd_fc_enabled and self.hd_fc.last_level > 0:
+        if self.hd_fc_enabled and self.hd_fc.deferred_apply and self.hd_fc.last_level > 0:
             levels.append((HdFc.CS_HD_FC, self.hd_fc.ipmi_zone, self.hd_fc.last_level, self.hd_fc.last_temp))
-        if self.nvme_fc_enabled and self.nvme_fc.last_level > 0:
+        if self.nvme_fc_enabled and self.nvme_fc.deferred_apply and self.nvme_fc.last_level > 0:
             levels.append((NvmeFc.CS_NVME_FC, self.nvme_fc.ipmi_zone, self.nvme_fc.last_level, self.nvme_fc.last_temp))
-        if self.gpu_fc_enabled and self.gpu_fc.last_level > 0:
+        if self.gpu_fc_enabled and self.gpu_fc.deferred_apply and self.gpu_fc.last_level > 0:
             levels.append((GpuFc.CS_GPU_FC, self.gpu_fc.ipmi_zone, self.gpu_fc.last_level, self.gpu_fc.last_temp))
-        if self.const_fc_enabled:
+        if self.const_fc_enabled and self.const_fc.deferred_apply:
             levels.append((ConstFc.CS_CONST_FC, self.const_fc.ipmi_zone, self.const_fc.last_level, 0.0))
         return levels
 
@@ -142,7 +142,7 @@ class Service:
                 zone_contributors.setdefault(zone, []).append((name, level, temp))
                 if zone not in zone_levels or level > zone_levels[zone][0]:
                     zone_levels[zone] = (level, name)
-        # Apply only changed levels
+        # Apply only changed levels (non-deferred controllers handle their own zones directly).
         for zone, (level, winner) in zone_levels.items():
             if self.applied_levels.get(zone) != level:
                 self.ipmi.set_fan_level(zone, level)
