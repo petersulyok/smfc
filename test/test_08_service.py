@@ -648,6 +648,111 @@ class TestService:
         log_output = str(mock_log_msg.call_args_list)
         assert "IPMI zone [0]: new level = 60% (CPU=45.0C)" in log_output
 
+    def test_apply_fan_levels_single_zone_const(self, mocker: MockerFixture):
+        """Test that _apply_fan_levels() logs without temperature for a single CONST controller zone."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {}
+
+        # Single CONST controller on zone 0
+        service.cpu_fc_enabled = False
+        service.hd_fc_enabled = False
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = True
+        service.const_fc = FanController.__new__(FanController)
+        service.const_fc.name = ConstFc.CS_CONST_FC
+        service.const_fc.ipmi_zone = [0]
+        service.const_fc.last_level = 50
+
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        mock_set_fan_level.assert_called_once_with(0, 50)
+        assert service.applied_levels[0] == 50
+        # Single CONST zone should log without temperature
+        log_output = str(mock_log_msg.call_args_list)
+        assert "IPMI zone [0]: new level = 50% (CONST)" in log_output
+
+    def test_apply_fan_levels_shared_zone_const_winner(self, mocker: MockerFixture):
+        """Test that _apply_fan_levels() logs correctly when CONST wins arbitration."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {}
+
+        # CONST at 80% wins over HD at 45% on zone 1
+        service.cpu_fc_enabled = False
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+        service.hd_fc.last_level = 45
+        service.hd_fc.last_temp = 38.0
+
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = True
+        service.const_fc = FanController.__new__(FanController)
+        service.const_fc.name = ConstFc.CS_CONST_FC
+        service.const_fc.ipmi_zone = [1]
+        service.const_fc.last_level = 80
+
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        mock_set_fan_level.assert_called_once_with(1, 80)
+        assert service.applied_levels[1] == 80
+        log_output = str(mock_log_msg.call_args_list)
+        assert "winner: CONST=80%" in log_output, "CONST winner should have no temperature"
+        assert "losers: HD=45%/38.0C" in log_output
+
+    def test_apply_fan_levels_shared_zone_const_loser(self, mocker: MockerFixture):
+        """Test that _apply_fan_levels() logs correctly when CONST loses arbitration."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {}
+
+        # HD at 70% wins over CONST at 40% on zone 1
+        service.cpu_fc_enabled = False
+        service.hd_fc_enabled = True
+        service.hd_fc = FanController.__new__(FanController)
+        service.hd_fc.name = HdFc.CS_HD_FC
+        service.hd_fc.ipmi_zone = [1]
+        service.hd_fc.last_level = 70
+        service.hd_fc.last_temp = 55.0
+
+        service.nvme_fc_enabled = False
+        service.gpu_fc_enabled = False
+        service.const_fc_enabled = True
+        service.const_fc = FanController.__new__(FanController)
+        service.const_fc.name = ConstFc.CS_CONST_FC
+        service.const_fc.ipmi_zone = [1]
+        service.const_fc.last_level = 40
+
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        mock_set_fan_level.assert_called_once_with(1, 70)
+        assert service.applied_levels[1] == 70
+        log_output = str(mock_log_msg.call_args_list)
+        assert "winner: HD=70%/55.0C" in log_output
+        assert "losers: CONST=40%" in log_output, "CONST loser should have no temperature"
+
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
         """Test that _apply_fan_levels() skips IPMI call when level hasn't changed."""
         mock_print = MagicMock()

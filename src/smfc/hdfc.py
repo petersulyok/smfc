@@ -157,19 +157,17 @@ class HdFc(FanController):
         args: List[str]
 
         # Execute `smartctl` command.
-        try:
-            # Build argument list.
-            args = []
-            if self.sudo:
-                args.append("sudo")
-            args.append(self.smartctl_path)
-            args.extend(arguments)
-            r = subprocess.run(args, check=False, capture_output=True, text=True)
-            # In case if sudo return code report execution problem (for smartctl it could be any SMART error)
-            if r.returncode != 0 and self.sudo and "sudo" in r.stderr:
-                raise RuntimeError(f"sudo error ({r.returncode}): {r.stderr}!")
-        except FileNotFoundError as e:
-            raise e
+        # Build argument list.
+        args = []
+        if self.sudo:
+            args.append("sudo")
+        args.append(self.smartctl_path)
+        args.extend(arguments)
+        # May raise FileNotFoundError if smartctl is not found.
+        r = subprocess.run(args, check=False, capture_output=True, text=True)
+        # In case if sudo return code report execution problem (for smartctl it could be any SMART error)
+        if r.returncode != 0 and self.sudo and "sudo" in r.stderr:
+            raise RuntimeError(f"sudo error ({r.returncode}): {r.stderr}!")
         return r
 
     def _get_nth_temp(self, index: int) -> float:

@@ -83,10 +83,9 @@ class Ipmi:
         bmc_timeout = 0.0
         while 1:
             try:
+                # May raise FileNotFoundError if ipmitool is not found.
                 self._exec_ipmitool(["sdr"])
                 break
-            except FileNotFoundError as e:
-                raise e
             except RuntimeError as e:
                 # In case of ipmitool error we try to wait BMC initialization in maximum 120 seconds
                 # (in 5 seconds steps), otherwise reraise the exception.
@@ -160,27 +159,25 @@ class Ipmi:
         r: subprocess.CompletedProcess  # result of the executed process
         arguments: List[str]  # Command arguments
 
-        try:
-            # Construct command line parameters.
-            arguments = []
-            # Add `sudo` if needed.
-            if self.sudo:
-                arguments.append("sudo")
-            # Add `ipmitool` path.
-            arguments.append(self.command)
-            # Add remote parameters if needed.
-            if self.remote_parameters:
-                arguments.extend(self.remote_parameters.split())
-            # Add additional command line parameters from caller.
-            arguments.extend(args)
-            r = subprocess.run(arguments, check=False, capture_output=True, text=True)
-            # Check error code.
-            if r.returncode != 0:
-                if self.sudo and "sudo" in r.stderr:
-                    raise RuntimeError(f"sudo error ({r.returncode}): {r.stderr}.")
-                raise RuntimeError(f"ipmitool error ({r.returncode}): {r.stderr}.")
-        except FileNotFoundError as e:
-            raise e
+        # Construct command line parameters.
+        arguments = []
+        # Add `sudo` if needed.
+        if self.sudo:
+            arguments.append("sudo")
+        # Add `ipmitool` path.
+        arguments.append(self.command)
+        # Add remote parameters if needed.
+        if self.remote_parameters:
+            arguments.extend(self.remote_parameters.split())
+        # Add additional command line parameters from caller.
+        arguments.extend(args)
+        # May raise FileNotFoundError if ipmitool is not found.
+        r = subprocess.run(arguments, check=False, capture_output=True, text=True)
+        # Check error code.
+        if r.returncode != 0:
+            if self.sudo and "sudo" in r.stderr:
+                raise RuntimeError(f"sudo error ({r.returncode}): {r.stderr}.")
+            raise RuntimeError(f"ipmitool error ({r.returncode}): {r.stderr}.")
         return r
 
     def get_fan_mode(self) -> int:

@@ -52,10 +52,8 @@ class GpuFc(FanController):
         # Save and validate GpuFc class-specific parameters.
         gpu_id_list = config[self.CS_GPU_FC].get(self.CV_GPU_FC_GPU_IDS, "0")
         gpu_id_list = re.sub(" +", " ", gpu_id_list.strip())
-        try:
-            self.gpu_device_ids = [int(s) for s in gpu_id_list.split("," if "," in gpu_id_list else " ")]
-        except ValueError as e:
-            raise e
+        # May raise ValueError if GPU ID string contains non-integer values.
+        self.gpu_device_ids = [int(s) for s in gpu_id_list.split("," if "," in gpu_id_list else " ")]
         for gid in self.gpu_device_ids:
             if gid not in range(0, 101):
                 raise ValueError(f"invalid value: {self.CV_GPU_FC_GPU_IDS}={gpu_id_list}.")
@@ -96,12 +94,10 @@ class GpuFc(FanController):
         args: List[str] = []  # List of arguments
 
         # Execute `nvidia-smi` command.
-        try:
-            args.append(self.nvidia_smi_path)
-            args.extend(arguments)
-            r = subprocess.run(args, check=False, capture_output=True, text=True)
-        except FileNotFoundError as e:
-            raise e
+        args.append(self.nvidia_smi_path)
+        args.extend(arguments)
+        # May raise FileNotFoundError if nvidia-smi is not found.
+        r = subprocess.run(args, check=False, capture_output=True, text=True)
         return r
 
     def _get_nth_temp(self, index: int) -> float:

@@ -73,10 +73,8 @@ class FanController:
         self.ipmi = ipmi
         # Read the list of IPMI zones from a string (trim and remove multiple spaces, convert strings to integers)
         zone_str = re.sub(" +", " ", ipmi_zone.strip())
-        try:
-            self.ipmi_zone = [int(s) for s in zone_str.split("," if "," in ipmi_zone else " ")]
-        except ValueError as e:
-            raise e
+        # May raise ValueError if zone string contains non-integer values.
+        self.ipmi_zone = [int(s) for s in zone_str.split("," if "," in ipmi_zone else " ")]
         for zone in self.ipmi_zone:
             if zone not in range(0, 101):
                 raise ValueError(f"invalid value: ipmi_zone={ipmi_zone}.")

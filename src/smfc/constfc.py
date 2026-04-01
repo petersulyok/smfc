@@ -41,10 +41,8 @@ class ConstFc(FanController):
         # Read the list of IPMI zones from a string (trim and remove multiple spaces, convert strings to integers)
         ipmi_zone_str = config[ConstFc.CS_CONST_FC].get(ConstFc.CV_CONST_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}")
         ipmi_zone_str = re.sub(" +", " ", ipmi_zone_str.strip())
-        try:
-            self.ipmi_zone = [int(s) for s in ipmi_zone_str.split("," if "," in ipmi_zone_str else " ")]
-        except ValueError as e:
-            raise e
+        # May raise ValueError if zone string contains non-integer values.
+        self.ipmi_zone = [int(s) for s in ipmi_zone_str.split("," if "," in ipmi_zone_str else " ")]
         for zone in self.ipmi_zone:
             if zone not in range(0, 101):
                 raise ValueError(f"invalid value: ipmi_zone={ipmi_zone_str}.")
