@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.3.0] - 2026.04.01
 
+### Changed
+- Removed pointless catch-and-re-raise exception handling across source files, with inline comments documenting potential exceptions.
+- Renamed "Super Micro" to "Supermicro" across the entire project.
+- Updated references section in README.md: added tools/standards/kernel links, removed archived/inactive similar projects, added new active ones.
+- Fixed broken links and cross-references in README.md (wrong relative path, broken anchor, missing section number, unlinked issue references).
+
 ### Fixed
 - Shared IPMI zone arbitration: fixed logging for CONST fan controller in single-contributor zones (was producing a dangling `=` with no temperature value).
+- Shared IPMI zone arbitration: non-shared zones were processed by `_apply_fan_levels()`, causing double IPMI calls and double logging.
 
 ## [5.2.0] - 2026.03.30
 
