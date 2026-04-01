@@ -101,5 +101,5 @@ max-line-length=120
 disable= [
     "missing-module-docstring", "too-many-instance-attributes", "too-many-arguments", "too-many-positional-arguments",
     "too-many-locals", "too-many-branches", "too-many-statements", "assignment-from-no-return", "too-many-public-methods",
-    "duplicate-code"
+    "duplicate-code", "too-many-lines"
 ]
