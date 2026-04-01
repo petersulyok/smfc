@@ -752,6 +752,7 @@ Further readings:
 
 #### Supermicro
  - [BMC IPMI User's Guide 1.1b (X10/X11/H11)](https://www.supermicro.com/manuals/other/IPMI_Users_Guide.pdf)
+ - [X9 SMM IPMI User's Guide](https://www.supermicro.com/manuals/other/X9_SMM_IPMI.pdf)
  - [Supermicro Management Software download](https://www.supermicro.com/en/solutions/management-software/bmc-resources)
  - [IPMI utilities overiew](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities)
  - [IPMICFG User's Guide (1.18)](https://www.supermicro.com/Bios/sw_download/968/IPMICFG_UserGuide.pdf)
