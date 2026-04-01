@@ -81,7 +81,7 @@ class Ipmi:
         # Validate configuration
         # Check 1: a valid command can be executed successfully and wait if BMC is not ready.
         bmc_timeout = 0.0
-        while 1:
+        while True:
             try:
                 # May raise FileNotFoundError if ipmitool is not found.
                 self._exec_ipmitool(["sdr"])
@@ -95,12 +95,12 @@ class Ipmi:
                     bmc_timeout += 5
                     if bmc_timeout < Ipmi.BMC_INIT_TIMEOUT:
                         continue
-                raise e
+                raise
 
         # Check 2: fan_mode_delay must be positive.
         if self.fan_mode_delay < 0:
             raise ValueError(f"Negative fan_mode_delay= parameter ({self.fan_mode_delay})")
-        # Check 3: fan_mode_delay must be positive.
+        # Check 3: fan_level_delay must be positive.
         if self.fan_level_delay < 0:
             raise ValueError(f"Negative fan_level_delay= parameter ({self.fan_level_delay})")
 
