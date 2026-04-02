@@ -29,6 +29,7 @@ class NvmeFc(FanController):
     CV_NVME_FC_MAX_TEMP: str = "max_temp"
     CV_NVME_FC_MIN_LEVEL: str = "min_level"
     CV_NVME_FC_MAX_LEVEL: str = "max_level"
+    CV_NVME_FC_SMOOTHING: str = "smoothing"
     CV_NVME_FC_NVME_NAMES: str = "nvme_names"
 
     def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
@@ -85,6 +86,7 @@ class NvmeFc(FanController):
             config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_MAX_TEMP, fallback=70),
             config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_MIN_LEVEL, fallback=35),
             config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_MAX_LEVEL, fallback=100),
+            config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_SMOOTHING, fallback=1),
         )
 
         # Print configuration in CONFIG log level (or higher).

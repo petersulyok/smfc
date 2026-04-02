@@ -66,6 +66,7 @@ class TestGpuFc:
         assert my_gpufc.max_temp == max_temp, error
         assert my_gpufc.min_level == min_level, error
         assert my_gpufc.max_level == max_level, error
+        assert my_gpufc.smoothing == 1, error
         assert (my_gpufc.gpu_device_ids ==
                 [int(s) for s in gpu_device_ids.split("," if "," in gpu_device_ids else " ")]), error
         assert my_gpufc.nvidia_smi_path == nvidia_smi_cmd, error
@@ -102,6 +103,7 @@ class TestGpuFc:
         assert my_gpufc.max_temp == 70, error
         assert my_gpufc.min_level == 35, error
         assert my_gpufc.max_level == 100, error
+        assert my_gpufc.smoothing == 1, error
         assert my_gpufc.gpu_device_ids == [0], error
         assert my_gpufc.nvidia_smi_path == "/usr/bin/nvidia-smi", error
 

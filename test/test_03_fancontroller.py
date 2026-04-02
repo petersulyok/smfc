@@ -5,6 +5,7 @@
 #
 import time
 import re
+from collections import deque
 from typing import List, Tuple
 import pytest
 import pyudev
@@ -20,27 +21,28 @@ class TestFanController:
     # pylint: disable=line-too-long
     @pytest.mark.parametrize(
         "ipmi_zone, name, count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, "
-        "min_level, max_level, error",
+        "min_level, max_level, smoothing, error",
         [
-            ("0", CpuFc.CS_CPU_FC, 1, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, "FanController.__init__() 1"),
-            ("0", CpuFc.CS_CPU_FC, 4, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, "FanController.__init__() 2"),
-            ("0", CpuFc.CS_CPU_FC, 6, FanController.CALC_AVG, 6, 5, 4, 32, 52, 37, 95,  "FanController.__init__() 3"),
-            ("0", CpuFc.CS_CPU_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90,  "FanController.__init__() 4"),
-            ("1", HdFc.CS_HD_FC, 1, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100,   "FanController.__init__() 5"),
-            ("1", HdFc.CS_HD_FC, 4, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100,   "FanController.__init__() 6"),
-            ("1", HdFc.CS_HD_FC, 6, FanController.CALC_AVG, 6, 5, 4, 32, 52, 37, 95,    "FanController.__init__() 7"),
-            ("1", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90,    "FanController.__init__() 8"),
-            ("0, 1", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, "FanController.__init__() 9"),
-            ("0, 1, 2", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, "FanController.__init__() 10"),
-            (" 0 1 2", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, "FanController.__init__() 11"),
-            ("  0  1  2 ", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, "FanController.__init__() 12"),
-            ("  0,  1,  2 ", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, "FanController.__init__() 13"),
+            ("0", CpuFc.CS_CPU_FC, 1, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 1"),
+            ("0", CpuFc.CS_CPU_FC, 4, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 2"),
+            ("0", CpuFc.CS_CPU_FC, 6, FanController.CALC_AVG, 6, 5, 4, 32, 52, 37, 95, 1, "FanController.__init__() 3"),
+            ("0", CpuFc.CS_CPU_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 4"),
+            ("1", HdFc.CS_HD_FC, 1, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 5"),
+            ("1", HdFc.CS_HD_FC, 4, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 6"),
+            ("1", HdFc.CS_HD_FC, 6, FanController.CALC_AVG, 6, 5, 4, 32, 52, 37, 95, 1, "FanController.__init__() 7"),
+            ("1", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 8"),
+            ("0, 1", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 9"),
+            ("0, 1, 2", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 10"),
+            (" 0 1 2", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 11"),
+            ("  0  1  2 ", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 12"),
+            ("  0,  1,  2 ", HdFc.CS_HD_FC, 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 13"),
+            ("0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 4, "FanController.__init__() 14"),
         ],
     )
     # pylint: enable=line-too-long
     def test_init_p1(self, mocker: MockerFixture, ipmi_zone: str, name: str, count: int, temp_calc: int,
                      steps: int, sensitivity: float, polling: float, min_temp: float, max_temp: float,
-                     min_level: int, max_level, error: str,) -> None:
+                     min_level: int, max_level, smoothing: int, error: str,) -> None:
         """Positive unit test for FanController.__init__() method. It contains the following steps:
         - mock print(), FanController._get_nth_temp() functions
         - initialize a Log, Ipmi, and FanController classes
@@ -55,7 +57,7 @@ class TestFanController:
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_fc = FanController(my_log, my_ipmi, ipmi_zone, name, count, temp_calc, steps, sensitivity, polling,
-                              min_temp, max_temp, min_level, max_level,)
+                              min_temp, max_temp, min_level, max_level, smoothing)
         assert my_fc.log == my_log, error
         assert my_fc.ipmi == my_ipmi
         zone_str = re.sub(" +", " ", ipmi_zone.strip())
@@ -70,43 +72,49 @@ class TestFanController:
         assert my_fc.max_temp == max_temp, error
         assert my_fc.min_level == min_level, error
         assert my_fc.max_level == max_level, error
+        assert my_fc.smoothing == smoothing, error
         assert my_fc.level_step == (max_level - min_level) / steps, error
         assert my_fc.last_temp == 0, error
         assert my_fc.last_level == 0, error
+        assert isinstance(my_fc._temp_history, deque), error
+        assert my_fc._temp_history.maxlen == smoothing, error
 
     @pytest.mark.parametrize(
         "ipmi_zone, name, count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, "
-        "min_level, max_level, error",
+        "min_level, max_level, smoothing, error",
         [
             # ipmi_zone is invalid
-            ("-1", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, "FanController.__init__() 14"),
-            ("101", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, "FanController.__init__() 15"),
-            ("%, &", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, "FanController.__init__() 16"),
-            ("1; 2; 3", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, "FanController.__init__() 17"),
-            ("1, %, 3", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, "FanController.__init__() 18"),
+            ("-1", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 15"),
+            ("101", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 16"),
+            ("%, &", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 17"),
+            ("1; 2; 3", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 18"),
+            ("1, %, 3", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 19"),
             # count <= 0
-            ("0", CpuFc.CS_CPU_FC, -1, 0, 5, 4, 2, 30, 50, 35, 100, "FanController.__init__() 19"),
-            ("0", CpuFc.CS_CPU_FC, 0, 0, 5, 4, 2, 30, 50, 35, 100, "FanController.__init__() 20"),
+            ("0", CpuFc.CS_CPU_FC, -1, 0, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 20"),
+            ("0", CpuFc.CS_CPU_FC, 0, 0, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 21"),
             # temp_calc is invalid
-            ("0", CpuFc.CS_CPU_FC, 1, -1, 5, 4, 2, 30, 50, 35, 100, "FanController.__init__() 21"),
-            ("0", CpuFc.CS_CPU_FC, 1, 100, 5, 4, 2, 30, 50, 35, 100, "FanController.__init__() 22"),
+            ("0", CpuFc.CS_CPU_FC, 1, -1, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 22"),
+            ("0", CpuFc.CS_CPU_FC, 1, 100, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 23"),
             # step <= 0
-            ("1", HdFc.CS_HD_FC, 1, 1, -2, 4, 2, 30, 50, 35, 100, "FanController.__init__() 23"),
-            ("1", HdFc.CS_HD_FC, 1, 1, 0, 4, 2, 30, 50, 35, 100, "FanController.__init__() 24"),
+            ("1", HdFc.CS_HD_FC, 1, 1, -2, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 24"),
+            ("1", HdFc.CS_HD_FC, 1, 1, 0, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 25"),
             # sensitivity <= 0
-            ("1", HdFc.CS_HD_FC, 1, 1, 5, 0, 2, 30, 50, 35, 100, "FanController.__init__() 25"),
-            ("1", HdFc.CS_HD_FC, 1, 1, 5, -2, 2, 30, 50, 35, 100, "FanController.__init__() 26"),
+            ("1", HdFc.CS_HD_FC, 1, 1, 5, 0, 2, 30, 50, 35, 100, 1, "FanController.__init__() 26"),
+            ("1", HdFc.CS_HD_FC, 1, 1, 5, -2, 2, 30, 50, 35, 100, 1, "FanController.__init__() 27"),
             # polling < 0
-            ("1", HdFc.CS_HD_FC, 1, 1, 5, 4, -2, 30, 50, 35, 100, "FanController.__init__() 27"),
+            ("1", HdFc.CS_HD_FC, 1, 1, 5, 4, -2, 30, 50, 35, 100, 1, "FanController.__init__() 28"),
             # max_temp < min_temp
-            ("1", HdFc.CS_HD_FC, 1, 1, 5, 4, 2, 50, 30, 35, 100, "FanController.__init__() 28"),
+            ("1", HdFc.CS_HD_FC, 1, 1, 5, 4, 2, 50, 30, 35, 100, 1, "FanController.__init__() 29"),
             # max_level < min_level
-            ("1", HdFc.CS_HD_FC, 1, 1, 5, 4, 2, 30, 50, 100, 35, "FanController.__init__() 29"),
+            ("1", HdFc.CS_HD_FC, 1, 1, 5, 4, 2, 30, 50, 100, 35, 1, "FanController.__init__() 30"),
+            # smoothing < 1
+            ("0", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, 0, "FanController.__init__() 31"),
+            ("0", CpuFc.CS_CPU_FC, 1, 0, 5, 4, 2, 30, 50, 35, 100, -1, "FanController.__init__() 32"),
         ],
     )
     def test_init_n1(self, mocker: MockerFixture, ipmi_zone: str, name: str, count: int, temp_calc: int,
                      steps: int, sensitivity: float, polling: float, min_temp: float, max_temp: float,
-                     min_level: int, max_level, error: str,) -> None:
+                     min_level: int, max_level, smoothing: int, error: str,) -> None:
         """Negative unit test for FanController.__init__() method. It contains the following steps:
         - mock print(), FanController._get_nth_temp() functions
         - initialize a Config, Log, Ipmi, and FanController classes
@@ -121,7 +129,7 @@ class TestFanController:
         my_ipmi = Ipmi.__new__(Ipmi)
         with pytest.raises(ValueError) as cm:
             FanController(my_log, my_ipmi, ipmi_zone, name, count, temp_calc, steps, sensitivity, polling,
-                          min_temp, max_temp, min_level, max_level,)
+                          min_temp, max_temp, min_level, max_level, smoothing)
         assert cm.type is ValueError, error
 
     @pytest.mark.parametrize(
@@ -375,7 +383,7 @@ class TestFanController:
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_fc = FanController(my_log, my_ipmi, "0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 1, 1, 30, 50, 35,
-                              100)
+                              100, 1)
         my_fc.deferred_apply = True
         my_fc.last_level = 0
         my_fc.last_time = time.monotonic() - 2
@@ -386,6 +394,83 @@ class TestFanController:
         if mock_set_fan_level.call_count > 0:
             # set_fan_level was called but should not have triggered IPMI
             mock_set_fan_level.assert_called_with(100)
+
+    def test_run_smoothing_spike(self, mocker: MockerFixture):
+        """Test that smoothing dampens a single-cycle temperature spike."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.FanController.set_fan_level", mock_set_fan_level)
+        mock_temp = MagicMock()
+        mock_temp.return_value = 0
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        # steps=5, min_temp=30, max_temp=50, min_level=35, max_level=100, smoothing=4
+        my_fc = FanController(my_log, my_ipmi, "0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 1, 1, 30, 50, 35,
+                              100, 4)
+        # Feed 3 stable readings at 30C, then a spike to 55C.
+        # With smoothing=4, the average after the spike is (30+30+30+55)/4 = 36.25C
+        # which maps to step round((36.25-30)/4.0) = round(1.5625) = 2 → level = round(2*13)+35 = 61
+        # Without smoothing, 55C would map to max_level=100.
+        temps = [30.0, 30.0, 30.0, 55.0]
+        for t in temps:
+            mock_temp.return_value = t
+            my_fc.last_level = 0
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+        # The smoothed temp after the spike should be 36.25C, not 55C.
+        assert my_fc.last_temp == pytest.approx(36.25, abs=0.01), "smoothing should average temperatures"
+        assert my_fc.last_level == 61, "smoothed spike should map to intermediate level, not max"
+
+    def test_run_smoothing_warmup(self, mocker: MockerFixture):
+        """Test that smoothing works correctly during warm-up (deque not full yet)."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.FanController.set_fan_level", mock_set_fan_level)
+        mock_temp = MagicMock()
+        mock_temp.return_value = 0
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        # smoothing=3
+        my_fc = FanController(my_log, my_ipmi, "0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 1, 1, 30, 50, 35,
+                              100, 3)
+        # First reading: deque has 1 element, average = 40.0
+        mock_temp.return_value = 40.0
+        my_fc.last_level = 0
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        assert my_fc.last_temp == pytest.approx(40.0), "first reading should use single value"
+        # Second reading: deque has 2 elements, average = (40+46)/2 = 43.0
+        mock_temp.return_value = 46.0
+        my_fc.last_level = 0
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        assert my_fc.last_temp == pytest.approx(43.0), "warm-up should average available readings"
+
+    def test_run_smoothing_sustained_heat(self, mocker: MockerFixture):
+        """Test that smoothing allows full response to sustained temperature increase."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.FanController.set_fan_level", mock_set_fan_level)
+        mock_temp = MagicMock()
+        mock_temp.return_value = 0
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        # smoothing=3, steps=5, sensitivity=1, min_temp=30, max_temp=50
+        my_fc = FanController(my_log, my_ipmi, "0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 1, 1, 30, 50, 35,
+                              100, 3)
+        # First run at 50C: deque=[50], avg=50, passes sensitivity (|50-0|>=1), level=100
+        mock_temp.return_value = 50.0
+        my_fc.last_level = 0
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        assert my_fc.last_temp == pytest.approx(50.0), "sustained heat should converge to actual temp"
+        assert my_fc.last_level == 100, "sustained max temp should reach max level"
 
 
 # End.

@@ -40,6 +40,7 @@ class HdFc(FanController):
     CV_HD_FC_MAX_TEMP: str = "max_temp"
     CV_HD_FC_MIN_LEVEL: str = "min_level"
     CV_HD_FC_MAX_LEVEL: str = "max_level"
+    CV_HD_FC_SMOOTHING: str = "smoothing"
     CV_HD_FC_HD_NAMES: str = "hd_names"
     CV_HD_FC_SMARTCTL_PATH: str = "smartctl_path"
     CV_HD_FC_STANDBY_GUARD_ENABLED: str = "standby_guard_enabled"
@@ -106,6 +107,7 @@ class HdFc(FanController):
             config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_MAX_TEMP, fallback=46),
             config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_MIN_LEVEL, fallback=35),
             config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_MAX_LEVEL, fallback=100),
+            config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_SMOOTHING, fallback=1),
         )
 
         # Read and validate the configuration of standby guard if enabled.

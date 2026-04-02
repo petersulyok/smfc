@@ -34,6 +34,7 @@ class GpuFc(FanController):
     CV_GPU_FC_MAX_TEMP: str = "max_temp"
     CV_GPU_FC_MIN_LEVEL: str = "min_level"
     CV_GPU_FC_MAX_LEVEL: str = "max_level"
+    CV_GPU_FC_SMOOTHING: str = "smoothing"
     CV_GPU_FC_GPU_IDS: str = "gpu_device_ids"
     CV_GPU_FC_NVIDIA_SMI_PATH: str = "nvidia_smi_path"
 
@@ -73,7 +74,8 @@ class GpuFc(FanController):
             config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_MIN_TEMP, fallback=40),
             config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_MAX_TEMP, fallback=70),
             config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_MIN_LEVEL, fallback=35),
-            config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_MAX_LEVEL, fallback=100)
+            config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_MAX_LEVEL, fallback=100),
+            config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_SMOOTHING, fallback=1),
         )
 
         # Print configuration in CONFIG log level (or higher).

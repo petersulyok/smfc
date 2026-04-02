@@ -18,22 +18,23 @@ class TestCpuFc:
     """Unit test class for smfc.CpuFc() class"""
 
     @pytest.mark.parametrize(
-        "count, ipmi_zone, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, error", 
+        "count, ipmi_zone, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, "
+        "smoothing, error",
         [
-            (1, "0", FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, "CpuFc.__init__() 1" ),
-            (2, "1", FanController.CALC_MIN, 6, 5, 3, 35, 55, 36,  99, "CpuFc.__init__() 2" ),
-            (4, "2", FanController.CALC_MIN, 7, 6, 4, 40, 60, 37,  98, "CpuFc.__init__() 3" ),
-            (1, "3", FanController.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, "CpuFc.__init__() 4" ),
-            (2, "4", FanController.CALC_AVG, 6, 5, 3, 35, 55, 36,  99, "CpuFc.__init__() 5" ),
-            (4, "5", FanController.CALC_AVG, 7, 6, 4, 40, 60, 37,  98, "CpuFc.__init__() 6" ),
-            (1, "6", FanController.CALC_MAX, 5, 4, 2, 30, 50, 35, 100, "CpuFc.__init__() 7" ),
-            (2, "7", FanController.CALC_MAX, 6, 5, 3, 35, 55, 36,  99, "CpuFc.__init__() 8" ),
-            (4, "8", FanController.CALC_MAX, 7, 6, 4, 40, 60, 37,  98, "CpuFc.__init__() 9" )
+            (1, "0", FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 1"),
+            (2, "1", FanController.CALC_MIN, 6, 5, 3, 35, 55, 36, 99, 1, "CpuFc.__init__() 2"),
+            (4, "2", FanController.CALC_MIN, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 3"),
+            (1, "3", FanController.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 4"),
+            (2, "4", FanController.CALC_AVG, 6, 5, 3, 35, 55, 36, 99, 4, "CpuFc.__init__() 5"),
+            (4, "5", FanController.CALC_AVG, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 6"),
+            (1, "6", FanController.CALC_MAX, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 7"),
+            (2, "7", FanController.CALC_MAX, 6, 5, 3, 35, 55, 36, 99, 1, "CpuFc.__init__() 8"),
+            (4, "8", FanController.CALC_MAX, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 9"),
         ]
     )
     def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: str, temp_calc: int, steps: int,
                      sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
-                     max_level: int, error: str):
+                     max_level: int, smoothing: int, error: str):
         """Positive unit test for CpuFc.__init__() method. It contains the following steps:
         - mock print(), pyudev.Context.list_devices(), smfc.FanController.get_hwmon_path() functions
         - initialize a Config, Log, Ipmi, and CpuFc classes
@@ -64,6 +65,7 @@ class TestCpuFc:
             CpuFc.CV_CPU_FC_MAX_TEMP: str(max_temp),
             CpuFc.CV_CPU_FC_MIN_LEVEL: str(min_level),
             CpuFc.CV_CPU_FC_MAX_LEVEL: str(max_level),
+            CpuFc.CV_CPU_FC_SMOOTHING: str(smoothing),
         }
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
@@ -82,6 +84,7 @@ class TestCpuFc:
         assert my_cpufc.max_temp == max_temp, error
         assert my_cpufc.min_level == min_level, error
         assert my_cpufc.max_level == max_level, error
+        assert my_cpufc.smoothing == smoothing, error
         assert my_cpufc.hwmon_path == my_td.cpu_files, error
         del my_td
 
@@ -126,6 +129,7 @@ class TestCpuFc:
         assert my_cpufc.max_temp == 60, error
         assert my_cpufc.min_level == 35, error
         assert my_cpufc.max_level == 100, error
+        assert my_cpufc.smoothing == 1, error
         assert my_cpufc.hwmon_path == my_td.cpu_files, error
         del my_td
 

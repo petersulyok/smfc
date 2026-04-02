@@ -84,6 +84,7 @@ class TestHdFc:
         assert my_hdfc.max_temp == max_temp, error
         assert my_hdfc.min_level == min_level, error
         assert my_hdfc.max_level == max_level, error
+        assert my_hdfc.smoothing == 1, error
         assert my_hdfc.hd_device_names == my_td.hd_name_list, error
         assert my_hdfc.smartctl_path == cmd_smart, error
         assert my_hdfc.hwmon_path == my_td.hd_files, error
@@ -128,6 +129,7 @@ class TestHdFc:
         assert my_hdfc.max_temp == 46, error
         assert my_hdfc.min_level == 35, error
         assert my_hdfc.max_level == 100, error
+        assert my_hdfc.smoothing == 1, error
         assert my_hdfc.hd_device_names == my_td.hd_name_list, error
         assert my_hdfc.smartctl_path == "/usr/sbin/smartctl", error
         assert my_hdfc.hwmon_path == my_td.hd_files, error

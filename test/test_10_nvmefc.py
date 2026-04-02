@@ -71,6 +71,7 @@ class TestNvmeFc:
         assert mynvmefc.max_temp == max_temp, error
         assert mynvmefc.min_level == min_level, error
         assert mynvmefc.max_level == max_level, error
+        assert mynvmefc.smoothing == 1, error
         assert mynvmefc.nvme_device_names == my_td.nvme_name_list, error
         assert mynvmefc.hwmon_path == my_td.nvme_files, error
         del my_td
@@ -113,6 +114,7 @@ class TestNvmeFc:
         assert mynvmefc.max_temp == 70, error
         assert mynvmefc.min_level == 35, error
         assert mynvmefc.max_level == 100, error
+        assert mynvmefc.smoothing == 1, error
         assert mynvmefc.nvme_device_names == my_td.nvme_name_list, error
         assert mynvmefc.hwmon_path == my_td.nvme_files, error
         del my_td

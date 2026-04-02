@@ -6,6 +6,7 @@
 import os
 import time
 import re
+from collections import deque
 from typing import List, Callable
 from pyudev import Context, Device
 from smfc.ipmi import Ipmi
@@ -34,6 +35,7 @@ class FanController:
     max_temp: float         # Maximum temperature value (C)
     min_level: int          # Minimum fan level (0..100%)
     max_level: int          # Maximum fan level (0..100%)
+    smoothing: int          # Moving average window size for temperature readings (1=disabled)
     hwmon_path: List[str]   # List of paths for HWMON devices
 
     # Measured or calculated attributes
@@ -43,6 +45,7 @@ class FanController:
     last_temp: float        # Last measured temperature value (C)
     last_level: int         # Last configured fan level (0..100%)
     deferred_apply: bool    # If True, skip IPMI calls (used for zone arbitration)
+    _temp_history: deque    # Circular buffer storing recent temperature readings
 
     # Function variable for selected temperature calculation method
     get_temp_func: Callable[[], float]
@@ -67,7 +70,7 @@ class FanController:
 
     def __init__(self, log: Log, ipmi: Ipmi, ipmi_zone: str, name: str, count: int, temp_calc: int, steps: int,
                  sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
-                 max_level: int) -> None:
+                 max_level: int, smoothing: int = 1) -> None:
         """Initialize the FanController class. Will raise an exception in case of invalid parameters.
         Args:
             log (Log): reference to a Log class instance
@@ -83,6 +86,7 @@ class FanController:
             max_temp (float): maximum temperature value (C)
             min_level (int): minimum fan level value [0..100%]
             max_level (int): maximum fan level value [0..100%]
+            smoothing (int): moving average window size for temperature smoothing (1=disabled)
         Raises:
             ValueError: invalid input parameter
         """
@@ -114,6 +118,9 @@ class FanController:
             raise ValueError("invalid value: max_level < min_level")
         self.min_level = min_level
         self.max_level = max_level
+        self.smoothing = smoothing
+        if self.smoothing < 1:
+            raise ValueError("invalid value: smoothing < 1")
 
         # Set the proper temperature function.
         if self.count == 1:
@@ -136,6 +143,7 @@ class FanController:
         self.last_level = 0
         self.last_time = time.monotonic() - (polling + 1)
         self.deferred_apply = False
+        self._temp_history = deque(maxlen=self.smoothing)
         # Print configuration at CONFIG log level.
         if self.log.log_level >= Log.LOG_CONFIG:
             self.log.msg(Log.LOG_CONFIG, f"{self.name} fan controller was initialized with:")
@@ -149,6 +157,7 @@ class FanController:
             self.log.msg(Log.LOG_CONFIG, f"   max_temp = {self.max_temp}")
             self.log.msg(Log.LOG_CONFIG, f"   min_level = {self.min_level}")
             self.log.msg(Log.LOG_CONFIG, f"   max_level = {self.max_level}")
+            self.log.msg(Log.LOG_CONFIG, f"   smoothing = {self.smoothing}")
             if hasattr(self, "hwmon_path"):
                 self.log.msg(Log.LOG_CONFIG, f"   hwmon_path = {[p if p else 'smartctl' for p in self.hwmon_path]}")
             self.print_temp_level_mapping()
@@ -266,9 +275,11 @@ class FanController:
         if (current_time - self.last_time) >= self.polling:
             self.last_time = current_time
 
-            # Step 2: read the temperature and check the sensitivity gap.
+            # Step 2: read the temperature, apply smoothing, and check the sensitivity gap.
             self.callback_func()
-            current_temp = self.get_temp_func()
+            raw_temp = self.get_temp_func()
+            self._temp_history.append(raw_temp)
+            current_temp = sum(self._temp_history) / len(self._temp_history)
             self.log.msg(Log.LOG_DEBUG, f"{self.name}: new temperature > {current_temp:.1f}C")
             if abs(current_temp - self.last_temp) >= self.sensitivity:
                 self.last_temp = current_temp

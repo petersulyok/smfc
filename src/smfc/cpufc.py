@@ -25,6 +25,7 @@ class CpuFc(FanController):
     CV_CPU_FC_MAX_TEMP: str = "max_temp"
     CV_CPU_FC_MIN_LEVEL: str = "min_level"
     CV_CPU_FC_MAX_LEVEL: str = "max_level"
+    CV_CPU_FC_SMOOTHING: str = "smoothing"
 
     def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
         """Initialize the CPU fan controller class and raise exception in case of invalid configuration.
@@ -64,7 +65,8 @@ class CpuFc(FanController):
             config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MIN_TEMP, fallback=30.0),
             config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MAX_TEMP, fallback=60.0),
             config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_MIN_LEVEL, fallback=35),
-            config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_MAX_LEVEL, fallback=100)
+            config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_MAX_LEVEL, fallback=100),
+            config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_SMOOTHING, fallback=1),
         )
 
     def _get_nth_temp(self, index: int) -> float:
