@@ -76,8 +76,8 @@ class TestFanController:
         assert my_fc.level_step == (max_level - min_level) / steps, error
         assert my_fc.last_temp == 0, error
         assert my_fc.last_level == 0, error
-        assert isinstance(my_fc._temp_history, deque), error
-        assert my_fc._temp_history.maxlen == smoothing, error
+        assert isinstance(my_fc._temp_history, deque), error  # pylint: disable=protected-access
+        assert my_fc._temp_history.maxlen == smoothing, error  # pylint: disable=protected-access
 
     @pytest.mark.parametrize(
         "ipmi_zone, name, count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, "
