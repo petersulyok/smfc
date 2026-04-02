@@ -136,8 +136,9 @@ Changing the fan rotational speed is a very slow process (it could take several 
 The fan controllers implement the following strategies to avoid/minimize the unnecessary change of fan rotation speed:
 
  1. When the fan rotational speed is changed, it always applies a delay time (defined in `[IPMI] fan_level_delay=` configuration parameter) to let the fan implement the physical change.
- 2. There is a sensitivity threshold parameter (`sensitivity=`) in the fan controller configuration. While the temperature change is below this value, the fan controller does not react. 
+ 2. There is a sensitivity threshold parameter (`sensitivity=`) in the fan controller configuration. While the temperature change is below this value, the fan controller does not react.
  3. The configuration parameter `polling=` defines the frequency of the temperature reading. The bigger polling time, the lower frequency of the fan speed change.
+ 4. The `smoothing=` parameter enables a moving average window for temperature readings. When set to a value greater than 1, the fan controller averages the last N temperature readings before making fan level decisions. This reduces fan speed oscillation caused by brief temperature spikes. For example, `smoothing=4` averages the last 4 readings. Set to 1 (default) to disable smoothing.
 
 ### 3. Standby guard
 For the HD fan controller, an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
@@ -530,6 +531,8 @@ max_temp=60.0
 min_level=35
 # Maximum CPU fan level (int, %, default=100)
 max_level=100
+# Moving average window size for temperature smoothing (int, default=1, 1=disabled)
+smoothing=1
 
 
 # HD fan controller: works based on SATA or SAS HDDs/SSDs temperature.
@@ -554,6 +557,8 @@ max_temp=46.0
 min_level=35
 # Maximum HD fan level (int, %, default=100)
 max_level=100
+# Moving average window size for temperature smoothing (int, default=1, 1=disabled)
+smoothing=1
 # Names of the HDs (str multi-line list, default=)
 # MUST BE specified in '/dev/disk/by-id/...' form, for example:
 # hd_names=/dev/disk/by-id/ata-WDC_WD100EFAX-68LHPN0_8CH7T91E
@@ -590,6 +595,8 @@ max_temp=70.0
 min_level=35
 # Maximum NVMe fan level (int, %, default=100)
 max_level=100
+# Moving average window size for temperature smoothing (int, default=1, 1=disabled)
+smoothing=1
 # Names of the NVMe devices (str multi-line list, default=)
 # MUST BE specified in '/dev/disk/by-id/...' form, for example:
 # nvme_names=/dev/disk/by-id/nvme-ADATA_LEGEND_650_2OFF29AO8DKR
@@ -619,6 +626,8 @@ max_temp=70.0
 min_level=35
 # Maximum GPU fan level (int, %, default=100)
 max_level=100
+# Moving average window size for temperature smoothing (int, default=1, 1=disabled)
+smoothing=1
 # GPU device IDs (comma- or space-separated list of int, default=0)
 # These are indices in nvidia-smi temperature report.
 gpu_device_ids=0
