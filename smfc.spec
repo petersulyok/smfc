@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        5.2.0
+Version:        5.3.0
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -94,6 +94,9 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Thu Apr 02 2026 Peter Sulyok <peter@sulyok.net> - 5.3.0-1
+- UPDATE WITH RELEASE NOTES
+
 * Mon Mar 30 2026 Peter Sulyok <peter@sulyok.net> - 5.2.0-1
 - Beta support for some Supermicro X9 motherboards (platform_name=genericx9)
 - Platform module refactored: split into separate modules

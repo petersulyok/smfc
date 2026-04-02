@@ -1,3 +1,9 @@
+smfc (5.3.0) unstable; urgency=medium
+
+  * UPDATE WITH RELEASE NOTES
+
+ -- Peter Sulyok <peter@sulyok.net>  Thu, 02 Apr 2026 23:13:22 +0200
+
 smfc (5.2.0) unstable; urgency=medium
 
   * Beta support for some Supermicro X9 motherboards (platform_name=genericx9).
