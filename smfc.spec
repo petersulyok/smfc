@@ -95,7 +95,12 @@ fi
 
 %changelog
 * Thu Apr 02 2026 Peter Sulyok <peter@sulyok.net> - 5.3.0-1
-- UPDATE WITH RELEASE NOTES
+- New: Temperature smoothing feature (smoothing= parameter) for CPU, HD, NVME, GPU controllers
+- Changed: Removed pointless catch-and-re-raise exception handling
+- Changed: Renamed "Super Micro" to "Supermicro" across the project
+- Changed: Updated references section in README.md
+- Fixed: Shared IPMI zone arbitration logging for CONST fan controller
+- Fixed: Non-shared zones double IPMI calls and logging
 
 * Mon Mar 30 2026 Peter Sulyok <peter@sulyok.net> - 5.2.0-1
 - Beta support for some Supermicro X9 motherboards (platform_name=genericx9)

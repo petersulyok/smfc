@@ -5,7 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [5.3.0] - 2026.04.01
+## [5.3.0] - 2026.04.02
+
+### New
+- Temperature smoothing feature added to all temperature-based fan controllers (CPU, HD, NVME, GPU). The new `smoothing=` configuration parameter enables a moving average window for temperature readings, reducing fan speed oscillation caused by brief temperature spikes.
 
 ### Changed
 - Removed pointless catch-and-re-raise exception handling across source files, with inline comments documenting potential exceptions.

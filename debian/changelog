@@ -1,6 +1,13 @@
 smfc (5.3.0) unstable; urgency=medium
 
-  * UPDATE WITH RELEASE NOTES
+  * New: Temperature smoothing feature (smoothing= parameter) for CPU, HD,
+    NVME, GPU fan controllers. Enables moving average window for temperature
+    readings to reduce fan speed oscillation from brief temperature spikes.
+  * Changed: Removed pointless catch-and-re-raise exception handling.
+  * Changed: Renamed "Super Micro" to "Supermicro" across the project.
+  * Changed: Updated references section in README.md.
+  * Fixed: Shared IPMI zone arbitration logging for CONST fan controller.
+  * Fixed: Non-shared zones double IPMI calls and logging.
 
  -- Peter Sulyok <peter@sulyok.net>  Thu, 02 Apr 2026 23:13:22 +0200
 
