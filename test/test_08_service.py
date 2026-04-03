@@ -632,7 +632,8 @@ class TestService:
         assert "losers: HD=45%/38.0C" in log_output, "Shared zone log should mention losers with temp"
 
     def test_apply_fan_levels_single_zone(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with single-controller zone. It contains the following steps:
+        """Positive unit test for Service._apply_fan_levels() method with single-controller zone.
+        It contains the following steps:
         - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
         - initialize a Service class with single CPU controller on zone 0
         - call _apply_fan_levels()
@@ -671,7 +672,8 @@ class TestService:
         assert "IPMI zone [0]: new level = 60% (CPU=45.0C)" in log_output
 
     def test_apply_fan_levels_single_zone_const(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with single CONST controller. It contains the following steps:
+        """Positive unit test for Service._apply_fan_levels() method with single CONST controller.
+        It contains the following steps:
         - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
         - initialize a Service class with single CONST controller on zone 0
         - call _apply_fan_levels()
@@ -798,7 +800,8 @@ class TestService:
         assert "losers: CONST=40%" in log_output, "CONST loser should have no temperature"
 
     def test_apply_fan_levels_skips_non_deferred(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with non-deferred controllers. It contains the following steps:
+        """Positive unit test for Service._apply_fan_levels() method with non-deferred controllers.
+        It contains the following steps:
         - mock print(), Ipmi.set_fan_level() functions
         - initialize a Service class with CPU (deferred) on zone 0 and HD (non-deferred) on zone 1
         - call _apply_fan_levels()
@@ -841,7 +844,8 @@ class TestService:
         assert 1 not in service.applied_levels
 
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with level caching. It contains the following steps:
+        """Positive unit test for Service._apply_fan_levels() method with level caching.
+        It contains the following steps:
         - mock print(), Ipmi.set_fan_level() functions
         - initialize a Service class with HD controller and pre-cached level 70% on zone 1
         - call _apply_fan_levels() with same level
@@ -1081,7 +1085,8 @@ class TestService:
         assert service.applied_levels[1] == 70
 
     def test_check_shared_zones_detected(self, mocker: MockerFixture):
-        """Positive unit test for Service._check_shared_zones() method with shared zone detection. It contains the following steps:
+        """Positive unit test for Service._check_shared_zones() method with shared zone detection.
+        It contains the following steps:
         - mock print(), Log.msg_to_stdout() functions
         - initialize a Service class with HD and NVME controllers both on zone 1
         - call _check_shared_zones()
@@ -1114,7 +1119,8 @@ class TestService:
         assert "Shared IPMI zone 1" in log_output, "Should log shared zone 1"
 
     def test_check_shared_zones_none(self, mocker: MockerFixture):
-        """Positive unit test for Service._check_shared_zones() method with no shared zones. It contains the following steps:
+        """Positive unit test for Service._check_shared_zones() method with no shared zones.
+        It contains the following steps:
         - mock print() function
         - initialize a Service class with CPU on zone 0 and HD on zone 1 (no overlap)
         - call _check_shared_zones()
@@ -1143,7 +1149,8 @@ class TestService:
         assert result == set(), "Should not detect shared zones"
 
     def test_check_shared_zones_multi_zone(self, mocker: MockerFixture):
-        """Positive unit test for Service._check_shared_zones() method with multi-zone controller. It contains the following steps:
+        """Positive unit test for Service._check_shared_zones() method with multi-zone controller.
+        It contains the following steps:
         - mock print(), Log.msg_to_stdout() functions
         - initialize a Service class with CPU on zones [0,1] and HD on zone [1]
         - call _check_shared_zones()
@@ -1176,7 +1183,8 @@ class TestService:
         assert "Shared IPMI zone 1" in log_output, "Should log shared zone 1"
 
     def test_check_shared_zones_selective_deferred(self, mocker: MockerFixture):
-        """Positive unit test for Service._check_shared_zones() method with selective deferred mode. It contains the following steps:
+        """Positive unit test for Service._check_shared_zones() method with selective deferred mode.
+        It contains the following steps:
         - mock print() function
         - initialize a Service class with CPU on zone 0 (exclusive), HD and NVME on zone 1 (shared)
         - call _check_shared_zones() and set deferred_apply based on shared zones
@@ -1228,7 +1236,8 @@ class TestService:
         - mock print(), pyudev.Context.__init__() functions
         - create config with old-style section names ([CPU zone], [HD zone], etc.)
         - execute Service.run()
-        - ASSERT: if exit code 10 (no enabled fancontroller) is not returned, proving the migration code ran successfully
+        - ASSERT: if exit code 10 (no enabled fancontroller) is not returned,
+          proving the migration code ran successfully
         """
         my_td = TestData()
         my_config = ConfigParser()
@@ -1256,7 +1265,8 @@ class TestService:
         del my_td
 
     def test_apply_fan_levels_four_controllers_same_zone(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with four controllers. It contains the following steps:
+        """Positive unit test for Service._apply_fan_levels() method with four controllers.
+        It contains the following steps:
         - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
         - create 4 deferred controllers (CPU 40%, HD 60%, NVME 50%, GPU 75%) on the same IPMI zone 1
         - execute _apply_fan_levels()
@@ -1320,7 +1330,8 @@ class TestService:
         assert "NVME=50%/42.0C" in log_output
 
     def test_apply_fan_levels_five_controllers_with_const(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with all five controller types. It contains the following steps:
+        """Positive unit test for Service._apply_fan_levels() method with all five controller types.
+        It contains the following steps:
         - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
         - create 5 deferred controllers (CPU 40%, HD 60%, NVME 50%, GPU 55%, CONST 80%) on the same IPMI zone 1
         - execute _apply_fan_levels()
@@ -1391,7 +1402,8 @@ class TestService:
         assert "GPU=55%/60.0C" in log_output
 
     def test_apply_fan_levels_complex_three_zone_overlap(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with complex zone overlap. It contains the following steps:
+        """Positive unit test for Service._apply_fan_levels() method with complex zone overlap.
+        It contains the following steps:
         - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
         - create CPU on zones [0, 1, 2] at 50%, HD on zones [1, 2] at 65%, NVME on zone [2] at 80%
         - execute _apply_fan_levels()
@@ -1498,7 +1510,8 @@ class TestService:
         assert mock_set_fan_level.call_count == 0, "Controllers with last_level=0 should be skipped"
 
     def test_check_shared_zones_three_plus_zones_partial_overlap(self, mocker: MockerFixture):
-        """Positive unit test for Service._check_shared_zones() method with complex overlap. It contains the following steps:
+        """Positive unit test for Service._check_shared_zones() method with complex overlap.
+        It contains the following steps:
         - mock print(), Log.msg_to_stdout() functions
         - create CPU on zones [0, 1, 2], HD on zones [1, 2], NVME on zone [2]
         - execute _check_shared_zones()
@@ -1539,7 +1552,8 @@ class TestService:
         assert "Shared IPMI zone 2" in log_output
 
     def test_apply_fan_levels_multi_zone_deferred_caching(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with multi-zone caching. It contains the following steps:
+        """Positive unit test for Service._apply_fan_levels() method with multi-zone caching.
+        It contains the following steps:
         - mock print(), Ipmi.set_fan_level() functions
         - create CPU controller on zones [0, 1] with deferred apply
         - execute _apply_fan_levels() multiple times with same and different levels

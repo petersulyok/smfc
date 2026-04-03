@@ -583,7 +583,6 @@ class TestFanController:
         my_fc.last_level = 0
         my_fc.last_time = time.monotonic() - 2
         my_fc.run()
-        first_level = my_fc.last_level
         first_temp = my_fc.last_temp
         # Second reading at 37C - smoothed avg will be (35+37)/2 = 36C
         # Change from 35 to 36 is only 1C, less than sensitivity=5, so should NOT update
