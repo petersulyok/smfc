@@ -533,8 +533,14 @@ class TestService:
         del my_td
 
     def test_collect_desired_levels(self, mocker: MockerFixture):
-        """Test that _collect_desired_levels() gathers levels from enabled controllers,
-        skipping those with last_level == 0 (except ConstFc)."""
+        """Positive unit test for Service._collect_desired_levels() method. It contains the following steps:
+        - mock print() function
+        - initialize a Service class with enabled controllers (CPU, HD, CONST)
+        - set last_level values for controllers (CPU=60, HD=0, CONST=0)
+        - call _collect_desired_levels()
+        - ASSERT: if controllers with last_level=0 are not skipped (except ConstFc)
+        - ASSERT: if ConstFc with last_level=0 is not still collected
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         service = Service()
@@ -577,8 +583,13 @@ class TestService:
         assert ConstFc.CS_CONST_FC in names, "ConstFc with level 0 should still be collected"
 
     def test_apply_fan_levels_shared_zone(self, mocker: MockerFixture):
-        """Test that _apply_fan_levels() applies the maximum level when two controllers share a zone
-        and logs the winner and losers."""
+        """Positive unit test for Service._apply_fan_levels() method with shared zone. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
+        - initialize a Service class with two controllers on zone 1 (HD at 45%, NVME at 70%)
+        - call _apply_fan_levels()
+        - ASSERT: if the maximum level (70%) is not applied when two controllers share a zone
+        - ASSERT: if the log output does not contain the winner and losers
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -621,7 +632,12 @@ class TestService:
         assert "losers: HD=45%/38.0C" in log_output, "Shared zone log should mention losers with temp"
 
     def test_apply_fan_levels_single_zone(self, mocker: MockerFixture):
-        """Test that _apply_fan_levels() logs the fan level for a single-controller zone."""
+        """Positive unit test for Service._apply_fan_levels() method with single-controller zone. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
+        - initialize a Service class with single CPU controller on zone 0
+        - call _apply_fan_levels()
+        - ASSERT: if the fan level is not logged for a single-controller zone
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -655,7 +671,12 @@ class TestService:
         assert "IPMI zone [0]: new level = 60% (CPU=45.0C)" in log_output
 
     def test_apply_fan_levels_single_zone_const(self, mocker: MockerFixture):
-        """Test that _apply_fan_levels() logs without temperature for a single CONST controller zone."""
+        """Positive unit test for Service._apply_fan_levels() method with single CONST controller. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
+        - initialize a Service class with single CONST controller on zone 0
+        - call _apply_fan_levels()
+        - ASSERT: if the log output does not exclude temperature for CONST controller
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -687,7 +708,13 @@ class TestService:
         assert "IPMI zone [0]: new level = 50% (CONST)" in log_output
 
     def test_apply_fan_levels_shared_zone_const_winner(self, mocker: MockerFixture):
-        """Test that _apply_fan_levels() logs correctly when CONST wins arbitration."""
+        """Positive unit test for Service._apply_fan_levels() method when CONST wins. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
+        - initialize a Service class with CONST at 80% and HD at 45% on zone 1
+        - call _apply_fan_levels()
+        - ASSERT: if CONST (80%) does not win over HD (45%)
+        - ASSERT: if the log output does not show CONST winner without temperature
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -726,7 +753,13 @@ class TestService:
         assert "losers: HD=45%/38.0C" in log_output
 
     def test_apply_fan_levels_shared_zone_const_loser(self, mocker: MockerFixture):
-        """Test that _apply_fan_levels() logs correctly when CONST loses arbitration."""
+        """Positive unit test for Service._apply_fan_levels() method when CONST loses. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
+        - initialize a Service class with HD at 70% and CONST at 40% on zone 1
+        - call _apply_fan_levels()
+        - ASSERT: if HD (70%) does not win over CONST (40%)
+        - ASSERT: if the log output does not show CONST loser without temperature
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -765,7 +798,12 @@ class TestService:
         assert "losers: CONST=40%" in log_output, "CONST loser should have no temperature"
 
     def test_apply_fan_levels_skips_non_deferred(self, mocker: MockerFixture):
-        """Test that _apply_fan_levels() skips non-deferred controllers."""
+        """Positive unit test for Service._apply_fan_levels() method with non-deferred controllers. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level() functions
+        - initialize a Service class with CPU (deferred) on zone 0 and HD (non-deferred) on zone 1
+        - call _apply_fan_levels()
+        - ASSERT: if non-deferred controllers are not skipped in _apply_fan_levels()
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -803,7 +841,12 @@ class TestService:
         assert 1 not in service.applied_levels
 
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
-        """Test that _apply_fan_levels() skips IPMI call when level hasn't changed."""
+        """Positive unit test for Service._apply_fan_levels() method with level caching. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level() functions
+        - initialize a Service class with HD controller and pre-cached level 70% on zone 1
+        - call _apply_fan_levels() with same level
+        - ASSERT: if IPMI call is not skipped when level has not changed
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -1038,7 +1081,12 @@ class TestService:
         assert service.applied_levels[1] == 70
 
     def test_check_shared_zones_detected(self, mocker: MockerFixture):
-        """Test that _check_shared_zones() returns True when HD and NVME share zone 1."""
+        """Positive unit test for Service._check_shared_zones() method with shared zone detection. It contains the following steps:
+        - mock print(), Log.msg_to_stdout() functions
+        - initialize a Service class with HD and NVME controllers both on zone 1
+        - call _check_shared_zones()
+        - ASSERT: if shared zone 1 is not detected when HD and NVME share it
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_log_msg = MagicMock()
@@ -1066,7 +1114,12 @@ class TestService:
         assert "Shared IPMI zone 1" in log_output, "Should log shared zone 1"
 
     def test_check_shared_zones_none(self, mocker: MockerFixture):
-        """Test that _check_shared_zones() returns empty set when CPU on zone 0 and HD on zone 1."""
+        """Positive unit test for Service._check_shared_zones() method with no shared zones. It contains the following steps:
+        - mock print() function
+        - initialize a Service class with CPU on zone 0 and HD on zone 1 (no overlap)
+        - call _check_shared_zones()
+        - ASSERT: if empty set is not returned when no zones are shared
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         service = Service()
@@ -1090,7 +1143,12 @@ class TestService:
         assert result == set(), "Should not detect shared zones"
 
     def test_check_shared_zones_multi_zone(self, mocker: MockerFixture):
-        """Test that _check_shared_zones() returns {1} when CPU on zones [0,1] and HD on zone [1]."""
+        """Positive unit test for Service._check_shared_zones() method with multi-zone controller. It contains the following steps:
+        - mock print(), Log.msg_to_stdout() functions
+        - initialize a Service class with CPU on zones [0,1] and HD on zone [1]
+        - call _check_shared_zones()
+        - ASSERT: if {1} is not returned when CPU spans zones [0,1] and HD is on zone [1]
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_log_msg = MagicMock()
@@ -1118,8 +1176,13 @@ class TestService:
         assert "Shared IPMI zone 1" in log_output, "Should log shared zone 1"
 
     def test_check_shared_zones_selective_deferred(self, mocker: MockerFixture):
-        """Test that only controllers on shared zones get deferred_apply=True,
-        while controllers on non-shared zones remain deferred_apply=False."""
+        """Positive unit test for Service._check_shared_zones() method with selective deferred mode. It contains the following steps:
+        - mock print() function
+        - initialize a Service class with CPU on zone 0 (exclusive), HD and NVME on zone 1 (shared)
+        - call _check_shared_zones() and set deferred_apply based on shared zones
+        - ASSERT: if controllers on non-shared zones get deferred_apply=True
+        - ASSERT: if controllers on shared zones do not get deferred_apply=True
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         service = Service()
@@ -1161,10 +1224,11 @@ class TestService:
 
     @pytest.mark.parametrize("exit_code, error", [(10, "Service.run() 23")])
     def test_run_old_section_names(self, mocker: MockerFixture, exit_code: int, error: str):
-        """Test backward compatibility: old config section names (with 'zone' tag) are migrated to new names.
+        """Positive unit test for Service.run() method with old section names. It contains the following steps:
+        - mock print(), pyudev.Context.__init__() functions
         - create config with old-style section names ([CPU zone], [HD zone], etc.)
         - execute Service.run()
-        - ASSERT: exit code 10 (no enabled fancontroller), proving the migration code ran successfully
+        - ASSERT: if exit code 10 (no enabled fancontroller) is not returned, proving the migration code ran successfully
         """
         my_td = TestData()
         my_config = ConfigParser()

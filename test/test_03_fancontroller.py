@@ -360,7 +360,12 @@ class TestFanController:
                 mock_ipmi_set_fan_level.assert_called_with(level)
 
     def test_set_fan_level_deferred(self, mocker: MockerFixture):
-        """Test that set_fan_level() skips IPMI call when deferred_apply is True."""
+        """Positive unit test for FanController.set_fan_level() method in deferred mode. It contains the following steps:
+        - mock Ipmi.set_multiple_fan_levels() function
+        - initialize an empty FanController class with deferred_apply=True
+        - call set_fan_level() with a level value
+        - ASSERT: if IPMI call is not skipped when deferred_apply is True
+        """
         my_ipmi = Ipmi.__new__(Ipmi)
         my_fc = FanController.__new__(FanController)
         my_fc.ipmi_zone = [0]
@@ -372,7 +377,13 @@ class TestFanController:
         assert mock_set_multiple_fan_levels.call_count == 0, "deferred_apply should skip IPMI call"
 
     def test_run_deferred(self, mocker: MockerFixture):
-        """Test that run() updates last_level but skips IPMI call when deferred_apply is True."""
+        """Positive unit test for FanController.run() method in deferred mode. It contains the following steps:
+        - mock print(), FanController.set_fan_level(), FanController._get_nth_temp() functions
+        - initialize a Log, Ipmi, and FanController class with deferred_apply=True
+        - call run() method
+        - ASSERT: if last_level is not updated when deferred_apply is True
+        - ASSERT: if set_fan_level does not skip IPMI call in deferred mode
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -396,7 +407,12 @@ class TestFanController:
             mock_set_fan_level.assert_called_with(100)
 
     def test_run_smoothing_spike(self, mocker: MockerFixture):
-        """Test that smoothing dampens a single-cycle temperature spike."""
+        """Positive unit test for FanController.run() method with temperature spike. It contains the following steps:
+        - mock print(), FanController.set_fan_level(), FanController._get_nth_temp() functions
+        - initialize a Log, Ipmi, and FanController class with smoothing=4
+        - feed 3 stable readings at 30C, then a spike to 55C
+        - ASSERT: if smoothing does not dampen a single-cycle temperature spike to intermediate level
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -424,7 +440,12 @@ class TestFanController:
         assert my_fc.last_level == 61, "smoothed spike should map to intermediate level, not max"
 
     def test_run_smoothing_warmup(self, mocker: MockerFixture):
-        """Test that smoothing works correctly during warm-up (deque not full yet)."""
+        """Positive unit test for FanController.run() method during smoothing warm-up. It contains the following steps:
+        - mock print(), FanController.set_fan_level(), FanController._get_nth_temp() functions
+        - initialize a Log, Ipmi, and FanController class with smoothing=3
+        - feed temperature readings while deque is not full yet
+        - ASSERT: if smoothing does not correctly average available readings during warm-up
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -451,7 +472,12 @@ class TestFanController:
         assert my_fc.last_temp == pytest.approx(43.0), "warm-up should average available readings"
 
     def test_run_smoothing_sustained_heat(self, mocker: MockerFixture):
-        """Test that smoothing allows full response to sustained temperature increase."""
+        """Positive unit test for FanController.run() method with sustained heat. It contains the following steps:
+        - mock print(), FanController.set_fan_level(), FanController._get_nth_temp() functions
+        - initialize a Log, Ipmi, and FanController class with smoothing=3
+        - feed sustained max temperature readings
+        - ASSERT: if smoothing does not allow full response to sustained temperature increase
+        """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()

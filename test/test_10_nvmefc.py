@@ -161,7 +161,9 @@ class TestNvmeFc:
 
     @pytest.mark.parametrize("error", ["NvmeFc.__init__() 8"])
     def test_init_n2(self, mocker: MockerFixture, error: str):
-        """Negative unit test for NvmeFc.__init__() method: empty hwmon path.
+        """Negative unit test for NvmeFc.__init__() method. It contains the following steps:
+        - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path() functions
+        - initialize a Config, Log, Ipmi, and NvmeFc classes with empty hwmon path
         - ASSERT: if no ValueError is raised when hwmon path is empty
         """
         my_td = TestData()

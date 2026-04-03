@@ -201,8 +201,10 @@ class TestHdFc:
         ],
     )
     def test_init_n2(self, mocker: MockerFixture, hd_names: str, error: str):
-        """Negative unit test for HdFc.__init__(): NVMe drives are not allowed in HD fan controller.
-        - ASSERT: if no ValueError is raised for NVMe device names
+        """Negative unit test for HdFc.__init__() method. It contains the following steps:
+        - mock print(), pyudev.Devices.from_device_file(), pyudev.Device functions
+        - initialize a Config, Log, Ipmi, and HdFc classes with NVMe device names
+        - ASSERT: if no ValueError is raised for NVMe device names (NVMe drives are not allowed in HD fan controller)
         """
         my_td = TestData()
         mock_print = MagicMock()
