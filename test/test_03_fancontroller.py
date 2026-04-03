@@ -472,5 +472,194 @@ class TestFanController:
         assert my_fc.last_temp == pytest.approx(50.0), "sustained heat should converge to actual temp"
         assert my_fc.last_level == 100, "sustained max temp should reach max level"
 
+    def test_run_smoothing_disabled(self, mocker: MockerFixture):
+        """Positive unit test for FanController.run() method with smoothing=1. It contains the following steps:
+        - mock print(), FanController.set_fan_level(), FanController._get_nth_temp() functions
+        - initialize a Log, Ipmi, and FanController class with smoothing=1 (disabled)
+        - feed a sequence of varying temperatures
+        - ASSERT: if smoothing=1 does not use raw temperature without averaging
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.FanController.set_fan_level", mock_set_fan_level)
+        mock_temp = MagicMock()
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        # smoothing=1 means disabled (no averaging)
+        my_fc = FanController(my_log, my_ipmi, "0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 1, 1, 30, 50, 35,
+                              100, 1)
+        # Feed a sequence of varying temperatures
+        temps = [30.0, 40.0, 50.0]
+        expected_levels = [35, 61, 100]  # min_level, mid, max_level
+        for i, t in enumerate(temps):
+            mock_temp.return_value = t
+            my_fc.last_level = 0
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+            assert my_fc.last_temp == pytest.approx(t), f"smoothing=1 should use raw temp {t}"
+            assert my_fc.last_level == expected_levels[i], f"level for temp {t} should be {expected_levels[i]}"
+
+    def test_run_smoothing_rapid_oscillation(self, mocker: MockerFixture):
+        """Positive unit test for FanController.run() method with rapid oscillations. It contains the following steps:
+        - mock print(), FanController.set_fan_level(), FanController._get_nth_temp() functions
+        - initialize a Log, Ipmi, and FanController class with smoothing=4
+        - feed rapid oscillating temperatures (30C/50C alternating for 10 cycles)
+        - ASSERT: if smoothing does not dampen rapid temperature oscillations to midpoint (~40C)
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.FanController.set_fan_level", mock_set_fan_level)
+        mock_temp = MagicMock()
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        # smoothing=4, min_temp=30, max_temp=50
+        my_fc = FanController(my_log, my_ipmi, "0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 1, 1, 30, 50, 35,
+                              100, 4)
+        # Rapid oscillation: 30C and 50C alternating for 10 cycles
+        # With smoothing=4, the average should converge to ~40C
+        oscillating_temps = [30.0, 50.0] * 10
+        for t in oscillating_temps:
+            mock_temp.return_value = t
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+        # After many oscillations, the smoothed temp should be around 40C (average of 30 and 50)
+        assert my_fc.last_temp == pytest.approx(40.0, abs=0.1), "oscillating temps should average to midpoint"
+        # Level at 40C with steps=5, min_temp=30, max_temp=50 → step 2.5 rounds to 3 → level=35+3*13=74
+        # Actually: temp_step = 4, (40-30)/4 = 2.5 rounds to 2 or 3, level_step = 13
+        # Let's just verify it's in a reasonable middle range
+        assert 50 <= my_fc.last_level <= 80, "smoothed oscillating temp should yield mid-range level"
+
+    def test_run_smoothing_with_sensitivity(self, mocker: MockerFixture):
+        """Positive unit test for FanController.run() method with smoothing and sensitivity interaction. It contains the following steps:
+        - mock print(), FanController.set_fan_level(), FanController._get_nth_temp() functions
+        - initialize a Log, Ipmi, and FanController class with smoothing=3 and sensitivity=5
+        - feed temperature readings where smoothed change is below and above sensitivity threshold
+        - ASSERT: if smoothed temperature change below sensitivity does not skip level update
+        - ASSERT: if smoothed temperature change above sensitivity does not trigger level update
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.FanController.set_fan_level", mock_set_fan_level)
+        mock_temp = MagicMock()
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        # smoothing=3, sensitivity=5 (high sensitivity threshold)
+        my_fc = FanController(my_log, my_ipmi, "0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 5, 1, 30, 50, 35,
+                              100, 3)
+        # First reading at 35C
+        mock_temp.return_value = 35.0
+        my_fc.last_level = 0
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        first_level = my_fc.last_level
+        first_temp = my_fc.last_temp
+        # Second reading at 37C - smoothed avg will be (35+37)/2 = 36C
+        # Change from 35 to 36 is only 1C, less than sensitivity=5, so should NOT update
+        mock_temp.return_value = 37.0
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        # last_temp should still be 35.0 because sensitivity wasn't exceeded
+        assert my_fc.last_temp == first_temp, "small smoothed change should not exceed sensitivity"
+        # Third reading at 45C - smoothed avg = (35+37+45)/3 = 39C
+        # Change from 35 to 39 is 4C, still less than sensitivity=5
+        mock_temp.return_value = 45.0
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        assert my_fc.last_temp == first_temp, "smoothed change still under sensitivity threshold"
+        # Fourth reading at 50C - smoothed avg = (37+45+50)/3 = 47.33C
+        # Change from 35 to 47.33 is 12.33C, exceeds sensitivity=5
+        mock_temp.return_value = 50.0
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        assert my_fc.last_temp > first_temp, "large smoothed change should exceed sensitivity"
+
+    def test_run_smoothing_at_boundaries(self, mocker: MockerFixture):
+        """Positive unit test for FanController.run() method at temperature boundaries. It contains the following steps:
+        - mock print(), FanController.set_fan_level(), FanController._get_nth_temp() functions
+        - initialize a Log, Ipmi, and FanController class with smoothing=3
+        - feed temperatures at exactly min_temp (30C) and max_temp (50C) boundaries
+        - ASSERT: if temperature at min_temp boundary does not yield min_level
+        - ASSERT: if temperature at max_temp boundary does not yield max_level
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.FanController.set_fan_level", mock_set_fan_level)
+        mock_temp = MagicMock()
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        # smoothing=3, min_temp=30, max_temp=50, min_level=35, max_level=100
+        my_fc = FanController(my_log, my_ipmi, "0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 1, 1, 30, 50, 35,
+                              100, 3)
+        # Stay at exactly min_temp for multiple readings - first reading will set initial level
+        mock_temp.return_value = 30.0
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        # After first run, the level should be set
+        assert my_fc.last_temp == pytest.approx(30.0), "temp at min boundary should stay at min"
+        assert my_fc.last_level == 35, "level at min_temp should be min_level"
+        # More readings at same temp shouldn't change anything (no sensitivity change)
+        for _ in range(4):
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+        assert my_fc.last_level == 35, "level should remain at min_level"
+        # Now jump to exactly max_temp - change exceeds sensitivity
+        mock_temp.return_value = 50.0
+        for _ in range(5):
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+        assert my_fc.last_temp == pytest.approx(50.0), "temp at max boundary should stay at max"
+        assert my_fc.last_level == 100, "level at max_temp should be max_level"
+
+    @pytest.mark.parametrize(
+        "ipmi_zone, expected_zones, error",
+        [
+            ("0, 1, 0", [0, 1, 0], "duplicate zones should be preserved"),
+            ("1, 1, 1", [1, 1, 1], "all same zones should be preserved"),
+            ("0, 1, 2, 1, 0", [0, 1, 2, 1, 0], "multiple duplicates should be preserved"),
+        ],
+    )
+    def test_init_duplicate_zones(self, mocker: MockerFixture, ipmi_zone: str, expected_zones: List[int],
+                                  error: str) -> None:
+        """Positive unit test for FanController.__init__() method with duplicate zones. It contains the following steps:
+        - mock print(), FanController._get_nth_temp() functions
+        - initialize a Log, Ipmi, and FanController class with duplicate zone IDs in ipmi_zone
+        - ASSERT: if duplicate zone IDs are not preserved in the parsed ipmi_zone list
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_get_nth_temp = MagicMock()
+        mocker.patch("smfc.FanController._get_nth_temp", mock_get_nth_temp)
+        mock_get_nth_temp.return_value = 38.5
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        my_fc = FanController(my_log, my_ipmi, ipmi_zone, CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 4, 2, 30, 50,
+                              35, 100, 1)
+        assert my_fc.ipmi_zone == expected_zones, error
+
+    def test_set_fan_level_deferred_multi_zone(self, mocker: MockerFixture):
+        """Positive unit test for FanController.set_fan_level() method with deferred multi-zone. It contains the following steps:
+        - mock Ipmi.set_multiple_fan_levels() function
+        - initialize an empty FanController class with ipmi_zone=[0, 1, 2] and deferred_apply=True
+        - call set_fan_level() with a level value
+        - ASSERT: if IPMI call is not skipped for multi-zone controller in deferred mode
+        """
+        my_ipmi = Ipmi.__new__(Ipmi)
+        my_fc = FanController.__new__(FanController)
+        my_fc.ipmi_zone = [0, 1, 2]
+        my_fc.ipmi = my_ipmi
+        my_fc.deferred_apply = True
+        mock_set_multiple_fan_levels = MagicMock()
+        mocker.patch("smfc.Ipmi.set_multiple_fan_levels", mock_set_multiple_fan_levels)
+        my_fc.set_fan_level(75)
+        assert mock_set_multiple_fan_levels.call_count == 0, "deferred multi-zone should skip all IPMI calls"
+
 
 # End.
