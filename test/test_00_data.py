@@ -322,9 +322,6 @@ class MockContext:
     def __init__(self, devices=None):
         self.mocked_devices = devices
 
-    def __del__(self):
-        pass
-
     # pylint: disable=unused-argument
     def list_devices(self, **kwargs):
         return iter(self.mocked_devices)

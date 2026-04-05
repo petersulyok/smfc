@@ -547,6 +547,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # Create two mock controllers on the same zone
         service.cpu_fc_enabled = True
@@ -600,6 +601,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # Two controllers on zone 1: HD at 45%, NVME at 70%
         service.cpu_fc_enabled = False
@@ -649,6 +651,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # Single controller on zone 0
         service.cpu_fc_enabled = True
@@ -689,6 +692,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # Single CONST controller on zone 0
         service.cpu_fc_enabled = False
@@ -727,6 +731,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # CONST at 80% wins over HD at 45% on zone 1
         service.cpu_fc_enabled = False
@@ -772,6 +777,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # HD at 70% wins over CONST at 40% on zone 1
         service.cpu_fc_enabled = False
@@ -815,6 +821,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # CPU deferred on shared zone 0, HD non-deferred on non-shared zone 1
         service.cpu_fc_enabled = True
@@ -859,6 +866,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {1: 70}  # Already applied 70% to zone 1
+        service.last_desired = []
 
         service.cpu_fc_enabled = False
         service.hd_fc_enabled = True
@@ -895,6 +903,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # Three controllers on zone 1: CPU 40%, HD 60%, NVME 50%
         service.cpu_fc_enabled = True
@@ -951,6 +960,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # Two controllers on zone 1 with identical levels (70%)
         service.cpu_fc_enabled = True
@@ -1001,6 +1011,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # CPU on zones [0, 1] at 55%, HD on zone [1] at 70%
         service.cpu_fc_enabled = True
@@ -1054,6 +1065,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         service.cpu_fc_enabled = False
         service.nvme_fc_enabled = False
@@ -1283,6 +1295,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # Four controllers on zone 1: CPU 40%, HD 60%, NVME 50%, GPU 75%
         service.cpu_fc_enabled = True
@@ -1348,6 +1361,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # Five controllers on zone 1: CPU 40%, HD 60%, NVME 50%, GPU 55%, CONST 80%
         service.cpu_fc_enabled = True
@@ -1421,6 +1435,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # CPU on zones [0, 1, 2] at 50%
         service.cpu_fc_enabled = True
@@ -1482,6 +1497,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # Two controllers on zone 1, both with last_level=0 (not yet computed)
         service.cpu_fc_enabled = True
@@ -1569,6 +1585,7 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         service.ipmi = Ipmi.__new__(Ipmi)
         service.applied_levels = {}
+        service.last_desired = []
 
         # CPU on zones [0, 1] with deferred apply
         service.cpu_fc_enabled = True

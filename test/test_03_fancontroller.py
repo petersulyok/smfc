@@ -692,7 +692,8 @@ class TestFanController:
         - mock print(), FanController.set_fan_level(), FanController._get_nth_temp() functions
         - initialize a Log, Ipmi, and FanController class
         - call run() without advancing time past the polling interval
-        - ASSERT: if the polling-skipped DEBUG log is not generated
+        - ASSERT: if temperature is not read when polling is skipped
+        - ASSERT: if fan level is not set when polling is skipped
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -706,9 +707,11 @@ class TestFanController:
         my_fc = FanController(my_log, my_ipmi, "0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 2, 10, 30, 50, 35,
                               100, 1)
         # Set last_time to now so polling interval has not elapsed.
+        initial_temp_calls = mock_temp.call_count
         my_fc.last_time = time.monotonic()
         my_fc.run()
-        # Temperature should not have been read (polling was skipped).
+        # Temperature should not have been read (polling was skipped silently).
+        assert mock_temp.call_count == initial_temp_calls, "temperature should not be read when polling is skipped"
         assert mock_set_fan_level.call_count == 0, "fan level should not be set when polling is skipped"
 
 

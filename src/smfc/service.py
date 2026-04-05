@@ -40,8 +40,9 @@ class Service:
     nvme_fc_enabled: bool           # NVME fan controller enabled
     gpu_fc_enabled: bool            # GPU fan controller enabled
     const_fc_enabled: bool          # CONST fan controller enabled
-    applied_levels: Dict[int, int]  # Cache of last applied fan levels per IPMI zone
-    shared_zones: Set[int]          # Set of IPMI zone IDs shared between controllers
+    applied_levels: Dict[int, int]                      # Cache of last applied fan levels per IPMI zone
+    shared_zones: Set[int]                               # Set of IPMI zone IDs shared between controllers
+    last_desired: List[Tuple[str, List[int], int, float]] # Cache of last desired levels for change detection
 
     def exit_func(self) -> None:
         """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
@@ -134,9 +135,10 @@ class Service:
     def _apply_fan_levels(self) -> None:
         """Apply the maximum desired fan level per IPMI zone across all controllers."""
         desired = self._collect_desired_levels()
-        if self.log.log_level >= Log.LOG_DEBUG:
+        if self.log.log_level >= Log.LOG_DEBUG and desired != self.last_desired:
             self.log.msg(Log.LOG_DEBUG, f"Arbitration desired levels: "
                          f"{[(n, z, l, f'{t:.1f}C') for n, z, l, t in desired]}")
+            self.last_desired = desired
         # Build zone -> (max_level, winner_name) mapping and collect all contributors per zone
         zone_levels: Dict[int, Tuple[int, str]] = {}
         zone_contributors: Dict[int, List[Tuple[str, int, float]]] = {}
@@ -148,8 +150,6 @@ class Service:
         # Apply only changed levels (non-deferred controllers handle their own zones directly).
         for zone, (level, winner) in zone_levels.items():
             if self.applied_levels.get(zone) == level:
-                if self.log.log_level >= Log.LOG_DEBUG:
-                    self.log.msg(Log.LOG_DEBUG, f"Shared IPMI zone [{zone}]: level unchanged at {level}%")
                 continue
             self.ipmi.set_fan_level(zone, level)
             self.applied_levels[zone] = level
@@ -339,6 +339,7 @@ class Service:
 
         # Initialize the applied levels cache for zone arbitration.
         self.applied_levels = {}
+        self.last_desired = []
 
         # Create an instance for CPU fan controller if enabled.
         if self.cpu_fc_enabled:
