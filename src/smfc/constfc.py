@@ -85,6 +85,8 @@ class ConstFc(FanController):
             # otherwise set the fan level again.
             for zone in self.ipmi_zone:
                 level = self.ipmi.get_fan_level(zone)
+                if self.log.log_level >= Log.LOG_DEBUG:
+                    self.log.msg(Log.LOG_DEBUG, f"{self.name}: zone {zone} current={level}% expected={self.level}%")
                 if level != self.level:
                     self.ipmi.set_fan_level(zone, self.level)
                     self.log.msg(Log.LOG_INFO, f"{self.name}: set fan level > {self.level}% "

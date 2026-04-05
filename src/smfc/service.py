@@ -134,6 +134,9 @@ class Service:
     def _apply_fan_levels(self) -> None:
         """Apply the maximum desired fan level per IPMI zone across all controllers."""
         desired = self._collect_desired_levels()
+        if self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f"Arbitration desired levels: "
+                         f"{[(n, z, l, f'{t:.1f}C') for n, z, l, t in desired]}")
         # Build zone -> (max_level, winner_name) mapping and collect all contributors per zone
         zone_levels: Dict[int, Tuple[int, str]] = {}
         zone_contributors: Dict[int, List[Tuple[str, int, float]]] = {}
@@ -144,26 +147,29 @@ class Service:
                     zone_levels[zone] = (level, name)
         # Apply only changed levels (non-deferred controllers handle their own zones directly).
         for zone, (level, winner) in zone_levels.items():
-            if self.applied_levels.get(zone) != level:
-                self.ipmi.set_fan_level(zone, level)
-                self.applied_levels[zone] = level
-                contributors = zone_contributors.get(zone, [])
-                if len(contributors) > 1:
-                    winner_str = ""
-                    loser_parts = []
-                    for n, l, t in contributors:
-                        s = f"{n}={l}%/{t:.1f}C" if t > 0.0 else f"{n}={l}%"
-                        if n == winner:
-                            winner_str = s
-                        else:
-                            loser_parts.append(s)
-                    msg = f"Shared IPMI zone [{zone}]: new level = {level}% (winner: {winner_str},"\
-                          f" losers: {', '.join(loser_parts)})"
-                    self.log.msg(Log.LOG_INFO, msg)
-                elif len(contributors) == 1:
-                    n, l, t = contributors[0]
-                    detail = f"{n}={t:.1f}C" if t > 0.0 else f"{n}"
-                    self.log.msg(Log.LOG_INFO, f"IPMI zone [{zone}]: new level = {l}% ({detail})")
+            if self.applied_levels.get(zone) == level:
+                if self.log.log_level >= Log.LOG_DEBUG:
+                    self.log.msg(Log.LOG_DEBUG, f"Shared IPMI zone [{zone}]: level unchanged at {level}%")
+                continue
+            self.ipmi.set_fan_level(zone, level)
+            self.applied_levels[zone] = level
+            contributors = zone_contributors.get(zone, [])
+            if len(contributors) > 1:
+                winner_str = ""
+                loser_parts = []
+                for n, l, t in contributors:
+                    s = f"{n}={l}%/{t:.1f}C" if t > 0.0 else f"{n}={l}%"
+                    if n == winner:
+                        winner_str = s
+                    else:
+                        loser_parts.append(s)
+                msg = f"Shared IPMI zone [{zone}]: new level = {level}% (winner: {winner_str},"\
+                      f" losers: {', '.join(loser_parts)})"
+                self.log.msg(Log.LOG_INFO, msg)
+            elif len(contributors) == 1:
+                n, l, t = contributors[0]
+                detail = f"{n}={t:.1f}C" if t > 0.0 else f"{n}"
+                self.log.msg(Log.LOG_INFO, f"IPMI zone [{zone}]: new level = {l}% ({detail})")
 
 
     def _check_shared_zones(self) -> Set[int]:
@@ -188,6 +194,8 @@ class Service:
         if self.const_fc_enabled:
             for zone in self.const_fc.ipmi_zone:
                 zone_owners.setdefault(zone, []).append(ConstFc.CS_CONST_FC)
+        if self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f"IPMI zone ownership: {dict(zone_owners)}")
         shared: Set[int] = set()
         for zone, names in zone_owners.items():
             if len(names) > 1:

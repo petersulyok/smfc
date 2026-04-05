@@ -171,8 +171,12 @@ class Ipmi:
             arguments.extend(self.remote_parameters.split())
         # Add additional command line parameters from caller.
         arguments.extend(args)
+        if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f"ipmitool exec: {' '.join(arguments)}")
         # May raise FileNotFoundError if ipmitool is not found.
         r = subprocess.run(arguments, check=False, capture_output=True, text=True)
+        if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f"ipmitool result: rc={r.returncode} stdout='{r.stdout.strip()}'")
         # Check error code.
         if r.returncode != 0:
             if self.sudo and "sudo" in r.stderr:
@@ -223,6 +227,8 @@ class Ipmi:
             FileNotFoundError: ipmitool command cannot be found
             RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI system/motherboard)
         """
+        if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f"Setting fan mode to {self.get_fan_mode_name(mode)} ({mode})")
         self.platform.set_fan_mode(mode)
         # Give time for IPMI system/fans to apply changes in the new fan mode.
         time.sleep(self.fan_mode_delay)
@@ -237,6 +243,8 @@ class Ipmi:
             FileNotFoundError: ipmitool command cannot be found
             RuntimeError: ipmitool execution problem (e.g. non-root user, incompatible IPMI system/motherboard)
         """
+        if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f"Setting fan level: zone={zone} level={level}%")
         self.platform.set_fan_level(zone, level)
         # Give time for IPMI and fans to spin up/down.
         time.sleep(self.fan_level_delay)

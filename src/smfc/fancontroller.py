@@ -208,8 +208,13 @@ class FanController:
 
         # Calculate minimum temperature.
         minimum = 1000.0
+        temps = []
         for i in range(self.count):
-            minimum = min(self._get_nth_temp(i), minimum)
+            t = self._get_nth_temp(i)
+            temps.append(t)
+            minimum = min(t, minimum)
+        if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} min={minimum:.1f}C")
         return minimum
 
     def get_avg_temp(self) -> float:
@@ -224,10 +229,16 @@ class FanController:
         # Calculate average temperature.
         average = 0.0
         counter = 0
+        temps = []
         for i in range(self.count):
-            average += self._get_nth_temp(i)
+            t = self._get_nth_temp(i)
+            temps.append(t)
+            average += t
             counter += 1
-        return average / counter
+        result = average / counter
+        if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} avg={result:.1f}C")
+        return result
 
     def get_max_temp(self) -> float:
         """Get the maximum temperature of the controlled entities in the IPMI zone.
@@ -237,10 +248,15 @@ class FanController:
         """
         maximum: float  # Maximum temperature value
 
-        # Calculate minimum temperature.
+        # Calculate maximum temperature.
         maximum = -1.0
+        temps = []
         for i in range(self.count):
-            maximum = max(self._get_nth_temp(i), maximum)
+            t = self._get_nth_temp(i)
+            temps.append(t)
+            maximum = max(t, maximum)
+        if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} max={maximum:.1f}C")
         return maximum
 
     def set_fan_level(self, level: int) -> None:
@@ -280,7 +296,12 @@ class FanController:
             raw_temp = self.get_temp_func()
             self._temp_history.append(raw_temp)
             current_temp = sum(self._temp_history) / len(self._temp_history)
-            self.log.msg(Log.LOG_DEBUG, f"{self.name}: new temperature > {current_temp:.1f}C")
+            if self.log.log_level >= Log.LOG_DEBUG:
+                if self.smoothing > 1:
+                    self.log.msg(Log.LOG_DEBUG, f"{self.name}: raw={raw_temp:.1f}C smoothed={current_temp:.1f}C "
+                                 f"(window {len(self._temp_history)}/{self.smoothing})")
+                else:
+                    self.log.msg(Log.LOG_DEBUG, f"{self.name}: new temperature > {current_temp:.1f}C")
             if abs(current_temp - self.last_temp) >= self.sensitivity:
                 self.last_temp = current_temp
 
@@ -292,6 +313,9 @@ class FanController:
                 else:
                     current_gain = int(round((current_temp - self.min_temp) / self.temp_step))
                     current_level = (int(round(float(current_gain) * self.level_step)) + self.min_level)
+                if self.log.log_level >= Log.LOG_DEBUG:
+                    self.log.msg(Log.LOG_DEBUG, f"{self.name}: calculated level={current_level}% "
+                                 f"for temp={current_temp:.1f}C")
 
                 # Step 4: the new fan level will be set and logged.
                 if current_level != self.last_level:
@@ -301,6 +325,14 @@ class FanController:
                         self.log.msg(Log.LOG_INFO,
                                      f"IPMI zone {self.ipmi_zone}: new level = {current_level}% "
                                      f"({self.name}={current_temp:.1f}C)")
+                elif self.log.log_level >= Log.LOG_DEBUG:
+                    self.log.msg(Log.LOG_DEBUG, f"{self.name}: level unchanged at {current_level}%")
+            elif self.log.log_level >= Log.LOG_DEBUG:
+                self.log.msg(Log.LOG_DEBUG, f"{self.name}: sensitivity not reached "
+                             f"(delta={abs(current_temp - self.last_temp):.1f}C < {self.sensitivity:.1f}C)")
+        elif self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f"{self.name}: polling skipped "
+                         f"(remaining={self.polling - (current_time - self.last_time):.1f}s)")
 
     def print_temp_level_mapping(self) -> None:
         """Print out the user-defined temperature to level mapping value in log DEBUG level."""

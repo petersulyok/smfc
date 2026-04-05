@@ -189,6 +189,8 @@ class HdFc(FanController):
 
         # Use 'smartctl' command for reading HD temperature in case of empty HWMON path.
         if not self.hwmon_path[index]:
+            if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
+                self.log.msg(Log.LOG_DEBUG, f"HD: using smartctl for {self.hd_device_names[index]}")
             r: subprocess.CompletedProcess  # result of the executed process
             output_lines: List[str]  # Lines of the output text.
             line: str  # One line.
@@ -304,6 +306,9 @@ class HdFc(FanController):
         cur_time = time.monotonic()
 
         # Step 2: check if the array is going to STANDBY state.
+        if self.log.log_level >= Log.LOG_DEBUG:
+            self.log.msg(Log.LOG_DEBUG, f"Standby guard: standby_flag={self.standby_flag} "
+                         f"hds_in_standby={hds_in_standby}/{self.count}")
         if not self.standby_flag and hds_in_standby >= self.standby_hd_limit:
             hours = (cur_time - self.standby_change_timestamp) / float(3600)
             self.log.msg(Log.LOG_INFO, f"Standby guard: Status change ACTIVE > STANDBY (after {hours:.1f} hours, "
