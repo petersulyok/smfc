@@ -686,5 +686,30 @@ class TestFanController:
         my_fc.set_fan_level(75)
         assert mock_set_multiple_fan_levels.call_count == 0, "deferred multi-zone should skip all IPMI calls"
 
+    def test_run_polling_skipped(self, mocker: MockerFixture):
+        """Positive unit test for FanController.run() method when polling interval has not elapsed. It contains the
+        following steps:
+        - mock print(), FanController.set_fan_level(), FanController._get_nth_temp() functions
+        - initialize a Log, Ipmi, and FanController class
+        - call run() without advancing time past the polling interval
+        - ASSERT: if the polling-skipped DEBUG log is not generated
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock()
+        mocker.patch("smfc.FanController.set_fan_level", mock_set_fan_level)
+        mock_temp = MagicMock()
+        mock_temp.return_value = 35.0
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        my_fc = FanController(my_log, my_ipmi, "0", CpuFc.CS_CPU_FC, 1, FanController.CALC_AVG, 5, 2, 10, 30, 50, 35,
+                              100, 1)
+        # Set last_time to now so polling interval has not elapsed.
+        my_fc.last_time = time.monotonic()
+        my_fc.run()
+        # Temperature should not have been read (polling was skipped).
+        assert mock_set_fan_level.call_count == 0, "fan level should not be set when polling is skipped"
+
 
 # End.

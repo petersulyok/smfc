@@ -632,5 +632,27 @@ class TestHdFc:
         del my_hdfc
         del my_td
 
+    def test_get_nth_temp_smartctl_debug(self, mocker: MockerFixture):
+        """Positive unit test for HdFc._get_nth_temp() method with DEBUG logging on smartctl fallback. It contains the
+        following steps:
+        - mock print(), HdFc._exec_smartctl() functions
+        - initialize an empty HdFc class with log at DEBUG level
+        - ASSERT: if temperature read via smartctl returns the expected value
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        smartctl_output = ("Current Drive Temperature:     37 C\n")
+        mock_exec_smartctl = MagicMock()
+        mock_exec_smartctl.return_value = subprocess.CompletedProcess([], returncode=0, stdout=smartctl_output)
+        mocker.patch("smfc.HdFc._exec_smartctl", mock_exec_smartctl)
+        my_hdfc = HdFc.__new__(HdFc)
+        my_hdfc.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_hdfc.hwmon_path = [""]
+        my_hdfc.hd_device_names = ["/dev/sda"]
+        my_hdfc.sudo = False
+        my_hdfc.smartctl_path = "/usr/sbin/smartctl"
+        assert my_hdfc._get_nth_temp(0) == 37.0, "smartctl temperature should be 37.0C"
+        del my_hdfc
+
 
 # End.
