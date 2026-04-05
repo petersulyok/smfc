@@ -69,24 +69,5 @@ class CpuFc(FanController):
             config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_SMOOTHING, fallback=1),
         )
 
-    def _get_nth_temp(self, index: int) -> float:
-        """Get the temperature of the 'nth' element in the hwmon list.
-        Args:
-            index (int): index in hwmon list
-        Returns:
-            float: temperature value
-        Raises:
-            FileNotFoundError:   file not found
-            IOError:             file cannot be opened
-            ValueError:          invalid value read from file
-            IndexError:          invalid index
-        """
-        value: float  # Temperature value
-
-        # May raise IOError, FileNotFoundError, or ValueError if hwmon file cannot be read or parsed.
-        with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
-            value = float(f.read()) / 1000
-        return value
-
 
 # End.

@@ -47,6 +47,7 @@ class ConstFc(FanController):
         if self.level not in range(0, 101):
             raise ValueError("invalid level")
         self.last_time = 0.0
+        self.last_temp = 0.0
         self.last_level = self.level
         self.deferred_apply = False
 

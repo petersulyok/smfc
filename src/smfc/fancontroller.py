@@ -181,7 +181,7 @@ class FanController:
         return (os.path.join(hwmon_device.sys_path, "temp1_input") if hwmon_device is not None else "")
 
     def _get_nth_temp(self, index: int) -> float:
-        """Get the temperature of the nth element in the hwmon list. Must be overridden by child classes.
+        """Get the temperature of the nth element in the hwmon list. Can be overridden by child classes.
 
         Args:
             index (int): index in hwmon list
@@ -189,6 +189,8 @@ class FanController:
         Returns:
             float: temperature value (C)
         """
+        with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
+            return float(f.read()) / 1000
 
     def get_1_temp(self) -> float:
         """Get a single temperature of a controlled entity in the IPMI zone.

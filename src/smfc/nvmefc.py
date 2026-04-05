@@ -93,28 +93,5 @@ class NvmeFc(FanController):
         if self.log.log_level >= Log.LOG_CONFIG:
             self.log.msg(Log.LOG_CONFIG, f"   {self.CV_NVME_FC_NVME_NAMES} = {self.nvme_device_names}")
 
-    def _get_nth_temp(self, index: int) -> float:
-        """Get the temperature of the nth element in the hwmon list.
-        Args:
-            index (int): index in hwmon list
-        Returns:
-            float: temperature value
-        Raises:
-            FileNotFoundError:  file cannot be found
-            IOError:            file cannot be opened
-            ValueError:         invalid temperature value
-            IndexError:         invalid index
-        """
-        value: float  # Read temperature value.
-
-        try:
-            with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
-                value = float(f.read()) / 1000
-        except (IOError, FileNotFoundError, ValueError, IndexError) as e:
-            raise type(e)(f"ERROR: Cannot read temperature from HWMON file (nvme={self.nvme_device_names[index]})!") \
-                from e
-
-        return value
-
 
 # End.
