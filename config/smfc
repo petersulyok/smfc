@@ -1,6 +1,15 @@
 #
 # smfc.service
 #
+# Command line options:
+#   -c FILE  configuration file (default is /etc/smfc/smfc.conf)
+#   -v       show program version and exit
+#   -l LEVEL set log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG
+#   -o OUT   set log output: 0-stdout, 1-stderr, 2-syslog(default)
+#   -nd      no dependency checking at start
+#   -s       use sudo command
+#   -ne      no fan speed recovery at exit
+#
 
 # Startup options for the service
 OPTIONS="-c /etc/smfc/smfc.conf -l 3"
