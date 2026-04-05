@@ -43,6 +43,21 @@ This service was designed for Supermicro motherboards with IPMI functionality. I
 fan speed dynamically in one or more IPMI zones. The service operates the fans in IPMI FULL mode, where the fan rotation level
 can be adjusted with IPMI raw commands (read [more details here](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/)).
 
+Key features:
+
+ - Five independent fan controllers (CPU, HD, NVME, GPU, CONST) that can be enabled/disabled and combined freely
+ - User-defined control function mapping temperature intervals to fan level intervals with configurable discrete steps
+ - Support for multiple IPMI zones with automatic shared zone arbitration (highest fan level wins)
+ - Temperature calculation methods: minimum, average, or maximum across multiple devices
+ - Temperature smoothing with configurable moving average window to reduce fan speed oscillation
+ - Sensitivity threshold to avoid unnecessary fan speed changes on small temperature fluctuations
+ - Standby guard feature for SATA hard disk arrays organized in RAID
+ - Support for SATA, SAS/SCSI, and NVMe disks with automatic HWMON/smartctl fallback
+ - Nvidia GPU temperature monitoring via `nvidia-smi`
+ - Platform abstraction for different Supermicro motherboard generations (X9-X13/H10-H13)
+ - Runs as a `systemd` service or in Docker
+ - Safe shutdown: all fans are set back to 100% speed at service termination
+
 #### 1.1 IPMI zones
 _IPMI zone_ is a logical term, representing a cooling zone, where there are predefined fans having the same rotation speed.
 Please note that the fan assignment to an IPMI zone is predefined on the motherboard, it cannot be changed (Supermicro does not 
