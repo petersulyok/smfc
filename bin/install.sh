@@ -106,7 +106,12 @@ if [ "$LOCAL_INSTALL" = "yes" ]; then
   new_configuration "cp ./config/smfc.conf /etc/smfc/smfc.conf"
 
   # Install smfc files.
-  cp -f ./config/smfc /etc/default/smfc
+  if [ -z "${KEEP_CONFIG}" ] || [ ! -f /etc/default/smfc ]; then
+    cp -f ./config/smfc /etc/default/smfc
+    verbose_echo "New default file installed (/etc/default/smfc)."
+  else
+    verbose_echo "Existing default file preserved (/etc/default/smfc)."
+  fi
   cp -f ./config/smfc.service /etc/systemd/system/smfc.service
   cp -f ./doc/smfc.1 /usr/local/share/man/man1/smfc.1
 
@@ -131,7 +136,12 @@ else
   new_configuration "curl --silent -o /etc/smfc/smfc.conf $GITHUB_URL/config/smfc.conf"
 
   # Install smfc files.
-  curl --silent -o "/etc/default/smfc" "$GITHUB_URL/config/smfc"
+  if [ -z "${KEEP_CONFIG}" ] || [ ! -f /etc/default/smfc ]; then
+    curl --silent -o "/etc/default/smfc" "$GITHUB_URL/config/smfc"
+    verbose_echo "New default file installed (/etc/default/smfc)."
+  else
+    verbose_echo "Existing default file preserved (/etc/default/smfc)."
+  fi
   curl --silent -o "/etc/systemd/system/smfc.service" "$GITHUB_URL/config/smfc.service"
   curl --silent -o "/usr/local/share/man/man1/smfc.1" "$GITHUB_URL/doc/smfc.1"
 
