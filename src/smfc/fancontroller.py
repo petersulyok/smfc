@@ -214,7 +214,8 @@ class FanController:
             temps.append(t)
             minimum = min(t, minimum)
         if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
-            self.log.msg(Log.LOG_DEBUG, f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} min={minimum:.1f}C")
+            self.log.msg(Log.LOG_DEBUG,
+                         f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} min={minimum:.1f}C")
         return minimum
 
     def get_avg_temp(self) -> float:
@@ -237,7 +238,8 @@ class FanController:
             counter += 1
         result = average / counter
         if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
-            self.log.msg(Log.LOG_DEBUG, f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} avg={result:.1f}C")
+            self.log.msg(Log.LOG_DEBUG,
+                         f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} avg={result:.1f}C")
         return result
 
     def get_max_temp(self) -> float:
@@ -256,7 +258,8 @@ class FanController:
             temps.append(t)
             maximum = max(t, maximum)
         if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
-            self.log.msg(Log.LOG_DEBUG, f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} max={maximum:.1f}C")
+            self.log.msg(Log.LOG_DEBUG,
+                         f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} max={maximum:.1f}C")
         return maximum
 
     def set_fan_level(self, level: int) -> None:

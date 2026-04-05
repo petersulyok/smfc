@@ -641,7 +641,7 @@ class TestHdFc:
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
-        smartctl_output = ("Current Drive Temperature:     37 C\n")
+        smartctl_output = "Current Drive Temperature:     37 C\n"
         mock_exec_smartctl = MagicMock()
         mock_exec_smartctl.return_value = subprocess.CompletedProcess([], returncode=0, stdout=smartctl_output)
         mocker.patch("smfc.HdFc._exec_smartctl", mock_exec_smartctl)
@@ -651,7 +651,7 @@ class TestHdFc:
         my_hdfc.hd_device_names = ["/dev/sda"]
         my_hdfc.sudo = False
         my_hdfc.smartctl_path = "/usr/sbin/smartctl"
-        assert my_hdfc._get_nth_temp(0) == 37.0, "smartctl temperature should be 37.0C"
+        assert my_hdfc._get_nth_temp(0) == 37.0, "smartctl temperature should be 37.0C"  # pylint: disable=protected-access
         del my_hdfc
 
 
