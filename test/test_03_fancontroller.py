@@ -170,47 +170,39 @@ class TestFanController:
         assert FanController.get_hwmon_path(context, parent) == result, error
 
     @pytest.mark.parametrize(
-        "count, code, temps, expected, error",
+        "count, temp_calc, temps, expected, error",
         [
-            # get_1_temp()
-            (1, 1, [38.5], 38.5, "fc get_1_temp 1"),
-            # get_min_temp()
-            (3, 2, [38.5, 38.5, 38.5], 38.5, "fc get_min_temp 1"),
-            (3, 2, [38.5, 40.5, 42.5], 38.5, "fc get_min_temp 2"),
-            # get_avg_temp()
-            (3, 3, [38.5, 38.5, 38.5], 38.5, "fc get_avg_temp 1"),
-            (3, 3, [38.5, 40.5, 42.5], 40.5, "fc get_avg_temp 2"),
-            (8, 3, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 45.0, "fc get_avg_temp 3"),
-            # get_max_temp()
-            (3, 4, [38.5, 38.5, 38.5], 38.5, "fc get_max_temp 1"),
-            (3, 4, [38.5, 40.5, 42.5], 42.5, "fc get_max_temp 2"),
-            (8, 4, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 52.0, "fc get_max_temp 3"),
+            # count=1 (single device, temp_calc is irrelevant)
+            (1, FanController.CALC_AVG, [38.5], 38.5, "fc get_temp single 1"),
+            # CALC_MIN
+            (3, FanController.CALC_MIN, [38.5, 38.5, 38.5], 38.5, "fc get_temp min 1"),
+            (3, FanController.CALC_MIN, [38.5, 40.5, 42.5], 38.5, "fc get_temp min 2"),
+            # CALC_AVG
+            (3, FanController.CALC_AVG, [38.5, 38.5, 38.5], 38.5, "fc get_temp avg 1"),
+            (3, FanController.CALC_AVG, [38.5, 40.5, 42.5], 40.5, "fc get_temp avg 2"),
+            (8, FanController.CALC_AVG, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 45.0,
+             "fc get_temp avg 3"),
+            # CALC_MAX
+            (3, FanController.CALC_MAX, [38.5, 38.5, 38.5], 38.5, "fc get_temp max 1"),
+            (3, FanController.CALC_MAX, [38.5, 40.5, 42.5], 42.5, "fc get_temp max 2"),
+            (8, FanController.CALC_MAX, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 52.0,
+             "fc get_temp max 3"),
         ],
     )
-    def test_get_xxx_temp(self, mocker: MockerFixture, count: int, code: int, temps: List[float], expected: float,
-                          error: str):
-        """Positive unit test for FanController.get_1_temp(), get_min_temp(), get_avg_temp(),
-        get_max_temp() methods. It contains the following steps:
+    def test_get_temp(self, mocker: MockerFixture, count: int, temp_calc: int, temps: List[float], expected: float,
+                      error: str):
+        """Positive unit test for FanController.get_temp() method. It contains the following steps:
         - mock FanController._get_nth_temp() function
-        - initialize an empty FanController class
-        - ASSERT: if get_xxx_temp() functions return different from expected temperature
+        - initialize an empty FanController class with count and temp_calc
+        - ASSERT: if get_temp() returns different from expected temperature
         """
-        t: float  # temperature
-
         my_fc = FanController.__new__(FanController)
         my_fc.count = count
+        my_fc.temp_calc = temp_calc
         mock_temp = MagicMock()
         mock_temp.side_effect = temps
         mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
-        if code == 1:
-            t = my_fc.get_1_temp()
-        elif code == 2:
-            t = my_fc.get_min_temp()
-        elif code == 3:
-            t = my_fc.get_avg_temp()
-        else:  # code == 4:
-            t = my_fc.get_max_temp()
-        assert t == expected, error
+        assert my_fc.get_temp() == expected, error
 
     @pytest.mark.parametrize(
         "zones, level, error",

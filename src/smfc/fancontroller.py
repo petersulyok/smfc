@@ -7,7 +7,7 @@ import os
 import time
 import re
 from collections import deque
-from typing import List, Callable
+from typing import List
 from pyudev import Context, Device
 from smfc.ipmi import Ipmi
 from smfc.log import Log
@@ -47,8 +47,6 @@ class FanController:
     deferred_apply: bool    # If True, skip IPMI calls (used for zone arbitration)
     _temp_history: deque    # Circular buffer storing recent temperature readings
 
-    # Function variable for selected temperature calculation method
-    get_temp_func: Callable[[], float]
 
     @staticmethod
     def parse_ipmi_zones(ipmi_zone: str) -> List[int]:
@@ -122,19 +120,9 @@ class FanController:
         if self.smoothing < 1:
             raise ValueError("invalid value: smoothing < 1")
 
-        # Set the proper temperature function.
-        if self.count == 1:
-            self.get_temp_func = self.get_1_temp
-        else:
-            self.get_temp_func = self.get_avg_temp
-            if self.temp_calc == self.CALC_MIN:
-                self.get_temp_func = self.get_min_temp
-            elif self.temp_calc == self.CALC_MAX:
-                self.get_temp_func = self.get_max_temp
-
         # Try to read device temperature (the hwmon_path[] list has already been created by a child class).
         # If there is any problem with reading temperature, the program will stop here with an exception.
-        self.get_temp_func()
+        self.get_temp()
 
         # Initialize calculated values.
         self.temp_step = (max_temp - min_temp) / steps
@@ -192,77 +180,26 @@ class FanController:
         with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
             return float(f.read()) / 1000
 
-    def get_1_temp(self) -> float:
-        """Get a single temperature of a controlled entity in the IPMI zone.
+    def get_temp(self) -> float:
+        """Get the aggregated temperature of the controlled entities using the configured calculation method.
 
         Returns:
-            float: single temperature of a controlled entity (C)
+            float: aggregated temperature value (C)
         """
-        return self._get_nth_temp(0)
-
-    def get_min_temp(self) -> float:
-        """Get the minimum temperature of multiple controlled entities.
-
-        Returns:
-            float: minimum temperature of the controlled entities (C)
-        """
-        minimum: float  # Minimum temperature value
-
-        # Calculate minimum temperature.
-        minimum = 1000.0
-        temps = []
-        for i in range(self.count):
-            t = self._get_nth_temp(i)
-            temps.append(t)
-            minimum = min(t, minimum)
+        if self.count == 1:
+            return self._get_nth_temp(0)
+        temps = [self._get_nth_temp(i) for i in range(self.count)]
+        if self.temp_calc == self.CALC_MIN:
+            result = min(temps)
+        elif self.temp_calc == self.CALC_MAX:
+            result = max(temps)
+        else:
+            result = sum(temps) / len(temps)
         if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
+            label = ("min", "avg", "max")[self.temp_calc]
             self.log.msg(Log.LOG_DEBUG,
-                         f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} min={minimum:.1f}C")
-        return minimum
-
-    def get_avg_temp(self) -> float:
-        """Get the average temperature of the controlled entities in the IPMI zone.
-
-        Returns:
-             float: average temperature of the controlled entities (C)
-        """
-        average: float  # Average temperature
-        counter: int  # Value counter
-
-        # Calculate average temperature.
-        average = 0.0
-        counter = 0
-        temps = []
-        for i in range(self.count):
-            t = self._get_nth_temp(i)
-            temps.append(t)
-            average += t
-            counter += 1
-        result = average / counter
-        if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
-            self.log.msg(Log.LOG_DEBUG,
-                         f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} avg={result:.1f}C")
+                         f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} {label}={result:.1f}C")
         return result
-
-    def get_max_temp(self) -> float:
-        """Get the maximum temperature of the controlled entities in the IPMI zone.
-
-        Returns:
-             float: maximum temperature of the controlled entities (C)
-        """
-        maximum: float  # Maximum temperature value
-
-        # Calculate maximum temperature.
-        maximum = -1.0
-        temps = []
-        for i in range(self.count):
-            t = self._get_nth_temp(i)
-            temps.append(t)
-            maximum = max(t, maximum)
-        if hasattr(self, "log") and self.log.log_level >= Log.LOG_DEBUG:
-            self.log.msg(Log.LOG_DEBUG,
-                         f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} max={maximum:.1f}C")
-        return maximum
 
     def set_fan_level(self, level: int) -> None:
         """Set the new fan level in all IPMI zones of the controller.
@@ -298,7 +235,7 @@ class FanController:
 
             # Step 2: read the temperature, apply smoothing, and check the sensitivity gap.
             self.callback_func()
-            raw_temp = self.get_temp_func()
+            raw_temp = self.get_temp()
             self._temp_history.append(raw_temp)
             current_temp = sum(self._temp_history) / len(self._temp_history)
             if self.log.log_level >= Log.LOG_DEBUG:
