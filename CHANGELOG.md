@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.0] - 2026.04.xx
+
+### New
+- Extended DEBUG level logging across the codebase for better internal state monitoring:
+  - Fan controller: temperature smoothing details (raw vs smoothed, window fill), sensitivity check results, calculated fan level, level-unchanged confirmation, polling skipped with remaining time
+  - Per-device temperatures logged in multi-device setups (min/avg/max aggregation)
+  - IPMI: raw `ipmitool` command execution and response tracing, fan mode and fan level changes
+  - Shared IPMI zone arbitration: desired levels logged on change, zone ownership map at startup
+  - HD fan controller: smartctl fallback path, standby guard state
+  - CONST fan controller: current vs expected fan level per zone
+- Command line help text added to `/etc/default/smfc` configuration file
+- Feature list added to README.md "How does it work?" section
+
+### Changed
+- Installation script (`install.sh`) now preserves `/etc/default/smfc` when `--keep-config` is set and the file already exists
+- All new DEBUG log statements use a level guard (`if self.log.log_level >= Log.LOG_DEBUG`) to avoid f-string formatting overhead when DEBUG is not enabled
+- Shared IPMI zone arbitration log ("Arbitration desired levels") now only fires when desired levels change, reducing log noise in steady state
+- Removed unused `MockContext.__del__` method in test helper to eliminate non-deterministic coverage results
+- Improved docstrings with better test descriptions
+- Pylint warnings corrected
+
 ## [5.3.0] - 2026.04.02
 
 ### New
