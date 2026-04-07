@@ -39,6 +39,7 @@ class PlatformName(str, Enum):
     AUTO = "auto"
     GENERIC = "generic"
     GENERIC_X9 = "genericx9"
+    GENERIC_X14 = "genericx14"
     X10QBI = "X10QBi"
 
 
