@@ -28,7 +28,7 @@ class X10QBi(Platform):
         r = self._exec(["raw", "0x30", "0x90", "0x5c", "0x03", f"0x{reg:x}", "0x01"])
         return int(r.stdout, 16)
 
-    def set_fan_manual_mode(self) -> None:
+    def start(self) -> None:
         # Set Temperature Fan Mapping Relationships (TMFR)
         # These map which of the 4 fan controllers are assigned to which
         # of the 10 temperature sensors. Each temperature sensor can have
@@ -58,6 +58,9 @@ class X10QBi(Platform):
         # Reference: Nuvoton NCT7904D Datasheet (p115)
         self._exec(["raw", "0x30", "0x91", "0x5c", self.BANK_3_REGISTER, "0x07", "0x00"])
 
+    def end(self) -> None:
+        pass
+
     def set_fan_mode(self, mode: int) -> None:
         if mode not in self.valid_fan_modes:
             raise ValueError(f"Invalid value: fan mode ({mode}).")
@@ -71,7 +74,7 @@ class X10QBi(Platform):
         reg = self.FANCTL_BASE_REG + zone
         # On the X10QBi, 100% is 0xFF (255), not 0x64 (100)
         normalised_level = level * 255 // 100
-        self.set_fan_manual_mode()
+        self.start()
         self._exec(["raw", "0x30", "0x91", "0x5c", self.BANK_3_REGISTER, f"0x{reg:02x}", f"0x{normalised_level:02x}"])
 
     def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
@@ -82,7 +85,7 @@ class X10QBi(Platform):
         validate_input_range(level, "level", 0, 100)
         # On the X10QBi, 100% is 0xFF (255), not 0x64 (100)
         normalised_level = level * 255 // 100
-        self.set_fan_manual_mode()
+        self.start()
         for zone in zone_list:
             reg = self.FANCTL_BASE_REG + zone
             reg_hex, level_hex = f"0x{reg:02x}", f"0x{normalised_level:02x}"

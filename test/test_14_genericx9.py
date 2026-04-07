@@ -78,15 +78,26 @@ class TestGenericX9Platform:
             platform.get_fan_level(zone)
         assert cm.type is ValueError, error
 
-    def test_set_fan_manual_mode(self) -> None:
-        """Positive unit test for GenericX9Platform.set_fan_manual_mode() method. It contains the following steps:
+    def test_start(self) -> None:
+        """Positive unit test for GenericX9Platform.start() method. It contains the following steps:
         - create a GenericX9Platform instance with a mock exec function
-        - call set_fan_manual_mode()
+        - call start()
         - ASSERT: if the mock exec was called (should be a no-op)
         """
         mock_exec = MagicMock()
         platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
-        platform.set_fan_manual_mode()
+        platform.start()
+        mock_exec.assert_not_called()
+
+    def test_end(self) -> None:
+        """Positive unit test for GenericX9Platform.end() method. It contains the following steps:
+        - create a GenericX9Platform instance with a mock exec function
+        - call end()
+        - ASSERT: if the mock exec was called (should be a no-op)
+        """
+        mock_exec = MagicMock()
+        platform = GenericX9Platform(PlatformName.GENERIC_X9, mock_exec)
+        platform.end()
         mock_exec.assert_not_called()
 
     @pytest.mark.parametrize(

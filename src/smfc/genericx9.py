@@ -26,7 +26,10 @@ class GenericX9Platform(Platform):
         r = self._exec(["raw", "0x30", "0x90", "0x5a", "0x03", f"0x{reg:x}", "0x01"])
         return int(r.stdout, 16)
 
-    def set_fan_manual_mode(self) -> None:
+    def start(self) -> None:
+        pass
+
+    def end(self) -> None:
         pass
 
     def set_fan_mode(self, mode: int) -> None:

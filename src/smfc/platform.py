@@ -91,8 +91,18 @@ class Platform(ABC):
         """
 
     @abstractmethod
-    def set_fan_manual_mode(self) -> None:
-        """Set the fan controllers on the platform to accept manual PWM or DC input.
+    def start(self) -> None:
+        """Initialize the platform for manual fan control operations.
+        Called once at startup to prepare the platform (e.g., set fan controllers to accept manual PWM/DC input).
+        Raises:
+            FileNotFoundError: ipmitool cannot be found
+            RuntimeError: ipmitool execution problem
+        """
+
+    @abstractmethod
+    def end(self) -> None:
+        """Clean up and restore platform state when shutting down.
+        Called once at shutdown to restore automatic fan control or clean up resources.
         Raises:
             FileNotFoundError: ipmitool cannot be found
             RuntimeError: ipmitool execution problem

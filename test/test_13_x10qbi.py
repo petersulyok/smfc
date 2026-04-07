@@ -77,17 +77,17 @@ class TestX10QBi:
             platform.get_fan_level(zone)
         assert cm.type is ValueError, error
 
-    def test_set_fan_manual_mode(self) -> None:
-        """Positive unit test for X10QBi.set_fan_manual_mode() method. It contains the following steps:
+    def test_start(self) -> None:
+        """Positive unit test for X10QBi.start() method. It contains the following steps:
         - create an X10QBi instance with a mock exec function
-        - call set_fan_manual_mode()
+        - call start()
         - ASSERT: if the mock exec was not called 11 times (10 TMFR + 1 FOMC)
         - ASSERT: if the mock exec was called with different parameters than expected
         """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
         platform = X10QBi("X10QBi", mock_exec)
-        platform.set_fan_manual_mode()
+        platform.start()
         assert mock_exec.call_count == 11
         expected_calls = [
             call(["raw", "0x30", "0x91", "0x5c", "0x03", "0x00", "0x00"]),
@@ -103,6 +103,17 @@ class TestX10QBi:
             call(["raw", "0x30", "0x91", "0x5c", "0x03", "0x07", "0x00"]),
         ]
         mock_exec.assert_has_calls(expected_calls)
+
+    def test_end(self) -> None:
+        """Positive unit test for X10QBi.end() method. It contains the following steps:
+        - create an X10QBi instance with a mock exec function
+        - call end()
+        - ASSERT: if the mock exec was called (should be a no-op)
+        """
+        mock_exec = MagicMock()
+        platform = X10QBi("X10QBi", mock_exec)
+        platform.end()
+        mock_exec.assert_not_called()
 
     @pytest.mark.parametrize(
         "mode, error",

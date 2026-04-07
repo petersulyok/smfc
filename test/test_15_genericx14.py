@@ -80,20 +80,38 @@ class TestGenericX14Platform:
             platform.get_fan_level(zone)
         assert cm.type is ValueError, error
 
-    def test_set_fan_manual_mode(self) -> None:
-        """Positive unit test for GenericX14Platform.set_fan_manual_mode() method. It contains the following steps:
+    def test_start(self) -> None:
+        """Positive unit test for GenericX14Platform.start() method. It contains the following steps:
         - create a GenericX14Platform instance with a mock exec function
-        - call set_fan_manual_mode()
+        - call start()
         - ASSERT: if the mock exec was not called 6 times (once per zone 0-5)
         - ASSERT: if the mock exec was called with correct manual mode enable commands
         """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
         platform = GenericX14Platform(PlatformName.GENERIC_X14, mock_exec)
-        platform.set_fan_manual_mode()
+        platform.start()
         assert mock_exec.call_count == 6
         expected_calls = [
             call(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x01"])
+            for zone in range(6)
+        ]
+        mock_exec.assert_has_calls(expected_calls)
+
+    def test_end(self) -> None:
+        """Positive unit test for GenericX14Platform.end() method. It contains the following steps:
+        - create a GenericX14Platform instance with a mock exec function
+        - call end()
+        - ASSERT: if the mock exec was not called 6 times (once per zone 0-5)
+        - ASSERT: if the mock exec was called with correct manual mode disable commands
+        """
+        mock_exec = MagicMock()
+        mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
+        platform = GenericX14Platform(PlatformName.GENERIC_X14, mock_exec)
+        platform.end()
+        assert mock_exec.call_count == 6
+        expected_calls = [
+            call(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x00"])
             for zone in range(6)
         ]
         mock_exec.assert_has_calls(expected_calls)
@@ -158,19 +176,15 @@ class TestGenericX14Platform:
         """Positive unit test for GenericX14Platform.set_fan_level() method. It contains the following steps:
         - create a GenericX14Platform instance with a mock exec function
         - call set_fan_level() with valid zones and levels
-        - ASSERT: if the mock exec was called exactly twice (manual mode enable + level set)
-        - ASSERT: if the mock exec calls have expected parameters (X14 uses percentage directly)
+        - ASSERT: if the mock exec was called exactly once (level set only, no manual mode enable)
+        - ASSERT: if the mock exec call has expected parameters (X14 uses percentage directly)
         """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
         platform = GenericX14Platform(PlatformName.GENERIC_X14, mock_exec)
         platform.set_fan_level(zone, level)
-        assert mock_exec.call_count == 2, error
-        expected_calls = [
-            call(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x01"]),
-            call(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}", f"0x{level:02x}"]),
-        ]
-        mock_exec.assert_has_calls(expected_calls)
+        assert mock_exec.call_count == 1, error
+        mock_exec.assert_called_with(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}", f"0x{level:02x}"])
 
     @pytest.mark.parametrize(
         "zone, level, error",
@@ -206,18 +220,18 @@ class TestGenericX14Platform:
         """Positive unit test for GenericX14Platform.set_multiple_fan_levels() method. It contains the following steps:
         - create a GenericX14Platform instance with a mock exec function
         - call set_multiple_fan_levels() with valid zones and level
-        - ASSERT: if the mock exec call count is different from expected (2*N zones: manual enable + level set)
+        - ASSERT: if the mock exec call count is different from expected (N zones, no manual mode enables)
         - ASSERT: if the mock exec calls have expected parameters
         """
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
         platform = GenericX14Platform(PlatformName.GENERIC_X14, mock_exec)
         platform.set_multiple_fan_levels(zones, level)
-        assert mock_exec.call_count == 2 * len(zones), error
-        expected_calls = []
-        for zone in zones:
-            expected_calls.append(call(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x01"]))
-            expected_calls.append(call(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}", f"0x{level:02x}"]))
+        assert mock_exec.call_count == len(zones), error
+        expected_calls = [
+            call(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}", f"0x{level:02x}"])
+            for zone in zones
+        ]
         mock_exec.assert_has_calls(expected_calls)
 
     @pytest.mark.parametrize(

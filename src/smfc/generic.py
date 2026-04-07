@@ -22,7 +22,10 @@ class GenericPlatform(Platform):
         r = self._exec(["raw", "0x30", "0x70", "0x66", "0x00", f"0x{zone:x}"])
         return int(r.stdout, 16)
 
-    def set_fan_manual_mode(self) -> None:
+    def start(self) -> None:
+        pass
+
+    def end(self) -> None:
         pass
 
     def set_fan_mode(self, mode: int) -> None:

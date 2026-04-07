@@ -46,8 +46,8 @@ class GenericX14Platform(Platform):
         r = self._exec(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}"])
         return int(r.stdout, 16)
 
-    def set_fan_manual_mode(self) -> None:
-        """Enable manual mode for all zones.
+    def start(self) -> None:
+        """Enable manual mode for all zones at startup.
 
         This stops the BMC's PID controller (swampd) from overriding PWM values.
         Uses OpenBMC OEM command (IANA: 0x0000C2CF).
@@ -55,6 +55,15 @@ class GenericX14Platform(Platform):
         # Enable manual mode for zones 0-5
         for zone in range(6):
             self._exec(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x01"])
+
+    def end(self) -> None:
+        """Disable manual mode for all zones at shutdown.
+
+        Restores automatic PID control by the BMC's swampd daemon.
+        """
+        # Disable manual mode for zones 0-5
+        for zone in range(6):
+            self._exec(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x00"])
 
     def set_fan_mode(self, mode: int) -> None:
         if mode not in self.valid_fan_modes:
@@ -64,8 +73,6 @@ class GenericX14Platform(Platform):
     def set_fan_level(self, zone: int, level: int) -> None:
         validate_input_range(zone, "zone", 0, 5)
         validate_input_range(level, "level", 0, 100)
-        # Enable manual mode for this zone first
-        self._exec(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x01"])
         # Set duty cycle (X14 uses percentage directly: 0x00-0x64)
         self._exec(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}", f"0x{level:02x}"])
 
@@ -73,9 +80,8 @@ class GenericX14Platform(Platform):
         for zone in zone_list:
             validate_input_range(zone, "zone", 0, 5)
         validate_input_range(level, "level", 0, 100)
-        # Enable manual mode and set level for each zone
+        # Set level for each zone
         for zone in zone_list:
-            self._exec(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x01"])
             self._exec(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}", f"0x{level:02x}"])
 
 
