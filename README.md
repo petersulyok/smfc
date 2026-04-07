@@ -207,23 +207,23 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 |----------------------------|----------------------------------------------|--------------------------------------------------------------------------------------------------|
 | `auto`                     | automatic discovery based on BMC information | Default behaviour                                                                                |
 | `generic`                  | Generic X10-X13/H10-H13 Supermicro boards   | Uses standard Supermicro IPMI raw commands                                                      |
-| `genericx9`                | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                 |
-| `genericx14`               | Generic Supermicro X14 boards                | 6 fan zones (0-5), extended fan modes, OpenBMC-based BMC                                        |
+| `generic_x9`               | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                 |
+| `generic_x14`              | Generic Supermicro X14 boards                | 6 fan zones (0-5), extended fan modes, OpenBMC-based BMC                                        |
 | `X10QBi`                   | Supermicro X10QBi motherboard               | Nuvoton NCT7904D fan controller, 4 fan zones (0x10-0x13), see [issue #69](https://github.com/petersulyok/smfc/issues/69) and [PR #97](https://github.com/petersulyok/smfc/pull/97) |
 
 With this abstraction layer, new Supermicro motherboards can also be added to `smfc` with a good understanding of their IPMI raw commands and fan control logic.
 
 #### 5.2 Supermicro X14/H14 motherboards
-X14 motherboards are supported (since `smfc v5.4.0`) via the `genericx14` platform. X14 boards use OpenBMC-based firmware with different IPMI raw commands for fan control, discovered through reverse engineering. Key features:
+X14 motherboards are supported (since `smfc v5.4.0`) via the `generic_x14` platform. X14 boards use OpenBMC-based firmware with different IPMI raw commands for fan control, discovered through reverse engineering. Key features:
 - 6 fan zones (0-5)
 - Manual mode control via OpenBMC OEM commands (IANA: 0x0000C2CF)
 - Extended fan modes (Standard, Full, Optimal, PUE, Heavy IO, PUE3, Liquid Cooling, Smart, Performance, Silent)
 - Direct percentage-based duty cycle (0-100)
 
-There is no auto-detection for X14 boards, so you must set `platform_name=genericx14` in the configuration file.
+There is no auto-detection for X14 boards, so you must set `platform_name=generic_x14` in the configuration file.
 
 #### 5.3 Supermicro X9 motherboards
-Some X9 motherboards are supported (since `smfc v5.2.0`) via the `genericx9` platform, provided they support the specific IPMI raw commands used for fan control. There is no auto-detection for X9 boards, so you must set `platform_name=genericx9` in the configuration file.
+Some X9 motherboards are supported (since `smfc v5.2.0`) via the `generic_x9` platform, provided they support the specific IPMI raw commands used for fan control. There is no auto-detection for X9 boards, so you must set `platform_name=generic_x9` in the configuration file.
 
 #### 5.4 Supermicro X8 motherboards
 The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
@@ -524,11 +524,11 @@ fan_level_delay=2
 #remote_parameters=-U USERNAME -P PASSWORD -H HOST
 # Supermicro platform (string, default='auto')
 # Potential values:
-#  auto       - automatic discovery based on BMC information
-#  generic    - Generic Supermicro X10-X13/H10-H13 platform
-#  genericx9  - Generic Supermicro X9 platform
-#  genericx14 - Generic Supermicro X14 platform
-#  X10QBi     - Supermicro X10QBi platform
+#  auto        - automatic discovery based on BMC information
+#  generic     - Generic Supermicro X10-X13/H10-H13 platform
+#  generic_x9  - Generic Supermicro X9 platform
+#  generic_x14 - Generic Supermicro X14 platform
+#  X10QBi      - Supermicro X10QBi platform
 platform_name=auto
 
 

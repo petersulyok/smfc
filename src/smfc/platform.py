@@ -38,8 +38,8 @@ class PlatformName(str, Enum):
     """Valid platform name values for the platform_name configuration parameter."""
     AUTO = "auto"
     GENERIC = "generic"
-    GENERIC_X9 = "genericx9"
-    GENERIC_X14 = "genericx14"
+    GENERIC_X9 = "generic_x9"
+    GENERIC_X14 = "generic_x14"
     X10QBI = "X10QBi"
 
 

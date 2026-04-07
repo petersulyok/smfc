@@ -18,8 +18,8 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
     Args:
         platform_name (str): The platform name, one of:
             - 'generic': force the GenericPlatform (X10-X13/H10-H13)
-            - 'genericx9': force the GenericX9Platform (X9 motherboards)
-            - 'genericx14': force the GenericX14Platform (X14 motherboards)
+            - 'generic_x9': force the GenericX9Platform (X9 motherboards)
+            - 'generic_x14': force the GenericX14Platform (X14 motherboards)
             - 'X10QBi': force the X10QBi platform
             - any other string: looked up in the platform registry, falls back to GenericPlatform
         exec_ipmitool (Callable): Function that executes ipmitool commands
