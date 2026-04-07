@@ -37,20 +37,12 @@ class GenericX14Platform(Platform):
         0x0B,  # Silent
     ]
 
-    def get_fan_mode(self) -> int:
-        r = self._exec(["raw", "0x30", "0x45", "0x00"])
-        return int(r.stdout)
-
-    def get_fan_level(self, zone: int) -> int:
-        validate_input_range(zone, "zone", 0, 5)
-        r = self._exec(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}"])
-        return int(r.stdout, 16)
-
     def start(self) -> None:
         """Enable manual mode for all zones at startup.
 
         This stops the BMC's PID controller (swampd) from overriding PWM values.
-        Uses OpenBMC OEM command (IANA: 0x0000C2CF).
+        Uses OpenBMC OEM command (IANA: 0x0000C2CF) 0x2c 0x04.
+        Enables manual mode for all 6 zones (0-5).
         """
         # Enable manual mode for zones 0-5
         for zone in range(6):
@@ -60,23 +52,62 @@ class GenericX14Platform(Platform):
         """Disable manual mode for all zones at shutdown.
 
         Restores automatic PID control by the BMC's swampd daemon.
+        Uses OpenBMC OEM command (IANA: 0x0000C2CF) 0x2c 0x04.
+        Disables manual mode for all 6 zones (0-5).
         """
         # Disable manual mode for zones 0-5
         for zone in range(6):
             self._exec(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x00"])
 
+    def get_fan_mode(self) -> int:
+        """Get the current IPMI fan mode using 0x30 0x45 0x00 command.
+        Returns:
+            int: fan mode (0x00-0x0B, see valid_fan_modes for details)
+        """
+        r = self._exec(["raw", "0x30", "0x45", "0x00"])
+        return int(r.stdout)
+
+    def get_fan_level(self, zone: int) -> int:
+        """Get the current fan duty cycle in a specific zone using 0x30 0x70 0x88 command.
+        Args:
+            zone (int): fan zone (0-5)
+        Returns:
+            int: fan duty cycle in % (0-100)
+        """
+        validate_input_range(zone, "zone", 0, 5)
+        r = self._exec(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}"])
+        return int(r.stdout, 16)
+
     def set_fan_mode(self, mode: int) -> None:
+        """Set the IPMI fan mode using 0x30 0x45 0x01 command.
+        Args:
+            mode (int): fan mode (0x00-0x0B, see valid_fan_modes for details)
+        """
         if mode not in self.valid_fan_modes:
             raise ValueError(f"Invalid value: fan mode ({mode}).")
         self._exec(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
 
     def set_fan_level(self, zone: int, level: int) -> None:
+        """Set the fan duty cycle in a specific zone using 0x30 0x70 0x88 command.
+        X14 uses percentage directly (0x00-0x64), not 0-255 scale.
+        Manual mode must be enabled first via start().
+        Args:
+            zone (int): fan zone (0-5)
+            level (int): fan duty cycle in % (0-100)
+        """
         validate_input_range(zone, "zone", 0, 5)
         validate_input_range(level, "level", 0, 100)
         # Set duty cycle (X14 uses percentage directly: 0x00-0x64)
         self._exec(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}", f"0x{level:02x}"])
 
     def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
+        """Set the fan duty cycle in multiple zones.
+        X14 uses percentage directly (0x00-0x64), not 0-255 scale.
+        Manual mode must be enabled first via start().
+        Args:
+            zone_list (List[int]): list of fan zones (0-5)
+            level (int): fan duty cycle in % (0-100)
+        """
         for zone in zone_list:
             validate_input_range(zone, "zone", 0, 5)
         validate_input_range(level, "level", 0, 100)

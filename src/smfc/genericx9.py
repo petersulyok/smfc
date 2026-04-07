@@ -15,31 +15,52 @@ class GenericX9Platform(Platform):
     FANCTL_COUNT: int = 4           # Number of fan zones
     valid_fan_modes: List[FanMode] = [FanMode.STANDARD, FanMode.FULL, FanMode.OPTIMAL, FanMode.HEAVY_IO]
 
+    def start(self) -> None:
+        """Initialize platform for manual fan control (no-op for X9 platforms)."""
+        pass
+
+    def end(self) -> None:
+        """Clean up platform resources (no-op for X9 platforms)."""
+        pass
+
     def get_fan_mode(self) -> int:
+        """Get the current IPMI fan mode using 0x30 0x45 0x00 command.
+        Returns:
+            int: fan mode (0=STANDARD, 1=FULL, 2=OPTIMAL, 4=HEAVY_IO)
+        """
         r = self._exec(["raw", "0x30", "0x45", "0x00"])
         return int(r.stdout)
 
     def get_fan_level(self, zone: int) -> int:
-        # Zone 0-3 maps to register 0x10-0x13
+        """Get the current fan level in a specific zone using 0x30 0x90 0x5a 0x03 command.
+        Zone 0-3 maps to register 0x10-0x13.
+        Args:
+            zone (int): fan zone (0-3)
+        Returns:
+            int: fan level (0-255 scale, not percentage)
+        """
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         reg = self.FANCTL_BASE_REG + zone
         r = self._exec(["raw", "0x30", "0x90", "0x5a", "0x03", f"0x{reg:x}", "0x01"])
         return int(r.stdout, 16)
 
-    def start(self) -> None:
-        pass
-
-    def end(self) -> None:
-        pass
-
     def set_fan_mode(self, mode: int) -> None:
+        """Set the IPMI fan mode using 0x30 0x45 0x01 command.
+        Args:
+            mode (int): fan mode (0=STANDARD, 1=FULL, 2=OPTIMAL, 4=HEAVY_IO)
+        """
         if mode not in self.valid_fan_modes:
             raise ValueError(f"Invalid value: fan mode ({mode}).")
         self._exec(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
 
     def set_fan_level(self, zone: int, level: int) -> None:
-        # Zone 0-3 maps to register 0x10-0x13
-        # Duty cycle uses 0-255 scale (100% = 0xFF)
+        """Set the fan level in a specific zone using 0x30 0x91 0x5a 0x03 command.
+        Zone 0-3 maps to register 0x10-0x13.
+        Duty cycle uses 0-255 scale (100% = 0xFF).
+        Args:
+            zone (int): fan zone (0-3)
+            level (int): fan level in % (0-100), converted to 0-255 scale
+        """
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         validate_input_range(level, "level", 0, 100)
         reg = self.FANCTL_BASE_REG + zone
@@ -47,7 +68,12 @@ class GenericX9Platform(Platform):
         self._exec(["raw", "0x30", "0x91", "0x5a", "0x03", f"0x{reg:02x}", f"0x{normalised_level:02x}"])
 
     def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
-        # Zone 0-3 maps to register 0x10-0x13
+        """Set the fan level in multiple zones.
+        Zone 0-3 maps to register 0x10-0x13.
+        Args:
+            zone_list (List[int]): list of fan zones (0-3)
+            level (int): fan level in % (0-100), converted to 0-255 scale
+        """
         for zone in zone_list:
             validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         validate_input_range(level, "level", 0, 100)
