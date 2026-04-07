@@ -62,7 +62,6 @@ class X10QBi(Platform):
         The NCT7904D configuration persists and doesn't require cleanup.
         SmartFan mode remains disabled until BMC restart or manual reconfiguration.
         """
-        pass
 
     def get_fan_mode(self) -> int:
         """Get the current IPMI fan mode using 0x30 0x45 0x00 command.

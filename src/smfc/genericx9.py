@@ -17,11 +17,9 @@ class GenericX9Platform(Platform):
 
     def start(self) -> None:
         """Initialize platform for manual fan control (no-op for X9 platforms)."""
-        pass
 
     def end(self) -> None:
         """Clean up platform resources (no-op for X9 platforms)."""
-        pass
 
     def get_fan_mode(self) -> int:
         """Get the current IPMI fan mode using 0x30 0x45 0x00 command.
