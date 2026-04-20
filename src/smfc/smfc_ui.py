@@ -1,31 +1,13 @@
 #!/usr/bin/env python3
-import sys
 import os
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 from configparser import ConfigParser
 
-# Ensure we can import the smfc package from src
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
+from .ipmi import Ipmi
+from .log import Log
 
-# Dependency check / Mocking
-# The smfc package structure imports all modules in __init__.py.
-# Some modules (like FanController) depend on pyudev.
-# Since we only use Ipmi and Log classes here (which don't depend on pyudev),
-# we can mock pyudev if it's missing to allow the import to succeed.
-try:
-    import pyudev
-except ImportError:
-    from unittest.mock import MagicMock
-    sys.modules["pyudev"] = MagicMock()
-
-try:
-    from smfc.ipmi import Ipmi
-    from smfc.log import Log
-except ImportError as e:
-    print(f"Error importing smfc modules: {e}")
-    sys.exit(1)
 
 class FanControlUI:
     def __init__(self, root):

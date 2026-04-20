@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
     "pyudev"
 ]
+# System package required for the UI (smfc_ui): python3-tk (e.g. `apt install python3-tk`)
 [dependency-groups]
 dev = [
     "build",
