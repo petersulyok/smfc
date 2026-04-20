@@ -50,6 +50,7 @@ Issues = "https://github.com/petersulyok/smfc/issues"
 
 [project.scripts]
 smfc = "smfc.cmd:main"
+smfc-ui = "smfc.smfc_ui:main"
 
 [tool.uv]
 default-groups = ["dev", "lint"]

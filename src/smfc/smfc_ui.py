@@ -267,12 +267,16 @@ class FanControlUI:
         self.root.after(0, update_text)
 
 
-if __name__ == "__main__":
+def main():
     # The UI should be run as a regular user to access the Display (X11/Wayland).
     # The Ipmi class handles sudo internally for the ipmitool commands.
     if os.geteuid() == 0:
         print("Warning: Running as root might cause issues with connecting to the X display.")
         print("Recommended: Run as regular user. You will be prompted for sudo password if needed.")
     root = tk.Tk()
-    app = FanControlUI(root)
+    FanControlUI(root)
     root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
