@@ -279,6 +279,27 @@ exit 0
         file_content += "EOF\n"
         return self.create_command_file(file_content)
 
+    def create_rocm_smi_command(
+        self, count: int, temp_list: List[float] = None
+    ) -> str:
+        """Creates a shell script emulating `rocm-smi -t --json`."""
+        import json
+        data = {}
+        for i in range(count):
+            if temp_list:
+                v = temp_list[i]
+            else:
+                v = random.uniform(35.0, 75.0)
+            data[f"card{i}"] = {
+                "Temperature (Sensor junction) (C)": f"{v:.1f}",
+                "Temperature (Sensor edge) (C)": f"{v-2:.1f}",
+                "Temperature (Sensor memory) (C)": f"{v-5:.1f}"
+            }
+        file_content = "cat << EOF\n"
+        file_content += json.dumps(data) + "\n"
+        file_content += "EOF\n"
+        return self.create_command_file(file_content)
+
     def create_text_file(self, content: str) -> str:
         """Creates a text file with the specified content."""
         h, name = tempfile.mkstemp(prefix="text", suffix=".txt", dir=self.td_dir)
