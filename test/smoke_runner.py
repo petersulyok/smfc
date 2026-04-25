@@ -169,8 +169,10 @@ class TestSmoke:
             nonlocal cmd_nvidia
             self.gpu_device_ids = list(range(gpu_num))
             count = len(self.gpu_device_ids)
+            self.gpu_type = config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_GPU_TYPE, fallback="nvidia")
             self.nvidia_smi_path = cmd_nvidia
-            self.nvidia_smi_called = 0
+            self.rocm_smi_path = "/usr/bin/rocm-smi"
+            self.smi_called = 0
 
             # Initialize FanController class.
             FanController.__init__(
@@ -190,7 +192,10 @@ class TestSmoke:
             # Print configuration in CONFIG log level (or higher).
             if self.log.log_level >= Log.LOG_CONFIG:
                 self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_GPU_IDS} = {self.gpu_device_ids}")
-            self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_NVIDIA_SMI_PATH} = {self.nvidia_smi_path}")
+            if self.gpu_type == "nvidia":
+                self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_NVIDIA_SMI_PATH} = {self.nvidia_smi_path}")
+            else:
+                self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_ROCM_SMI_PATH} = {self.rocm_smi_path}")
             # pragma pylint: enable=unused-argument, duplicate-code
 
         my_td = TestData()

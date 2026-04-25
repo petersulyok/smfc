@@ -109,10 +109,14 @@ class Service:
 
         # Check dependencies for GPU fancontroller.
         if self._is_fc_enabled(self.config, GpuFc.CS_GPU_FC, GpuFc.CV_GPU_FC_ENABLED):
-            # Check if `nvidia-smi` command is available.
-            path = self.config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH, "/usr/bin/nvidia-smi")
+            gpu_type = self.config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
+            if gpu_type == "nvidia":
+                path = self.config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH, "/usr/bin/nvidia-smi")
+            else:
+                path = self.config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_ROCM_SMI_PATH, "/usr/bin/rocm-smi")
+
             if not os.path.exists(path):
-                return f"ERROR: nvidia-smi command cannot be found {path}!"
+                return f"ERROR: {path} command cannot be found!"
 
         # All required run-time dependencies are available.
         return ""

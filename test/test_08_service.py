@@ -165,7 +165,7 @@ class TestService:
         # Check if `nvidia-smi` command is not available.
         my_td.delete_file(nvidia_smi_cmd)
         error_str = service.check_dependencies()
-        assert error_str.find("nvidia-smi") != -1, error
+        assert error_str.find("command cannot be found!") != -1, error
 
         # Check if `smartctl` command is not available.
         my_td.delete_file(smartctl_cmd)
@@ -396,8 +396,10 @@ class TestService:
             nonlocal cmd_nvidia
             self.gpu_device_ids = [0]
             count = 1
+            self.gpu_type = "nvidia"
             self.nvidia_smi_path = cmd_nvidia
-            self.nvidia_smi_called = 0
+            self.rocm_smi_path = "/usr/bin/rocm-smi"
+            self.smi_called = 0
             FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", GpuFc.CS_GPU_FC, count,
                                    1, 5, 2, 0, 45, 70, 35, 100)
 
