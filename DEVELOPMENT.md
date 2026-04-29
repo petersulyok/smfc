@@ -80,21 +80,26 @@ Several smoke tests have been provided for `smfc` where the service is executed 
 
 * the following smoke scripts and fan controller configurations can be executed:
 
-   | Test script               | CPU      | HD       | NVME      | GPU      | CONST      | Standby guard |
-   |---------------------------|----------|----------|-----------|----------|------------|---------------|
-   | `run_test_cpu_1.sh`       | 1 x CPU  | 1 x HD   | disabled  | disabled | enabled    | enabled       |
-   | `run_test_cpu_2.sh`       | 2 x CPUs | disabled | disabled  | 1 GPU    | disabled   | disabled      |
-   | `run_test_cpu_4.sh`       | 4 x CPUs | 4 x HDs  | disabled  | 4 GPUs   | disabled   | enabled       |
-   | `run_test_hd_1.sh`        | disabled | 1 x HD   | disabled  | disabled | enabled    | enabled       |
-   | `run_test_hd_2.sh`        | 1 x CPU  | 2 x HDs  | disabled  | disabled | disabled   | disabled      |
-   | `run_test_hd_4.sh`        | disabled | 4 x HDs  | disabled  | 2 GPUs   | disabled   | disabled      |
-   | `run_test_hd_8.sh`        | 4 x CPUs | 8 x HDs  | disabled  | disabled | disabled   | enabled       |
-   | `run_test_const_level.sh` | 1 x CPU  | disabled | disabled  | disabled | enabled    | enabled       |
-   | `run_test_gpu_8.sh`       | 1 x CPU  | disabled | disabled  | 8 GPUs   | enabled    | disabled      |
-   | `run_test_nvme_4.sh`      | 2 x CPU  | disabled | 4 x NVME  | disabled | enabled    | disabled      |
-   | `run_test_shared_zones.sh`| 1 x CPU  | disabled | 2 x NVMEs | disabled | disabled   | disabled      |
+   | Test script               | CPU      | HD       | NVME      | GPU           | CONST      | Standby guard |
+   |---------------------------|----------|----------|-----------|---------------|------------|---------------|
+   | `run_test_cpu_1.sh`       | 1 x CPU  | 1 x HD   | disabled  | disabled      | enabled    | enabled       |
+   | `run_test_cpu_2.sh`       | 2 x CPUs | disabled | disabled  | 1 GPU         | disabled   | disabled      |
+   | `run_test_cpu_4.sh`       | 4 x CPUs | 4 x HDs  | disabled  | 4 GPUs        | disabled   | enabled       |
+   | `run_test_hd_1.sh`        | disabled | 1 x HD   | disabled  | disabled      | enabled    | enabled       |
+   | `run_test_hd_2.sh`        | 1 x CPU  | 2 x HDs  | disabled  | disabled      | disabled   | disabled      |
+   | `run_test_hd_4.sh`        | disabled | 4 x HDs  | disabled  | 2 GPUs        | disabled   | disabled      |
+   | `run_test_hd_8.sh`        | 4 x CPUs | 8 x HDs  | disabled  | disabled      | disabled   | enabled       |
+   | `run_test_const_level.sh` | 1 x CPU  | disabled | disabled  | disabled      | enabled    | enabled       |
+   | `run_test_gpu_8.sh`       | 1 x CPU  | disabled | disabled  | 8 GPUs        | enabled    | disabled      |
+   | `run_test_gpu_8_nvidia.sh`| 1 x CPU  | disabled | disabled  | 8 Nvidia GPUs | enabled    | disabled      |
+   | `run_test_gpu_8_amd.sh`   | 1 x CPU  | disabled | disabled  | 8 AMD GPUs    | enabled    | disabled      |
+   | `run_test_nvme_4.sh`      | 2 x CPU  | disabled | 4 x NVME  | disabled      | enabled    | disabled      |
+   | `run_test_shared_zones.sh`| 1 x CPU  | disabled | 2 x NVMEs | disabled      | disabled   | disabled      |
 
-   Note: `run_test_shared_zones.sh` tests the shared IPMI zone arbitration where CPU and NVME fan controllers both use IPMI zone 0.
+   Notes:
+   - `run_test_shared_zones.sh` tests the shared IPMI zone arbitration where CPU and NVME fan controllers both use IPMI zone 0.
+   - `run_test_gpu_8_nvidia.sh` and `run_test_gpu_8_amd.sh` test GPU fan controller with Nvidia and AMD GPUs respectively.
+   - During smoke tests, temperature values change gradually over time to simulate realistic thermal behavior. A background thread updates hwmon temperature files (for CPU, HD, NVMe) every second, applying random changes of +/- 0-3 degrees within the configured min/max range. GPU temperatures (both Nvidia and AMD) also change gradually between script invocations using a state file to track previous values.
 
 ## Unit tests
 
