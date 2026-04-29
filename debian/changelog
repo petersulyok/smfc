@@ -1,3 +1,9 @@
+smfc (5.4.0) unstable; urgency=medium
+
+  * UPDATE WITH RELEASE NOTES
+
+ -- Peter Sulyok <peter@sulyok.net>  Wed, 29 Apr 2026 21:00:50 +0200
+
 smfc (5.3.0) unstable; urgency=medium
 
   * New: Temperature smoothing feature (smoothing= parameter) for CPU, HD,

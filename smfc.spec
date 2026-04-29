@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        5.3.0
+Version:        5.4.0
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -94,6 +94,9 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Wed Apr 29 2026 Peter Sulyok <peter@sulyok.net> - 5.4.0-1
+- UPDATE WITH RELEASE NOTES
+
 * Thu Apr 02 2026 Peter Sulyok <peter@sulyok.net> - 5.3.0-1
 - New: Temperature smoothing feature (smoothing= parameter) for CPU, HD, NVME, GPU controllers
 - Changed: Removed pointless catch-and-re-raise exception handling
