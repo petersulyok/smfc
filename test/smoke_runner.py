@@ -5,6 +5,7 @@
 #
 import atexit
 import sys
+import threading
 import time
 from configparser import ConfigParser
 from pytest import fixture
@@ -59,10 +60,25 @@ class TestSmoke:
         - The main loop will be stopped if the user presses CTRL-C
         """
         my_td: TestData = None  # Test data
+        temp_updater_stop: threading.Event = threading.Event()
+        temp_ranges: dict = {}  # Temperature ranges from config
 
         def exit_func() -> None:
-            nonlocal my_td
+            nonlocal my_td, temp_updater_stop
+            temp_updater_stop.set()
             del my_td
+
+        def temperature_updater() -> None:
+            """Background thread that periodically updates hwmon temperature files."""
+            nonlocal my_td, temp_updater_stop, temp_ranges
+            while not temp_updater_stop.is_set():
+                if my_td.cpu_files and 'cpu' in temp_ranges:
+                    my_td.update_hwmon_temperatures(my_td.cpu_files, *temp_ranges['cpu'])
+                if my_td.hd_files and 'hd' in temp_ranges:
+                    my_td.update_hwmon_temperatures(my_td.hd_files, *temp_ranges['hd'])
+                if my_td.nvme_files and 'nvme' in temp_ranges:
+                    my_td.update_hwmon_temperatures(my_td.nvme_files, *temp_ranges['nvme'])
+                temp_updater_stop.wait(1.0)
 
         # pylint: disable=unused-argument, duplicate-code
         def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
@@ -214,9 +230,6 @@ class TestSmoke:
             my_td.create_hd_data(hd_num)
         if nvme_num:
             my_td.create_nvme_data(nvme_num)
-        if gpu_num:
-            cmd_nvidia = my_td.create_nvidia_smi_command(gpu_num)
-            cmd_rocm = my_td.create_rocm_smi_command(gpu_num)
 
         # Load the original configuration file
         my_config = ConfigParser()
@@ -230,10 +243,32 @@ class TestSmoke:
             my_config[NvmeFc.CS_NVME_FC][NvmeFc.CV_NVME_FC_NVME_NAMES] = my_td.nvme_names
         if gpu_num:
             gpu_type = my_config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
+            gpu_min = my_config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_MIN_TEMP, fallback=40.0)
+            gpu_max = my_config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_MAX_TEMP, fallback=70.0)
+            cmd_nvidia = my_td.create_nvidia_smi_command(gpu_num, min_temp=gpu_min, max_temp=gpu_max)
+            cmd_rocm = my_td.create_rocm_smi_command(gpu_num, min_temp=gpu_min, max_temp=gpu_max)
             if gpu_type == "nvidia":
                 my_config[GpuFc.CS_GPU_FC][GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH] = cmd_nvidia
             else:
                 my_config[GpuFc.CS_GPU_FC][GpuFc.CV_GPU_FC_ROCM_SMI_PATH] = cmd_rocm
+
+        # Extract temperature ranges from config for dynamic updates.
+        if cpu_num:
+            temp_ranges['cpu'] = (
+                my_config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MIN_TEMP, fallback=30.0),
+                my_config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MAX_TEMP, fallback=60.0)
+            )
+        if hd_num:
+            temp_ranges['hd'] = (
+                my_config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_MIN_TEMP, fallback=32.0),
+                my_config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_MAX_TEMP, fallback=46.0)
+            )
+        if nvme_num:
+            temp_ranges['nvme'] = (
+                my_config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_MIN_TEMP, fallback=30.0),
+                my_config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_MAX_TEMP, fallback=50.0)
+            )
+
         # Create a new config file
         new_config_file = my_td.create_config_file(my_config)
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
@@ -243,6 +278,11 @@ class TestSmoke:
         mocker.patch("smfc.GpuFc.__init__", mocked_gpufc_init)
         sys.argv = ("smfc -o 0 -l 4 -ne -nd -c " + new_config_file).split()
         service = Service()
+
+        # Start background thread to update temperatures periodically.
+        temp_thread = threading.Thread(target=temperature_updater, daemon=True)
+        temp_thread.start()
+
         service.run()
 
     # pylint: enable=redefined-outer-name

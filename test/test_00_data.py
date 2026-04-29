@@ -267,14 +267,17 @@ exit 0
 """)
 
     def update_hwmon_temperatures(self, files: List[str], min_temp: float, max_temp: float) -> None:
-        """Updates hwmon temperature files with new random values within the given range."""
+        """Updates hwmon temperature files with gradual changes (+/- 0-3 degrees) within the given range."""
         for path in files:
-            v = random.uniform(min_temp, max_temp)
+            with open(path, "r", encoding="UTF-8") as f:
+                current = float(f.read()) / 1000
+            delta = random.choice([-3, -2, -1, 0, 1, 2, 3])
+            new_temp = max(min_temp, min(max_temp, current + delta))
             with open(path, "w+t", encoding="UTF-8") as f:
-                f.write(f"{v * 1000:.0f}")
+                f.write(f"{new_temp * 1000:.0f}")
 
     def create_nvidia_smi_command(self, count: int, temp_list: List[float] = None, min_temp: float = 35.0, max_temp: float = 75.0) -> str:
-        """Creates a shell script emulating `nvidia-smi`."""
+        """Creates a shell script emulating `nvidia-smi` with gradual temperature changes."""
         if temp_list:
             file_content = "cat << EOF\n"
             for i in range(count):
@@ -282,14 +285,27 @@ exit 0
             file_content += "EOF\n"
         else:
             min_t = int(min_temp)
-            range_t = int(max_temp) - min_t
-            file_content = ""
-            for _ in range(count):
-                file_content += f"echo $(( {min_t} + RANDOM % {range_t + 1} ))\n"
+            max_t = int(max_temp)
+            mid_t = (min_t + max_t) // 2
+            file_content = f"""STATE_FILE="${{0}}.state"
+if [ ! -f "$STATE_FILE" ]; then
+    for i in $(seq 0 {count - 1}); do echo {mid_t}; done > "$STATE_FILE"
+fi
+temps=($(cat "$STATE_FILE"))
+for i in $(seq 0 {count - 1}); do
+    delta=$((RANDOM % 7 - 3))
+    new_t=$((temps[i] + delta))
+    [ $new_t -lt {min_t} ] && new_t={min_t}
+    [ $new_t -gt {max_t} ] && new_t={max_t}
+    temps[i]=$new_t
+    echo $new_t
+done
+printf '%s\\n' "${{temps[@]}}" > "$STATE_FILE"
+"""
         return self.create_command_file(file_content)
 
     def create_rocm_smi_command(self, count: int, temp_list: List[float] = None, min_temp: float = 35.0, max_temp: float = 75.0) -> str:
-        """Creates a shell script emulating `rocm-smi -t --json`."""
+        """Creates a shell script emulating `rocm-smi -t --json` with gradual temperature changes."""
         if temp_list:
             data = {}
             for i in range(count):
@@ -304,12 +320,9 @@ exit 0
             file_content += "EOF\n"
         else:
             min_t = int(min_temp)
-            range_t = int(max_temp) - min_t
-            file_content = ""
-            for i in range(count):
-                file_content += f"t{i}=$(( {min_t} + RANDOM % {range_t + 1} ))\n"
+            max_t = int(max_temp)
+            mid_t = (min_t + max_t) // 2
             fmt_parts = []
-            arg_parts = []
             for i in range(count):
                 sep = ", " if i < count - 1 else ""
                 fmt_parts.append(
@@ -317,10 +330,24 @@ exit 0
                     f'"Temperature (Sensor edge) (C)": "%d.0", '
                     f'"Temperature (Sensor memory) (C)": "%d.0"}}{sep}'
                 )
-                arg_parts.extend([f"${{t{i}}}", f"$(( t{i} - 2 ))", f"$(( t{i} - 5 ))"])
             fmt_str = "{" + "".join(fmt_parts) + "}\\n"
-            args_str = " ".join(arg_parts)
-            file_content += f"printf '{fmt_str}' {args_str}\n"
+            file_content = f"""STATE_FILE="${{0}}.state"
+if [ ! -f "$STATE_FILE" ]; then
+    for i in $(seq 0 {count - 1}); do echo {mid_t}; done > "$STATE_FILE"
+fi
+temps=($(cat "$STATE_FILE"))
+args=""
+for i in $(seq 0 {count - 1}); do
+    delta=$((RANDOM % 7 - 3))
+    new_t=$((temps[i] + delta))
+    [ $new_t -lt {min_t} ] && new_t={min_t}
+    [ $new_t -gt {max_t} ] && new_t={max_t}
+    temps[i]=$new_t
+    args="$args $new_t $((new_t - 2)) $((new_t - 5))"
+done
+printf '%s\\n' "${{temps[@]}}" > "$STATE_FILE"
+printf '{fmt_str}' $args
+"""
         return self.create_command_file(file_content)
 
     def create_text_file(self, content: str) -> str:
