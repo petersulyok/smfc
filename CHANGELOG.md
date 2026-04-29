@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [5.4.0] - 2026.04.xx
 
 ### New
+- AMD GPU support: `gpu_type=amd` enables temperature monitoring via `rocm-smi`
+  - New `amd_temp_sensor=` parameter selects the temperature sensor (0-junction, 1-edge, 2-memory, default=0)
+  - New `rocm_smi_path=` parameter specifies the path to the `rocm-smi` command
+  - GPU type validation added to dependency checker in service startup
+- Smoke tests extended with AMD GPU configuration (`gpu_8_amd.conf`) and dynamic temperature generation for all fan controllers
+- Man page updated: rephrased DESCRIPTION, added FEATURES section, fixed COPYRIGHT formatting
+- Documentation updated: README, `smfc.conf`, and sample configuration files reflect AMD GPU support
 - Extended DEBUG level logging across the codebase for better internal state monitoring:
   - Fan controller: temperature smoothing details (raw vs smoothed, window fill), sensitivity check results, calculated fan level, level-unchanged confirmation, polling skipped with remaining time
   - Per-device temperatures logged in multi-device setups (min/avg/max aggregation)
