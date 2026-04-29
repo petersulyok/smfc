@@ -8,7 +8,7 @@ import time
 import re
 import json
 from configparser import ConfigParser
-from typing import List, Optional
+from typing import List
 from smfc.fancontroller import FanController
 from smfc.ipmi import Ipmi
 from smfc.log import Log
@@ -22,6 +22,7 @@ class GpuFc(FanController):
     gpu_device_ids: List[int]       # GPU device IDs (indexes)
     nvidia_smi_path: str            # Path for `nvidia-smi` command
     rocm_smi_path: str              # Path for `rocm-smi` command
+    amd_temp_sensor: int            # AMD temperature sensor (0-junction, 1-edge, 2-memory)
     smi_called: float               # Timestamp when SMI command executed
     gpu_temperature: List[float]    # List of GPU temperatures
 
@@ -42,6 +43,11 @@ class GpuFc(FanController):
     CV_GPU_FC_GPU_IDS: str = "gpu_device_ids"
     CV_GPU_FC_NVIDIA_SMI_PATH: str = "nvidia_smi_path"
     CV_GPU_FC_ROCM_SMI_PATH: str = "rocm_smi_path"
+    CV_GPU_FC_AMD_TEMP_SENSOR: str = "amd_temp_sensor"
+    CV_AMD_TEMP_JUNCTION: str = "Temperature (Sensor junction) (C)"
+    CV_AMD_TEMP_EDGE: str = "Temperature (Sensor edge) (C)"
+    CV_AMD_TEMP_MEMORY: str = "Temperature (Sensor memory) (C)"
+    CV_AMD_TEMP_KEYS: tuple = (CV_AMD_TEMP_JUNCTION, CV_AMD_TEMP_EDGE, CV_AMD_TEMP_MEMORY)
 
     def __init__(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
         """Initialize the GPU fan controller class and raise exception in case of invalid configuration.
@@ -70,6 +76,9 @@ class GpuFc(FanController):
         count = len(self.gpu_device_ids)
         self.nvidia_smi_path = config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH, "/usr/bin/nvidia-smi")
         self.rocm_smi_path = config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_ROCM_SMI_PATH, "/usr/bin/rocm-smi")
+        self.amd_temp_sensor = config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_AMD_TEMP_SENSOR, fallback=0)
+        if self.amd_temp_sensor not in range(0, 3):
+            raise ValueError(f"invalid value: {self.CV_GPU_FC_AMD_TEMP_SENSOR}={self.amd_temp_sensor}.")
         self.smi_called = 0
 
         # Initialize FanController class.
@@ -96,6 +105,7 @@ class GpuFc(FanController):
                 self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_NVIDIA_SMI_PATH} = {self.nvidia_smi_path}")
             else:
                 self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_ROCM_SMI_PATH} = {self.rocm_smi_path}")
+                self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_AMD_TEMP_SENSOR} = {self.amd_temp_sensor}")
 
     def _exec_smi(self, command_path: str, arguments: List[str]) -> subprocess.CompletedProcess:
         """Execute the SMI command (nvidia-smi or rocm-smi).
@@ -133,39 +143,30 @@ class GpuFc(FanController):
             r: subprocess.CompletedProcess  # result of the executed process
 
             if self.gpu_type == "nvidia":
-                r = self._exec_smi(self.nvidia_smi_path, ["--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"])
+                nvidia_args = ["--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"]
+                r = self._exec_smi(self.nvidia_smi_path, nvidia_args)
                 self.smi_called = current_time
                 temp_list = r.stdout.splitlines()
                 self.gpu_temperature = []
                 for gid in self.gpu_device_ids:
                     self.gpu_temperature.append(float(temp_list[gid]))
             else:
-                # AMD GPUs using rocm-smi
                 r = self._exec_smi(self.rocm_smi_path, ["-t", "--json"])
                 self.smi_called = current_time
                 try:
                     data = json.loads(r.stdout)
                 except json.JSONDecodeError as e:
                     raise ValueError(f"Failed to parse rocm-smi JSON output: {e}") from e
-
-                # Sort keys to ensure card0, card1... mapping is consistent if needed,
-                # though usually json keys for cards are card0, card1...
-                cards = sorted(data.keys(), key=lambda x: int(re.search(r"\d+", x).group()) if re.search(r"\d+", x) else 0)
                 self.gpu_temperature = []
+                temp_key = self.CV_AMD_TEMP_KEYS[self.amd_temp_sensor]
                 for gid in self.gpu_device_ids:
-                    card_name = cards[gid]
-                    card_data = data[card_name]
-                    # Prefer junction, then edge, then memory temperature.
-                    temp: Optional[float] = None
-                    for key in ["Temperature (Sensor junction) (C)",
-                                "Temperature (Sensor edge) (C)",
-                                "Temperature (Sensor memory) (C)"]:
-                        if key in card_data:
-                            temp = float(card_data[key])
-                            break
-                    if temp is None:
-                        raise ValueError(f"No temperature data found for {card_name}")
-                    self.gpu_temperature.append(temp)
+                    card_key = f"card{gid}"
+                    if card_key not in data:
+                        raise ValueError(f"{card_key} not found in rocm-smi output")
+                    card_data = data[card_key]
+                    if temp_key not in card_data:
+                        raise ValueError(f"No temperature data found for {card_key}")
+                    self.gpu_temperature.append(float(card_data[temp_key]))
 
         return self.gpu_temperature[index]
 

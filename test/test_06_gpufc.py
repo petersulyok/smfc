@@ -3,6 +3,7 @@
 #   test_06_gpufc.py (C) 2021-2026, Peter Sulyok
 #   Unit tests for smfc.GpuFc() class.
 #
+import json
 import subprocess
 from configparser import ConfigParser
 from typing import List, Any
@@ -46,7 +47,8 @@ class TestGpuFc:
         if gpu_type == "nvidia":
             mock_exec_smi.return_value = subprocess.CompletedProcess([], 0, stdout="40\n"*count)
         else:
-            amd_stdout = "{" + ", ".join([f'"card{i}": {{"Temperature (Sensor junction) (C)": "40.0"}}' for i in range(count)]) + "}"
+            amd_json_data = {f"card{i}": {"Temperature (Sensor junction) (C)": "40.0"} for i in range(count)}
+            amd_stdout = json.dumps(amd_json_data)
             mock_exec_smi.return_value = subprocess.CompletedProcess([], 0, stdout=amd_stdout)
         mocker.patch("smfc.GpuFc._exec_smi", mock_exec_smi)
 
@@ -92,6 +94,7 @@ class TestGpuFc:
             assert my_gpufc.nvidia_smi_path == smi_cmd, error
         else:
             assert my_gpufc.rocm_smi_path == smi_cmd, error
+            assert my_gpufc.amd_temp_sensor == 0, error
         del my_td
 
     @pytest.mark.parametrize("error", ["GpuFc.__init__() 4"])
@@ -129,6 +132,7 @@ class TestGpuFc:
         assert my_gpufc.gpu_device_ids == [0], error
         assert my_gpufc.nvidia_smi_path == "/usr/bin/nvidia-smi", error
         assert my_gpufc.gpu_type == "nvidia", error
+        assert my_gpufc.amd_temp_sensor == 0, error
 
     @pytest.mark.parametrize(
         "device_ids, error",
@@ -165,6 +169,36 @@ class TestGpuFc:
             GpuFc(my_log, my_ipmi, my_config)
         assert cm.type is ValueError, error
         del my_td
+
+    @pytest.mark.parametrize(
+        "gpu_type, amd_temp, error",
+        [
+            ("invalid", "0", "GpuFc.__init__() 8"),
+            ("nvidia",  "3", "GpuFc.__init__() 9"),
+        ],
+    )
+    def test_init_n2(self, mocker: MockerFixture, gpu_type: str, amd_temp: str, error: str):
+        """Negative unit test for GpuFc.__init__() method. It contains the following steps:
+        - mock print(), smfc.GpuFc._exec_smi()
+        - initialize a Config, Log, Ipmi, and GpuFc classes with invalid gpu_type or amd_temp
+        - ASSERT: if no ValueError is raised for invalid values at initialization
+        """
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_exec_smi = MagicMock()
+        mock_exec_smi.return_value = subprocess.CompletedProcess([], 0, stdout="40\n")
+        mocker.patch("smfc.GpuFc._exec_smi", mock_exec_smi)
+        my_config = ConfigParser()
+        my_config[GpuFc.CS_GPU_FC] = {
+            GpuFc.CV_GPU_FC_ENABLED: "1",
+            GpuFc.CV_GPU_FC_GPU_TYPE: gpu_type,
+            GpuFc.CV_GPU_FC_AMD_TEMP_SENSOR: amd_temp,
+        }
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        with pytest.raises(Exception) as cm:
+            GpuFc(my_log, my_ipmi, my_config)
+        assert cm.type is ValueError, error
 
     # pylint: disable=protected-access
     @pytest.mark.parametrize(
@@ -215,15 +249,18 @@ class TestGpuFc:
         assert cm.type == exception, error
 
     @pytest.mark.parametrize(
-        "gpu_type, count, temperatures, error",
+        "gpu_type, amd_temp, count, temperatures, error",
         [
-            ("nvidia", 1, [32.0], "GpuFc._get_nth_temp() 1"),
-            ("nvidia", 2, [33.0, 34.0], "GpuFc._get_nth_temp() 2"),
-            ("amd",    4, [33.0, 34.0, 35.0, 38.0], "GpuFc._get_nth_temp() 3"),
-            ("amd",    2, [36.0, 37.0], "GpuFc._get_nth_temp() 4"),
+            ("nvidia", 0, 1, [32.0],                   "GpuFc._get_nth_temp() 1"),
+            ("nvidia", 0, 2, [33.0, 34.0],             "GpuFc._get_nth_temp() 2"),
+            ("amd",    0, 4, [33.0, 34.0, 35.0, 38.0], "GpuFc._get_nth_temp() 3"),
+            ("amd",    0, 2, [36.0, 37.0],             "GpuFc._get_nth_temp() 4"),
+            ("amd",    1, 2, [36.0, 37.0],             "GpuFc._get_nth_temp() 5"),
+            ("amd",    2, 2, [36.0, 37.0],             "GpuFc._get_nth_temp() 6"),
         ],
     )
-    def test_get_nth_temp_p1(self, mocker: MockerFixture, gpu_type: str, count: int, temperatures: List[float], error: str):
+    def test_get_nth_temp_p1(self, mocker: MockerFixture, gpu_type: str, amd_temp: int, count: int,
+                             temperatures: List[float], error: str):
         """Positive unit test for GpuFc._get_nth_temp() method. It contains the following steps:
         - mock print() function
         - initialize an empty GpuFc class
@@ -237,6 +274,7 @@ class TestGpuFc:
 
         my_gpufc = GpuFc.__new__(GpuFc)
         my_gpufc.gpu_type = gpu_type
+        my_gpufc.amd_temp_sensor = amd_temp
         my_gpufc.gpu_device_ids = list(range(count))
         my_gpufc.polling = 2
         my_gpufc.smi_called = 0
@@ -247,10 +285,44 @@ class TestGpuFc:
 
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
+        amd_offsets = [0.0, -2.0, -5.0]
+        offset = amd_offsets[amd_temp] if gpu_type == "amd" else 0.0
         for i in range(count):
             temp = my_gpufc._get_nth_temp(i)
-            assert temp == temperatures[i], error
+            assert temp == temperatures[i] + offset, error
         del my_td
+
+    @pytest.mark.parametrize(
+        "stdout, gpu_device_ids, amd_temp, error",
+        [
+            # card key not found: gpu_device_ids=[1] but JSON only contains card0
+            ('{"card0": {"Temperature (Sensor junction) (C)": "40.0"}}', [1], 0, "GpuFc._get_nth_temp() n1"),
+            # temp key not found: amd_temp=0 (junction) but card only has edge sensor
+            ('{"card0": {"Temperature (Sensor edge) (C)": "38.0"}}',    [0], 0, "GpuFc._get_nth_temp() n2"),
+            # malformed JSON output from rocm-smi
+            ("not valid json",                                           [0], 0, "GpuFc._get_nth_temp() n3"),
+        ],
+    )
+    def test_get_nth_temp_n(self, mocker: MockerFixture, stdout: str, gpu_device_ids: List[int],
+                            amd_temp: int, error: str):
+        """Negative unit test for GpuFc._get_nth_temp() method. It contains the following steps:
+        - mock smfc.GpuFc._exec_smi() to return controlled stdout
+        - initialize an empty GpuFc class configured for AMD
+        - ASSERT: if ValueError is not raised for missing card, missing temp key, or malformed JSON
+        """
+        my_gpufc = GpuFc.__new__(GpuFc)
+        my_gpufc.gpu_type = "amd"
+        my_gpufc.amd_temp_sensor = amd_temp
+        my_gpufc.gpu_device_ids = gpu_device_ids
+        my_gpufc.rocm_smi_path = "/usr/bin/rocm-smi"
+        my_gpufc.polling = 2
+        my_gpufc.smi_called = 0
+        mock_exec_smi = MagicMock()
+        mock_exec_smi.return_value = subprocess.CompletedProcess([], 0, stdout=stdout)
+        mocker.patch("smfc.GpuFc._exec_smi", mock_exec_smi)
+        with pytest.raises(Exception) as cm:
+            my_gpufc._get_nth_temp(0)
+        assert cm.type is ValueError, error
 
 
 # End.

@@ -4,6 +4,7 @@
 #   Test data handling class for unit tests.
 #
 import configparser
+import json
 import os
 import random
 import shutil
@@ -265,39 +266,61 @@ fi
 exit 0
 """)
 
-    def create_nvidia_smi_command(
-        self, count: int, temp_list: List[float] = None
-    ) -> str:
+    def update_hwmon_temperatures(self, files: List[str], min_temp: float, max_temp: float) -> None:
+        """Updates hwmon temperature files with new random values within the given range."""
+        for path in files:
+            v = random.uniform(min_temp, max_temp)
+            with open(path, "w+t", encoding="UTF-8") as f:
+                f.write(f"{v * 1000:.0f}")
+
+    def create_nvidia_smi_command(self, count: int, temp_list: List[float] = None, min_temp: float = 35.0, max_temp: float = 75.0) -> str:
         """Creates a shell script emulating `nvidia-smi`."""
-        file_content = "cat << EOF\n"
-        for i in range(0, count):
-            if temp_list:
-                v = temp_list[i]
-            else:
-                v = random.uniform(35.0, 75.0)
-            file_content += f"{v:.0f}" + "\n"
-        file_content += "EOF\n"
+        if temp_list:
+            file_content = "cat << EOF\n"
+            for i in range(count):
+                file_content += f"{temp_list[i]:.0f}\n"
+            file_content += "EOF\n"
+        else:
+            min_t = int(min_temp)
+            range_t = int(max_temp) - min_t
+            file_content = ""
+            for _ in range(count):
+                file_content += f"echo $(( {min_t} + RANDOM % {range_t + 1} ))\n"
         return self.create_command_file(file_content)
 
-    def create_rocm_smi_command(
-        self, count: int, temp_list: List[float] = None
-    ) -> str:
+    def create_rocm_smi_command(self, count: int, temp_list: List[float] = None, min_temp: float = 35.0, max_temp: float = 75.0) -> str:
         """Creates a shell script emulating `rocm-smi -t --json`."""
-        import json
-        data = {}
-        for i in range(count):
-            if temp_list:
+        if temp_list:
+            data = {}
+            for i in range(count):
                 v = temp_list[i]
-            else:
-                v = random.uniform(35.0, 75.0)
-            data[f"card{i}"] = {
-                "Temperature (Sensor junction) (C)": f"{v:.1f}",
-                "Temperature (Sensor edge) (C)": f"{v-2:.1f}",
-                "Temperature (Sensor memory) (C)": f"{v-5:.1f}"
-            }
-        file_content = "cat << EOF\n"
-        file_content += json.dumps(data) + "\n"
-        file_content += "EOF\n"
+                data[f"card{i}"] = {
+                    "Temperature (Sensor junction) (C)": f"{v:.1f}",
+                    "Temperature (Sensor edge) (C)": f"{v-2:.1f}",
+                    "Temperature (Sensor memory) (C)": f"{v-5:.1f}"
+                }
+            file_content = "cat << EOF\n"
+            file_content += json.dumps(data) + "\n"
+            file_content += "EOF\n"
+        else:
+            min_t = int(min_temp)
+            range_t = int(max_temp) - min_t
+            file_content = ""
+            for i in range(count):
+                file_content += f"t{i}=$(( {min_t} + RANDOM % {range_t + 1} ))\n"
+            fmt_parts = []
+            arg_parts = []
+            for i in range(count):
+                sep = ", " if i < count - 1 else ""
+                fmt_parts.append(
+                    f'"card{i}": {{"Temperature (Sensor junction) (C)": "%d.0", '
+                    f'"Temperature (Sensor edge) (C)": "%d.0", '
+                    f'"Temperature (Sensor memory) (C)": "%d.0"}}{sep}'
+                )
+                arg_parts.extend([f"${{t{i}}}", f"$(( t{i} - 2 ))", f"$(( t{i} - 5 ))"])
+            fmt_str = "{" + "".join(fmt_parts) + "}\\n"
+            args_str = " ".join(arg_parts)
+            file_content += f"printf '{fmt_str}' {args_str}\n"
         return self.create_command_file(file_content)
 
     def create_text_file(self, content: str) -> str:

@@ -60,7 +60,7 @@ class Service:
         """
         return config.has_section(section) and config[section].getboolean(key, fallback=False)
 
-    def check_dependencies(self) -> str:
+    def check_dependencies(self) -> str:  # pylint: disable=too-many-return-statements
         """Check run-time dependencies of smfc:
               - ipmitool command
               - if CPU fan controller enabled: either `coretemp` or `k10temp` kernel module
@@ -112,8 +112,10 @@ class Service:
             gpu_type = self.config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
             if gpu_type == "nvidia":
                 path = self.config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH, "/usr/bin/nvidia-smi")
-            else:
+            elif gpu_type == "amd":
                 path = self.config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_ROCM_SMI_PATH, "/usr/bin/rocm-smi")
+            else:
+                return f"ERROR: invalid value: {GpuFc.CV_GPU_FC_GPU_TYPE}={gpu_type}."
 
             if not os.path.exists(path):
                 return f"ERROR: {path} command cannot be found!"

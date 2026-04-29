@@ -312,6 +312,83 @@ class TestService:
         assert cm.value.code == exit_code, error
         del my_td
 
+    def test_check_dependencies_amd_p(self, mocker: MockerFixture):
+        """Positive unit test for Service.check_dependencies() with AMD GPU. It contains the following steps:
+        - mock print() and builtins.open() functions
+        - configure gpu_type=amd with a valid rocm_smi_path
+        - execute Service.check_dependencies()
+        - ASSERT: if it returns an error message (should return empty string)
+        """
+
+        def mocked_open(path: str, *args, **kwargs):
+            return (
+                original_open(modules, *args, **kwargs)
+                if path == "/proc/modules"
+                else original_open(path, *args, **kwargs)
+            )
+
+        my_td = TestData()
+        ipmi_command = my_td.create_ipmi_command()
+        modules = my_td.create_text_file("something\ncoretemp\n")
+        rocm_smi_cmd = my_td.create_command_file('echo "0"')
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        original_open = open
+        mock_open = MagicMock(side_effect=mocked_open)
+        mocker.patch("builtins.open", mock_open)
+
+        service = Service()
+        service.config = ConfigParser()
+        service.config[Ipmi.CS_IPMI] = {Ipmi.CV_IPMI_COMMAND: ipmi_command}
+        service.config[CpuFc.CS_CPU_FC] = {CpuFc.CV_CPU_FC_ENABLED: "0"}
+        service.config[HdFc.CS_HD_FC] = {HdFc.CV_HD_FC_ENABLED: "0"}
+        service.config[NvmeFc.CS_NVME_FC] = {NvmeFc.CV_NVME_FC_ENABLED: "0"}
+        service.config[GpuFc.CS_GPU_FC] = {
+            GpuFc.CV_GPU_FC_ENABLED: "1",
+            GpuFc.CV_GPU_FC_GPU_TYPE: "amd",
+            GpuFc.CV_GPU_FC_ROCM_SMI_PATH: rocm_smi_cmd,
+        }
+        assert service.check_dependencies() == "", "Service.check_dependencies() AMD p1"
+        del my_td
+
+    def test_check_dependencies_invalid_gpu_type_n(self, mocker: MockerFixture):
+        """Negative unit test for Service.check_dependencies() with invalid gpu_type. It contains the following steps:
+        - mock print() and builtins.open() functions
+        - configure gpu_type=invalid
+        - execute Service.check_dependencies()
+        - ASSERT: if it does not return an error message containing the invalid value
+        """
+
+        def mocked_open(path: str, *args, **kwargs):
+            return (
+                original_open(modules, *args, **kwargs)
+                if path == "/proc/modules"
+                else original_open(path, *args, **kwargs)
+            )
+
+        my_td = TestData()
+        ipmi_command = my_td.create_ipmi_command()
+        modules = my_td.create_text_file("something\ncoretemp\n")
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        original_open = open
+        mock_open = MagicMock(side_effect=mocked_open)
+        mocker.patch("builtins.open", mock_open)
+
+        service = Service()
+        service.config = ConfigParser()
+        service.config[Ipmi.CS_IPMI] = {Ipmi.CV_IPMI_COMMAND: ipmi_command}
+        service.config[CpuFc.CS_CPU_FC] = {CpuFc.CV_CPU_FC_ENABLED: "0"}
+        service.config[HdFc.CS_HD_FC] = {HdFc.CV_HD_FC_ENABLED: "0"}
+        service.config[NvmeFc.CS_NVME_FC] = {NvmeFc.CV_NVME_FC_ENABLED: "0"}
+        service.config[GpuFc.CS_GPU_FC] = {
+            GpuFc.CV_GPU_FC_ENABLED: "1",
+            GpuFc.CV_GPU_FC_GPU_TYPE: "invalid",
+        }
+        error_str = service.check_dependencies()
+        assert "invalid" in error_str, "Service.check_dependencies() invalid gpu_type n1"
+        del my_td
+
     @pytest.mark.parametrize("exit_code, error", [(9, "Service.run() 17")])
     def test_run_9n(self, mocker: MockerFixture, exit_code: int, error: str):
         """Negative unit test for Service.run() method. It contains the following steps:

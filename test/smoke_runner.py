@@ -166,12 +166,14 @@ class TestSmoke:
                 self.log.msg(Log.LOG_CONFIG, f"   {self.CV_NVME_FC_NVME_NAMES} = {self.nvme_device_names}")
 
         def mocked_gpufc_init(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
-            nonlocal cmd_nvidia
+            nonlocal cmd_nvidia, cmd_rocm
             self.gpu_device_ids = list(range(gpu_num))
             count = len(self.gpu_device_ids)
-            self.gpu_type = config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_GPU_TYPE, fallback="nvidia")
+            self.gpu_type = config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
             self.nvidia_smi_path = cmd_nvidia
-            self.rocm_smi_path = "/usr/bin/rocm-smi"
+            self.rocm_smi_path = cmd_rocm
+
+            self.amd_temp_sensor = config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_AMD_TEMP_SENSOR, fallback=0)
             self.smi_called = 0
 
             # Initialize FanController class.
@@ -196,6 +198,7 @@ class TestSmoke:
                 self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_NVIDIA_SMI_PATH} = {self.nvidia_smi_path}")
             else:
                 self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_ROCM_SMI_PATH} = {self.rocm_smi_path}")
+                self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_AMD_TEMP_SENSOR} = {self.amd_temp_sensor}")
             # pragma pylint: enable=unused-argument, duplicate-code
 
         my_td = TestData()
@@ -203,6 +206,8 @@ class TestSmoke:
         # Force mode initial fan mode 0 for setting new FULL mode during the test.
         cmd_ipmi = my_td.create_ipmi_command()
         cmd_smart = my_td.create_smart_command()
+        cmd_nvidia = ""
+        cmd_rocm = ""
         if cpu_num:
             my_td.create_cpu_data(cpu_num)
         if hd_num:
@@ -211,6 +216,7 @@ class TestSmoke:
             my_td.create_nvme_data(nvme_num)
         if gpu_num:
             cmd_nvidia = my_td.create_nvidia_smi_command(gpu_num)
+            cmd_rocm = my_td.create_rocm_smi_command(gpu_num)
 
         # Load the original configuration file
         my_config = ConfigParser()
@@ -223,7 +229,11 @@ class TestSmoke:
         if nvme_num:
             my_config[NvmeFc.CS_NVME_FC][NvmeFc.CV_NVME_FC_NVME_NAMES] = my_td.nvme_names
         if gpu_num:
-            my_config[GpuFc.CS_GPU_FC][GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH] = cmd_nvidia
+            gpu_type = my_config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
+            if gpu_type == "nvidia":
+                my_config[GpuFc.CS_GPU_FC][GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH] = cmd_nvidia
+            else:
+                my_config[GpuFc.CS_GPU_FC][GpuFc.CV_GPU_FC_ROCM_SMI_PATH] = cmd_rocm
         # Create a new config file
         new_config_file = my_td.create_config_file(my_config)
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
