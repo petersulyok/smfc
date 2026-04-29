@@ -21,7 +21,8 @@ This is a `systemd service` running on Linux that can control fans with the help
    - `drivetemp` kernel module (kernel version 5.6+ required) for SATA HDDs/SSDs
  - `ipmitool`
  - optional: `smartmontools` for SAS/SCSI disks and *standby guard* feature
- - optional: `nvidia-smi` for GPU fan controller 
+ - optional: `nvidia-smi` for Nvidia GPUs
+ - optional: `rocm-smi` for AMD GPUs
 
 
 ### 2. Installation and configuration
@@ -53,7 +54,7 @@ Key features:
  - Sensitivity threshold to avoid unnecessary fan speed changes on small temperature fluctuations
  - Standby guard feature for SATA hard disk arrays organized in RAID
  - Support for SATA, SAS/SCSI, and NVMe disks with automatic HWMON/smartctl fallback
- - Nvidia GPU temperature monitoring via `nvidia-smi`
+ - Nvidia or AMD GPU temperature monitoring via `nvidia-smi` or `rocm-smi`
  - Platform abstraction for different Supermicro motherboard generations (X9-X13/H10-H13)
  - Runs as a `systemd` service or in Docker
  - Safe shutdown: all fans are set back to 100% speed at service termination
@@ -78,7 +79,7 @@ In `smfc`, the following fan controllers are implemented:
 | CPU            | Intel/AMD CPU(s)        | CPUs are identified automatically                                     | 0 (CPU zone)        |
 | HD             | SATA and SCSI HDDs/SSDs | Hard disks' names must be specified in `[HD] hd_names=` parameter     | 1 (Peripheral zone) |
 | NVME           | NVMe SSDs               | NVMe device names must be specified in `[NVME] nvme_names=` parameter | 1 (Peripheral zone) |
-| GPU            | Nvidia GPUs             | GPU indices must be specified in `[GPU] gpu_device_ids=` parameter    | 1 (Peripheral zone) |
+| GPU            | Nvidia/AMD GPUs         | GPU indices must be specified in `[GPU] gpu_device_ids=` parameter    | 1 (Peripheral zone) |
 | CONST          | None                    | Constant fan level can be specified in `[CONST] level=` parameter     | 1 (Peripheral zone) |
 
 These fan controllers can be enabled and disabled independently. They can be used in a free combination with one or more IPMI zones. Multiple fan controllers
@@ -619,12 +620,16 @@ smoothing=1
 nvme_names=
 
 
-# GPU fan controller: works based on Nvidia GPU(s) temperature.
+# GPU fan controller: works based on Nvidia or AMD GPU(s) temperature.
 [GPU]
 # Fan controller enabled (bool, default=0)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1))
 ipmi_zone=1
+# GPU type (str, ['nvidia', 'amd'], default=nvidia)
+gpu_type=nvidia
+# AMD GPU temperature sensor (int, 0-junction, 1-edge, 2-memory, default=0)
+#amd_temp_sensor=0
 # Calculation of GPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
 # Discrete steps in mapping of temperatures to fan level (int, default=5)
@@ -644,10 +649,11 @@ max_level=100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
 # GPU device IDs (comma- or space-separated list of int, default=0)
-# These are indices in nvidia-smi temperature report.
 gpu_device_ids=0
-# Path for 'nvidia-smi' command (str, default=/usr/bin/nvidia-smi).
+# Path for 'nvidia-smi' command (str, default=/usr/bin/nvidia-smi)
 nvidia_smi_path=/usr/bin/nvidia-smi
+# Path for 'rocm-smi' command (str, default=/usr/bin/rocm-smi)
+#rocm_smi_path=/usr/bin/rocm-smi
 
 
 # CONST fan controller: sets constant fan level (without any heat source) for IPMI zones(s).
@@ -793,6 +799,7 @@ Further readings:
  - [ipmitool](https://github.com/ipmitool/ipmitool) — CLI for managing IPMI-enabled devices
  - [smartmontools](https://www.smartmontools.org/) — S.M.A.R.T. monitoring tools for hard disks (`smartctl`)
  - [nvidia-smi](https://developer.nvidia.com/system-management-interface) — NVIDIA System Management Interface for GPU monitoring
+ - [rocm-smi](https://github.com/ROCm/rocm_smi_lib) — AMD ROCm System Management Interface for GPU monitoring
  - [hwmon subsystem](https://www.kernel.org/doc/html/latest/hwmon/index.html) — hardware monitoring framework used for temperature readings
  - [coretemp](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html) — Intel CPU temperature monitoring
  - [k10temp](https://docs.kernel.org/hwmon/k10temp.html) — AMD CPU temperature monitoring

@@ -7,11 +7,32 @@
 [options]
 .SH DESCRIPTION
 .B smfc
-is a systemd service (written in Python), which can control fans on Supermicro X10-X13 motherboards with IPMI.
-It can be started and stopped as a systemd service, but it can be also executed as a standalone command, manually.
-See more details in GitHub repository:
+is a systemd service written in Python for temperature-based fan control on Supermicro motherboards via IPMI. It is compatible
+with some X9 and majority of X10\-X13/H10\-H13 motherboards; it can be executed as a systemd service or as a standalone command.
+.PP
+For more details see:
 .IP
 https://github.com/petersulyok/smfc
+
+.SH FEATURES
+.TP
+.B Fan controllers
+Five independent controllers: CPU, HD (SATA/SAS), NVMe, GPU, and CONST (constant level).
+Each can be enabled/disabled and assigned to one or more IPMI zones freely.
+.TP
+.B Temperature sources
+Intel/AMD CPUs (coretemp/k10temp), SATA/SAS disks (drivetemp/smartctl),
+NVMe SSDs (hwmon), Nvidia GPUs (nvidia\-smi), AMD GPUs (rocm\-smi).
+.TP
+.B Control logic
+Configurable temperature\-to\-fan\-level mapping with discrete steps, sensitivity threshold,
+polling interval, and optional moving average smoothing.
+.TP
+.B Shared IPMI zones
+Multiple controllers can share the same IPMI zone; the highest requested fan level wins.
+.TP
+.B Safety
+All fans are restored to 100% speed on service exit.
 
 .SH OPTIONS
 .TP
@@ -95,5 +116,5 @@ udev initialization error
 none of the fan controllers are enabled
 
 .SH COPYRIGHT
-.Bsmfc
+.B smfc
 is Copyright (C) 2020-2026 by Peter Sulyok
