@@ -276,7 +276,7 @@ exit 0
             with open(path, "w+t", encoding="UTF-8") as f:
                 f.write(f"{new_temp * 1000:.0f}")
 
-    def create_nvidia_smi_command(self, count: int, temp_list: List[float] = None, min_temp: float = 35.0, 
+    def create_nvidia_smi_command(self, count: int, temp_list: List[float] = None, min_temp: float = 35.0,
                                   max_temp: float = 75.0) -> str:
         """Creates a shell script emulating `nvidia-smi` with gradual temperature changes."""
         if temp_list:
@@ -305,7 +305,7 @@ printf '%s\\n' "${{temps[@]}}" > "$STATE_FILE"
 """
         return self.create_command_file(file_content)
 
-    def create_rocm_smi_command(self, count: int, temp_list: List[float] = None, min_temp: float = 35.0, 
+    def create_rocm_smi_command(self, count: int, temp_list: List[float] = None, min_temp: float = 35.0,
                                 max_temp: float = 75.0) -> str:
         """Creates a shell script emulating `rocm-smi -t --json` with gradual temperature changes."""
         if temp_list:

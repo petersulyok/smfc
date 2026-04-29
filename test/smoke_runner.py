@@ -72,12 +72,12 @@ class TestSmoke:
             """Background thread that periodically updates hwmon temperature files."""
             nonlocal my_td, temp_updater_stop, temp_ranges
             while not temp_updater_stop.is_set():
-                if my_td.cpu_files and 'cpu' in temp_ranges:
-                    my_td.update_hwmon_temperatures(my_td.cpu_files, *temp_ranges['cpu'])
-                if my_td.hd_files and 'hd' in temp_ranges:
-                    my_td.update_hwmon_temperatures(my_td.hd_files, *temp_ranges['hd'])
-                if my_td.nvme_files and 'nvme' in temp_ranges:
-                    my_td.update_hwmon_temperatures(my_td.nvme_files, *temp_ranges['nvme'])
+                if my_td.cpu_files and "cpu" in temp_ranges:
+                    my_td.update_hwmon_temperatures(my_td.cpu_files, *temp_ranges["cpu"])
+                if my_td.hd_files and "hd" in temp_ranges:
+                    my_td.update_hwmon_temperatures(my_td.hd_files, *temp_ranges["hd"])
+                if my_td.nvme_files and "nvme" in temp_ranges:
+                    my_td.update_hwmon_temperatures(my_td.nvme_files, *temp_ranges["nvme"])
                 temp_updater_stop.wait(1.0)
 
         # pylint: disable=unused-argument, duplicate-code
@@ -254,17 +254,17 @@ class TestSmoke:
 
         # Extract temperature ranges from config for dynamic updates.
         if cpu_num:
-            temp_ranges['cpu'] = (
+            temp_ranges["cpu"] = (
                 my_config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MIN_TEMP, fallback=30.0),
                 my_config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MAX_TEMP, fallback=60.0)
             )
         if hd_num:
-            temp_ranges['hd'] = (
+            temp_ranges["hd"] = (
                 my_config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_MIN_TEMP, fallback=32.0),
                 my_config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_MAX_TEMP, fallback=46.0)
             )
         if nvme_num:
-            temp_ranges['nvme'] = (
+            temp_ranges["nvme"] = (
                 my_config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_MIN_TEMP, fallback=30.0),
                 my_config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_MAX_TEMP, fallback=50.0)
             )
