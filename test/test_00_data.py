@@ -266,8 +266,9 @@ fi
 exit 0
 """)
 
-    def update_hwmon_temperatures(self, files: List[str], min_temp: float, max_temp: float) -> None:
-        """Updates hwmon temperature files with gradual changes (+/- 0-3 degrees) within the given range."""
+    def update_hwmon_temperatures(self, files: List[str], min_temp: float, max_temp: float) -> None:  # pragma: no cover
+        """Updates hwmon temperature files with gradual changes (+/- 0-3 degrees) within the given range.
+        Called only from smoke_runner.py background thread."""
         for path in files:
             with open(path, "r", encoding="UTF-8") as f:
                 current = float(f.read()) / 1000
