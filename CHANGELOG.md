@@ -5,13 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [5.4.0] - 2026.04.xx
+## [5.4.0] - 2026.04.30
 
 ### New
 - AMD GPU support: `gpu_type=amd` enables temperature monitoring via `rocm-smi`
   - New `amd_temp_sensor=` parameter selects the temperature sensor (0-junction, 1-edge, 2-memory, default=0)
   - New `rocm_smi_path=` parameter specifies the path to the `rocm-smi` command
   - GPU type validation added to dependency checker in service startup
+- New AMD GPU docker image (`petersulyok/smfc:5.4.0-amd` / `latest-amd`) based on `rocm/dev-ubuntu`; `rocm-smi` is bundled inside the image, only the host `amdgpu` kernel driver is required
 - Smoke tests extended with AMD GPU configuration (`gpu_8_amd.conf`) and dynamic temperature generation for all fan controllers
 - Man page updated: rephrased DESCRIPTION, added FEATURES section, fixed COPYRIGHT formatting
 - Documentation updated: README, `smfc.conf`, and sample configuration files reflect AMD GPU support
@@ -26,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Feature list added to README.md "How does it work?" section
 
 ### Changed
+- Docker: NVIDIA GPU image renamed — tag `latest-gpu` → `latest-nvidia`, `Dockerfile-debian` → `Dockerfile-gpu-nvidia`, `docker-start-gpu.sh` → `docker-start-nvidia.sh`, `docker-compose-gpu.yaml` → `docker-compose-nvidia.yaml`
+- Docker: `docker-build.sh` and `docker-push.sh` updated to build and push all three image variants in a single call
+- Docker: Alpine Linux base image updated from 3.23.3 to 3.23.4 (Python 3.12.12-r0 → 3.12.13-r0)
 - Installation script (`install.sh`) now preserves `/etc/default/smfc` when `--keep-config` is set and the file already exists
 - All new DEBUG log statements use a level guard (`if self.log.log_level >= Log.LOG_DEBUG`) to avoid f-string formatting overhead when DEBUG is not enabled
 - Shared IPMI zone arbitration log ("Arbitration desired levels") now only fires when desired levels change, reducing log noise in steady state
