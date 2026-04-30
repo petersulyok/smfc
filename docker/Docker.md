@@ -4,11 +4,11 @@ This page describes the most important docker-specific information for `smfc`. P
 # Content
 There are three images created for `smfc`:
 
-| Image type          | Tags                            | Base image        | Pros                                          | Cons                                                         |
-|---------------------|---------------------------------|-------------------|-----------------------------------------------|--------------------------------------------------------------|
-| Standard            | `5.4.0` / `latest`              | Alpine Linux 3.23 | Small image size                              | GPU fan controller not supported                             |
-| NVIDIA GPU-enabled  | `5.4.0-nvidia`/ `latest-nvidia` | Debian 13 (slim)  | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
-| AMD GPU-enabled     | `5.4.0-amd` / `latest-amd`      | Ubuntu (ROCm)     | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
+| Image type          | Tags                            | Base image         | Pros                                          | Cons                                                         |
+|---------------------|---------------------------------|--------------------|-----------------------------------------------|--------------------------------------------------------------|
+| Standard            | `5.4.0` / `latest`              | Alpine Linux 3.23  | Small image size                              | GPU fan controller not supported                             |
+| NVIDIA GPU-enabled  | `5.4.0-nvidia`/ `latest-nvidia` | Debian 13 (slim)   | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
+| AMD GPU-enabled     | `5.4.0-amd` / `latest-amd`      | ROCm Ubuntu 24.04  | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
 
 > Docker image tags changed for GPU-enabled images with the newly implemented AMD GPU support in `smfc v5.4.0`!
 
@@ -160,8 +160,8 @@ docker compose -f docker-compose-nvidia.yaml down
 
 # AMD GPU-enabled image
 This image contains the following components:
-- `Ubuntu` (ROCm base image)
-- `Python` 3
+- `Ubuntu` 24.04 (ROCm base image)
+- `Python` 3.12.5
 - `ipmitool` 1.8.19
 - `smartmontools` 7.4
 - `ROCm` (includes `rocm-smi`)
