@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [5.4.0] - 2026.04.30
 
 ### New
-- AMD GPU support: `gpu_type=amd` enables temperature monitoring via `rocm-smi`
+- AMD GPU support: `gpu_type=amd` enables temperature monitoring via `rocm-smi` - based on [PR #112](https://github.com/petersulyok/smfc/pull/112) by @GCoffland
   - New `amd_temp_sensor=` parameter selects the temperature sensor (0-junction, 1-edge, 2-memory, default=0)
   - New `rocm_smi_path=` parameter specifies the path to the `rocm-smi` command
   - GPU type validation added to dependency checker in service startup
@@ -28,8 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Docker: many files refactored from `-gpu` to `-nvidia` and `-amd` naming
-- Docker: `docker-build.sh` and `docker-push.sh` updated to build and push all three image variants in a single call
-- Installation script (`install.sh`) now preserves `/etc/default/smfc` when `--keep-config` is set and the file already exists
+- Docker: [`docker-build.sh`](https://github.com/petersulyok/smfc/blob/main/docker/docker-build.sh) and [`docker-push.sh`](https://github.com/petersulyok/smfc/blob/main/docker/docker-push.sh) updated to build and push all three image variants in a single call
+- Installation script ([`install.sh`](https://github.com/petersulyok/smfc/blob/main/bin/install.sh)) now preserves `/etc/default/smfc` when `--keep-config` is set and the file already exists
 - Shared IPMI zone arbitration log ("Arbitration desired levels") now only fires when desired levels change, reducing log noise in steady state
 - Improved docstrings with better test descriptions
 - Pylint warnings corrected
@@ -69,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [5.1.2] - 2026.03.28
 
 ### New
-- New `./bin/update_version_number.sh` script created to update all release specific files.
+- New [`./bin/update_version_number.sh`](https://github.com/petersulyok/smfc/blob/main/bin/update_version_number.sh) script created to update all release specific files.
 
 ### Fixed
 - DEB and RPM artifact names configured correctly
@@ -94,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
        firmware revision = 1.74
   ```
 - Platform abstraction implemented to support multiple Supermicro motherboards with different IPMI raw commands ([PR #97](https://github.com/petersulyok/smfc/pull/97) by @samuel-emrys merged). New `[Ipmi] platform_name=` configuration parameter added (values: `auto`, `generic`, `X10QBi`). Support for incompatible Supermicro X10QBi motherboard also added.
-- DEB and RPM package creation added. See PACKAGES.md for more details. GitHub workflow will create DEB and RPM packages for new releases. 
+- DEB and RPM package creation added. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for more details. GitHub workflow will create DEB and RPM packages for new releases. 
 
 ### Changed
 - Docstrings consistency check and update across source and test files.

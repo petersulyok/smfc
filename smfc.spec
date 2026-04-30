@@ -94,8 +94,17 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
-* Wed Apr 29 2026 Peter Sulyok <peter@sulyok.net> - 5.4.0-1
-- UPDATE WITH RELEASE NOTES
+* Thu Apr 30 2026 Peter Sulyok <peter@sulyok.net> - 5.4.0-1
+- New: AMD GPU support: gpu_type=amd enables temperature monitoring via rocm-smi
+- New: amd_temp_sensor= and rocm_smi_path= configuration parameters added
+- New: AMD GPU docker image (latest-amd / 5.4.0-amd) based on rocm/dev-ubuntu
+- New: Extended DEBUG level logging across all fan controllers and IPMI layer
+- New: Command line help text added to /etc/default/smfc
+- Changed: Docker NVIDIA image renamed from -gpu to -nvidia suffix throughout
+- Changed: docker-build.sh and docker-push.sh updated for all three image variants
+- Changed: Alpine base image updated to 3.23.4 (Python 3.12.13-r0)
+- Changed: install.sh preserves /etc/default/smfc when --keep-config is set
+- Changed: Shared IPMI zone arbitration log reduced noise in steady state
 
 * Thu Apr 02 2026 Peter Sulyok <peter@sulyok.net> - 5.3.0-1
 - New: Temperature smoothing feature (smoothing= parameter) for CPU, HD, NVME, GPU controllers
