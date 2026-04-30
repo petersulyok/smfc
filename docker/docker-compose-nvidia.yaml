@@ -1,7 +1,7 @@
 version: "2"
 services:
   smfc:
-    image: petersulyok/smfc:latest-gpu
+    image: petersulyok/smfc:latest-nvidia
     container_name: smfc
     runtime: nvidia
     deploy:

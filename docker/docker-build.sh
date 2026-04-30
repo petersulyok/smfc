@@ -16,13 +16,18 @@ fi
 BUILD_IMAGE_VERSION=$1
 BUILD_IMAGE_NAME="petersulyok/smfc"
 
-# Execute build process for both images.
+# Execute build process:
+# 1. standard alpine image.
 DOCKER_BUILDKIT=1 docker build -t ${BUILD_IMAGE_NAME}:"$BUILD_IMAGE_VERSION" --build-arg BUILD_IMAGE_VERSION="$BUILD_IMAGE_VERSION" -f ./docker/Dockerfile-alpine .
-DOCKER_BUILDKIT=1 docker build -t ${BUILD_IMAGE_NAME}:"$BUILD_IMAGE_VERSION-gpu" --build-arg BUILD_IMAGE_VERSION="$BUILD_IMAGE_VERSION-gpu" -f ./docker/Dockerfile-debian .
+# 2. debian-based image for nvidia-smi.
+DOCKER_BUILDKIT=1 docker build -t ${BUILD_IMAGE_NAME}:"$BUILD_IMAGE_VERSION-nvidia" --build-arg BUILD_IMAGE_VERSION="$BUILD_IMAGE_VERSION-nvidia" -f ./docker/Dockerfile-gpu-nvidia .
+# 3. ubuntu-based AMD image for rocm-smi.
+DOCKER_BUILDKIT=1 docker build -t ${BUILD_IMAGE_NAME}:"$BUILD_IMAGE_VERSION-amd" --build-arg BUILD_IMAGE_VERSION="$BUILD_IMAGE_VERSION-amd" -f ./docker/Dockerfile-gpu-amd .
 
 # Set secondary tag (i.e. latest) if specified.
 if [ -n "$2" ];
 then
     docker image tag ${BUILD_IMAGE_NAME}:"$BUILD_IMAGE_VERSION" ${BUILD_IMAGE_NAME}:$2
-    docker image tag ${BUILD_IMAGE_NAME}:"$BUILD_IMAGE_VERSION-gpu" ${BUILD_IMAGE_NAME}:"$2-gpu"
+    docker image tag ${BUILD_IMAGE_NAME}:"$BUILD_IMAGE_VERSION-nvidia" ${BUILD_IMAGE_NAME}:"$2-nvidia"
+    docker image tag ${BUILD_IMAGE_NAME}:"$BUILD_IMAGE_VERSION-amd" ${BUILD_IMAGE_NAME}:"$2-amd"
 fi

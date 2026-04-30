@@ -259,14 +259,15 @@ The docker images can be built locally in the project root folder:
 ```
 Notes:
 - Please note that the dockerfile will install `smfc` from `pypi.org`, so the version must refer an official `smfc` release.
-- The build script will generate the following tags: `4.1.0`, `latest`, `4.1.0-gpu`, `latest-gpu`.
+- The build script will generate the following tags: `4.1.0`, `latest`, `4.1.0-nvidia`, `latest-nvidia`, `4.1.0-amd`, `latest-amd`.
 
 The generated docker images can be uploaded to [hub.docker.com](https://hub.docker.com/r/petersulyok/smfc)
 in the following way:
 
 ```commandline
 ./docker/docker-push.sh 4.1.0 latest
-./docker/docker-push.sh 4.1.0-gpu latest-gpu
 ```
+
+This pushes all three image variants (`4.1.0`, `4.1.0-nvidia`, `4.1.0-amd`) and their secondary tags (`latest`, `latest-nvidia`, `latest-amd`) in a single call.
 
 > Written with [StackEdit](https://stackedit.io/).

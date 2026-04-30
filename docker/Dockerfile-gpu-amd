@@ -1,4 +1,4 @@
-FROM debian:13-slim
+FROM rocm/dev-ubuntu:latest
 ARG BUILD_IMAGE_VERSION
 LABEL org.opencontainers.image.version=${BUILD_IMAGE_VERSION}
 LABEL org.opencontainers.image.title="smfc"
@@ -9,7 +9,7 @@ RUN echo 'APT::Keep-Downloaded-Packages "false";' > /etc/apt/apt.conf.d/01disabl
 RUN apt update
 RUN apt install -y ipmitool python3 python3-pyudev smartmontools
 RUN apt install -y python3-pip
-RUN pip install --prefix=/usr smfc==${BUILD_IMAGE_VERSION%%-gpu}
+RUN pip install --prefix=/usr smfc==${BUILD_IMAGE_VERSION%%-amd}
 RUN apt autoremove --purge -y python3-pip
 ADD --chmod=755 docker/entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

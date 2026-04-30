@@ -1,0 +1,25 @@
+version: "2"
+services:
+  smfc:
+    image: petersulyok/smfc:latest-amd
+    container_name: smfc
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - video
+      - render
+    security_opt:
+      - seccomp:unconfined
+    logging:
+        driver: journald
+    privileged: true
+    environment:
+      - SMFC_ARGS=-l 3
+    volumes:
+      - /dev:/dev:ro
+      - /run:/run:ro
+      - /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped

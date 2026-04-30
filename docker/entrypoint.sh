@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 #   entrypoint.sh (C) 2026, Peter Sulyok
-#   Entry point for `smfc` docker image (for Alpine Linux).
+#   Entry point for `smfc` docker images.
 #
 
 # Set a default value for $SMFC_ARG environment variable if it was empty.

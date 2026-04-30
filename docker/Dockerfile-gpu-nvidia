@@ -1,14 +1,15 @@
-FROM alpine:3.23.4
+FROM debian:13-slim
 ARG BUILD_IMAGE_VERSION
 LABEL org.opencontainers.image.version=${BUILD_IMAGE_VERSION}
 LABEL org.opencontainers.image.title="smfc"
 LABEL org.opencontainers.image.authors="petersulyok"
 LABEL org.opencontainers.image.desciption="Supermicro fan control for Linux (home) servers."
 LABEL org.opencontainers.image.url="https://github.com/petersulyok/smfc"
-RUN apk add --no-cache ipmitool python3 py3-udev smartmontools
-RUN ln -s /usr/sbin/ipmitool /usr/bin/ipmitool
-RUN apk add --no-cache --virtual .depends py3-pip
-RUN pip install --prefix=/usr smfc==${BUILD_IMAGE_VERSION}
-RUN apk del .depends
+RUN echo 'APT::Keep-Downloaded-Packages "false";' > /etc/apt/apt.conf.d/01disable-cache
+RUN apt update
+RUN apt install -y ipmitool python3 python3-pyudev smartmontools
+RUN apt install -y python3-pip
+RUN pip install --prefix=/usr smfc==${BUILD_IMAGE_VERSION%%-nvidia}
+RUN apt autoremove --purge -y python3-pip
 ADD --chmod=755 docker/entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
