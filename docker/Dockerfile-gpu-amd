@@ -1,4 +1,4 @@
-FROM rocm/dev-ubuntu:latest
+FROM rocm/dev-ubuntu-24.04:latest
 ARG BUILD_IMAGE_VERSION
 LABEL org.opencontainers.image.version=${BUILD_IMAGE_VERSION}
 LABEL org.opencontainers.image.title="smfc"
