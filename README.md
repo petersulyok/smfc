@@ -55,7 +55,7 @@ Key features:
  - Standby guard feature for SATA hard disk arrays organized in RAID
  - Support for SATA, SAS/SCSI, and NVMe disks with automatic HWMON/smartctl fallback
  - Nvidia or AMD GPU temperature monitoring via `nvidia-smi` or `rocm-smi`
- - Platform abstraction for different Supermicro motherboard generations (X9-X13/H10-H13)
+ - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13) and egde cases (X10QBi)
  - Runs as a `systemd` service or in Docker
  - Safe shutdown: all fans are set back to 100% speed at service termination
 
@@ -189,9 +189,6 @@ Some additional notes:
 
 
 ### 5. Supermicro compatibility
-Feel free to create a short feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55) on your compatibility experience.
-
-#### 5.1 Supermicro X10-X13/H10-H13 motherboards
 Originally, this software was designed to work with Supermicro X10-X12/H10-H12 motherboards with IPMI functionality,
 where the BMC chip is ASPEED AST2400 or AST2500. Most motherboards in this set are compatible with the Supermicro IPMI
 raw commands used here and are supported out of the box.
@@ -207,21 +204,20 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 | `platform_name=` parameter | Platform                                     | Notes                                                                                            |
 |----------------------------|----------------------------------------------|--------------------------------------------------------------------------------------------------|
 | `auto`                     | automatic discovery based on BMC information | Default behaviour                                                                                |
-| `generic`                  | Generic X10-X13/H10-H13 Supermicro boards   | Uses standard Supermicro IPMI raw commands                                                      |
-| `genericx9`                | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                                                                                                    |
-| `X10QBi`                   | Supermicro X10QBi motherboard               | Nuvoton NCT7904D fan controller, 4 fan zones (0x10-0x13), see [issue #69](https://github.com/petersulyok/smfc/issues/69) and [PR #97](https://github.com/petersulyok/smfc/pull/97) |
+| `generic`                  | Generic X10-X13/H10-H13 Supermicro boards    | Uses standard Supermicro IPMI raw commands                                                       |
+| `genericx9`                | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                  |
+| `X10QBi`                   | Supermicro X10QBi motherboard                | Nuvoton NCT7904D fan controller, 4 fan zones (0x10-0x13), see [issue #69](https://github.com/petersulyok/smfc/issues/69) and [PR #97](https://github.com/petersulyok/smfc/pull/97) |
 
 With this abstraction layer, new Supermicro motherboards can also be added to `smfc` with a good understanding of their IPMI raw commands and fan control logic.
 
-#### 5.2 Supermicro X14/H14 motherboards
+Some X9 motherboards are supported (since `smfc v5.2.0`) via the `genericx9` platform, provided they support the specific IPMI raw commands used for fan control. There is 
+no auto-detection for X9 boards, so you must set `platform_name=genericx9` in the configuration file.
+
 For the newer X14/H14 motherboards, compatibility is still being investigated. There are some issues ([#98](https://github.com/petersulyok/smfc/issues/98)) and discussions ([#92](https://github.com/petersulyok/smfc/discussions/92), [#106](https://github.com/petersulyok/smfc/discussions/106)) about this to get better understanding.
 
-#### 5.3 Supermicro X9 motherboards
-Some X9 motherboards are supported (since `smfc v5.2.0`) via the `genericx9` platform, provided they support the specific IPMI raw commands used for fan control. There is no auto-detection for X9 boards, so you must set `platform_name=genericx9` in the configuration file.
-
-#### 5.4 Supermicro X8 motherboards
 The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
 
+Feel free to create a short feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55) on your compatibility experience.
 
 ### 6. IPMI fan control and sensor thresholds
 On Supermicro X10-X11 motherboards IPMI uses six sensor thresholds to specify the safe and unsafe fan rotational speed intervals (these are RPM values rounded to the nearest hundreds, defined for each fan separately):
