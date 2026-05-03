@@ -46,7 +46,8 @@ class HdFc(FanController):
     CV_HD_FC_STANDBY_GUARD_ENABLED: str = "standby_guard_enabled"
     CV_HD_FC_STANDBY_HD_LIMIT: str = "standby_hd_limit"
 
-    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
+    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool,
+                 section: str = CS_HD_FC) -> None:
         """Initialize the HD fan controller class and raise exception in case of invalid configuration.
 
         Args:
@@ -55,6 +56,7 @@ class HdFc(FanController):
             ipmi (Ipmi): reference to an Ipmi class instance
             config (ConfigParser): reference to the configuration
             sudo (bool): sudo flag
+            section (str): configuration section name (default: CS_HD_FC)
 
         Raises:
             ValueError: invalid configuration parameters (e.g. missing hd_names, NVMe drives specified)
@@ -63,7 +65,7 @@ class HdFc(FanController):
         count: int      # HDD count.
 
         # Save and validate HdFc class-specific parameters.
-        hd_names = config[self.CS_HD_FC].get(self.CV_HD_FC_HD_NAMES)
+        hd_names = config[section].get(self.CV_HD_FC_HD_NAMES)
         if not hd_names:
             raise ValueError("Parameter hd_names= is not specified.")
         if "\n" in hd_names:
@@ -92,34 +94,34 @@ class HdFc(FanController):
             self.hwmon_path.append(self.get_hwmon_path(udevc, block_dev.parent))
 
         # Save path for `smartctl` command.
-        self.smartctl_path = config[HdFc.CS_HD_FC].get(HdFc.CV_HD_FC_SMARTCTL_PATH, "/usr/sbin/smartctl")
+        self.smartctl_path = config[section].get(HdFc.CV_HD_FC_SMARTCTL_PATH, "/usr/sbin/smartctl")
 
         # Initialize FanController class.
         super().__init__(
             log, ipmi,
-            config[HdFc.CS_HD_FC].get(HdFc.CV_HD_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}"),
-            HdFc.CS_HD_FC, count,
-            config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
-            config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_STEPS, fallback=4),
-            config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_SENSITIVITY, fallback=2),
-            config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_POLLING, fallback=10),
-            config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_MIN_TEMP, fallback=32),
-            config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_MAX_TEMP, fallback=46),
-            config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_MIN_LEVEL, fallback=35),
-            config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_MAX_LEVEL, fallback=100),
-            config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_SMOOTHING, fallback=1),
+            config[section].get(HdFc.CV_HD_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}"),
+            section, count,
+            config[section].getint(HdFc.CV_HD_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
+            config[section].getint(HdFc.CV_HD_FC_STEPS, fallback=4),
+            config[section].getfloat(HdFc.CV_HD_FC_SENSITIVITY, fallback=2),
+            config[section].getfloat(HdFc.CV_HD_FC_POLLING, fallback=10),
+            config[section].getfloat(HdFc.CV_HD_FC_MIN_TEMP, fallback=32),
+            config[section].getfloat(HdFc.CV_HD_FC_MAX_TEMP, fallback=46),
+            config[section].getint(HdFc.CV_HD_FC_MIN_LEVEL, fallback=35),
+            config[section].getint(HdFc.CV_HD_FC_MAX_LEVEL, fallback=100),
+            config[section].getint(HdFc.CV_HD_FC_SMOOTHING, fallback=1),
         )
 
         # Read and validate the configuration of standby guard if enabled.
-        self.standby_guard_enabled = config[HdFc.CS_HD_FC].getboolean(HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED,
-                                                                      fallback=False)
+        self.standby_guard_enabled = config[section].getboolean(HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED,
+                                                                fallback=False)
         if self.count == 1:
             self.log.msg(Log.LOG_INFO, "   WARNING: Standby guard is disabled ([HD] count=1")
             self.standby_guard_enabled = False
         if self.standby_guard_enabled:
             self.standby_array_states = [False] * self.count
             # Read and validate further parameters.
-            self.standby_hd_limit = config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_STANDBY_HD_LIMIT, fallback=1)
+            self.standby_hd_limit = config[section].getint(HdFc.CV_HD_FC_STANDBY_HD_LIMIT, fallback=1)
             if self.standby_hd_limit < 0:
                 raise ValueError("standby_hd_limit < 0")
             if self.standby_hd_limit > self.count:

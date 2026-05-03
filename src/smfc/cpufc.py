@@ -27,13 +27,15 @@ class CpuFc(FanController):
     CV_CPU_FC_MAX_LEVEL: str = "max_level"
     CV_CPU_FC_SMOOTHING: str = "smoothing"
 
-    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
+    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser,
+                 section: str = CS_CPU_FC) -> None:
         """Initialize the CPU fan controller class and raise exception in case of invalid configuration.
         Args:
             log (Log): reference to a Log class instance
             udevc (Context): reference to an udev database connection (instance of Context from pyudev)
             ipmi (Ipmi): reference to an Ipmi class instance
             config (ConfigParser): reference to the configuration
+            section (str): configuration section name (default: CS_CPU_FC)
         Raises:
             ValueError: multiple hwmon devices reported, one expected
             RuntimeError: No HWMON device found for CPU(s)
@@ -56,17 +58,17 @@ class CpuFc(FanController):
         # Initialize FanController class.
         super().__init__(
             log, ipmi,
-            config[CpuFc.CS_CPU_FC].get(CpuFc.CV_CPU_FC_IPMI_ZONE, fallback=f"{Ipmi.CPU_ZONE}"),
-            CpuFc.CS_CPU_FC, count,
-            config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
-            config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_STEPS, fallback=6),
-            config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_SENSITIVITY, fallback=3.0),
-            config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_POLLING, fallback=2),
-            config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MIN_TEMP, fallback=30.0),
-            config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MAX_TEMP, fallback=60.0),
-            config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_MIN_LEVEL, fallback=35),
-            config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_MAX_LEVEL, fallback=100),
-            config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_SMOOTHING, fallback=1),
+            config[section].get(CpuFc.CV_CPU_FC_IPMI_ZONE, fallback=f"{Ipmi.CPU_ZONE}"),
+            section, count,
+            config[section].getint(CpuFc.CV_CPU_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
+            config[section].getint(CpuFc.CV_CPU_FC_STEPS, fallback=6),
+            config[section].getfloat(CpuFc.CV_CPU_FC_SENSITIVITY, fallback=3.0),
+            config[section].getfloat(CpuFc.CV_CPU_FC_POLLING, fallback=2),
+            config[section].getfloat(CpuFc.CV_CPU_FC_MIN_TEMP, fallback=30.0),
+            config[section].getfloat(CpuFc.CV_CPU_FC_MAX_TEMP, fallback=60.0),
+            config[section].getint(CpuFc.CV_CPU_FC_MIN_LEVEL, fallback=35),
+            config[section].getint(CpuFc.CV_CPU_FC_MAX_LEVEL, fallback=100),
+            config[section].getint(CpuFc.CV_CPU_FC_SMOOTHING, fallback=1),
         )
 
 

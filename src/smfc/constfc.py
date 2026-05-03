@@ -24,26 +24,27 @@ class ConstFc(FanController):
     level: int
 
     # pylint: disable=super-init-not-called
-    def __init__(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
+    def __init__(self, log: Log, ipmi: Ipmi, config: ConfigParser, section: str = CS_CONST_FC) -> None:
         """Initialize the CONST fan controller class and raise exception in case invalid configuration items.
         Args:
             log (Log): reference to a Log class instance
             ipmi (Ipmi): reference to an Ipmi class instance
             config (ConfigParser): reference to the configuration
+            section (str): configuration section name (default: CS_CONST_FC)
         Raises:
             ValueError: invalid configuration parameters
         """
         # Initialize ConstFc class.
         self.log = log
         self.ipmi = ipmi
-        ipmi_zone_str = config[ConstFc.CS_CONST_FC].get(ConstFc.CV_CONST_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}")
+        ipmi_zone_str = config[section].get(ConstFc.CV_CONST_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}")
         self.ipmi_zone = FanController.parse_ipmi_zones(ipmi_zone_str)
 
-        self.name = ConstFc.CS_CONST_FC
-        self.polling = config[ConstFc.CS_CONST_FC].getfloat(ConstFc.CV_CONST_FC_POLLING, fallback=30.0)
+        self.name = section
+        self.polling = config[section].getfloat(ConstFc.CV_CONST_FC_POLLING, fallback=30.0)
         if self.polling < 0.0:
             raise ValueError("polling < 0")
-        self.level = config[ConstFc.CS_CONST_FC].getint(ConstFc.CV_CONST_FC_LEVEL, fallback=50)
+        self.level = config[section].getint(ConstFc.CV_CONST_FC_LEVEL, fallback=50)
         if self.level not in range(0, 101):
             raise ValueError("invalid level")
         self.last_time = 0.0

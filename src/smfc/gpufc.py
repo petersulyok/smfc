@@ -49,12 +49,13 @@ class GpuFc(FanController):
     CV_AMD_TEMP_MEMORY: str = "Temperature (Sensor memory) (C)"
     CV_AMD_TEMP_KEYS: tuple = (CV_AMD_TEMP_JUNCTION, CV_AMD_TEMP_EDGE, CV_AMD_TEMP_MEMORY)
 
-    def __init__(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
+    def __init__(self, log: Log, ipmi: Ipmi, config: ConfigParser, section: str = CS_GPU_FC) -> None:
         """Initialize the GPU fan controller class and raise exception in case of invalid configuration.
         Args:
             log (Log): reference to a Log class instance
             ipmi (Ipmi): reference to an Ipmi class instance
             config (ConfigParser): reference to the configuration
+            section (str): configuration section name (default: CS_GPU_FC)
         Raises:
             ValueError: invalid configuration parameters
         """
@@ -62,11 +63,11 @@ class GpuFc(FanController):
         count: int          # GPU count.
 
         # Save and validate GpuFc class-specific parameters.
-        self.gpu_type = config[self.CS_GPU_FC].get(self.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
+        self.gpu_type = config[section].get(self.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
         if self.gpu_type not in ["nvidia", "amd"]:
             raise ValueError(f"invalid value: {self.CV_GPU_FC_GPU_TYPE}={self.gpu_type}.")
 
-        gpu_id_list = config[self.CS_GPU_FC].get(self.CV_GPU_FC_GPU_IDS, "0")
+        gpu_id_list = config[section].get(self.CV_GPU_FC_GPU_IDS, "0")
         gpu_id_list = re.sub(" +", " ", gpu_id_list.strip())
         # May raise ValueError if GPU ID string contains non-integer values.
         self.gpu_device_ids = [int(s) for s in gpu_id_list.split("," if "," in gpu_id_list else " ")]
@@ -74,9 +75,9 @@ class GpuFc(FanController):
             if gid not in range(0, 101):
                 raise ValueError(f"invalid value: {self.CV_GPU_FC_GPU_IDS}={gpu_id_list}.")
         count = len(self.gpu_device_ids)
-        self.nvidia_smi_path = config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH, "/usr/bin/nvidia-smi")
-        self.rocm_smi_path = config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_ROCM_SMI_PATH, "/usr/bin/rocm-smi")
-        self.amd_temp_sensor = config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_AMD_TEMP_SENSOR, fallback=0)
+        self.nvidia_smi_path = config[section].get(GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH, "/usr/bin/nvidia-smi")
+        self.rocm_smi_path = config[section].get(GpuFc.CV_GPU_FC_ROCM_SMI_PATH, "/usr/bin/rocm-smi")
+        self.amd_temp_sensor = config[section].getint(GpuFc.CV_GPU_FC_AMD_TEMP_SENSOR, fallback=0)
         if self.amd_temp_sensor not in range(0, 3):
             raise ValueError(f"invalid value: {self.CV_GPU_FC_AMD_TEMP_SENSOR}={self.amd_temp_sensor}.")
         self.smi_called = 0
@@ -84,17 +85,17 @@ class GpuFc(FanController):
         # Initialize FanController class.
         super().__init__(
             log, ipmi,
-            config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}"),
-            GpuFc.CS_GPU_FC, count,
-            config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
-            config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_STEPS, fallback=5),
-            config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_SENSITIVITY, fallback=2),
-            config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_POLLING, fallback=2),
-            config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_MIN_TEMP, fallback=40),
-            config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_MAX_TEMP, fallback=70),
-            config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_MIN_LEVEL, fallback=35),
-            config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_MAX_LEVEL, fallback=100),
-            config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_SMOOTHING, fallback=1),
+            config[section].get(GpuFc.CV_GPU_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}"),
+            section, count,
+            config[section].getint(GpuFc.CV_GPU_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
+            config[section].getint(GpuFc.CV_GPU_FC_STEPS, fallback=5),
+            config[section].getfloat(GpuFc.CV_GPU_FC_SENSITIVITY, fallback=2),
+            config[section].getfloat(GpuFc.CV_GPU_FC_POLLING, fallback=2),
+            config[section].getfloat(GpuFc.CV_GPU_FC_MIN_TEMP, fallback=40),
+            config[section].getfloat(GpuFc.CV_GPU_FC_MAX_TEMP, fallback=70),
+            config[section].getint(GpuFc.CV_GPU_FC_MIN_LEVEL, fallback=35),
+            config[section].getint(GpuFc.CV_GPU_FC_MAX_LEVEL, fallback=100),
+            config[section].getint(GpuFc.CV_GPU_FC_SMOOTHING, fallback=1),
         )
 
         # Print configuration in CONFIG log level (or higher).

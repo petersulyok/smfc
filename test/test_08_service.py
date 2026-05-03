@@ -445,21 +445,23 @@ class TestService:
             if self.sleep_counter >= 10:
                 sys.exit(100)
 
-        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
+        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser,
+                              section: str = CpuFc.CS_CPU_FC) -> None:
             nonlocal my_td
             self.hwmon_path = my_td.cpu_files
             count = len(my_td.cpu_files)
-            FanController.__init__(self, log, ipmi, f"{Ipmi.CPU_ZONE} {Ipmi.HD_ZONE}", CpuFc.CS_CPU_FC, count,
+            FanController.__init__(self, log, ipmi, f"{Ipmi.CPU_ZONE} {Ipmi.HD_ZONE}", section, count,
                                    1, 5, 5, 0, 30, 60, 35, 100,)
 
-        def mocked_hdfc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
+        def mocked_hdfc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool,
+                             section: str = HdFc.CS_HD_FC) -> None:
             nonlocal my_td
             nonlocal cmd_smart
             self.hd_device_names = my_td.hd_name_list
             self.hwmon_path = my_td.hd_files
             count = len(my_td.hd_files)
             self.sudo = sudo
-            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", HdFc.CS_HD_FC, count,
+            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", section, count,
                                    1, 5, 2, 0, 32, 46, 35, 100)
             self.smartctl_path = cmd_smart
             self.standby_guard_enabled = True
@@ -468,7 +470,8 @@ class TestService:
             self.standby_flag = False
             self.standby_change_timestamp = time.monotonic()
 
-        def mocked_gpufc_init(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
+        def mocked_gpufc_init(self, log: Log, ipmi: Ipmi, config: ConfigParser,
+                              section: str = GpuFc.CS_GPU_FC) -> None:
             nonlocal my_td
             nonlocal cmd_nvidia
             self.gpu_device_ids = [0]
@@ -477,21 +480,23 @@ class TestService:
             self.nvidia_smi_path = cmd_nvidia
             self.rocm_smi_path = "/usr/bin/rocm-smi"
             self.smi_called = 0
-            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", GpuFc.CS_GPU_FC, count,
+            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", section, count,
                                    1, 5, 2, 0, 45, 70, 35, 100)
 
-        def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
+        def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser,
+                               section: str = NvmeFc.CS_NVME_FC) -> None:
             nonlocal my_td
             self.nvme_device_names = my_td.nvme_name_list
             self.hwmon_path = my_td.nvme_files
             count = len(my_td.nvme_files)
-            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", NvmeFc.CS_NVME_FC, count,
+            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", section, count,
                                    1, 5, 2, 0, 30, 50, 35, 100,)
 
-        def mocked_constfc_init(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
+        def mocked_constfc_init(self, log: Log, ipmi: Ipmi, config: ConfigParser,
+                                section: str = ConstFc.CS_CONST_FC) -> None:
             self.ipmi = ipmi
             self.log = log
-            self.name = ConstFc.CS_CONST_FC
+            self.name = section
             self.ipmi_zone = [Ipmi.HD_ZONE]
             self.polling = 30
             self.level = 50

@@ -32,7 +32,8 @@ class NvmeFc(FanController):
     CV_NVME_FC_SMOOTHING: str = "smoothing"
     CV_NVME_FC_NVME_NAMES: str = "nvme_names"
 
-    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
+    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser,
+                 section: str = CS_NVME_FC) -> None:
         """Initialize the NVME fan controller class and raise exception in case of invalid configuration.
 
         Args:
@@ -40,6 +41,7 @@ class NvmeFc(FanController):
             udevc (Context): reference to an udev database connection (instance of Context from pyudev)
             ipmi (Ipmi): reference to an Ipmi class instance
             config (ConfigParser): reference to the configuration
+            section (str): configuration section name (default: CS_NVME_FC)
 
         Raises:
             ValueError: invalid configuration parameters (e.g. missing nvme_names)
@@ -48,7 +50,7 @@ class NvmeFc(FanController):
         count: int  # NVMe count.
 
         # Save and validate NvmeFc class-specific parameters.
-        nvme_names = config[self.CS_NVME_FC].get(self.CV_NVME_FC_NVME_NAMES)
+        nvme_names = config[section].get(self.CV_NVME_FC_NVME_NAMES)
         if not nvme_names:
             raise ValueError("Parameter nvme_names= is not specified.")
         if "\n" in nvme_names:
@@ -76,17 +78,17 @@ class NvmeFc(FanController):
         # Initialize FanController class.
         super().__init__(
             log, ipmi,
-            config[NvmeFc.CS_NVME_FC].get(NvmeFc.CV_NVME_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}"),
-            NvmeFc.CS_NVME_FC, count,
-            config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
-            config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_STEPS, fallback=4),
-            config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_SENSITIVITY, fallback=2),
-            config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_POLLING, fallback=10),
-            config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_MIN_TEMP, fallback=35),
-            config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_MAX_TEMP, fallback=70),
-            config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_MIN_LEVEL, fallback=35),
-            config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_MAX_LEVEL, fallback=100),
-            config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_SMOOTHING, fallback=1),
+            config[section].get(NvmeFc.CV_NVME_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}"),
+            section, count,
+            config[section].getint(NvmeFc.CV_NVME_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
+            config[section].getint(NvmeFc.CV_NVME_FC_STEPS, fallback=4),
+            config[section].getfloat(NvmeFc.CV_NVME_FC_SENSITIVITY, fallback=2),
+            config[section].getfloat(NvmeFc.CV_NVME_FC_POLLING, fallback=10),
+            config[section].getfloat(NvmeFc.CV_NVME_FC_MIN_TEMP, fallback=35),
+            config[section].getfloat(NvmeFc.CV_NVME_FC_MAX_TEMP, fallback=70),
+            config[section].getint(NvmeFc.CV_NVME_FC_MIN_LEVEL, fallback=35),
+            config[section].getint(NvmeFc.CV_NVME_FC_MAX_LEVEL, fallback=100),
+            config[section].getint(NvmeFc.CV_NVME_FC_SMOOTHING, fallback=1),
         )
 
         # Print configuration in CONFIG log level (or higher).

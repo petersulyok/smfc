@@ -60,6 +60,32 @@ class Service:
         """
         return config.has_section(section) and config[section].getboolean(key, fallback=False)
 
+    @staticmethod
+    def _get_controller_sections(config: ConfigParser, base_name: str) -> List[str]:
+        """Collect all configuration sections for a given controller base name.
+
+        Supports three naming conventions:
+          - [CPU]           single instance (backward compatible)
+          - [CPU], [CPU:1]  base section plus numbered extras
+          - [CPU:0], [CPU:1] all-numbered instances
+
+        Args:
+            config (ConfigParser): reference to the configuration
+            base_name (str): base section name (e.g. 'CPU', 'HD')
+        Returns:
+            List[str]: ordered list of matching section names
+        """
+        sections: List[str] = []
+        if config.has_section(base_name):
+            sections.append(base_name)
+        prefix = f"{base_name}:"
+        numbered = sorted(
+            [s for s in config.sections() if s.startswith(prefix) and s[len(prefix):].isdigit()],
+            key=lambda s: int(s[len(prefix):])
+        )
+        sections.extend(numbered)
+        return sections
+
     def check_dependencies(self) -> str:  # pylint: disable=too-many-return-statements
         """Check run-time dependencies of smfc:
               - ipmitool command
@@ -83,40 +109,43 @@ class Service:
             modules = file.read()
 
         # Check the kernel modules for CPU fan controller.
-        if self._is_fc_enabled(self.config, CpuFc.CS_CPU_FC, CpuFc.CV_CPU_FC_ENABLED):
+        cpu_sections = self._get_controller_sections(self.config, CpuFc.CS_CPU_FC)
+        if any(self.config[s].getboolean(CpuFc.CV_CPU_FC_ENABLED, fallback=False) for s in cpu_sections):
             if "coretemp" not in modules and "k10temp" not in modules:
                 return "ERROR: coretemp or k10temp kernel module must be loaded!"
 
         # Check dependencies for HD fan controller.
-        if self._is_fc_enabled(self.config, HdFc.CS_HD_FC, HdFc.CV_HD_FC_ENABLED):
-            # Check if `smartctl` command is available.
-            path = self.config[HdFc.CS_HD_FC].get(HdFc.CV_HD_FC_SMARTCTL_PATH, "/usr/sbin/smartctl")
-            if not os.path.exists(path):
-                no_smartctl = True
-
-            # Check if `drivetemp` modules is loaded.
+        hd_sections = [s for s in self._get_controller_sections(self.config, HdFc.CS_HD_FC)
+                       if self.config[s].getboolean(HdFc.CV_HD_FC_ENABLED, fallback=False)]
+        if hd_sections:
+            # Check if `drivetemp` module is loaded.
             if "drivetemp" not in modules:
                 no_drivetemp = True
+            for s in hd_sections:
+                # Check if `smartctl` command is available.
+                path = self.config[s].get(HdFc.CV_HD_FC_SMARTCTL_PATH, "/usr/sbin/smartctl")
+                if not os.path.exists(path):
+                    no_smartctl = True
+                # If neither `drivetemp` nor `smartctl` is available.
+                if no_smartctl and no_drivetemp:
+                    return (f"ERROR: drivetemp kernel module must be loaded or "
+                            f"smartctl command ({path}) must be installed!")
+                # If Standby Guard feature enabled, `smartctl` command should be available.
+                sge = self.config[s].getboolean(HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED, fallback=False)
+                if sge and no_smartctl:
+                    return f"ERROR: smartctl command ({path}) must be installed for Standby Guard feature!"
 
-            # If neither `drivetemp` nor `smartctl` is available.
-            if no_smartctl and no_drivetemp:
-                return f"ERROR: drivetemp kernel module must be loaded or smartctl command ({path}) must be installed!"
-
-            # If Standby Guard feature enabled, `smartctl` command should be available
-            sge = self.config[HdFc.CS_HD_FC].getboolean(HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED, fallback=False)
-            if sge and no_smartctl:
-                return f"ERROR: smartctl command ({path}) must be installed for Standby Guard feature!"
-
-        # Check dependencies for GPU fancontroller.
-        if self._is_fc_enabled(self.config, GpuFc.CS_GPU_FC, GpuFc.CV_GPU_FC_ENABLED):
-            gpu_type = self.config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
+        # Check dependencies for GPU fan controller.
+        gpu_sections = [s for s in self._get_controller_sections(self.config, GpuFc.CS_GPU_FC)
+                        if self.config[s].getboolean(GpuFc.CV_GPU_FC_ENABLED, fallback=False)]
+        for s in gpu_sections:
+            gpu_type = self.config[s].get(GpuFc.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
             if gpu_type == "nvidia":
-                path = self.config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH, "/usr/bin/nvidia-smi")
+                path = self.config[s].get(GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH, "/usr/bin/nvidia-smi")
             elif gpu_type == "amd":
-                path = self.config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_ROCM_SMI_PATH, "/usr/bin/rocm-smi")
+                path = self.config[s].get(GpuFc.CV_GPU_FC_ROCM_SMI_PATH, "/usr/bin/rocm-smi")
             else:
                 return f"ERROR: invalid value: {GpuFc.CV_GPU_FC_GPU_TYPE}={gpu_type}."
-
             if not os.path.exists(path):
                 return f"ERROR: {path} command cannot be found!"
 
@@ -270,12 +299,6 @@ class Service:
                 self.config.remove_section(old_name)
                 self.log.msg(Log.LOG_INFO, f"Deprecated section name [{old_name}], " \
                                            "please update your configuration file.")
-        # Read enabled= parameters from each fan controller section.
-        cpu_fc_enabled = self._is_fc_enabled(self.config, CpuFc.CS_CPU_FC, CpuFc.CV_CPU_FC_ENABLED)
-        hd_fc_enabled = self._is_fc_enabled(self.config, HdFc.CS_HD_FC, HdFc.CV_HD_FC_ENABLED)
-        nvme_fc_enabled = self._is_fc_enabled(self.config, NvmeFc.CS_NVME_FC, NvmeFc.CV_NVME_FC_ENABLED)
-        gpu_fc_enabled = self._is_fc_enabled(self.config, GpuFc.CS_GPU_FC, GpuFc.CV_GPU_FC_ENABLED)
-        const_fc_enabled = self._is_fc_enabled(self.config, ConstFc.CS_CONST_FC, ConstFc.CV_CONST_FC_ENABLED)
         self.log.msg(Log.LOG_DEBUG, f"Configuration file ({parsed_results.config_file}) loaded")
 
         # Check run-time dependencies (commands, kernel modules) if `-nd` command line option is not specified.
@@ -315,26 +338,31 @@ class Service:
 
         # Create enabled fan controller instances.
         self.controllers = []
-        if cpu_fc_enabled:
-            self.log.msg(Log.LOG_DEBUG, "CPU fan controller enabled")
-            self.controllers.append(CpuFc(self.log, self.udevc, self.ipmi, self.config))
-            time.sleep(self.ipmi.fan_level_delay)
-        if hd_fc_enabled:
-            self.log.msg(Log.LOG_DEBUG, "HD fan controller enabled")
-            self.controllers.append(HdFc(self.log, self.udevc, self.ipmi, self.config, self.sudo))
-            time.sleep(self.ipmi.fan_level_delay)
-        if nvme_fc_enabled:
-            self.log.msg(Log.LOG_DEBUG, "NVME fan controller enabled")
-            self.controllers.append(NvmeFc(self.log, self.udevc, self.ipmi, self.config))
-            time.sleep(self.ipmi.fan_level_delay)
-        if gpu_fc_enabled:
-            self.log.msg(Log.LOG_DEBUG, "GPU fan controller enabled")
-            self.controllers.append(GpuFc(self.log, self.ipmi, self.config))
-            time.sleep(self.ipmi.fan_level_delay)
-        if const_fc_enabled:
-            self.log.msg(Log.LOG_DEBUG, "CONST fan controller enabled")
-            self.controllers.append(ConstFc(self.log, self.ipmi, self.config))
-            time.sleep(self.ipmi.fan_level_delay)
+        for section in self._get_controller_sections(self.config, CpuFc.CS_CPU_FC):
+            if self.config[section].getboolean(CpuFc.CV_CPU_FC_ENABLED, fallback=False):
+                self.log.msg(Log.LOG_DEBUG, f"CPU fan controller [{section}] enabled")
+                self.controllers.append(CpuFc(self.log, self.udevc, self.ipmi, self.config, section))
+                time.sleep(self.ipmi.fan_level_delay)
+        for section in self._get_controller_sections(self.config, HdFc.CS_HD_FC):
+            if self.config[section].getboolean(HdFc.CV_HD_FC_ENABLED, fallback=False):
+                self.log.msg(Log.LOG_DEBUG, f"HD fan controller [{section}] enabled")
+                self.controllers.append(HdFc(self.log, self.udevc, self.ipmi, self.config, self.sudo, section))
+                time.sleep(self.ipmi.fan_level_delay)
+        for section in self._get_controller_sections(self.config, NvmeFc.CS_NVME_FC):
+            if self.config[section].getboolean(NvmeFc.CV_NVME_FC_ENABLED, fallback=False):
+                self.log.msg(Log.LOG_DEBUG, f"NVME fan controller [{section}] enabled")
+                self.controllers.append(NvmeFc(self.log, self.udevc, self.ipmi, self.config, section))
+                time.sleep(self.ipmi.fan_level_delay)
+        for section in self._get_controller_sections(self.config, GpuFc.CS_GPU_FC):
+            if self.config[section].getboolean(GpuFc.CV_GPU_FC_ENABLED, fallback=False):
+                self.log.msg(Log.LOG_DEBUG, f"GPU fan controller [{section}] enabled")
+                self.controllers.append(GpuFc(self.log, self.ipmi, self.config, section))
+                time.sleep(self.ipmi.fan_level_delay)
+        for section in self._get_controller_sections(self.config, ConstFc.CS_CONST_FC):
+            if self.config[section].getboolean(ConstFc.CV_CONST_FC_ENABLED, fallback=False):
+                self.log.msg(Log.LOG_DEBUG, f"CONST fan controller [{section}] enabled")
+                self.controllers.append(ConstFc(self.log, self.ipmi, self.config, section))
+                time.sleep(self.ipmi.fan_level_delay)
 
         # If none of the fan controllers is enabled.
         if not self.controllers:
