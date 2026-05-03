@@ -12,7 +12,7 @@ from pytest import fixture
 from pyudev import Context
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, FanController, CpuFc, HdFc, NvmeFc, GpuFc, Service
-from .test_00_data import TestData, MockedContextGood
+from .test_data import TestData, MockedContextGood
 
 # In case of adding a new command line parameter, see `conftest.py` as well.
 

@@ -5,85 +5,52 @@
 #
 import subprocess
 import time
-from configparser import ConfigParser
 from typing import List
 from pyudev import Context, Devices, DeviceNotFoundByFileError
 from smfc.fancontroller import FanController
 from smfc.ipmi import Ipmi
 from smfc.log import Log
+from smfc.config import HdConfig
 
 
 class HdFc(FanController):
     """Class for HD fan controller."""
 
+    config: HdConfig
+
     # HdFc specific parameters.
     hd_device_names: List[str]          # Device names of the hard disks (e.g. '/dev/disk/by-id/...').
 
     # Standby guard specific parameters.
-    standby_guard_enabled: bool         # Standby guard feature enabled
-    standby_hd_limit: int               # Number of HDs in STANDBY state before the full RAID array will go STANDBY
-    smartctl_path: str                  # Path for 'smartctl' command
     standby_flag: bool                  # The actual state of the whole HD array
     standby_change_timestamp: float     # Timestamp of the latest change in STANDBY mode
     standby_array_states: List[bool]    # Standby states of HDs
     sudo: bool                          # Use `sudo` command
 
-    # Constant values for the configuration parameters.
-    CS_HD_FC: str = "HD"
-    CV_HD_FC_ENABLED: str = "enabled"
-    CV_HD_FC_IPMI_ZONE: str = "ipmi_zone"
-    CV_HD_FC_TEMP_CALC: str = "temp_calc"
-    CV_HD_FC_STEPS: str = "steps"
-    CV_HD_FC_SENSITIVITY: str = "sensitivity"
-    CV_HD_FC_POLLING: str = "polling"
-    CV_HD_FC_MIN_TEMP: str = "min_temp"
-    CV_HD_FC_MAX_TEMP: str = "max_temp"
-    CV_HD_FC_MIN_LEVEL: str = "min_level"
-    CV_HD_FC_MAX_LEVEL: str = "max_level"
-    CV_HD_FC_SMOOTHING: str = "smoothing"
-    CV_HD_FC_HD_NAMES: str = "hd_names"
-    CV_HD_FC_SMARTCTL_PATH: str = "smartctl_path"
-    CV_HD_FC_STANDBY_GUARD_ENABLED: str = "standby_guard_enabled"
-    CV_HD_FC_STANDBY_HD_LIMIT: str = "standby_hd_limit"
-
-    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool,
-                 section: str = CS_HD_FC) -> None:
+    def __init__(self, log: Log, udevc: Context, ipmi: Ipmi, cfg: HdConfig, sudo: bool) -> None:
         """Initialize the HD fan controller class and raise exception in case of invalid configuration.
 
         Args:
             log (Log): reference to a Log class instance
             udevc (Context): reference to an udev database connection (instance of Context from pyudev)
             ipmi (Ipmi): reference to an Ipmi class instance
-            config (ConfigParser): reference to the configuration
+            cfg (HdConfig): HD fan controller configuration
             sudo (bool): sudo flag
-            section (str): configuration section name (default: CS_HD_FC)
 
         Raises:
-            ValueError: invalid configuration parameters (e.g. missing hd_names, NVMe drives specified)
+            ValueError: invalid configuration parameters (e.g. device not reachable)
         """
-        hd_names: str   # String for hd_names=
-        count: int      # HDD count.
+        # Store config reference first (required by base class)
+        self.config = cfg
 
-        # Save and validate HdFc class-specific parameters.
-        hd_names = config[section].get(self.CV_HD_FC_HD_NAMES)
-        if not hd_names:
-            raise ValueError("Parameter hd_names= is not specified.")
-        if "\n" in hd_names:
-            self.hd_device_names = hd_names.splitlines()
-        else:
-            self.hd_device_names = hd_names.split()
-        # Validate that no NVMe drives are specified (they belong to NVME fan controller).
-        for name in self.hd_device_names:
-            if "nvme" in name.lower():
-                raise ValueError(f"NVMe drives are not allowed in [HD], use [NVME] instead: '{name}'")
-        # Set count.
-        count = len(self.hd_device_names)
+        # Save HdFc class-specific parameters (validation done in Config).
+        self.hd_device_names = cfg.hd_names
         # Save sudo flag.
         self.sudo = sudo
 
         # Iterate through each disk.
         self.hwmon_path = []
-        for i in range(count):
+        for i in range(len(self.hd_device_names)):
             # Find a device in udev database based on disk name.
             try:
                 block_dev = Devices.from_device_file(udevc, self.hd_device_names[i])
@@ -93,38 +60,16 @@ class HdFc(FanController):
             # Add the hwmon path string for NVME/SATA/HDD disks or '' for SAS/SCSI disks.
             self.hwmon_path.append(self.get_hwmon_path(udevc, block_dev.parent))
 
-        # Save path for `smartctl` command.
-        self.smartctl_path = config[section].get(HdFc.CV_HD_FC_SMARTCTL_PATH, "/usr/sbin/smartctl")
-
         # Initialize FanController class.
-        super().__init__(
-            log, ipmi,
-            config[section].get(HdFc.CV_HD_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}"),
-            section, count,
-            config[section].getint(HdFc.CV_HD_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
-            config[section].getint(HdFc.CV_HD_FC_STEPS, fallback=4),
-            config[section].getfloat(HdFc.CV_HD_FC_SENSITIVITY, fallback=2),
-            config[section].getfloat(HdFc.CV_HD_FC_POLLING, fallback=10),
-            config[section].getfloat(HdFc.CV_HD_FC_MIN_TEMP, fallback=32),
-            config[section].getfloat(HdFc.CV_HD_FC_MAX_TEMP, fallback=46),
-            config[section].getint(HdFc.CV_HD_FC_MIN_LEVEL, fallback=35),
-            config[section].getint(HdFc.CV_HD_FC_MAX_LEVEL, fallback=100),
-            config[section].getint(HdFc.CV_HD_FC_SMOOTHING, fallback=1),
-        )
+        super().__init__(log, ipmi, cfg.section, len(self.hd_device_names))
 
         # Read and validate the configuration of standby guard if enabled.
-        self.standby_guard_enabled = config[section].getboolean(HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED,
-                                                                fallback=False)
         if self.count == 1:
             self.log.msg(Log.LOG_INFO, "   WARNING: Standby guard is disabled ([HD] count=1")
-            self.standby_guard_enabled = False
-        if self.standby_guard_enabled:
+        if cfg.standby_guard_enabled and self.count > 1:
             self.standby_array_states = [False] * self.count
-            # Read and validate further parameters.
-            self.standby_hd_limit = config[section].getint(HdFc.CV_HD_FC_STANDBY_HD_LIMIT, fallback=1)
-            if self.standby_hd_limit < 0:
-                raise ValueError("standby_hd_limit < 0")
-            if self.standby_hd_limit > self.count:
+            # Validate standby_hd_limit against count.
+            if cfg.standby_hd_limit > self.count:
                 raise ValueError("standby_hd_limit > count")
             # Get the current power state of the HD array.
             n = self.check_standby_state()
@@ -134,17 +79,17 @@ class HdFc(FanController):
 
         # Print configuration in CONFIG log level (or higher).
         if self.log.log_level >= Log.LOG_CONFIG:
-            self.log.msg(Log.LOG_CONFIG, f"   {self.CV_HD_FC_HD_NAMES} = {self.hd_device_names}")
-            self.log.msg(Log.LOG_CONFIG, f"   {self.CV_HD_FC_SMARTCTL_PATH} = {self.smartctl_path}")
-            if self.standby_guard_enabled:
+            self.log.msg(Log.LOG_CONFIG, f"   hd_names = {self.hd_device_names}")
+            self.log.msg(Log.LOG_CONFIG, f"   smartctl_path = {self.config.smartctl_path}")
+            if self.config.standby_guard_enabled and self.count > 1:
                 self.log.msg(Log.LOG_CONFIG, "   Standby guard is enabled:")
-                self.log.msg(Log.LOG_CONFIG, f"     {self.CV_HD_FC_STANDBY_HD_LIMIT} = {self.standby_hd_limit}")
+                self.log.msg(Log.LOG_CONFIG, f"     standby_hd_limit = {self.config.standby_hd_limit}")
             else:
                 self.log.msg(Log.LOG_CONFIG, "   Standby guard is disabled")
 
     def callback_func(self) -> None:
         """Call-back function to execute standby guard."""
-        if self.standby_guard_enabled:
+        if self.config.standby_guard_enabled and self.count > 1:
             self.run_standby_guard()
 
     def _exec_smartctl(self, arguments: List[str]) -> subprocess.CompletedProcess:
@@ -165,7 +110,7 @@ class HdFc(FanController):
         args = []
         if self.sudo:
             args.append("sudo")
-        args.append(self.smartctl_path)
+        args.append(self.config.smartctl_path)
         args.extend(arguments)
         # May raise FileNotFoundError if smartctl is not found.
         r = subprocess.run(args, check=False, capture_output=True, text=True)
@@ -311,7 +256,7 @@ class HdFc(FanController):
         if self.log.log_level >= Log.LOG_DEBUG:
             self.log.msg(Log.LOG_DEBUG, f"Standby guard: standby_flag={self.standby_flag} "
                          f"hds_in_standby={hds_in_standby}/{self.count}")
-        if not self.standby_flag and hds_in_standby >= self.standby_hd_limit:
+        if not self.standby_flag and hds_in_standby >= self.config.standby_hd_limit:
             hours = (cur_time - self.standby_change_timestamp) / float(3600)
             self.log.msg(Log.LOG_INFO, f"Standby guard: Status change ACTIVE > STANDBY (after {hours:.1f} hours, "
                          f"{self.get_standby_state_str()})")

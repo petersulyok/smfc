@@ -7,9 +7,8 @@ import atexit
 import os
 import sys
 import time
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, Union
 from importlib.metadata import version
-from configparser import ConfigParser
 from argparse import ArgumentParser, Namespace
 from pyudev import Context
 from smfc.constfc import ConstFc
@@ -20,21 +19,22 @@ from smfc.hdfc import HdFc
 from smfc.nvmefc import NvmeFc
 from smfc.ipmi import Ipmi
 from smfc.log import Log
+from smfc.config import Config
 
 
 class Service:
     """Service class contains all resources/functions for the execution."""
 
     # Service data.
-    config: ConfigParser                                   # Instance for a parsed configuration
-    sudo: bool                                             # Use sudo command
-    log: Log                                               # Instance for a Log class
-    udevc: Context                                         # Reference to a pyudev Context instance
-    ipmi: Ipmi                                             # Instance for an Ipmi class
-    controllers: List[FanController]                       # List of enabled fan controller instances
-    applied_levels: Dict[int, int]                         # Cache of last applied fan levels per IPMI zone
-    shared_zones: Set[int]                                 # Set of IPMI zone IDs shared between controllers
-    last_desired: List[Tuple[str, List[int], int, float]]  # Cache of last desired levels for change detection
+    config: Config                                             # Instance for a parsed configuration
+    sudo: bool                                                 # Use sudo command
+    log: Log                                                   # Instance for a Log class
+    udevc: Context                                             # Reference to a pyudev Context instance
+    ipmi: Ipmi                                                 # Instance for an Ipmi class
+    controllers: List[Union[FanController, ConstFc]]           # List of enabled fan controller instances
+    applied_levels: Dict[int, int]                             # Cache of last applied fan levels per IPMI zone
+    shared_zones: Set[int]                                     # Set of IPMI zone IDs shared between controllers
+    last_desired: List[Tuple[str, List[int], int, float]]      # Cache of last desired levels for change detection
 
     def exit_func(self) -> None:
         """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
@@ -47,44 +47,6 @@ class Service:
 
         # Unregister this function.
         atexit.unregister(self.exit_func)
-
-    @staticmethod
-    def _is_fc_enabled(config: ConfigParser, section: str, key: str) -> bool:
-        """Check if a fan controller is enabled in the configuration.
-        Args:
-            config (ConfigParser): reference to the configuration
-            section (str): configuration section name
-            key (str): configuration key for the enabled flag
-        Returns:
-            bool: True if the controller is enabled
-        """
-        return config.has_section(section) and config[section].getboolean(key, fallback=False)
-
-    @staticmethod
-    def _get_controller_sections(config: ConfigParser, base_name: str) -> List[str]:
-        """Collect all configuration sections for a given controller base name.
-
-        Supports three naming conventions:
-          - [CPU]           single instance (backward compatible)
-          - [CPU], [CPU:1]  base section plus numbered extras
-          - [CPU:0], [CPU:1] all-numbered instances
-
-        Args:
-            config (ConfigParser): reference to the configuration
-            base_name (str): base section name (e.g. 'CPU', 'HD')
-        Returns:
-            List[str]: ordered list of matching section names
-        """
-        sections: List[str] = []
-        if config.has_section(base_name):
-            sections.append(base_name)
-        prefix = f"{base_name}:"
-        numbered = sorted(
-            [s for s in config.sections() if s.startswith(prefix) and s[len(prefix):].isdigit()],
-            key=lambda s: int(s[len(prefix):])
-        )
-        sections.extend(numbered)
-        return sections
 
     def check_dependencies(self) -> str:  # pylint: disable=too-many-return-statements
         """Check run-time dependencies of smfc:
@@ -100,7 +62,7 @@ class Service:
         no_drivetemp: bool = False
 
         # Check if `ipmitool` command is available.
-        path = self.config[Ipmi.CS_IPMI].get(Ipmi.CV_IPMI_COMMAND, "/usr/bin/ipmitool")
+        path = self.config.ipmi.command
         if not os.path.exists(path):
             return f"ERROR: ipmitool command cannot be found {path}!"
 
@@ -109,21 +71,19 @@ class Service:
             modules = file.read()
 
         # Check the kernel modules for CPU fan controller.
-        cpu_sections = self._get_controller_sections(self.config, CpuFc.CS_CPU_FC)
-        if any(self.config[s].getboolean(CpuFc.CV_CPU_FC_ENABLED, fallback=False) for s in cpu_sections):
+        if any(cfg.enabled for cfg in self.config.cpu):
             if "coretemp" not in modules and "k10temp" not in modules:
                 return "ERROR: coretemp or k10temp kernel module must be loaded!"
 
         # Check dependencies for HD fan controller.
-        hd_sections = [s for s in self._get_controller_sections(self.config, HdFc.CS_HD_FC)
-                       if self.config[s].getboolean(HdFc.CV_HD_FC_ENABLED, fallback=False)]
-        if hd_sections:
+        enabled_hd_configs = [cfg for cfg in self.config.hd if cfg.enabled]
+        if enabled_hd_configs:
             # Check if `drivetemp` module is loaded.
             if "drivetemp" not in modules:
                 no_drivetemp = True
-            for s in hd_sections:
+            for cfg in enabled_hd_configs:
                 # Check if `smartctl` command is available.
-                path = self.config[s].get(HdFc.CV_HD_FC_SMARTCTL_PATH, "/usr/sbin/smartctl")
+                path = cfg.smartctl_path
                 if not os.path.exists(path):
                     no_smartctl = True
                 # If neither `drivetemp` nor `smartctl` is available.
@@ -131,21 +91,19 @@ class Service:
                     return (f"ERROR: drivetemp kernel module must be loaded or "
                             f"smartctl command ({path}) must be installed!")
                 # If Standby Guard feature enabled, `smartctl` command should be available.
-                sge = self.config[s].getboolean(HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED, fallback=False)
-                if sge and no_smartctl:
+                if cfg.standby_guard_enabled and no_smartctl:
                     return f"ERROR: smartctl command ({path}) must be installed for Standby Guard feature!"
 
         # Check dependencies for GPU fan controller.
-        gpu_sections = [s for s in self._get_controller_sections(self.config, GpuFc.CS_GPU_FC)
-                        if self.config[s].getboolean(GpuFc.CV_GPU_FC_ENABLED, fallback=False)]
-        for s in gpu_sections:
-            gpu_type = self.config[s].get(GpuFc.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
-            if gpu_type == "nvidia":
-                path = self.config[s].get(GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH, "/usr/bin/nvidia-smi")
-            elif gpu_type == "amd":
-                path = self.config[s].get(GpuFc.CV_GPU_FC_ROCM_SMI_PATH, "/usr/bin/rocm-smi")
+        for cfg in self.config.gpu:
+            if not cfg.enabled:
+                continue
+            if cfg.gpu_type == "nvidia":
+                path = cfg.nvidia_smi_path
+            elif cfg.gpu_type == "amd":
+                path = cfg.rocm_smi_path
             else:
-                return f"ERROR: invalid value: {GpuFc.CV_GPU_FC_GPU_TYPE}={gpu_type}."
+                return f"ERROR: invalid value: gpu_type={cfg.gpu_type}."
             if not os.path.exists(path):
                 return f"ERROR: {path} command cannot be found!"
 
@@ -161,7 +119,7 @@ class Service:
         levels: List[Tuple[str, List[int], int, float]] = []
         for fc in self.controllers:
             if fc.deferred_apply and (fc.last_level > 0 or isinstance(fc, ConstFc)):
-                levels.append((fc.name, fc.ipmi_zone, fc.last_level, fc.last_temp))
+                levels.append((fc.name, fc.config.ipmi_zone, fc.last_level, fc.last_temp))
         return levels
 
     def _apply_fan_levels(self) -> None:
@@ -212,7 +170,7 @@ class Service:
         """
         zone_owners: Dict[int, List[str]] = {}
         for fc in self.controllers:
-            for zone in fc.ipmi_zone:
+            for zone in fc.config.ipmi_zone:
                 zone_owners.setdefault(zone, []).append(fc.name)
         if self.log.log_level >= Log.LOG_DEBUG:
             self.log.msg(Log.LOG_DEBUG, f"IPMI zone ownership: {dict(zone_owners)}")
@@ -282,23 +240,11 @@ class Service:
             self.log.msg(Log.LOG_CONFIG, f"   log_output = {self.log.log_output}")
 
         # Parse and load configuration file.
-        self.config = ConfigParser()
-        if not self.config or not self.config.read(parsed_results.config_file):
-            self.log.msg(Log.LOG_ERROR, f"Cannot load configuration file ({parsed_results.config_file})")
+        try:
+            self.config = Config(parsed_results.config_file)
+        except (FileNotFoundError, ValueError) as e:
+            self.log.msg(Log.LOG_ERROR, f"Configuration error: {e}")
             sys.exit(6)
-        # Backward compatibility: accept old section names (with 'zone' tag).
-        for old_name, new_name in {
-            "CPU zone": CpuFc.CS_CPU_FC,
-            "HD zone": HdFc.CS_HD_FC,
-            "NVME zone": NvmeFc.CS_NVME_FC,
-            "GPU zone": GpuFc.CS_GPU_FC,
-            "CONST zone": ConstFc.CS_CONST_FC
-        }.items():
-            if self.config.has_section(old_name) and not self.config.has_section(new_name):
-                self.config[new_name] = self.config[old_name]
-                self.config.remove_section(old_name)
-                self.log.msg(Log.LOG_INFO, f"Deprecated section name [{old_name}], " \
-                                           "please update your configuration file.")
         self.log.msg(Log.LOG_DEBUG, f"Configuration file ({parsed_results.config_file}) loaded")
 
         # Check run-time dependencies (commands, kernel modules) if `-nd` command line option is not specified.
@@ -308,9 +254,9 @@ class Service:
                 self.log.msg(Log.LOG_ERROR, error_msg)
                 sys.exit(7)
 
-        # Create an Ipmi class instances.
+        # Create an Ipmi class instance.
         try:
-            self.ipmi = Ipmi(self.log, self.config, self.sudo)
+            self.ipmi = Ipmi(self.log, self.config.ipmi, self.sudo)
             old_mode = self.ipmi.get_fan_mode()
         except (ValueError, FileNotFoundError, RuntimeError) as e:
             self.log.msg(Log.LOG_ERROR, f"{e}.")
@@ -338,31 +284,31 @@ class Service:
 
         # Create enabled fan controller instances.
         self.controllers = []
-        for section in self._get_controller_sections(self.config, CpuFc.CS_CPU_FC):
-            if self.config[section].getboolean(CpuFc.CV_CPU_FC_ENABLED, fallback=False):
-                self.log.msg(Log.LOG_DEBUG, f"CPU fan controller [{section}] enabled")
-                self.controllers.append(CpuFc(self.log, self.udevc, self.ipmi, self.config, section))
-                time.sleep(self.ipmi.fan_level_delay)
-        for section in self._get_controller_sections(self.config, HdFc.CS_HD_FC):
-            if self.config[section].getboolean(HdFc.CV_HD_FC_ENABLED, fallback=False):
-                self.log.msg(Log.LOG_DEBUG, f"HD fan controller [{section}] enabled")
-                self.controllers.append(HdFc(self.log, self.udevc, self.ipmi, self.config, self.sudo, section))
-                time.sleep(self.ipmi.fan_level_delay)
-        for section in self._get_controller_sections(self.config, NvmeFc.CS_NVME_FC):
-            if self.config[section].getboolean(NvmeFc.CV_NVME_FC_ENABLED, fallback=False):
-                self.log.msg(Log.LOG_DEBUG, f"NVME fan controller [{section}] enabled")
-                self.controllers.append(NvmeFc(self.log, self.udevc, self.ipmi, self.config, section))
-                time.sleep(self.ipmi.fan_level_delay)
-        for section in self._get_controller_sections(self.config, GpuFc.CS_GPU_FC):
-            if self.config[section].getboolean(GpuFc.CV_GPU_FC_ENABLED, fallback=False):
-                self.log.msg(Log.LOG_DEBUG, f"GPU fan controller [{section}] enabled")
-                self.controllers.append(GpuFc(self.log, self.ipmi, self.config, section))
-                time.sleep(self.ipmi.fan_level_delay)
-        for section in self._get_controller_sections(self.config, ConstFc.CS_CONST_FC):
-            if self.config[section].getboolean(ConstFc.CV_CONST_FC_ENABLED, fallback=False):
-                self.log.msg(Log.LOG_DEBUG, f"CONST fan controller [{section}] enabled")
-                self.controllers.append(ConstFc(self.log, self.ipmi, self.config, section))
-                time.sleep(self.ipmi.fan_level_delay)
+        for cfg in self.config.cpu:
+            if cfg.enabled:
+                self.log.msg(Log.LOG_DEBUG, f"CPU fan controller [{cfg.section}] enabled")
+                self.controllers.append(CpuFc(self.log, self.udevc, self.ipmi, cfg))
+                time.sleep(self.config.ipmi.fan_level_delay)
+        for cfg in self.config.hd:
+            if cfg.enabled:
+                self.log.msg(Log.LOG_DEBUG, f"HD fan controller [{cfg.section}] enabled")
+                self.controllers.append(HdFc(self.log, self.udevc, self.ipmi, cfg, self.sudo))
+                time.sleep(self.config.ipmi.fan_level_delay)
+        for cfg in self.config.nvme:
+            if cfg.enabled:
+                self.log.msg(Log.LOG_DEBUG, f"NVME fan controller [{cfg.section}] enabled")
+                self.controllers.append(NvmeFc(self.log, self.udevc, self.ipmi, cfg))
+                time.sleep(self.config.ipmi.fan_level_delay)
+        for cfg in self.config.gpu:
+            if cfg.enabled:
+                self.log.msg(Log.LOG_DEBUG, f"GPU fan controller [{cfg.section}] enabled")
+                self.controllers.append(GpuFc(self.log, self.ipmi, cfg))
+                time.sleep(self.config.ipmi.fan_level_delay)
+        for cfg in self.config.const:
+            if cfg.enabled:
+                self.log.msg(Log.LOG_DEBUG, f"CONST fan controller [{cfg.section}] enabled")
+                self.controllers.append(ConstFc(self.log, self.ipmi, cfg))
+                time.sleep(self.config.ipmi.fan_level_delay)
 
         # If none of the fan controllers is enabled.
         if not self.controllers:
@@ -373,11 +319,11 @@ class Service:
         self.shared_zones = self._check_shared_zones()
         if self.shared_zones:
             for fc in self.controllers:
-                if set(fc.ipmi_zone) & self.shared_zones:
+                if set(fc.config.ipmi_zone) & self.shared_zones:
                     fc.deferred_apply = True
 
         # Calculate the wait time in the main loop.
-        wait = min(fc.polling for fc in self.controllers) / 2
+        wait = min(fc.config.polling for fc in self.controllers) / 2
         self.log.msg(Log.LOG_DEBUG, f"Main loop sleep time = {wait} sec")
 
         # Main execution loop.
