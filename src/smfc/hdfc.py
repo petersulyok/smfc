@@ -48,6 +48,11 @@ class HdFc(FanController):
         # Save sudo flag.
         self.sudo = sudo
 
+        # Validate that no NVMe devices are listed.
+        for name in self.hd_device_names:
+            if "nvme" in name.lower():
+                raise ValueError(f"NVMe drives are not allowed in [{cfg.section}], use [NVME] instead: '{name}'")
+
         # Iterate through each disk.
         self.hwmon_path = []
         for i in range(len(self.hd_device_names)):
@@ -69,6 +74,8 @@ class HdFc(FanController):
         if cfg.standby_guard_enabled and self.count > 1:
             self.standby_array_states = [False] * self.count
             # Validate standby_hd_limit against count.
+            if cfg.standby_hd_limit < 0:
+                raise ValueError("standby_hd_limit < 0")
             if cfg.standby_hd_limit > self.count:
                 raise ValueError("standby_hd_limit > count")
             # Get the current power state of the HD array.

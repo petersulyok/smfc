@@ -129,13 +129,6 @@ class TestData:
             my_config.write(f)
         return name
 
-    def create_config_file_from_str(self, content: str) -> str:
-        """Creates a config file from a raw string content."""
-        h, name = tempfile.mkstemp(prefix="config", suffix=".conf", dir=self.td_dir)
-        with os.fdopen(h, "w+t") as f:
-            f.write(content)
-        return name
-
     def create_command_file(self, content: str = "echo OK") -> str:
         """Creates an executable bash script."""
         h, name = tempfile.mkstemp(suffix=".sh", dir=self.td_dir)

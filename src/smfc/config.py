@@ -78,23 +78,23 @@ class NvmeConfig:
 @dataclass
 class GpuConfig:
     """Configuration for GPU fan controller."""
-    section: str            # Section name used for logging (e.g. "GPU", "GPU:1")
-    enabled: bool           # Fan controller enabled
-    ipmi_zone: List[int]    # IPMI zone(s) assigned to the controller
-    temp_calc: int          # Temperature calculation method (0-min, 1-avg, 2-max)
-    steps: int              # Discrete steps in temperatures and fan levels
-    sensitivity: float      # Temperature change to activate fan controller (C)
-    polling: float          # Polling interval to read temperature (sec)
-    min_temp: float         # Minimum temperature value (C)
-    max_temp: float         # Maximum temperature value (C)
-    min_level: int          # Minimum fan level (0..100%)
-    max_level: int          # Maximum fan level (0..100%)
-    smoothing: int          # Moving average window size for temperature readings (1=disabled)
-    gpu_type: str           # GPU type: 'nvidia' or 'amd'
-    gpu_device_ids: List[int]  # GPU device IDs (indexes)
-    nvidia_smi_path: str    # Path for 'nvidia-smi' command
-    rocm_smi_path: str      # Path for 'rocm-smi' command
-    amd_temp_sensor: int    # AMD temperature sensor (0-junction, 1-edge, 2-memory)
+    section: str                # Section name used for logging (e.g. "GPU", "GPU:1")
+    enabled: bool               # Fan controller enabled
+    ipmi_zone: List[int]        # IPMI zone(s) assigned to the controller
+    temp_calc: int              # Temperature calculation method (0-min, 1-avg, 2-max)
+    steps: int                  # Discrete steps in temperatures and fan levels
+    sensitivity: float          # Temperature change to activate fan controller (C)
+    polling: float              # Polling interval to read temperature (sec)
+    min_temp: float             # Minimum temperature value (C)
+    max_temp: float             # Maximum temperature value (C)
+    min_level: int              # Minimum fan level (0..100%)
+    max_level: int              # Maximum fan level (0..100%)
+    smoothing: int              # Moving average window size for temperature readings (1=disabled)
+    gpu_type: str               # GPU type: 'nvidia' or 'amd'
+    gpu_device_ids: List[int]   # GPU device IDs (indexes)
+    nvidia_smi_path: str        # Path for 'nvidia-smi' command
+    rocm_smi_path: str          # Path for 'rocm-smi' command
+    amd_temp_sensor: int        # AMD temperature sensor (0-junction, 1-edge, 2-memory)
 
 
 @dataclass
@@ -339,8 +339,9 @@ class Config:
             for name in hd_names:
                 if "nvme" in name.lower():
                     raise ValueError(f"NVMe drives are not allowed in [{s}], use [NVME] instead: '{name}'")
+            standby_guard_enabled = parser[s].getboolean(self.CV_HD_STANDBY_GUARD_ENABLED, fallback=False)
             standby_hd_limit = parser[s].getint(self.CV_HD_STANDBY_HD_LIMIT, fallback=1)
-            if standby_hd_limit < 0:
+            if standby_guard_enabled and standby_hd_limit < 0:
                 raise ValueError(f"[{s}] {self.CV_HD_STANDBY_HD_LIMIT} < 0")
             cfg = HdConfig(
                 section=s,
@@ -357,7 +358,7 @@ class Config:
                 smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=1),
                 hd_names=hd_names,
                 smartctl_path=parser[s].get(self.CV_HD_SMARTCTL_PATH, "/usr/sbin/smartctl"),
-                standby_guard_enabled=parser[s].getboolean(self.CV_HD_STANDBY_GUARD_ENABLED, fallback=False),
+                standby_guard_enabled=standby_guard_enabled,
                 standby_hd_limit=standby_hd_limit,
             )
             self._validate_fan_controller_config(cfg, s)

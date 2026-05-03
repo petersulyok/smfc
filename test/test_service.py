@@ -130,6 +130,26 @@ class TestService:
         assert service.check_dependencies() == "", error
         del my_td
 
+    def test_check_dependencies_disabled_gpu(self, mocker: MockerFixture, tmp_path):
+        """Positive unit test: GPU section present with enabled=0 is skipped by check_dependencies()."""
+        my_td = TestData()
+        ipmi_command = my_td.create_ipmi_command()
+        modules = my_td.create_text_file("something\ncoretemp\n")
+        original_open = open
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mocker.patch("builtins.open", MagicMock(side_effect=lambda path, *a, **kw:
+            original_open(modules, *a, **kw) if path == "/proc/modules" else original_open(path, *a, **kw)))
+        config_content = (f"[Ipmi]\ncommand = {ipmi_command}\n"
+                          f"[CPU]\nenabled = 1\n"
+                          f"[GPU]\nenabled = 0\n")
+        config_file = tmp_path / "test.conf"
+        config_file.write_text(config_content)
+        service = Service()
+        service.config = Config(str(config_file))
+        assert service.check_dependencies() == ""
+        del my_td
+
     @pytest.mark.parametrize(
         "error",
         [
@@ -472,64 +492,46 @@ class TestService:
             if self.sleep_counter >= 10:
                 sys.exit(100)
 
-        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser,
-                              section: str = Config.CS_CPU) -> None:
+        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
             nonlocal my_td
             self.hwmon_path = my_td.cpu_files
-            count = len(my_td.cpu_files)
-            FanController.__init__(self, log, ipmi, f"{Ipmi.CPU_ZONE} {Ipmi.HD_ZONE}", section, count,
-                                   1, 5, 5, 0, 30, 60, 35, 100,)
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(my_td.cpu_files))
 
-        def mocked_hdfc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool,
-                             section: str = Config.CS_HD) -> None:
+        def mocked_hdfc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg, sudo: bool) -> None:
             nonlocal my_td
-            nonlocal cmd_smart
             self.hd_device_names = my_td.hd_name_list
             self.hwmon_path = my_td.hd_files
-            count = len(my_td.hd_files)
             self.sudo = sudo
-            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", section, count,
-                                   1, 5, 2, 0, 32, 46, 35, 100)
-            self.smartctl_path = cmd_smart
-            self.standby_guard_enabled = True
-            self.standby_hd_limit = 1
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(my_td.hd_files))
             self.standby_array_states = [False] * self.count
             self.standby_flag = False
             self.standby_change_timestamp = time.monotonic()
 
-        def mocked_gpufc_init(self, log: Log, ipmi: Ipmi, config: ConfigParser,
-                              section: str = Config.CS_GPU) -> None:
+        def mocked_gpufc_init(self, log: Log, ipmi: Ipmi, cfg) -> None:
             nonlocal my_td
-            nonlocal cmd_nvidia
-            self.gpu_device_ids = [0]
-            count = 1
-            self.gpu_type = "nvidia"
-            self.nvidia_smi_path = cmd_nvidia
-            self.rocm_smi_path = "/usr/bin/rocm-smi"
             self.smi_called = 0
-            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", section, count,
-                                   1, 5, 2, 0, 45, 70, 35, 100)
+            self.hwmon_path = []
+            self.gpu_temperature = []
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(cfg.gpu_device_ids))
 
-        def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser,
-                               section: str = Config.CS_NVME) -> None:
+        def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
             nonlocal my_td
             self.nvme_device_names = my_td.nvme_name_list
             self.hwmon_path = my_td.nvme_files
-            count = len(my_td.nvme_files)
-            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", section, count,
-                                   1, 5, 2, 0, 30, 50, 35, 100,)
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(my_td.nvme_files))
 
-        def mocked_constfc_init(self, log: Log, ipmi: Ipmi, config: ConfigParser,
-                                section: str = Config.CS_CONST) -> None:
+        def mocked_constfc_init(self, log: Log, ipmi: Ipmi, cfg) -> None:
             self.ipmi = ipmi
             self.log = log
-            self.name = section
-            self.config = MockControllerConfig(ipmi_zone=[Ipmi.HD_ZONE], polling=30)
-            self.polling = 30
-            self.level = 50
+            self.name = cfg.section
+            self.config = cfg
             self.last_time = 0
             self.last_temp = 0.0
-            self.last_level = self.level
+            self.last_level = cfg.level
             self.deferred_apply = False
 
         # pragma pylint: enable=unused-argument
@@ -1283,7 +1285,7 @@ class TestService:
         # Apply deferred only to controllers on shared zones
         if service.shared_zones:
             for fc in service.controllers:
-                if set(fc.ipmi_zone) & service.shared_zones:
+                if set(fc.config.ipmi_zone) & service.shared_zones:
                     fc.deferred_apply = True
         assert cpu_fc.deferred_apply is False, "CPU on zone 0 should not be deferred"
         assert hd_fc.deferred_apply is True, "HD on shared zone 1 should be deferred"

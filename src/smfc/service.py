@@ -100,10 +100,8 @@ class Service:
                 continue
             if cfg.gpu_type == "nvidia":
                 path = cfg.nvidia_smi_path
-            elif cfg.gpu_type == "amd":
-                path = cfg.rocm_smi_path
             else:
-                return f"ERROR: invalid value: gpu_type={cfg.gpu_type}."
+                path = cfg.rocm_smi_path
             if not os.path.exists(path):
                 return f"ERROR: {path} command cannot be found!"
 

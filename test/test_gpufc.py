@@ -141,57 +141,14 @@ class TestGpuFc:
             ("0, 101, 1", "GpuFc.__init__() 7"),
         ],
     )
-    def test_init_n1(self, mocker: MockerFixture, device_ids: str, error: str):
+    def test_init_n1(self, device_ids: str, error: str):
         """Negative unit test for GpuFc.__init__() method. It contains the following steps:
-        - mock print(), smfc.GpuFc._exec_smi()
         - create GPU config using factory function with invalid gpu_device_ids
-        - initialize a Log, Ipmi, and GpuFc classes
-        - ASSERT: if no assertion is raised for invalid values at initialization
+        - ASSERT: if no ValueError is raised during config parsing
         """
-        my_td = TestData()
-        count = 3
-        nvidia_smi_cmd = my_td.create_nvidia_smi_command(count)
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
-        mock_exec_smi = MagicMock()
-        mock_exec_smi.return_value = subprocess.CompletedProcess([], 0, stdout="40\n"*count)
-        mocker.patch("smfc.GpuFc._exec_smi", mock_exec_smi)
-        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-        my_ipmi = Ipmi.__new__(Ipmi)
         with pytest.raises(Exception) as cm:
-            # This will raise during config parsing
-            cfg = create_gpu_config(enabled=True, gpu_device_ids=Config.parse_gpu_ids(device_ids),
-                                    nvidia_smi_path=nvidia_smi_cmd)
-            GpuFc(my_log, my_ipmi, cfg)
-        assert cm.type is ValueError, error
-        del my_td
-
-    @pytest.mark.parametrize(
-        "gpu_type, amd_temp, error",
-        [
-            # Invalid gpu_type
-            ("invalid", 0, "GpuFc.__init__() 8"),
-            # Invalid amd_temp_sensor for nvidia type
-            ("nvidia", 3, "GpuFc.__init__() 9"),
-        ],
-    )
-    def test_init_n2(self, mocker: MockerFixture, gpu_type: str, amd_temp: int, error: str):
-        """Negative unit test for GpuFc.__init__() method. It contains the following steps:
-        - mock print(), smfc.GpuFc._exec_smi()
-        - create GPU config using factory function with invalid gpu_type or amd_temp
-        - initialize a Log, Ipmi, and GpuFc classes
-        - ASSERT: if no ValueError is raised for invalid values at initialization
-        """
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
-        mock_exec_smi = MagicMock()
-        mock_exec_smi.return_value = subprocess.CompletedProcess([], 0, stdout="40\n")
-        mocker.patch("smfc.GpuFc._exec_smi", mock_exec_smi)
-        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-        my_ipmi = Ipmi.__new__(Ipmi)
-        with pytest.raises(Exception) as cm:
-            cfg = create_gpu_config(enabled=True, gpu_type=gpu_type, amd_temp_sensor=amd_temp)
-            GpuFc(my_log, my_ipmi, cfg)
+            # Raises during config parsing, before GpuFc is constructed
+            create_gpu_config(enabled=True, gpu_device_ids=Config.parse_gpu_ids(device_ids))
         assert cm.type is ValueError, error
 
     # pylint: disable=protected-access

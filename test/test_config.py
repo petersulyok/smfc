@@ -440,7 +440,7 @@ standby_hd_limit = 2
 
     def test_hd_standby_limit_negative_error(self, create_config_file):
         """Negative test: HdConfig raises error for negative standby_hd_limit."""
-        config_path = create_config_file("[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\nstandby_hd_limit = -1\n")
+        config_path = create_config_file("[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\nstandby_guard_enabled = 1\nstandby_hd_limit = -1\n")
         with pytest.raises(ValueError):
             Config(config_path)
 

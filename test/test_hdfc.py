@@ -242,7 +242,7 @@ class TestHdFc:
         expected_args = []
         if sudo:
             expected_args.append("sudo")
-        expected_args.append(my_hdfc.smartctl_path)
+        expected_args.append(my_hdfc.config.smartctl_path)
         expected_args.extend(args)
         mock_subprocess_run.assert_called_with(expected_args, capture_output=True, check=False, text=True)
         assert mock_subprocess_run.call_count == 1, error
