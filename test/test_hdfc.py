@@ -117,16 +117,16 @@ class TestHdFc:
         assert my_hdfc.count == count, error
         assert my_hdfc.sudo is False
         assert my_hdfc.config.temp_calc == FanController.CALC_AVG, error
-        assert my_hdfc.config.steps == 4, error
-        assert my_hdfc.config.sensitivity == 2, error
-        assert my_hdfc.config.polling == 10, error
-        assert my_hdfc.config.min_temp == 32, error
-        assert my_hdfc.config.max_temp == 46, error
-        assert my_hdfc.config.min_level == 35, error
-        assert my_hdfc.config.max_level == 100, error
-        assert my_hdfc.config.smoothing == 1, error
+        assert my_hdfc.config.steps == Config.DV_HD_STEPS, error
+        assert my_hdfc.config.sensitivity == Config.DV_HD_SENSITIVITY, error
+        assert my_hdfc.config.polling == Config.DV_HD_POLLING, error
+        assert my_hdfc.config.min_temp == Config.DV_HD_MIN_TEMP, error
+        assert my_hdfc.config.max_temp == Config.DV_HD_MAX_TEMP, error
+        assert my_hdfc.config.min_level == Config.DV_HD_MIN_LEVEL, error
+        assert my_hdfc.config.max_level == Config.DV_HD_MAX_LEVEL, error
+        assert my_hdfc.config.smoothing == Config.DV_HD_SMOOTHING, error
         assert my_hdfc.hd_device_names == my_td.hd_name_list, error
-        assert my_hdfc.config.smartctl_path == "/usr/sbin/smartctl", error
+        assert my_hdfc.config.smartctl_path == Config.DV_HD_SMARTCTL_PATH, error
         assert my_hdfc.hwmon_path == my_td.hd_files, error
         del my_td
 

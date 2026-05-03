@@ -182,8 +182,8 @@ class FanController:
         """
         current_time: float  # Current system timestamp (measured)
         current_temp: float  # Current temperature (measured)
-        current_level: int  # Current fan level (calculated)
-        current_gain: int  # Current gain (calculated)
+        current_level: int   # Current fan level (calculated)
+        current_gain: int    # Current gain (calculated)
 
         # Step 1: check the elapsed time.
         current_time = time.monotonic()

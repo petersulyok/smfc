@@ -104,14 +104,14 @@ class TestNvmeFc:
         assert mynvmefc.name == cfg.section, error
         assert mynvmefc.count == count, error
         assert mynvmefc.config.temp_calc == FanController.CALC_AVG, error
-        assert mynvmefc.config.steps == 4, error
-        assert mynvmefc.config.sensitivity == 2, error
-        assert mynvmefc.config.polling == 10, error
-        assert mynvmefc.config.min_temp == 35, error
-        assert mynvmefc.config.max_temp == 70, error
-        assert mynvmefc.config.min_level == 35, error
-        assert mynvmefc.config.max_level == 100, error
-        assert mynvmefc.config.smoothing == 1, error
+        assert mynvmefc.config.steps == Config.DV_NVME_STEPS, error
+        assert mynvmefc.config.sensitivity == Config.DV_NVME_SENSITIVITY, error
+        assert mynvmefc.config.polling == Config.DV_NVME_POLLING, error
+        assert mynvmefc.config.min_temp == Config.DV_NVME_MIN_TEMP, error
+        assert mynvmefc.config.max_temp == Config.DV_NVME_MAX_TEMP, error
+        assert mynvmefc.config.min_level == Config.DV_NVME_MIN_LEVEL, error
+        assert mynvmefc.config.max_level == Config.DV_NVME_MAX_LEVEL, error
+        assert mynvmefc.config.smoothing == Config.DV_NVME_SMOOTHING, error
         assert mynvmefc.nvme_device_names == my_td.nvme_name_list, error
         assert mynvmefc.hwmon_path == my_td.nvme_files, error
         del my_td

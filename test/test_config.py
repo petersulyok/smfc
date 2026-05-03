@@ -148,9 +148,9 @@ class TestConfigFileLoading:
     def test_config_load_minimal(self, create_config):
         """Positive test: Config loads minimal valid configuration."""
         cfg = create_config("[Ipmi]\ncommand = /usr/bin/ipmitool\n")
-        assert cfg.ipmi.command == "/usr/bin/ipmitool"
-        assert cfg.ipmi.fan_mode_delay == 10
-        assert cfg.ipmi.fan_level_delay == 2
+        assert cfg.ipmi.command == Config.DV_IPMI_COMMAND
+        assert cfg.ipmi.fan_mode_delay == Config.DV_IPMI_FAN_MODE_DELAY
+        assert cfg.ipmi.fan_level_delay == Config.DV_IPMI_FAN_LEVEL_DELAY
         assert cfg.cpu == []
         assert cfg.hd == []
         assert cfg.nvme == []
@@ -201,11 +201,11 @@ class TestIpmiConfigParsing:
     def test_ipmi_defaults(self, create_config):
         """Positive test: IpmiConfig uses correct default values."""
         cfg = create_config("[Ipmi]\n")
-        assert cfg.ipmi.command == "/usr/bin/ipmitool"
-        assert cfg.ipmi.fan_mode_delay == 10
-        assert cfg.ipmi.fan_level_delay == 2
-        assert cfg.ipmi.remote_parameters == ""
-        assert cfg.ipmi.platform_name == "auto"
+        assert cfg.ipmi.command == Config.DV_IPMI_COMMAND
+        assert cfg.ipmi.fan_mode_delay == Config.DV_IPMI_FAN_MODE_DELAY
+        assert cfg.ipmi.fan_level_delay == Config.DV_IPMI_FAN_LEVEL_DELAY
+        assert cfg.ipmi.remote_parameters == Config.DV_IPMI_REMOTE_PARAMETERS
+        assert cfg.ipmi.platform_name == Config.DV_IPMI_PLATFORM_NAME
 
     def test_ipmi_custom_values(self, create_config):
         """Positive test: IpmiConfig parses custom values."""
@@ -251,14 +251,14 @@ class TestCpuConfigParsing:
         assert cpu.enabled is True
         assert cpu.ipmi_zone == [Config.CPU_ZONE]
         assert cpu.temp_calc == Config.CALC_AVG
-        assert cpu.steps == 6
-        assert cpu.sensitivity == 3.0
-        assert cpu.polling == 2.0
-        assert cpu.min_temp == 30.0
-        assert cpu.max_temp == 60.0
-        assert cpu.min_level == 35
-        assert cpu.max_level == 100
-        assert cpu.smoothing == 1
+        assert cpu.steps == Config.DV_CPU_STEPS
+        assert cpu.sensitivity == Config.DV_CPU_SENSITIVITY
+        assert cpu.polling == Config.DV_CPU_POLLING
+        assert cpu.min_temp == Config.DV_CPU_MIN_TEMP
+        assert cpu.max_temp == Config.DV_CPU_MAX_TEMP
+        assert cpu.min_level == Config.DV_CPU_MIN_LEVEL
+        assert cpu.max_level == Config.DV_CPU_MAX_LEVEL
+        assert cpu.smoothing == Config.DV_CPU_SMOOTHING
 
     def test_cpu_custom_values(self, create_config):
         """Positive test: CpuConfig parses custom values."""
@@ -388,18 +388,18 @@ class TestHdConfigParsing:
         assert hd.enabled is True
         assert hd.ipmi_zone == [Config.HD_ZONE]
         assert hd.temp_calc == Config.CALC_AVG
-        assert hd.steps == 4
-        assert hd.sensitivity == 2.0
-        assert hd.polling == 10.0
-        assert hd.min_temp == 32.0
-        assert hd.max_temp == 46.0
-        assert hd.min_level == 35
-        assert hd.max_level == 100
-        assert hd.smoothing == 1
+        assert hd.steps == Config.DV_HD_STEPS
+        assert hd.sensitivity == Config.DV_HD_SENSITIVITY
+        assert hd.polling == Config.DV_HD_POLLING
+        assert hd.min_temp == Config.DV_HD_MIN_TEMP
+        assert hd.max_temp == Config.DV_HD_MAX_TEMP
+        assert hd.min_level == Config.DV_HD_MIN_LEVEL
+        assert hd.max_level == Config.DV_HD_MAX_LEVEL
+        assert hd.smoothing == Config.DV_HD_SMOOTHING
         assert hd.hd_names == ["/dev/sda"]
-        assert hd.smartctl_path == "/usr/sbin/smartctl"
+        assert hd.smartctl_path == Config.DV_HD_SMARTCTL_PATH
         assert hd.standby_guard_enabled is False
-        assert hd.standby_hd_limit == 1
+        assert hd.standby_hd_limit == Config.DV_HD_STANDBY_HD_LIMIT
 
     def test_hd_multi_names_newline(self, create_config):
         """Positive test: HdConfig parses multiple device names with newlines."""
@@ -534,8 +534,8 @@ class TestNvmeConfigParsing:
         assert nvme.section == "NVME"
         assert nvme.enabled is True
         assert nvme.ipmi_zone == [Config.HD_ZONE]
-        assert nvme.min_temp == 35.0
-        assert nvme.max_temp == 70.0
+        assert nvme.min_temp == Config.DV_NVME_MIN_TEMP
+        assert nvme.max_temp == Config.DV_NVME_MAX_TEMP
         assert nvme.nvme_names == ["/dev/nvme0n1"]
 
     def test_nvme_enabled_without_names_error(self, create_config_file):
@@ -628,13 +628,13 @@ class TestGpuConfigParsing:
         gpu = cfg.gpu[0]
         assert gpu.section == "GPU"
         assert gpu.enabled is True
-        assert gpu.gpu_type == "nvidia"
-        assert gpu.gpu_device_ids == [0]
-        assert gpu.nvidia_smi_path == "/usr/bin/nvidia-smi"
-        assert gpu.rocm_smi_path == "/usr/bin/rocm-smi"
-        assert gpu.amd_temp_sensor == 0
-        assert gpu.min_temp == 40.0
-        assert gpu.max_temp == 70.0
+        assert gpu.gpu_type == Config.DV_GPU_TYPE
+        assert gpu.gpu_device_ids == Config.parse_gpu_ids(Config.DV_GPU_DEVICE_IDS)
+        assert gpu.nvidia_smi_path == Config.DV_GPU_NVIDIA_SMI_PATH
+        assert gpu.rocm_smi_path == Config.DV_GPU_ROCM_SMI_PATH
+        assert gpu.amd_temp_sensor == Config.DV_GPU_AMD_TEMP_SENSOR
+        assert gpu.min_temp == Config.DV_GPU_MIN_TEMP
+        assert gpu.max_temp == Config.DV_GPU_MAX_TEMP
 
     def test_gpu_amd_type(self, create_config):
         """Positive test: GpuConfig parses AMD GPU type."""
@@ -690,8 +690,8 @@ class TestConstConfigParsing:
         assert const.section == "CONST"
         assert const.enabled is True
         assert const.ipmi_zone == [Config.HD_ZONE]
-        assert const.polling == 30.0
-        assert const.level == 50
+        assert const.polling == Config.DV_CONST_POLLING
+        assert const.level == Config.DV_CONST_LEVEL
 
     def test_const_custom_values(self, create_config):
         """Positive test: ConstConfig parses custom values."""

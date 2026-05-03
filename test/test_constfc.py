@@ -64,8 +64,8 @@ class TestConstFc:
         assert my_constfc.ipmi == my_ipmi
         assert my_constfc.config.ipmi_zone == [Config.HD_ZONE], error
         assert my_constfc.name == cfg.section, error
-        assert my_constfc.config.polling == 30, error
-        assert my_constfc.config.level == 50, error
+        assert my_constfc.config.polling == Config.DV_CONST_POLLING, error
+        assert my_constfc.config.level == Config.DV_CONST_LEVEL, error
 
     @pytest.mark.parametrize(
         "ipmi_zone, polling, level, error",

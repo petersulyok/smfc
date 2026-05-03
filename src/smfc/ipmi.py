@@ -124,9 +124,9 @@ class Ipmi:
             self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_IPMI_PLATFORM_NAME} = {self.platform.name} "
                                          f"({type(self.platform).__name__})")
             self.log.msg(Log.LOG_CONFIG, "BMC information:")
-            self.log.msg(Log.LOG_CONFIG, f"   manufacturer name and id = {self.bmc_manufacturer_name} "
+            self.log.msg(Log.LOG_CONFIG, f"   manufacturer name (id) = {self.bmc_manufacturer_name} "
                                          f"({self.bmc_manufacturer_id})")
-            self.log.msg(Log.LOG_CONFIG, f"   product name and id = {self.bmc_product_name} ({self.bmc_product_id})")
+            self.log.msg(Log.LOG_CONFIG, f"   product name (id) = {self.bmc_product_name} ({self.bmc_product_id})")
             self.log.msg(Log.LOG_CONFIG, f"   IPMI version = {self.bmc_ipmi_version}")
             self.log.msg(Log.LOG_CONFIG, f"   firmware revision = {self.bmc_firmware_rev}")
 

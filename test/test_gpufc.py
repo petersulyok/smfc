@@ -117,18 +117,18 @@ class TestGpuFc:
         assert my_gpufc.name == cfg.section, error
         assert my_gpufc.count == count, error
         assert my_gpufc.config.temp_calc == FanController.CALC_AVG, error
-        assert my_gpufc.config.steps == 5, error
-        assert my_gpufc.config.sensitivity == 2, error
-        assert my_gpufc.config.polling == 2, error
-        assert my_gpufc.config.min_temp == 40, error
-        assert my_gpufc.config.max_temp == 70, error
-        assert my_gpufc.config.min_level == 35, error
-        assert my_gpufc.config.max_level == 100, error
-        assert my_gpufc.config.smoothing == 1, error
-        assert my_gpufc.config.gpu_device_ids == [0], error
-        assert my_gpufc.config.nvidia_smi_path == "/usr/bin/nvidia-smi", error
-        assert my_gpufc.config.gpu_type == "nvidia", error
-        assert my_gpufc.config.amd_temp_sensor == 0, error
+        assert my_gpufc.config.steps == Config.DV_GPU_STEPS, error
+        assert my_gpufc.config.sensitivity == Config.DV_GPU_SENSITIVITY, error
+        assert my_gpufc.config.polling == Config.DV_GPU_POLLING, error
+        assert my_gpufc.config.min_temp == Config.DV_GPU_MIN_TEMP, error
+        assert my_gpufc.config.max_temp == Config.DV_GPU_MAX_TEMP, error
+        assert my_gpufc.config.min_level == Config.DV_GPU_MIN_LEVEL, error
+        assert my_gpufc.config.max_level == Config.DV_GPU_MAX_LEVEL, error
+        assert my_gpufc.config.smoothing == Config.DV_GPU_SMOOTHING, error
+        assert my_gpufc.config.gpu_device_ids == Config.parse_gpu_ids(Config.DV_GPU_DEVICE_IDS), error
+        assert my_gpufc.config.nvidia_smi_path == Config.DV_GPU_NVIDIA_SMI_PATH, error
+        assert my_gpufc.config.gpu_type == Config.DV_GPU_TYPE, error
+        assert my_gpufc.config.amd_temp_sensor == Config.DV_GPU_AMD_TEMP_SENSOR, error
 
     @pytest.mark.parametrize(
         "device_ids, error",

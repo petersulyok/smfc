@@ -172,6 +172,64 @@ class Config:
     CPU_ZONE: int = 0   # Default CPU zone ID
     HD_ZONE: int = 1    # Default HD zone ID
 
+    # Default values — [Ipmi] section
+    DV_IPMI_COMMAND: str = "/usr/bin/ipmitool"
+    DV_IPMI_FAN_MODE_DELAY: int = 10
+    DV_IPMI_FAN_LEVEL_DELAY: int = 2
+    DV_IPMI_REMOTE_PARAMETERS: str = ""
+    DV_IPMI_PLATFORM_NAME: str = "auto"
+
+    # Default values — [CPU] section
+    DV_CPU_STEPS: int = 6
+    DV_CPU_SENSITIVITY: float = 3.0
+    DV_CPU_POLLING: float = 2.0
+    DV_CPU_MIN_TEMP: float = 30.0
+    DV_CPU_MAX_TEMP: float = 60.0
+    DV_CPU_MIN_LEVEL: int = 35
+    DV_CPU_MAX_LEVEL: int = 100
+    DV_CPU_SMOOTHING: int = 1
+
+    # Default values — [HD] section
+    DV_HD_STEPS: int = 4
+    DV_HD_SENSITIVITY: float = 2.0
+    DV_HD_POLLING: float = 10.0
+    DV_HD_MIN_TEMP: float = 32.0
+    DV_HD_MAX_TEMP: float = 46.0
+    DV_HD_MIN_LEVEL: int = 35
+    DV_HD_MAX_LEVEL: int = 100
+    DV_HD_SMOOTHING: int = 1
+    DV_HD_SMARTCTL_PATH: str = "/usr/sbin/smartctl"
+    DV_HD_STANDBY_HD_LIMIT: int = 1
+
+    # Default values — [NVME] section
+    DV_NVME_STEPS: int = 4
+    DV_NVME_SENSITIVITY: float = 2.0
+    DV_NVME_POLLING: float = 10.0
+    DV_NVME_MIN_TEMP: float = 35.0
+    DV_NVME_MAX_TEMP: float = 70.0
+    DV_NVME_MIN_LEVEL: int = 35
+    DV_NVME_MAX_LEVEL: int = 100
+    DV_NVME_SMOOTHING: int = 1
+
+    # Default values — [GPU] section
+    DV_GPU_TYPE: str = "nvidia"
+    DV_GPU_STEPS: int = 5
+    DV_GPU_SENSITIVITY: float = 2.0
+    DV_GPU_POLLING: float = 2.0
+    DV_GPU_MIN_TEMP: float = 40.0
+    DV_GPU_MAX_TEMP: float = 70.0
+    DV_GPU_MIN_LEVEL: int = 35
+    DV_GPU_MAX_LEVEL: int = 100
+    DV_GPU_SMOOTHING: int = 1
+    DV_GPU_DEVICE_IDS: str = "0"
+    DV_GPU_NVIDIA_SMI_PATH: str = "/usr/bin/nvidia-smi"
+    DV_GPU_ROCM_SMI_PATH: str = "/usr/bin/rocm-smi"
+    DV_GPU_AMD_TEMP_SENSOR: int = 0
+
+    # Default values — [CONST] section
+    DV_CONST_POLLING: float = 30.0
+    DV_CONST_LEVEL: int = 50
+
     # Parsed configuration dataclasses
     ipmi: IpmiConfig            # IPMI configuration
     cpu: List[CpuConfig]        # List of CPU fan controller configurations
@@ -276,18 +334,18 @@ class Config:
         s = self.CS_IPMI
         if s not in parser:
             raise ValueError(f"Missing mandatory [{s}] section in configuration file")
-        fan_mode_delay = parser[s].getint(self.CV_IPMI_FAN_MODE_DELAY, fallback=10)
+        fan_mode_delay = parser[s].getint(self.CV_IPMI_FAN_MODE_DELAY, fallback=self.DV_IPMI_FAN_MODE_DELAY)
         if fan_mode_delay < 0:
             raise ValueError(f"Negative {self.CV_IPMI_FAN_MODE_DELAY}= parameter ({fan_mode_delay})")
-        fan_level_delay = parser[s].getint(self.CV_IPMI_FAN_LEVEL_DELAY, fallback=2)
+        fan_level_delay = parser[s].getint(self.CV_IPMI_FAN_LEVEL_DELAY, fallback=self.DV_IPMI_FAN_LEVEL_DELAY)
         if fan_level_delay < 0:
             raise ValueError(f"Negative {self.CV_IPMI_FAN_LEVEL_DELAY}= parameter ({fan_level_delay})")
         return IpmiConfig(
-            command=parser[s].get(self.CV_IPMI_COMMAND, "/usr/bin/ipmitool"),
+            command=parser[s].get(self.CV_IPMI_COMMAND, self.DV_IPMI_COMMAND),
             fan_mode_delay=fan_mode_delay,
             fan_level_delay=fan_level_delay,
-            remote_parameters=parser[s].get(self.CV_IPMI_REMOTE_PARAMETERS, fallback=""),
-            platform_name=parser[s].get(self.CV_IPMI_PLATFORM_NAME, fallback="auto"),
+            remote_parameters=parser[s].get(self.CV_IPMI_REMOTE_PARAMETERS, fallback=self.DV_IPMI_REMOTE_PARAMETERS),
+            platform_name=parser[s].get(self.CV_IPMI_PLATFORM_NAME, fallback=self.DV_IPMI_PLATFORM_NAME),
         )
 
     def _parse_cpu_sections(self, parser: ConfigParser) -> List[CpuConfig]:
@@ -306,14 +364,14 @@ class Config:
                 enabled=parser[s].getboolean(self.CV_ENABLED, fallback=False),
                 ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.CPU_ZONE))),
                 temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
-                steps=parser[s].getint(self.CV_STEPS, fallback=6),
-                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=3.0),
-                polling=parser[s].getfloat(self.CV_POLLING, fallback=2.0),
-                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=30.0),
-                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=60.0),
-                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=35),
-                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=100),
-                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=1),
+                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_CPU_STEPS),
+                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_CPU_SENSITIVITY),
+                polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_CPU_POLLING),
+                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_CPU_MIN_TEMP),
+                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=self.DV_CPU_MAX_TEMP),
+                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_CPU_MIN_LEVEL),
+                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_CPU_MAX_LEVEL),
+                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_CPU_SMOOTHING),
             )
             self._validate_fan_controller_config(cfg, s)
             result.append(cfg)
@@ -340,7 +398,7 @@ class Config:
                 if "nvme" in name.lower():
                     raise ValueError(f"NVMe drives are not allowed in [{s}], use [NVME] instead: '{name}'")
             standby_guard_enabled = parser[s].getboolean(self.CV_HD_STANDBY_GUARD_ENABLED, fallback=False)
-            standby_hd_limit = parser[s].getint(self.CV_HD_STANDBY_HD_LIMIT, fallback=1)
+            standby_hd_limit = parser[s].getint(self.CV_HD_STANDBY_HD_LIMIT, fallback=self.DV_HD_STANDBY_HD_LIMIT)
             if standby_guard_enabled and standby_hd_limit < 0:
                 raise ValueError(f"[{s}] {self.CV_HD_STANDBY_HD_LIMIT} < 0")
             cfg = HdConfig(
@@ -348,16 +406,16 @@ class Config:
                 enabled=enabled,
                 ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
                 temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
-                steps=parser[s].getint(self.CV_STEPS, fallback=4),
-                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=2.0),
-                polling=parser[s].getfloat(self.CV_POLLING, fallback=10.0),
-                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=32.0),
-                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=46.0),
-                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=35),
-                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=100),
-                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=1),
+                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_HD_STEPS),
+                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_HD_SENSITIVITY),
+                polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_HD_POLLING),
+                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_HD_MIN_TEMP),
+                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=self.DV_HD_MAX_TEMP),
+                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_HD_MIN_LEVEL),
+                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_HD_MAX_LEVEL),
+                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_HD_SMOOTHING),
                 hd_names=hd_names,
-                smartctl_path=parser[s].get(self.CV_HD_SMARTCTL_PATH, "/usr/sbin/smartctl"),
+                smartctl_path=parser[s].get(self.CV_HD_SMARTCTL_PATH, self.DV_HD_SMARTCTL_PATH),
                 standby_guard_enabled=standby_guard_enabled,
                 standby_hd_limit=standby_hd_limit,
             )
@@ -387,14 +445,14 @@ class Config:
                 enabled=enabled,
                 ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
                 temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
-                steps=parser[s].getint(self.CV_STEPS, fallback=4),
-                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=2.0),
-                polling=parser[s].getfloat(self.CV_POLLING, fallback=10.0),
-                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=35.0),
-                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=70.0),
-                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=35),
-                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=100),
-                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=1),
+                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_NVME_STEPS),
+                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_NVME_SENSITIVITY),
+                polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_NVME_POLLING),
+                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_NVME_MIN_TEMP),
+                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=self.DV_NVME_MAX_TEMP),
+                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_NVME_MIN_LEVEL),
+                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_NVME_MAX_LEVEL),
+                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_NVME_SMOOTHING),
                 nvme_names=nvme_names,
             )
             self._validate_fan_controller_config(cfg, s)
@@ -412,29 +470,29 @@ class Config:
         """
         result = []
         for s in self._get_sections(parser, self.CS_GPU):
-            gpu_type = parser[s].get(self.CV_GPU_TYPE, "nvidia").lower()
+            gpu_type = parser[s].get(self.CV_GPU_TYPE, self.DV_GPU_TYPE).lower()
             if gpu_type not in ["nvidia", "amd"]:
                 raise ValueError(f"[{s}] invalid value: {self.CV_GPU_TYPE}={gpu_type}.")
-            amd_temp_sensor = parser[s].getint(self.CV_GPU_AMD_TEMP_SENSOR, fallback=0)
-            if amd_temp_sensor not in range(0, 3):
+            amd_temp_sensor = parser[s].getint(self.CV_GPU_AMD_TEMP_SENSOR, fallback=self.DV_GPU_AMD_TEMP_SENSOR)
+            if gpu_type == "amd" and amd_temp_sensor not in range(0, 3):
                 raise ValueError(f"[{s}] invalid value: {self.CV_GPU_AMD_TEMP_SENSOR}={amd_temp_sensor}.")
             cfg = GpuConfig(
                 section=s,
                 enabled=parser[s].getboolean(self.CV_ENABLED, fallback=False),
                 ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
                 temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
-                steps=parser[s].getint(self.CV_STEPS, fallback=5),
-                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=2.0),
-                polling=parser[s].getfloat(self.CV_POLLING, fallback=2.0),
-                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=40.0),
-                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=70.0),
-                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=35),
-                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=100),
-                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=1),
+                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_GPU_STEPS),
+                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_GPU_SENSITIVITY),
+                polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_GPU_POLLING),
+                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_GPU_MIN_TEMP),
+                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=self.DV_GPU_MAX_TEMP),
+                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_GPU_MIN_LEVEL),
+                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_GPU_MAX_LEVEL),
+                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_GPU_SMOOTHING),
                 gpu_type=gpu_type,
-                gpu_device_ids=self.parse_gpu_ids(parser[s].get(self.CV_GPU_IDS, "0")),
-                nvidia_smi_path=parser[s].get(self.CV_GPU_NVIDIA_SMI_PATH, "/usr/bin/nvidia-smi"),
-                rocm_smi_path=parser[s].get(self.CV_GPU_ROCM_SMI_PATH, "/usr/bin/rocm-smi"),
+                gpu_device_ids=self.parse_gpu_ids(parser[s].get(self.CV_GPU_IDS, self.DV_GPU_DEVICE_IDS)),
+                nvidia_smi_path=parser[s].get(self.CV_GPU_NVIDIA_SMI_PATH, self.DV_GPU_NVIDIA_SMI_PATH),
+                rocm_smi_path=parser[s].get(self.CV_GPU_ROCM_SMI_PATH, self.DV_GPU_ROCM_SMI_PATH),
                 amd_temp_sensor=amd_temp_sensor,
             )
             self._validate_fan_controller_config(cfg, s)
@@ -452,10 +510,10 @@ class Config:
         """
         result = []
         for s in self._get_sections(parser, self.CS_CONST):
-            polling = parser[s].getfloat(self.CV_POLLING, fallback=30.0)
+            polling = parser[s].getfloat(self.CV_POLLING, fallback=self.DV_CONST_POLLING)
             if polling < 0:
                 raise ValueError(f"[{s}] {self.CV_POLLING} < 0")
-            level = parser[s].getint(self.CV_CONST_LEVEL, fallback=50)
+            level = parser[s].getint(self.CV_CONST_LEVEL, fallback=self.DV_CONST_LEVEL)
             if level not in range(0, 101):
                 raise ValueError(f"[{s}] invalid {self.CV_CONST_LEVEL}")
             result.append(ConstConfig(

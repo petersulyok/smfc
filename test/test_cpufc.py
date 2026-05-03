@@ -119,14 +119,14 @@ class TestCpuFc:
         assert my_cpufc.name == cfg.section, error
         assert my_cpufc.count == 1, error
         assert my_cpufc.config.temp_calc == FanController.CALC_AVG, error
-        assert my_cpufc.config.steps == 6, error
-        assert my_cpufc.config.sensitivity == 3.0, error
-        assert my_cpufc.config.polling == 2, error
-        assert my_cpufc.config.min_temp == 30, error
-        assert my_cpufc.config.max_temp == 60, error
-        assert my_cpufc.config.min_level == 35, error
-        assert my_cpufc.config.max_level == 100, error
-        assert my_cpufc.config.smoothing == 1, error
+        assert my_cpufc.config.steps == Config.DV_CPU_STEPS, error
+        assert my_cpufc.config.sensitivity == Config.DV_CPU_SENSITIVITY, error
+        assert my_cpufc.config.polling == Config.DV_CPU_POLLING, error
+        assert my_cpufc.config.min_temp == Config.DV_CPU_MIN_TEMP, error
+        assert my_cpufc.config.max_temp == Config.DV_CPU_MAX_TEMP, error
+        assert my_cpufc.config.min_level == Config.DV_CPU_MIN_LEVEL, error
+        assert my_cpufc.config.max_level == Config.DV_CPU_MAX_LEVEL, error
+        assert my_cpufc.config.smoothing == Config.DV_CPU_SMOOTHING, error
         assert my_cpufc.hwmon_path == my_td.cpu_files, error
         del my_td
 

@@ -11,6 +11,7 @@ import shutil
 import tempfile
 from typing import List
 from pyudev import DeviceNotFoundByFileError
+from smfc.config import Config
 
 
 class TestData:
@@ -432,8 +433,10 @@ class MockedContextGood:
 
 
 # Generic config factory functions for unit tests
-def create_ipmi_config(command="/usr/bin/ipmitool", fan_mode_delay=10, fan_level_delay=2, remote_parameters="",
-                       platform_name="auto"):
+def create_ipmi_config(command=Config.DV_IPMI_COMMAND, fan_mode_delay=Config.DV_IPMI_FAN_MODE_DELAY,
+                       fan_level_delay=Config.DV_IPMI_FAN_LEVEL_DELAY,
+                       remote_parameters=Config.DV_IPMI_REMOTE_PARAMETERS,
+                       platform_name=Config.DV_IPMI_PLATFORM_NAME):
     """Factory function to create IpmiConfig instances for testing without needing a config file.
 
     Args:
@@ -451,8 +454,11 @@ def create_ipmi_config(command="/usr/bin/ipmitool", fan_mode_delay=10, fan_level
                       remote_parameters=remote_parameters, platform_name=platform_name)
 
 
-def create_cpu_config(section="CPU", enabled=False, ipmi_zone=None, temp_calc=1, steps=6, sensitivity=3.0, polling=2.0,
-                      min_temp=30.0, max_temp=60.0, min_level=35, max_level=100, smoothing=1):
+def create_cpu_config(section="CPU", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,
+                      steps=Config.DV_CPU_STEPS, sensitivity=Config.DV_CPU_SENSITIVITY,
+                      polling=Config.DV_CPU_POLLING, min_temp=Config.DV_CPU_MIN_TEMP,
+                      max_temp=Config.DV_CPU_MAX_TEMP, min_level=Config.DV_CPU_MIN_LEVEL,
+                      max_level=Config.DV_CPU_MAX_LEVEL, smoothing=Config.DV_CPU_SMOOTHING):
     """Factory function to create CpuConfig instances for testing without needing a config file.
 
     Args:
@@ -473,14 +479,18 @@ def create_cpu_config(section="CPU", enabled=False, ipmi_zone=None, temp_calc=1,
         CpuConfig: configured CpuConfig instance
     """
     from smfc.config import CpuConfig
-    return CpuConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [0],
+    return CpuConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [Config.CPU_ZONE],
                      temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                      max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing)
 
 
-def create_hd_config(section="HD", enabled=False, ipmi_zone=None, temp_calc=1, steps=4, sensitivity=2.0, polling=10.0,
-                     min_temp=32.0, max_temp=46.0, min_level=35, max_level=100, smoothing=1, hd_names=None,
-                     smartctl_path="/usr/sbin/smartctl", standby_guard_enabled=False, standby_hd_limit=1):
+def create_hd_config(section="HD", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,
+                     steps=Config.DV_HD_STEPS, sensitivity=Config.DV_HD_SENSITIVITY,
+                     polling=Config.DV_HD_POLLING, min_temp=Config.DV_HD_MIN_TEMP,
+                     max_temp=Config.DV_HD_MAX_TEMP, min_level=Config.DV_HD_MIN_LEVEL,
+                     max_level=Config.DV_HD_MAX_LEVEL, smoothing=Config.DV_HD_SMOOTHING, hd_names=None,
+                     smartctl_path=Config.DV_HD_SMARTCTL_PATH, standby_guard_enabled=False,
+                     standby_hd_limit=Config.DV_HD_STANDBY_HD_LIMIT):
     """Factory function to create HdConfig instances for testing without needing a config file.
 
     Args:
@@ -505,15 +515,18 @@ def create_hd_config(section="HD", enabled=False, ipmi_zone=None, temp_calc=1, s
         HdConfig: configured HdConfig instance
     """
     from smfc.config import HdConfig
-    return HdConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [1],
+    return HdConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE],
                     temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                     max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
                     hd_names=hd_names if hd_names is not None else [], smartctl_path=smartctl_path,
                     standby_guard_enabled=standby_guard_enabled, standby_hd_limit=standby_hd_limit)
 
 
-def create_nvme_config(section="NVME", enabled=False, ipmi_zone=None, temp_calc=1, steps=4, sensitivity=2.0,
-                       polling=10.0, min_temp=35.0, max_temp=70.0, min_level=35, max_level=100, smoothing=1,
+def create_nvme_config(section="NVME", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,
+                       steps=Config.DV_NVME_STEPS, sensitivity=Config.DV_NVME_SENSITIVITY,
+                       polling=Config.DV_NVME_POLLING, min_temp=Config.DV_NVME_MIN_TEMP,
+                       max_temp=Config.DV_NVME_MAX_TEMP, min_level=Config.DV_NVME_MIN_LEVEL,
+                       max_level=Config.DV_NVME_MAX_LEVEL, smoothing=Config.DV_NVME_SMOOTHING,
                        nvme_names=None):
     """Factory function to create NvmeConfig instances for testing without needing a config file.
 
@@ -536,16 +549,20 @@ def create_nvme_config(section="NVME", enabled=False, ipmi_zone=None, temp_calc=
         NvmeConfig: configured NvmeConfig instance
     """
     from smfc.config import NvmeConfig
-    return NvmeConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [1],
+    return NvmeConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE],
                       temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                       max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
                       nvme_names=nvme_names if nvme_names is not None else [])
 
 
-def create_gpu_config(section="GPU", enabled=False, ipmi_zone=None, temp_calc=1, steps=5, sensitivity=2.0, polling=2.0,
-                      min_temp=40.0, max_temp=70.0, min_level=35, max_level=100, smoothing=1, gpu_type="nvidia",
-                      gpu_device_ids=None, nvidia_smi_path="/usr/bin/nvidia-smi", rocm_smi_path="/usr/bin/rocm-smi",
-                      amd_temp_sensor=0):
+def create_gpu_config(section="GPU", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,
+                      steps=Config.DV_GPU_STEPS, sensitivity=Config.DV_GPU_SENSITIVITY,
+                      polling=Config.DV_GPU_POLLING, min_temp=Config.DV_GPU_MIN_TEMP,
+                      max_temp=Config.DV_GPU_MAX_TEMP, min_level=Config.DV_GPU_MIN_LEVEL,
+                      max_level=Config.DV_GPU_MAX_LEVEL, smoothing=Config.DV_GPU_SMOOTHING,
+                      gpu_type=Config.DV_GPU_TYPE, gpu_device_ids=None,
+                      nvidia_smi_path=Config.DV_GPU_NVIDIA_SMI_PATH, rocm_smi_path=Config.DV_GPU_ROCM_SMI_PATH,
+                      amd_temp_sensor=Config.DV_GPU_AMD_TEMP_SENSOR):
     """Factory function to create GpuConfig instances for testing without needing a config file.
 
     Args:
@@ -571,14 +588,16 @@ def create_gpu_config(section="GPU", enabled=False, ipmi_zone=None, temp_calc=1,
         GpuConfig: configured GpuConfig instance
     """
     from smfc.config import GpuConfig
-    return GpuConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [1],
+    return GpuConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE],
                      temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                      max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
-                     gpu_type=gpu_type, gpu_device_ids=gpu_device_ids if gpu_device_ids is not None else [0],
+                     gpu_type=gpu_type,
+                     gpu_device_ids=gpu_device_ids if gpu_device_ids is not None else Config.parse_gpu_ids(Config.DV_GPU_DEVICE_IDS),
                      nvidia_smi_path=nvidia_smi_path, rocm_smi_path=rocm_smi_path, amd_temp_sensor=amd_temp_sensor)
 
 
-def create_const_config(section="CONST", enabled=False, ipmi_zone=None, polling=30.0, level=50):
+def create_const_config(section="CONST", enabled=False, ipmi_zone=None, polling=Config.DV_CONST_POLLING,
+                        level=Config.DV_CONST_LEVEL):
     """Factory function to create ConstConfig instances for testing without needing a config file.
 
     Args:
@@ -592,7 +611,7 @@ def create_const_config(section="CONST", enabled=False, ipmi_zone=None, polling=
         ConstConfig: configured ConstConfig instance
     """
     from smfc.config import ConstConfig
-    return ConstConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [1],
+    return ConstConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE],
                        polling=polling, level=level)
 
 
