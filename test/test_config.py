@@ -3,9 +3,10 @@
 #   test_config.py (C) 2026, Peter Sulyok
 #   Unit tests for smfc.Config class.
 #
+# pylint: disable=redefined-outer-name,unused-argument
+from configparser import MissingSectionHeaderError, DuplicateSectionError
 from typing import List, Callable
 import pytest
-from configparser import MissingSectionHeaderError, DuplicateSectionError
 from smfc.config import Config
 
 
@@ -351,14 +352,16 @@ class TestHdConfigParsing:
 
     def test_hd_max_temp_less_than_min_error(self, create_config_file):
         """Negative test: Validation catches max_temp < min_temp for HD."""
-        config_path = create_config_file("[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\nmin_temp = 50\nmax_temp = 30\n")
+        content = "[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\nmin_temp = 50\nmax_temp = 30\n"
+        config_path = create_config_file(content)
         with pytest.raises(ValueError) as exc_info:
             Config(config_path)
         assert "max_temp" in str(exc_info.value) and "min_temp" in str(exc_info.value)
 
     def test_hd_max_level_less_than_min_error(self, create_config_file):
         """Negative test: Validation catches max_level < min_level for HD."""
-        config_path = create_config_file("[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\nmin_level = 100\nmax_level = 35\n")
+        content = "[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\nmin_level = 100\nmax_level = 35\n"
+        config_path = create_config_file(content)
         with pytest.raises(ValueError) as exc_info:
             Config(config_path)
         assert "max_level" in str(exc_info.value) and "min_level" in str(exc_info.value)
@@ -440,7 +443,9 @@ standby_hd_limit = 2
 
     def test_hd_standby_limit_negative_error(self, create_config_file):
         """Negative test: HdConfig raises error for negative standby_hd_limit."""
-        config_path = create_config_file("[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\nstandby_guard_enabled = 1\nstandby_hd_limit = -1\n")
+        content = ("[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\n"
+                   "standby_guard_enabled = 1\nstandby_hd_limit = -1\n")
+        config_path = create_config_file(content)
         with pytest.raises(ValueError):
             Config(config_path)
 

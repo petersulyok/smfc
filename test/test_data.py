@@ -11,7 +11,7 @@ import shutil
 import tempfile
 from typing import List
 from pyudev import DeviceNotFoundByFileError
-from smfc.config import Config
+from smfc.config import (Config, IpmiConfig, CpuConfig, HdConfig, NvmeConfig, GpuConfig, ConstConfig)
 
 
 class TestData:
@@ -449,7 +449,6 @@ def create_ipmi_config(command=Config.DV_IPMI_COMMAND, fan_mode_delay=Config.DV_
     Returns:
         IpmiConfig: configured IpmiConfig instance
     """
-    from smfc.config import IpmiConfig
     return IpmiConfig(command=command, fan_mode_delay=fan_mode_delay, fan_level_delay=fan_level_delay,
                       remote_parameters=remote_parameters, platform_name=platform_name)
 
@@ -478,8 +477,8 @@ def create_cpu_config(section="CPU", enabled=False, ipmi_zone=None, temp_calc=Co
     Returns:
         CpuConfig: configured CpuConfig instance
     """
-    from smfc.config import CpuConfig
-    return CpuConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [Config.CPU_ZONE],
+    zones = ipmi_zone if ipmi_zone is not None else [Config.CPU_ZONE]
+    return CpuConfig(section=section, enabled=enabled, ipmi_zone=zones,
                      temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                      max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing)
 
@@ -514,8 +513,8 @@ def create_hd_config(section="HD", enabled=False, ipmi_zone=None, temp_calc=Conf
     Returns:
         HdConfig: configured HdConfig instance
     """
-    from smfc.config import HdConfig
-    return HdConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE],
+    zones = ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE]
+    return HdConfig(section=section, enabled=enabled, ipmi_zone=zones,
                     temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                     max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
                     hd_names=hd_names if hd_names is not None else [], smartctl_path=smartctl_path,
@@ -548,8 +547,8 @@ def create_nvme_config(section="NVME", enabled=False, ipmi_zone=None, temp_calc=
     Returns:
         NvmeConfig: configured NvmeConfig instance
     """
-    from smfc.config import NvmeConfig
-    return NvmeConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE],
+    zones = ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE]
+    return NvmeConfig(section=section, enabled=enabled, ipmi_zone=zones,
                       temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                       max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
                       nvme_names=nvme_names if nvme_names is not None else [])
@@ -587,12 +586,12 @@ def create_gpu_config(section="GPU", enabled=False, ipmi_zone=None, temp_calc=Co
     Returns:
         GpuConfig: configured GpuConfig instance
     """
-    from smfc.config import GpuConfig
-    return GpuConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE],
+    zones = ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE]
+    device_ids = gpu_device_ids if gpu_device_ids is not None else Config.parse_gpu_ids(Config.DV_GPU_DEVICE_IDS)
+    return GpuConfig(section=section, enabled=enabled, ipmi_zone=zones,
                      temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                      max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
-                     gpu_type=gpu_type,
-                     gpu_device_ids=gpu_device_ids if gpu_device_ids is not None else Config.parse_gpu_ids(Config.DV_GPU_DEVICE_IDS),
+                     gpu_type=gpu_type, gpu_device_ids=device_ids,
                      nvidia_smi_path=nvidia_smi_path, rocm_smi_path=rocm_smi_path, amd_temp_sensor=amd_temp_sensor)
 
 
@@ -610,8 +609,8 @@ def create_const_config(section="CONST", enabled=False, ipmi_zone=None, polling=
     Returns:
         ConstConfig: configured ConstConfig instance
     """
-    from smfc.config import ConstConfig
-    return ConstConfig(section=section, enabled=enabled, ipmi_zone=ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE],
+    zones = ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE]
+    return ConstConfig(section=section, enabled=enabled, ipmi_zone=zones,
                        polling=polling, level=level)
 
 

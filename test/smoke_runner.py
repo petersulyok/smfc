@@ -10,7 +10,7 @@ from configparser import ConfigParser
 from pytest import fixture
 from pyudev import Context
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, FanController, CpuFc, HdFc, NvmeFc, GpuFc, Service
+from smfc import Log, Ipmi, FanController, Service
 from smfc.config import Config, CpuConfig, HdConfig, NvmeConfig, GpuConfig
 from .test_data import TestData, MockedContextGood
 
@@ -172,19 +172,25 @@ class TestSmoke:
         # Extract temperature ranges from config for dynamic updates.
         # Use next() to handle both plain [CPU] and multi-section [CPU:0], [CPU:1] configs.
         if cpu_num:
-            cpu_sec = next((s for s in my_config.sections() if s == Config.CS_CPU or s.startswith(Config.CS_CPU + ":")), Config.CS_CPU)
+            cpu_prefix = Config.CS_CPU + ":"
+            cpu_sec = next((s for s in my_config.sections() if s == Config.CS_CPU or s.startswith(cpu_prefix)),
+                           Config.CS_CPU)
             temp_ranges["cpu"] = (
                 my_config[cpu_sec].getfloat(Config.CV_MIN_TEMP, fallback=Config.DV_CPU_MIN_TEMP),
                 my_config[cpu_sec].getfloat(Config.CV_MAX_TEMP, fallback=Config.DV_CPU_MAX_TEMP)
             )
         if hd_num:
-            hd_sec = next((s for s in my_config.sections() if s == Config.CS_HD or s.startswith(Config.CS_HD + ":")), Config.CS_HD)
+            hd_prefix = Config.CS_HD + ":"
+            hd_sec = next((s for s in my_config.sections() if s == Config.CS_HD or s.startswith(hd_prefix)),
+                          Config.CS_HD)
             temp_ranges["hd"] = (
                 my_config[hd_sec].getfloat(Config.CV_MIN_TEMP, fallback=Config.DV_HD_MIN_TEMP),
                 my_config[hd_sec].getfloat(Config.CV_MAX_TEMP, fallback=Config.DV_HD_MAX_TEMP)
             )
         if nvme_num:
-            nvme_sec = next((s for s in my_config.sections() if s == Config.CS_NVME or s.startswith(Config.CS_NVME + ":")), Config.CS_NVME)
+            nvme_prefix = Config.CS_NVME + ":"
+            nvme_sec = next((s for s in my_config.sections() if s == Config.CS_NVME or s.startswith(nvme_prefix)),
+                            Config.CS_NVME)
             temp_ranges["nvme"] = (
                 my_config[nvme_sec].getfloat(Config.CV_MIN_TEMP, fallback=Config.DV_NVME_MIN_TEMP),
                 my_config[nvme_sec].getfloat(Config.CV_MAX_TEMP, fallback=Config.DV_NVME_MAX_TEMP)

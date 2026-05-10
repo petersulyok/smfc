@@ -39,17 +39,17 @@ class NvmeFc(FanController):
 
         # Iterate through each NVMe device.
         self.hwmon_path = []
-        for i in range(len(self.nvme_device_names)):
+        for name in self.nvme_device_names:
             # Find a device in udev database based on device name.
             try:
-                block_dev = Devices.from_device_file(udevc, self.nvme_device_names[i])
+                block_dev = Devices.from_device_file(udevc, name)
             except DeviceNotFoundByFileError:
-                raise ValueError(f"nvme_names= parameter error: '{self.nvme_device_names[i]}' cannot be reached."
+                raise ValueError(f"nvme_names= parameter error: '{name}' cannot be reached."
                         ) from DeviceNotFoundByFileError
             # Get the hwmon path for NVMe device.
             hwmon = self.get_hwmon_path(udevc, block_dev.parent)
             if not hwmon:
-                raise ValueError(f"nvme_names= parameter error: '{self.nvme_device_names[i]}' has no hwmon path.")
+                raise ValueError(f"nvme_names= parameter error: '{name}' has no hwmon path.")
             self.hwmon_path.append(hwmon)
 
         # Initialize FanController class.

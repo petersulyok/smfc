@@ -4,7 +4,6 @@
 #   Unit tests for smfc.FanController() class.
 #
 import time
-import re
 from collections import deque
 from typing import List, Tuple
 import pytest
@@ -12,8 +11,7 @@ import pyudev
 from mock import MagicMock, call
 from pytest_mock import MockerFixture
 from smfc import FanController, Log, Ipmi
-from smfc.config import Config
-from .test_data import MockDevice, MockContext, create_cpu_config, create_hd_config
+from .test_data import MockDevice, MockContext, create_cpu_config
 
 
 class TestFanController:

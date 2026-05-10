@@ -80,6 +80,7 @@ class TestConstFc:
             # since validation now happens in Config class, not in ConstFc.__init__()
         ],
     )
+    # pylint: disable-next=unused-argument
     def test_init_n(self, mocker: MockerFixture, ipmi_zone, polling: float, level: int, error: str):
         """Negative unit test for ConstFc.__init__() method. It contains the following steps:
         - mock print() function

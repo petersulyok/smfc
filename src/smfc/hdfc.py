@@ -55,12 +55,12 @@ class HdFc(FanController):
 
         # Iterate through each disk.
         self.hwmon_path = []
-        for i in range(len(self.hd_device_names)):
+        for name in self.hd_device_names:
             # Find a device in udev database based on disk name.
             try:
-                block_dev = Devices.from_device_file(udevc, self.hd_device_names[i])
+                block_dev = Devices.from_device_file(udevc, name)
             except DeviceNotFoundByFileError:
-                raise ValueError(f"hd_names= parameter error: '{self.hd_device_names[i]}' cannot be reached.") \
+                raise ValueError(f"hd_names= parameter error: '{name}' cannot be reached.") \
                     from DeviceNotFoundByFileError
             # Add the hwmon path string for NVME/SATA/HDD disks or '' for SAS/SCSI disks.
             self.hwmon_path.append(self.get_hwmon_path(udevc, block_dev.parent))

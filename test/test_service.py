@@ -13,7 +13,7 @@ import pytest
 from pyudev import Context
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, FanController, CpuFc, HdFc, NvmeFc, GpuFc, ConstFc, Service
+from smfc import Log, Ipmi, FanController, ConstFc, Service
 from smfc.config import Config
 from .test_data import TestData, MockedContextError, MockedContextGood
 from .test_ipmi import BMC_INFO_OUTPUT
@@ -138,8 +138,10 @@ class TestService:
         original_open = open
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
-        mocker.patch("builtins.open", MagicMock(side_effect=lambda path, *a, **kw:
-            original_open(modules, *a, **kw) if path == "/proc/modules" else original_open(path, *a, **kw)))
+        def fake_open(path, *a, **kw):
+            target = modules if path == "/proc/modules" else path
+            return original_open(target, *a, **kw)  # pylint: disable=consider-using-with
+        mocker.patch("builtins.open", MagicMock(side_effect=fake_open))
         config_content = (f"[Ipmi]\ncommand = {ipmi_command}\n"
                           f"[CPU]\nenabled = 1\n"
                           f"[GPU]\nenabled = 0\n")
@@ -183,9 +185,11 @@ class TestService:
         smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
         nvidia_smi_cmd = my_td.create_command_file('echo "0"')
 
+        hd_section = (f"[HD]\nenabled = 1\nhd_names = /dev/sda\n"
+                      f"smartctl_path = {smartctl_cmd}\nstandby_guard_enabled = 1\n")
         config_content = (f"[Ipmi]\ncommand = {ipmi_command}\n"
                           f"[CPU]\nenabled = 1\n"
-                          f"[HD]\nenabled = 1\nhd_names = /dev/sda\nsmartctl_path = {smartctl_cmd}\nstandby_guard_enabled = 1\n"
+                          f"{hd_section}"
                           f"[GPU]\nenabled = 1\ngpu_type = nvidia\nnvidia_smi_path = {nvidia_smi_cmd}\n")
         config_file = tmp_path / "test.conf"
         config_file.write_text(config_content)

@@ -9,7 +9,7 @@ from smfc.log import Log
 from smfc.config import ConstConfig
 
 
-class ConstFc:
+class ConstFc:  # pylint: disable=too-few-public-methods
     """Class for CONST fan controller. This controller maintains a constant fan level."""
 
     config: ConstConfig
