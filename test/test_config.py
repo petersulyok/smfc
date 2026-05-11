@@ -296,9 +296,11 @@ smoothing = 4
 [Ipmi]
 [CPU]
 enabled = 1
+ipmi_zone = 0
 min_temp = 30
 [CPU:0]
 enabled = 1
+ipmi_zone = 1
 min_temp = 32
 [CPU:1]
 enabled = 0
@@ -584,9 +586,11 @@ class TestNvmeConfigParsing:
 [Ipmi]
 [NVME]
 enabled = 1
+ipmi_zone = 0
 nvme_names = /dev/nvme0n1
 [NVME:0]
 enabled = 1
+ipmi_zone = 1
 nvme_names = /dev/nvme1n1
 """)
         assert len(cfg.nvme) == 2
@@ -726,10 +730,12 @@ class TestGpuConfigParsing:
 [Ipmi]
 [GPU]
 enabled = 1
+ipmi_zone = 0
 gpu_type = nvidia
 gpu_device_ids = 0
 [GPU:0]
 enabled = 1
+ipmi_zone = 1
 gpu_type = amd
 gpu_device_ids = 1
 """)
@@ -1099,12 +1105,16 @@ level = 40
 [Ipmi]
 [CPU:2]
 enabled = 1
+ipmi_zone = 3
 [CPU]
 enabled = 1
+ipmi_zone = 0
 [CPU:0]
 enabled = 1
+ipmi_zone = 1
 [CPU:1]
 enabled = 1
+ipmi_zone = 2
 """)
         # Should be ordered: CPU, CPU:0, CPU:1, CPU:2
         assert len(cfg.cpu) == 4
@@ -1112,6 +1122,31 @@ enabled = 1
         assert cfg.cpu[1].section == "CPU:0"
         assert cfg.cpu[2].section == "CPU:1"
         assert cfg.cpu[3].section == "CPU:2"
+
+
+class TestDuplicateZoneValidation:
+    """Unit tests for _validate_no_duplicate_zones() validation logic."""
+
+    def test_cpu_duplicate_zone_raises(self, create_config):
+        """Negative test: Two enabled CPU instances on the same IPMI zone raises ValueError."""
+        with pytest.raises(ValueError, match=r"\[CPU:1\] IPMI zone 0 is already used by \[CPU:0\]"):
+            create_config("[Ipmi]\n[CPU:0]\nenabled = 1\nipmi_zone = 0\n[CPU:1]\nenabled = 1\nipmi_zone = 0\n")
+
+    def test_hd_duplicate_zone_raises(self, create_config):
+        """Negative test: Two enabled HD instances on the same IPMI zone raises ValueError."""
+        with pytest.raises(ValueError, match=r"\[HD:1\] IPMI zone 1 is already used by \[HD\]"):
+            create_config("[Ipmi]\n[HD]\nenabled = 1\nipmi_zone = 1\nhd_names = /dev/sda\n"
+                         "[HD:1]\nenabled = 1\nipmi_zone = 1\nhd_names = /dev/sdb\n")
+
+    def test_disabled_instance_no_conflict(self, create_config):
+        """Positive test: Disabled instance on the same zone does not raise."""
+        cfg = create_config("[Ipmi]\n[CPU]\nenabled = 1\nipmi_zone = 0\n[CPU:1]\nenabled = 0\nipmi_zone = 0\n")
+        assert len(cfg.cpu) == 2
+
+    def test_different_zones_no_conflict(self, create_config):
+        """Positive test: Enabled instances on different zones is valid."""
+        cfg = create_config("[Ipmi]\n[CPU:0]\nenabled = 1\nipmi_zone = 0\n[CPU:1]\nenabled = 1\nipmi_zone = 1\n")
+        assert len(cfg.cpu) == 2
 
 
 # End.
