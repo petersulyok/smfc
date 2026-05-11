@@ -930,10 +930,17 @@ class TestEdgeCases:
         cfg = create_config("[Ipmi]\n[CPU]\nenabled = 1\npolling = 0\n")
         assert cfg.cpu[0].polling == 0.0
 
-    def test_const_level_boundary_zero(self, create_config):
-        """Positive test: CONST level = 0 is valid."""
-        cfg = create_config("[Ipmi]\n[CONST]\nenabled = 1\nlevel = 0\n")
-        assert cfg.const[0].level == 0
+    def test_const_level_boundary_zero(self, create_config_file):
+        """Negative test: CONST level = 0 is invalid (fans off is not allowed)."""
+        config_path = create_config_file("[Ipmi]\n[CONST]\nenabled = 1\nlevel = 0\n")
+        with pytest.raises(ValueError) as exc_info:
+            Config(config_path)
+        assert "level" in str(exc_info.value)
+
+    def test_const_level_boundary_one(self, create_config):
+        """Positive test: CONST level = 1 is valid (minimum allowed)."""
+        cfg = create_config("[Ipmi]\n[CONST]\nenabled = 1\nlevel = 1\n")
+        assert cfg.const[0].level == 1
 
     def test_const_level_boundary_hundred(self, create_config):
         """Positive test: CONST level = 100 is valid."""

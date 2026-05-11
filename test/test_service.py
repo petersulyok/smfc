@@ -646,10 +646,10 @@ class TestService:
         """Positive unit test for Service._collect_desired_levels() method. It contains the following steps:
         - mock print() function
         - initialize a Service class with enabled controllers (CPU, HD, CONST)
-        - set last_level values for controllers (CPU=60, HD=0, CONST=0)
+        - set last_level values for controllers (CPU=60, HD=0, CONST=50)
         - call _collect_desired_levels()
-        - ASSERT: if controllers with last_level=0 are not skipped (except ConstFc)
-        - ASSERT: if ConstFc with last_level=0 is not still collected
+        - ASSERT: controllers with last_level=0 are skipped
+        - ASSERT: controllers with last_level>0 are collected (including ConstFc)
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -674,11 +674,10 @@ class TestService:
         hd_fc.last_temp = 0.0
         hd_fc.deferred_apply = True
 
-        # ConstFc with last_level=0 should NOT be skipped
         const_fc = ConstFc.__new__(ConstFc)
         const_fc.name = Config.CS_CONST
         const_fc.config = MockControllerConfig(ipmi_zone=[1])
-        const_fc.last_level = 0
+        const_fc.last_level = 50
         const_fc.last_temp = 0.0
         const_fc.deferred_apply = True
 
@@ -688,7 +687,7 @@ class TestService:
         names = [name for name, _, _, _ in levels]
         assert Config.CS_CPU in names, "CPU controller should be collected"
         assert Config.CS_HD not in names, "HD controller with level 0 should be skipped"
-        assert Config.CS_CONST in names, "ConstFc with level 0 should still be collected"
+        assert Config.CS_CONST in names, "ConstFc with level > 0 should be collected"
 
     def test_apply_fan_levels_shared_zone(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with shared zone. It contains the following steps:

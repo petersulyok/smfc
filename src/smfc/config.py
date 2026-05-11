@@ -525,7 +525,7 @@ class Config:
             if polling < 0:
                 raise ValueError(f"[{s}] {self.CV_POLLING} < 0")
             level = parser[s].getint(self.CV_CONST_LEVEL, fallback=self.DV_CONST_LEVEL)
-            if level not in range(0, 101):
+            if level not in range(1, 101):
                 raise ValueError(f"[{s}] invalid {self.CV_CONST_LEVEL}")
             result.append(ConstConfig(
                 section=s,

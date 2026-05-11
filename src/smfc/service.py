@@ -116,7 +116,7 @@ class Service:
         """
         levels: List[Tuple[str, List[int], int, float]] = []
         for fc in self.controllers:
-            if fc.deferred_apply and (fc.last_level > 0 or isinstance(fc, ConstFc)):
+            if fc.deferred_apply and fc.last_level > 0:
                 levels.append((fc.name, fc.config.ipmi_zone, fc.last_level, fc.last_temp))
         return levels
 
