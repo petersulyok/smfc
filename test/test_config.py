@@ -332,6 +332,8 @@ class TestHdConfigParsing:
             ("steps", "0", "Config._validate_fan_controller_config() 2"),
             # steps negative
             ("steps", "-1", "Config._validate_fan_controller_config() 3"),
+            # steps > max_level - min_level (default max_level=100, min_level=35 -> 65)
+            ("steps", "66", "Config._validate_fan_controller_config() 3a"),
             # sensitivity = 0
             ("sensitivity", "0", "Config._validate_fan_controller_config() 4"),
             # sensitivity negative
@@ -342,6 +344,14 @@ class TestHdConfigParsing:
             ("smoothing", "0", "Config._validate_fan_controller_config() 7"),
             # smoothing negative
             ("smoothing", "-1", "Config._validate_fan_controller_config() 8"),
+            # min_temp negative
+            ("min_temp", "-1", "Config._validate_fan_controller_config() 9"),
+            # max_temp over 200
+            ("max_temp", "201", "Config._validate_fan_controller_config() 10"),
+            # min_level negative
+            ("min_level", "-1", "Config._validate_fan_controller_config() 11"),
+            # max_level over 100
+            ("max_level", "101", "Config._validate_fan_controller_config() 12"),
         ],
     )
     def test_hd_validation_errors(self, create_config_file, param: str, value: str, error: str):  # noqa: ARG002
@@ -449,6 +459,14 @@ standby_hd_limit = 2
         with pytest.raises(ValueError):
             Config(config_path)
 
+    def test_hd_empty_smartctl_path_error(self, create_config_file):
+        """Negative test: HdConfig raises error for empty smartctl_path when enabled."""
+        content = "[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\nsmartctl_path = \n"
+        config_path = create_config_file(content)
+        with pytest.raises(ValueError) as exc_info:
+            Config(config_path)
+        assert "smartctl_path" in str(exc_info.value)
+
     def test_hd_multi_section(self, create_config):
         """Positive test: Multiple HD sections parsed correctly."""
         cfg = create_config("""
@@ -481,6 +499,8 @@ class TestNvmeConfigParsing:
             ("steps", "0", "Config._validate_fan_controller_config() 2"),
             # steps negative
             ("steps", "-1", "Config._validate_fan_controller_config() 3"),
+            # steps > max_level - min_level (default max_level=100, min_level=35 -> 65)
+            ("steps", "66", "Config._validate_fan_controller_config() 3a"),
             # sensitivity = 0
             ("sensitivity", "0", "Config._validate_fan_controller_config() 4"),
             # sensitivity negative
@@ -491,6 +511,14 @@ class TestNvmeConfigParsing:
             ("smoothing", "0", "Config._validate_fan_controller_config() 7"),
             # smoothing negative
             ("smoothing", "-1", "Config._validate_fan_controller_config() 8"),
+            # min_temp negative
+            ("min_temp", "-1", "Config._validate_fan_controller_config() 9"),
+            # max_temp over 200
+            ("max_temp", "201", "Config._validate_fan_controller_config() 10"),
+            # min_level negative
+            ("min_level", "-1", "Config._validate_fan_controller_config() 11"),
+            # max_level over 100
+            ("max_level", "101", "Config._validate_fan_controller_config() 12"),
         ],
     )
     def test_nvme_validation_errors(self, create_config_file, param: str, value: str, error: str):  # noqa: ARG002
@@ -578,6 +606,8 @@ class TestGpuConfigParsing:
             ("steps", "0", "Config._validate_fan_controller_config() 2"),
             # steps negative
             ("steps", "-1", "Config._validate_fan_controller_config() 3"),
+            # steps > max_level - min_level (default max_level=100, min_level=35 -> 65)
+            ("steps", "66", "Config._validate_fan_controller_config() 3a"),
             # sensitivity = 0
             ("sensitivity", "0", "Config._validate_fan_controller_config() 4"),
             # sensitivity negative
@@ -588,6 +618,14 @@ class TestGpuConfigParsing:
             ("smoothing", "0", "Config._validate_fan_controller_config() 7"),
             # smoothing negative
             ("smoothing", "-1", "Config._validate_fan_controller_config() 8"),
+            # min_temp negative
+            ("min_temp", "-1", "Config._validate_fan_controller_config() 9"),
+            # max_temp over 200
+            ("max_temp", "201", "Config._validate_fan_controller_config() 10"),
+            # min_level negative
+            ("min_level", "-1", "Config._validate_fan_controller_config() 11"),
+            # max_level over 100
+            ("max_level", "101", "Config._validate_fan_controller_config() 12"),
         ],
     )
     def test_gpu_validation_errors(self, create_config_file, param: str, value: str, error: str):  # noqa: ARG002
@@ -665,6 +703,22 @@ class TestGpuConfigParsing:
         with pytest.raises(ValueError) as exc_info:
             Config(config_path)
         assert "amd_temp_sensor" in str(exc_info.value)
+
+    def test_gpu_empty_nvidia_smi_path_error(self, create_config_file):
+        """Negative test: GpuConfig raises error for empty nvidia_smi_path when nvidia enabled."""
+        content = "[Ipmi]\n[GPU]\nenabled = 1\ngpu_type = nvidia\nnvidia_smi_path = \n"
+        config_path = create_config_file(content)
+        with pytest.raises(ValueError) as exc_info:
+            Config(config_path)
+        assert "nvidia_smi_path" in str(exc_info.value)
+
+    def test_gpu_empty_rocm_smi_path_error(self, create_config_file):
+        """Negative test: GpuConfig raises error for empty rocm_smi_path when amd enabled."""
+        content = "[Ipmi]\n[GPU]\nenabled = 1\ngpu_type = amd\nrocm_smi_path = \n"
+        config_path = create_config_file(content)
+        with pytest.raises(ValueError) as exc_info:
+            Config(config_path)
+        assert "rocm_smi_path" in str(exc_info.value)
 
     def test_gpu_multi_section(self, create_config):
         """Positive test: Multiple GPU sections parsed correctly."""
@@ -749,6 +803,8 @@ class TestFanControllerValidation:
             ("steps", "0", "Config._validate_fan_controller_config() 2"),
             # steps negative
             ("steps", "-1", "Config._validate_fan_controller_config() 3"),
+            # steps > max_level - min_level (default max_level=100, min_level=35 -> 65)
+            ("steps", "66", "Config._validate_fan_controller_config() 3a"),
             # sensitivity = 0
             ("sensitivity", "0", "Config._validate_fan_controller_config() 4"),
             # sensitivity negative
@@ -759,6 +815,14 @@ class TestFanControllerValidation:
             ("smoothing", "0", "Config._validate_fan_controller_config() 7"),
             # smoothing negative
             ("smoothing", "-1", "Config._validate_fan_controller_config() 8"),
+            # min_temp negative
+            ("min_temp", "-1", "Config._validate_fan_controller_config() 9"),
+            # max_temp over 200
+            ("max_temp", "201", "Config._validate_fan_controller_config() 10"),
+            # min_level negative
+            ("min_level", "-1", "Config._validate_fan_controller_config() 11"),
+            # max_level over 100
+            ("max_level", "101", "Config._validate_fan_controller_config() 12"),
         ],
     )
     def test_cpu_validation_errors(self, create_config_file, param: str, value: str, error: str):  # noqa: ARG002
@@ -943,7 +1007,7 @@ class TestEdgeCases:
     def test_gpu_device_ids_empty_string_error(self, create_config_file):
         """Negative test: Empty gpu_device_ids string raises error."""
         config_path = create_config_file("[Ipmi]\n[GPU]\nenabled = 1\ngpu_device_ids = \n")
-        with pytest.raises((ValueError, IndexError)):
+        with pytest.raises(ValueError):
             Config(config_path)
 
     def test_gpu_device_ids_many(self, create_config):

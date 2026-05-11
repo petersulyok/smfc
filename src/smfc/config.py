@@ -397,6 +397,9 @@ class Config:
             for name in hd_names:
                 if "nvme" in name.lower():
                     raise ValueError(f"NVMe drives are not allowed in [{s}], use [NVME] instead: '{name}'")
+            smartctl_path = parser[s].get(self.CV_HD_SMARTCTL_PATH, self.DV_HD_SMARTCTL_PATH)
+            if enabled and not smartctl_path.strip():
+                raise ValueError(f"[{s}] {self.CV_HD_SMARTCTL_PATH} is empty")
             standby_guard_enabled = parser[s].getboolean(self.CV_HD_STANDBY_GUARD_ENABLED, fallback=False)
             standby_hd_limit = parser[s].getint(self.CV_HD_STANDBY_HD_LIMIT, fallback=self.DV_HD_STANDBY_HD_LIMIT)
             if standby_guard_enabled and standby_hd_limit < 0:
@@ -415,7 +418,7 @@ class Config:
                 max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_HD_MAX_LEVEL),
                 smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_HD_SMOOTHING),
                 hd_names=hd_names,
-                smartctl_path=parser[s].get(self.CV_HD_SMARTCTL_PATH, self.DV_HD_SMARTCTL_PATH),
+                smartctl_path=smartctl_path,
                 standby_guard_enabled=standby_guard_enabled,
                 standby_hd_limit=standby_hd_limit,
             )
@@ -473,12 +476,20 @@ class Config:
             gpu_type = parser[s].get(self.CV_GPU_TYPE, self.DV_GPU_TYPE).lower()
             if gpu_type not in ["nvidia", "amd"]:
                 raise ValueError(f"[{s}] invalid value: {self.CV_GPU_TYPE}={gpu_type}.")
+            enabled = parser[s].getboolean(self.CV_ENABLED, fallback=False)
             amd_temp_sensor = parser[s].getint(self.CV_GPU_AMD_TEMP_SENSOR, fallback=self.DV_GPU_AMD_TEMP_SENSOR)
             if gpu_type == "amd" and amd_temp_sensor not in range(0, 3):
                 raise ValueError(f"[{s}] invalid value: {self.CV_GPU_AMD_TEMP_SENSOR}={amd_temp_sensor}.")
+            gpu_device_ids = self.parse_gpu_ids(parser[s].get(self.CV_GPU_IDS, self.DV_GPU_DEVICE_IDS))
+            nvidia_smi_path = parser[s].get(self.CV_GPU_NVIDIA_SMI_PATH, self.DV_GPU_NVIDIA_SMI_PATH)
+            if enabled and gpu_type == "nvidia" and not nvidia_smi_path.strip():
+                raise ValueError(f"[{s}] {self.CV_GPU_NVIDIA_SMI_PATH} is empty")
+            rocm_smi_path = parser[s].get(self.CV_GPU_ROCM_SMI_PATH, self.DV_GPU_ROCM_SMI_PATH)
+            if enabled and gpu_type == "amd" and not rocm_smi_path.strip():
+                raise ValueError(f"[{s}] {self.CV_GPU_ROCM_SMI_PATH} is empty")
             cfg = GpuConfig(
                 section=s,
-                enabled=parser[s].getboolean(self.CV_ENABLED, fallback=False),
+                enabled=enabled,
                 ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
                 temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
                 steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_GPU_STEPS),
@@ -490,9 +501,9 @@ class Config:
                 max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_GPU_MAX_LEVEL),
                 smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_GPU_SMOOTHING),
                 gpu_type=gpu_type,
-                gpu_device_ids=self.parse_gpu_ids(parser[s].get(self.CV_GPU_IDS, self.DV_GPU_DEVICE_IDS)),
-                nvidia_smi_path=parser[s].get(self.CV_GPU_NVIDIA_SMI_PATH, self.DV_GPU_NVIDIA_SMI_PATH),
-                rocm_smi_path=parser[s].get(self.CV_GPU_ROCM_SMI_PATH, self.DV_GPU_ROCM_SMI_PATH),
+                gpu_device_ids=gpu_device_ids,
+                nvidia_smi_path=nvidia_smi_path,
+                rocm_smi_path=rocm_smi_path,
                 amd_temp_sensor=amd_temp_sensor,
             )
             self._validate_fan_controller_config(cfg, s)
@@ -537,12 +548,22 @@ class Config:
             raise ValueError(f"[{section}] invalid value: {self.CV_TEMP_CALC} ({cfg.temp_calc}).")
         if cfg.steps <= 0:
             raise ValueError(f"[{section}] invalid value: {self.CV_STEPS} <= 0")
+        if cfg.max_level > cfg.min_level and cfg.steps > cfg.max_level - cfg.min_level:
+            raise ValueError(f"[{section}] invalid value: {self.CV_STEPS} > {self.CV_MAX_LEVEL} - {self.CV_MIN_LEVEL}")
         if cfg.sensitivity <= 0:
             raise ValueError(f"[{section}] invalid value: {self.CV_SENSITIVITY} <= 0")
         if cfg.polling < 0:
             raise ValueError(f"[{section}] {self.CV_POLLING} < 0")
+        if cfg.min_temp < 0:
+            raise ValueError(f"[{section}] invalid value: {self.CV_MIN_TEMP} < 0")
+        if cfg.max_temp > 200:
+            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} > 200")
         if cfg.max_temp < cfg.min_temp:
             raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} < {self.CV_MIN_TEMP}")
+        if cfg.min_level < 0:
+            raise ValueError(f"[{section}] invalid value: {self.CV_MIN_LEVEL} < 0")
+        if cfg.max_level > 100:
+            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} > 100")
         if cfg.max_level < cfg.min_level:
             raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} < {self.CV_MIN_LEVEL}")
         if cfg.smoothing < 1:

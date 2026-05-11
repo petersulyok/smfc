@@ -132,49 +132,20 @@ class TestFanController:
         assert my_fc._temp_history.maxlen == smoothing, error  # pylint: disable=protected-access
 
     @pytest.mark.parametrize(
-        "ipmi_zone, count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, "
-        "smoothing, error",
+        "count, error",
         [
-            # Invalid ipmi_zone - negative
-            ([-1], 1, 0, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 15"),
-            # Invalid ipmi_zone - over 100
-            ([101], 1, 0, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 16"),
             # Invalid count - negative
-            ([0], -1, 0, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 20"),
+            (-1, "FanController.__init__() 20"),
             # Invalid count - zero
-            ([0], 0, 0, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 21"),
-            # Invalid temp_calc - negative
-            ([0], 1, -1, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 22"),
-            # Invalid temp_calc - too high
-            ([0], 1, 100, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 23"),
-            # Invalid steps - negative
-            ([1], 1, 1, -2, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 24"),
-            # Invalid steps - zero
-            ([1], 1, 1, 0, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 25"),
-            # Invalid sensitivity - zero
-            ([1], 1, 1, 5, 0, 2, 30, 50, 35, 100, 1, "FanController.__init__() 26"),
-            # Invalid sensitivity - negative
-            ([1], 1, 1, 5, -2, 2, 30, 50, 35, 100, 1, "FanController.__init__() 27"),
-            # Invalid polling - negative
-            ([1], 1, 1, 5, 4, -2, 30, 50, 35, 100, 1, "FanController.__init__() 28"),
-            # Invalid max_temp < min_temp
-            ([1], 1, 1, 5, 4, 2, 50, 30, 35, 100, 1, "FanController.__init__() 29"),
-            # Invalid max_level < min_level
-            ([1], 1, 1, 5, 4, 2, 30, 50, 100, 35, 1, "FanController.__init__() 30"),
-            # Invalid smoothing - zero
-            ([0], 1, 0, 5, 4, 2, 30, 50, 35, 100, 0, "FanController.__init__() 31"),
-            # Invalid smoothing - negative
-            ([0], 1, 0, 5, 4, 2, 30, 50, 35, 100, -1, "FanController.__init__() 32"),
+            (0, "FanController.__init__() 21"),
         ],
     )
-    def test_init_n1(self, mocker: MockerFixture, ipmi_zone: List[int], count: int, temp_calc: int, steps: int,
-                     sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
-                     max_level, smoothing: int, error: str,) -> None:
+    def test_init_n1(self, mocker: MockerFixture, count: int, error: str) -> None:
         """Negative unit test for FanController.__init__() method. It contains the following steps:
         - mock print(), FanController._get_nth_temp() functions
-        - create CPU config using factory function with invalid parameters
+        - create CPU config using factory function with invalid count
         - initialize a Log, Ipmi, and FanController classes
-        - ASSERT: if exception was not raised in case of invalid parameter values
+        - ASSERT: if exception was not raised in case of invalid count value
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -184,9 +155,7 @@ class TestFanController:
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
         with pytest.raises(ValueError) as cm:
-            cfg = create_cpu_config(ipmi_zone=ipmi_zone, temp_calc=temp_calc, steps=steps, sensitivity=sensitivity,
-                                    polling=polling, min_temp=min_temp, max_temp=max_temp, min_level=min_level,
-                                    max_level=max_level, smoothing=smoothing)
+            cfg = create_cpu_config()
             my_fc = FanController.__new__(FanController)
             my_fc.config = cfg
             FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, count)

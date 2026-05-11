@@ -49,30 +49,14 @@ class FanController:
             count (int): number of devices
         Raises:
             ValueError: invalid count parameter
+            RuntimeError: temperature reading failed
         """
         self.log = log
         self.ipmi = ipmi
         self.name = name
         self.count = count
 
-        # Validate config parameters.
-        for zone in self.config.ipmi_zone:
-            if zone not in range(0, 101):
-                raise ValueError(f"invalid value: ipmi_zone={zone}.")
-        if self.config.temp_calc not in {self.CALC_MIN, self.CALC_AVG, self.CALC_MAX}:
-            raise ValueError(f"invalid value: temp_calc={self.config.temp_calc}.")
-        if self.config.steps <= 0:
-            raise ValueError("invalid value: steps <= 0")
-        if self.config.sensitivity <= 0:
-            raise ValueError("invalid value: sensitivity <= 0")
-        if self.config.polling < 0:
-            raise ValueError("invalid value: polling < 0")
-        if self.config.max_temp < self.config.min_temp:
-            raise ValueError("invalid value: max_temp < min_temp")
-        if self.config.max_level < self.config.min_level:
-            raise ValueError("invalid value: max_level < min_level")
-        if self.config.smoothing < 1:
-            raise ValueError("invalid value: smoothing < 1")
+        # Validate count parameter (config parameters are validated in Config class).
         if self.count <= 0:
             raise ValueError("invalid value: count <= 0")
 
