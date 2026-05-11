@@ -49,6 +49,7 @@ Key features:
  - Five independent fan controllers (CPU, HD, NVME, GPU, CONST) that can be enabled/disabled and combined freely
  - User-defined control function mapping temperature intervals to fan level intervals with configurable discrete steps
  - Support for multiple IPMI zones with automatic shared zone arbitration (highest fan level wins)
+ - Multiple fan curve instances per controller type for per-zone tuning (e.g. `[CPU]` + `[CPU:1]`)
  - Temperature calculation methods: minimum, average, or maximum across multiple devices
  - Temperature smoothing with configurable moving average window to reduce fan speed oscillation
  - Sensitivity threshold to avoid unnecessary fan speed changes on small temperature fluctuations
@@ -131,6 +132,38 @@ For non-shared zones, only the applied level is logged:
 IPMI zone [0]: new level = 60% (CPU=45.0C)
 ```
 
+#### 1.4 Multiple fan curves per IPMI zone
+A single fan controller can only apply one temperature-to-level curve. When different IPMI zones need different curves for the same temperature source (e.g. quiet mid-plane fans vs. aggressive CPU coolers), you can create multiple instances of the same controller type by appending a colon and a number to the section name:
+
+```ini
+# Instance for zone 0 — conservative curve for noisy mid-plane fans
+[CPU:0]
+enabled=1
+ipmi_zone=0
+min_temp=55.0
+max_temp=75.0
+min_level=20
+max_level=80
+
+# Instance for zone 1 — aggressive curve for silent CPU coolers
+[CPU:1]
+enabled=1
+ipmi_zone=1
+min_temp=40.0
+max_temp=80.0
+min_level=20
+max_level=100
+```
+
+Three naming styles are supported and can be freely mixed:
+ - `[CPU]` — single instance, original format (unchanged behaviour)
+ - `[CPU]` + `[CPU:1]` — base section plus numbered extras
+ - `[CPU:0]` + `[CPU:1]` — all-numbered instances
+
+The suffix number after `:` is used only for ordering and logging — it has no relationship to the `ipmi_zone=` value inside the section. Each instance is a complete, independent fan controller with its own full set of parameters, sharing only the physical temperature source.
+
+Multiple instances on the same IPMI zone participate in the shared zone arbitration described in [chapter 1.3](#13-shared-ipmi-zone-arbitration).
+
 ### 2. User-defined control function
 Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval.
 
@@ -138,11 +171,13 @@ Fan controllers use user-defined control functions that map a temperature interv
 
 The following five parameters will define such a function:
 
+```ini
      min_temp=
      max_temp=
      min_level=
      max_level=
      steps=
+```
 
 In this way, a fan controller can map any new temperature value to a fan level (from Celsius degrees to % value).   
 Changing the fan rotational speed is a very slow process (it could take several seconds depending on the fan type and the requested amount of change), so we try to minimize these kinds of actions. Instead of setting fan rotational speed continuously, we define discrete fan levels based on `steps=` parameter.
@@ -494,7 +529,7 @@ You have to think over and answer the following questions:
 The configuration file contains sections. The first one for IPMI configuration, the rest for fan controllers.
 Edit `/etc/smfc/smfc.conf` and specify your configuration parameters here:
 
-```
+```ini
 #
 #   smfc.conf (C) 2020-2026, Peter Sulyok
 #   smfc 5.x service configuration parameters
@@ -669,8 +704,9 @@ Important notes:
 2. `[HD] hd_names=` is a compulsory parameter for HD fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent and could change after a reboot!
 3. `[NVME] nvme_names=` is a compulsory parameter for NVME fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/nvme0n1` form is not persistent and could change after a reboot!
 4. `[CPU] / [HD] / [NVME] min_level= / max_level=` should be configured in alignment with threshold configuration (see more details in [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)). Be patient, several refinement cycles could happen.
-5. Several sample configuration files are provided in `./config/samples` folder.
-6. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
+5. Multiple instances of the same fan controller can be created using numbered section names (e.g. `[CPU:0]`, `[CPU:1]`). Each instance has its own full set of parameters and can be assigned to a different IPMI zone with a different fan curve. Two enabled instances of the same type must not share the same IPMI zone. See [chapter 1.4](#14-multiple-fan-curves-per-ipmi-zone) for details.
+6. Several sample configuration files are provided in `./config/samples` folder.
+7. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
 
 
 ### 11. How to run `smfc`?
