@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   test_01_log.py (C) 2021-2026, Peter Sulyok
+#   test_log.py (C) 2021-2026, Peter Sulyok
 #   Unit test for smfc.Log() class.
 #
 import syslog
@@ -16,20 +16,35 @@ class TestLog:
     @pytest.mark.parametrize(
         "level, output, error",
         [
+            # LOG_NONE to STDOUT
             (Log.LOG_NONE, Log.LOG_STDOUT, "Log.__init__() 1"),
+            # LOG_ERROR to STDOUT
             (Log.LOG_ERROR, Log.LOG_STDOUT, "Log.__init__() 2"),
+            # LOG_CONFIG to STDOUT
             (Log.LOG_CONFIG, Log.LOG_STDOUT, "Log.__init__() 3"),
+            # LOG_INFO to STDOUT
             (Log.LOG_INFO, Log.LOG_STDOUT, "Log.__init__() 4"),
+            # LOG_DEBUG to STDOUT
             (Log.LOG_DEBUG, Log.LOG_STDOUT, "Log.__init__() 5"),
+            # LOG_NONE to STDERR
             (Log.LOG_NONE, Log.LOG_STDERR, "Log.__init__() 6"),
+            # LOG_ERROR to STDERR
             (Log.LOG_ERROR, Log.LOG_STDERR, "Log.__init__() 7"),
+            # LOG_CONFIG to STDERR
             (Log.LOG_CONFIG, Log.LOG_STDERR, "Log.__init__() 8"),
+            # LOG_INFO to STDERR
             (Log.LOG_INFO, Log.LOG_STDERR, "Log.__init__() 9"),
+            # LOG_DEBUG to STDERR
             (Log.LOG_DEBUG, Log.LOG_STDERR, "Log.__init__() 10"),
+            # LOG_NONE to SYSLOG
             (Log.LOG_NONE, Log.LOG_SYSLOG, "Log.__init__() 11"),
+            # LOG_ERROR to SYSLOG
             (Log.LOG_ERROR, Log.LOG_SYSLOG, "Log.__init__() 12"),
+            # LOG_CONFIG to SYSLOG
             (Log.LOG_CONFIG, Log.LOG_SYSLOG, "Log.__init__() 13"),
+            # LOG_INFO to SYSLOG
             (Log.LOG_INFO, Log.LOG_SYSLOG, "Log.__init__() 14"),
+            # LOG_DEBUG to SYSLOG
             (Log.LOG_DEBUG, Log.LOG_SYSLOG, "Log.__init__() 15"),
         ],
     )
@@ -59,7 +74,9 @@ class TestLog:
     @pytest.mark.parametrize(
         "level, output, error",
         [
+            # Invalid level: 100
             (100, Log.LOG_STDOUT, "Log.__init__() 16"),
+            # Invalid output: 100
             (Log.LOG_ERROR, 100, "Log.__init__() 17"),
         ],
     )
@@ -78,11 +95,17 @@ class TestLog:
     @pytest.mark.parametrize(
         "level, syslog_level, error",
         [
+            # LOG_ERROR maps to LOG_ERR
             (Log.LOG_ERROR, syslog.LOG_ERR, "Log.map_to_syslog() 1"),
+            # LOG_CONFIG maps to LOG_INFO
             (Log.LOG_CONFIG, syslog.LOG_INFO, "Log.map_to_syslog() 2"),
+            # LOG_INFO maps to LOG_INFO
             (Log.LOG_INFO, syslog.LOG_INFO, "Log.map_to_syslog() 3"),
+            # LOG_DEBUG maps to LOG_DEBUG
             (Log.LOG_DEBUG, syslog.LOG_DEBUG, "Log.map_to_syslog() 4"),
+            # Invalid level: 1000 maps to LOG_ERR
             (1000, syslog.LOG_ERR, "Log.map_to_syslog() 5"),
+            # Invalid level: -1 maps to LOG_ERR
             (-1, syslog.LOG_ERR, "Log.map_to_syslog() 5"),
         ],
     )
@@ -97,12 +120,19 @@ class TestLog:
     @pytest.mark.parametrize(
         "level, level_str, error",
         [
+            # LOG_NONE to "NONE"
             (Log.LOG_NONE, "NONE", "Log.level_to_str() 1"),
+            # LOG_ERROR to "ERROR"
             (Log.LOG_ERROR, "ERROR", "Log.level_to_str() 2"),
+            # LOG_CONFIG to "CONFIG"
             (Log.LOG_CONFIG, "CONFIG", "Log.level_to_str() 3"),
+            # LOG_INFO to "INFO"
             (Log.LOG_INFO, "INFO", "Log.level_to_str() 4"),
+            # LOG_DEBUG to "DEBUG"
             (Log.LOG_DEBUG, "DEBUG", "Log.level_to_str() 5"),
+            # Invalid level: -1 to "NONE"
             (-1, "NONE", "Log.level_to_str() 6"),
+            # Invalid level: 1000 to "NONE"
             (1000, "NONE", "Log.level_to_str() 7"),
         ],
     )

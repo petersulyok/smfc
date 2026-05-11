@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 #
-#   test_04_constfc.py (C) 2021-2026, Peter Sulyok
+#   test_constfc.py (C) 2021-2026, Peter Sulyok
 #   Unit tests for smfc.ConstFc() class.
 #
-from configparser import ConfigParser
+from typing import List
 import pytest
 from mock import MagicMock
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, ConstFc
+from smfc.config import Config
+from .test_data import create_const_config
 
 
 class TestConstFc:
@@ -16,13 +18,17 @@ class TestConstFc:
     @pytest.mark.parametrize(
         "ipmi_zone, polling, level, error",
         [
-            ("0", 30, 45, "ConstFc.__init__() 1"),
-            ("0, 1", 35, 55, "ConstFc.__init__() 2"),
-            ("0, 1, 2", 40, 60, "ConstFc.__init__() 3"),
-            ("0 1 2", 45, 65, "ConstFc.__init__() 4"),
+            # Single zone
+            ([0], 30, 45, "ConstFc.__init__() 1"),
+            # Comma-separated zones
+            ([0, 1], 35, 55, "ConstFc.__init__() 2"),
+            # Three comma-separated zones
+            ([0, 1, 2], 40, 60, "ConstFc.__init__() 3"),
+            # Space-separated zones
+            ([0, 1, 2], 45, 65, "ConstFc.__init__() 4"),
         ],
     )
-    def test_init_p1(self, mocker: MockerFixture, ipmi_zone: str, polling: float, level: int, error: str):
+    def test_init_p1(self, mocker: MockerFixture, ipmi_zone: List[int], polling: float, level: int, error: str):
         """Positive unit test for ConstFc.__init__() method. It contains the following steps:
         - mock print() function
         - initialize a Config, Log, Ipmi, and ConstFc classes
@@ -30,22 +36,16 @@ class TestConstFc:
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
-        my_config = ConfigParser()
-        my_config[ConstFc.CS_CONST_FC] = {
-            ConstFc.CV_CONST_FC_ENABLED: "1",
-            ConstFc.CV_CONST_FC_IPMI_ZONE: ipmi_zone,
-            ConstFc.CV_CONST_FC_POLLING: str(polling),
-            ConstFc.CV_CONST_FC_LEVEL: str(level),
-        }
+        cfg = create_const_config(enabled=True, ipmi_zone=ipmi_zone, polling=polling, level=level)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
-        my_constfc = ConstFc(my_log, my_ipmi, my_config)
+        my_constfc = ConstFc(my_log, my_ipmi, cfg)
         assert my_constfc.log == my_log, error
         assert my_constfc.ipmi == my_ipmi, error
-        assert my_constfc.ipmi_zone == [int(s) for s in ipmi_zone.split("," if "," in ipmi_zone else " ")], error
-        assert my_constfc.name == ConstFc.CS_CONST_FC, error
-        assert my_constfc.polling == polling, error
-        assert my_constfc.level == level, error
+        assert my_constfc.config.ipmi_zone == ipmi_zone, error
+        assert my_constfc.name == cfg.section, error
+        assert my_constfc.config.polling == polling, error
+        assert my_constfc.config.level == level, error
 
     @pytest.mark.parametrize("error", [("ConstFc.__init__() 5")])
     def test_init_p2(self, mocker: MockerFixture, error: str):
@@ -56,65 +56,62 @@ class TestConstFc:
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
-        my_config = ConfigParser()
-        my_config[ConstFc.CS_CONST_FC] = {ConstFc.CV_CONST_FC_ENABLED: "1"}
+        cfg = create_const_config(enabled=True)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
-        my_constfc = ConstFc(my_log, my_ipmi, my_config)
+        my_constfc = ConstFc(my_log, my_ipmi, cfg)
         assert my_constfc.log == my_log, error
         assert my_constfc.ipmi == my_ipmi
-        assert my_constfc.ipmi_zone == [Ipmi.HD_ZONE], error
-        assert my_constfc.name == ConstFc.CS_CONST_FC, error
-        assert my_constfc.polling == 30, error
-        assert my_constfc.level == 50, error
+        assert my_constfc.config.ipmi_zone == [Config.HD_ZONE], error
+        assert my_constfc.name == cfg.section, error
+        assert my_constfc.config.polling == Config.DV_CONST_POLLING, error
+        assert my_constfc.config.level == Config.DV_CONST_LEVEL, error
 
     @pytest.mark.parametrize(
         "ipmi_zone, polling, level, error",
         [
-            # invalid IPMI zone
+            # Invalid IPMI zone - special character
             ("!", 30, 40, "ConstFc.__init__() 6"),
+            # Invalid IPMI zone - negative
             ("-1", 30, 40, "ConstFc.__init__() 7"),
+            # Invalid IPMI zone - wrong separator
             ("1; 2", 30, 40, "ConstFc.__init__() 8"),
-            # invalid polling
-            ("0", -1, 40, "ConstFc.__init__() 9"),
-            # invalid level
-            ("0", 30, -1, "ConstFc.__init__() 10"),
-            ("0", 30, 102, "ConstFc.__init__() 11"),
+            # NOTE: Invalid polling/level tests (9-11) moved to Config validation tests,
+            # since validation now happens in Config class, not in ConstFc.__init__()
         ],
     )
-    def test_init_n(self, mocker: MockerFixture, ipmi_zone: str, polling: float, level: int, error: str):
+    # pylint: disable-next=unused-argument
+    def test_init_n(self, mocker: MockerFixture, ipmi_zone, polling: float, level: int, error: str):
         """Negative unit test for ConstFc.__init__() method. It contains the following steps:
         - mock print() function
-        - initialize a Config, Log, Ipmi, and ConstFc classes
+        - test that Config.parse_ipmi_zones() raises ValueError for invalid zone strings
         - ASSERT: if no ValueError assertion will be generated due to invalid configuration
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
-        my_config = ConfigParser()
-        my_config[ConstFc.CS_CONST_FC] = {
-            ConstFc.CV_CONST_FC_ENABLED: "1",
-            ConstFc.CV_CONST_FC_IPMI_ZONE: ipmi_zone,
-            ConstFc.CV_CONST_FC_POLLING: str(polling),
-            ConstFc.CV_CONST_FC_LEVEL: str(level),
-        }
-        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-        my_ipmi = Ipmi.__new__(Ipmi)
         with pytest.raises(Exception) as cm:
-            ConstFc(my_log, my_ipmi, my_config)
+            # Invalid zone strings should fail at parse time
+            Config.parse_ipmi_zones(ipmi_zone)
         assert cm.type is ValueError, error
 
     @pytest.mark.parametrize(
         "ipmi_zone, read_level, level, error",
         [
-            ("0", 30, 30, "ConstFc.run() 1"),
-            ("0, 1", 30, 30, "ConstFc.run() 2"),
-            ("0  1  2", 30, 30, "ConstFc.run() 3"),
-            ("0", 30, 40, "ConstFc.run() 4"),
-            ("0  1", 30, 40, "ConstFc.run() 5"),
-            ("0, 1, 2", 30, 40, "ConstFc.run() 6"),
+            # Single zone, same level
+            ([0], 30, 30, "ConstFc.run() 1"),
+            # Two zones, same level
+            ([0, 1], 30, 30, "ConstFc.run() 2"),
+            # Three zones space-separated, same level
+            ([0, 1, 2], 30, 30, "ConstFc.run() 3"),
+            # Single zone, different level
+            ([0], 30, 40, "ConstFc.run() 4"),
+            # Two zones space-separated, different level
+            ([0, 1], 30, 40, "ConstFc.run() 5"),
+            # Three zones comma-separated, different level
+            ([0, 1, 2], 30, 40, "ConstFc.run() 6"),
         ],
     )
-    def test_run_p(self, mocker: MockerFixture, ipmi_zone: str, read_level: int, level: int, error: str):
+    def test_run_p(self, mocker: MockerFixture, ipmi_zone: List[int], read_level: int, level: int, error: str):
         """Positive unit test for ConstFc.run() method. It contains the following steps:
         - mock print(), Ipmi.get_fan_level(), Ipmi.set_fan_level() functions
         - initialize a Config, Log, Ipmi, and ConstFc classes
@@ -128,31 +125,27 @@ class TestConstFc:
         mocker.patch("smfc.Ipmi.get_fan_level", mock_getfanlevel)
         mock_setfanlevel = MagicMock()
         mocker.patch("smfc.Ipmi.set_fan_level", mock_setfanlevel)
-        my_config = ConfigParser()
-        my_config[ConstFc.CS_CONST_FC] = {
-            ConstFc.CV_CONST_FC_ENABLED: "1",
-            ConstFc.CV_CONST_FC_IPMI_ZONE: ipmi_zone,
-            ConstFc.CV_CONST_FC_POLLING: str(3.0),
-            ConstFc.CV_CONST_FC_LEVEL: str(level),
-        }
+        cfg = create_const_config(enabled=True, ipmi_zone=ipmi_zone, polling=3.0, level=level)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
-        my_constfc = ConstFc(my_log, my_ipmi, my_config)
-        my_constfc.level = level
+        my_constfc = ConstFc(my_log, my_ipmi, cfg)
+        my_constfc.config.level = level
         my_constfc.last_time = -100.0
         my_constfc.run()
-        assert mock_getfanlevel.call_count == len(my_constfc.ipmi_zone), error
+        assert mock_getfanlevel.call_count == len(my_constfc.config.ipmi_zone), error
         if read_level != level:
-            assert mock_setfanlevel.call_count == len(my_constfc.ipmi_zone), error
+            assert mock_setfanlevel.call_count == len(my_constfc.config.ipmi_zone), error
 
     @pytest.mark.parametrize(
         "ipmi_zone, level, error",
         [
-            ("0", 45, "ConstFc.run() deferred 1"),
-            ("0, 1", 55, "ConstFc.run() deferred 2"),
+            # Single zone deferred
+            ([0], 45, "ConstFc.run() 7"),
+            # Two zones deferred
+            ([0, 1], 55, "ConstFc.run() 8"),
         ],
     )
-    def test_run_deferred(self, mocker: MockerFixture, ipmi_zone: str, level: int, error: str):
+    def test_run_deferred(self, mocker: MockerFixture, ipmi_zone: List[int], level: int, error: str):
         """Positive unit test for ConstFc.run() method in deferred mode. It contains the following steps:
         - mock print(), Ipmi.get_fan_level(), Ipmi.set_fan_level() functions
         - initialize a Config, Log, Ipmi, and ConstFc classes
@@ -165,16 +158,10 @@ class TestConstFc:
         mocker.patch("smfc.Ipmi.get_fan_level", mock_getfanlevel)
         mock_setfanlevel = MagicMock()
         mocker.patch("smfc.Ipmi.set_fan_level", mock_setfanlevel)
-        my_config = ConfigParser()
-        my_config[ConstFc.CS_CONST_FC] = {
-            ConstFc.CV_CONST_FC_ENABLED: "1",
-            ConstFc.CV_CONST_FC_IPMI_ZONE: ipmi_zone,
-            ConstFc.CV_CONST_FC_POLLING: str(3.0),
-            ConstFc.CV_CONST_FC_LEVEL: str(level),
-        }
+        cfg = create_const_config(enabled=True, ipmi_zone=ipmi_zone, polling=3.0, level=level)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
-        my_constfc = ConstFc(my_log, my_ipmi, my_config)
+        my_constfc = ConstFc(my_log, my_ipmi, cfg)
         my_constfc.deferred_apply = True
         my_constfc.last_time = -100.0
         my_constfc.run()

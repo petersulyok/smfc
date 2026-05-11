@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   test_14_genericx9.py (C) 2025-2026, Peter Sulyok
+#   test_genericx9.py (C) 2025-2026, Peter Sulyok
 #   Unit tests for smfc.genericx9 module (GenericX9Platform).
 #
 import subprocess
@@ -17,9 +17,13 @@ class TestGenericX9Platform:
     @pytest.mark.parametrize(
         "mode, error",
         [
+            # STANDARD mode
             (0, "GenericX9Platform.get_fan_mode() 1"),
+            # FULL mode
             (1, "GenericX9Platform.get_fan_mode() 2"),
+            # OPTIMAL mode
             (2, "GenericX9Platform.get_fan_mode() 3"),
+            # HEAVY_IO mode
             (4, "GenericX9Platform.get_fan_mode() 4"),
         ],
     )
@@ -39,9 +43,13 @@ class TestGenericX9Platform:
     @pytest.mark.parametrize(
         "zone, hex_output, expected_level, error",
         [
+            # Zone 0, level 0x80
             (0, " 80", 0x80, "GenericX9Platform.get_fan_level() 1"),
+            # Zone 1, level 0xFF
             (1, " ff", 0xFF, "GenericX9Platform.get_fan_level() 2"),
+            # Zone 2, level 0x00
             (2, " 00", 0x00, "GenericX9Platform.get_fan_level() 3"),
+            # Zone 3, level 0x40
             (3, " 40", 0x40, "GenericX9Platform.get_fan_level() 4"),
         ],
     )
@@ -62,7 +70,9 @@ class TestGenericX9Platform:
     @pytest.mark.parametrize(
         "zone, error",
         [
+            # Invalid zone: negative
             (-1, "GenericX9Platform.get_fan_level() 5"),
+            # Invalid zone: over 3
             (4, "GenericX9Platform.get_fan_level() 6"),
         ],
     )
@@ -92,9 +102,13 @@ class TestGenericX9Platform:
     @pytest.mark.parametrize(
         "mode, error",
         [
+            # STANDARD mode
             (FanMode.STANDARD, "GenericX9Platform.set_fan_mode() 1"),
+            # FULL mode
             (FanMode.FULL, "GenericX9Platform.set_fan_mode() 2"),
+            # OPTIMAL mode
             (FanMode.OPTIMAL, "GenericX9Platform.set_fan_mode() 3"),
+            # HEAVY_IO mode
             (FanMode.HEAVY_IO, "GenericX9Platform.set_fan_mode() 4"),
         ],
     )
@@ -115,8 +129,11 @@ class TestGenericX9Platform:
     @pytest.mark.parametrize(
         "mode, error",
         [
+            # Invalid mode: PUE not supported on X9
             (FanMode.PUE, "GenericX9Platform.set_fan_mode() 5"),
+            # Invalid mode: negative value
             (-1, "GenericX9Platform.set_fan_mode() 6"),
+            # Invalid mode: value over valid range
             (100, "GenericX9Platform.set_fan_mode() 7"),
         ],
     )
@@ -135,10 +152,14 @@ class TestGenericX9Platform:
     @pytest.mark.parametrize(
         "zone, level, expected_normalised, error",
         [
+            # Zone 0, level 100 (max) -> normalised 255
             (0, 100, 255, "GenericX9Platform.set_fan_level() 1"),
-            (1, 50, 127,  "GenericX9Platform.set_fan_level() 2"),
-            (2, 0, 0,     "GenericX9Platform.set_fan_level() 3"),
-            (3, 75, 191,  "GenericX9Platform.set_fan_level() 4"),
+            # Zone 1, level 50 -> normalised 127
+            (1, 50, 127, "GenericX9Platform.set_fan_level() 2"),
+            # Zone 2, level 0 (min) -> normalised 0
+            (2, 0, 0, "GenericX9Platform.set_fan_level() 3"),
+            # Zone 3, level 75 -> normalised 191
+            (3, 75, 191, "GenericX9Platform.set_fan_level() 4"),
         ],
     )
     def test_set_fan_level_p(self, zone: int, level: int, expected_normalised: int, error: str) -> None:
@@ -161,9 +182,13 @@ class TestGenericX9Platform:
     @pytest.mark.parametrize(
         "zone, level, error",
         [
+            # Invalid zone: negative
             (-1, 50, "GenericX9Platform.set_fan_level() 5"),
+            # Invalid zone: over 3
             (4, 50, "GenericX9Platform.set_fan_level() 6"),
+            # Invalid level: negative
             (0, -1, "GenericX9Platform.set_fan_level() 7"),
+            # Invalid level: over 100
             (0, 101, "GenericX9Platform.set_fan_level() 8"),
         ],
     )
@@ -182,8 +207,11 @@ class TestGenericX9Platform:
     @pytest.mark.parametrize(
         "zones, level, expected_normalised, error",
         [
+            # Two zones, level 100 -> normalised 255
             ([0, 1], 100, 255, "GenericX9Platform.set_multiple_fan_levels() 1"),
+            # Four zones, level 50 -> normalised 127
             ([0, 1, 2, 3], 50, 127, "GenericX9Platform.set_multiple_fan_levels() 2"),
+            # Single zone, level 0 -> normalised 0
             ([2], 0, 0, "GenericX9Platform.set_multiple_fan_levels() 3"),
         ],
     )
@@ -207,9 +235,13 @@ class TestGenericX9Platform:
     @pytest.mark.parametrize(
         "zones, level, error",
         [
+            # Invalid zone: negative in list
             ([-1, 0], 50, "GenericX9Platform.set_multiple_fan_levels() 4"),
+            # Invalid zone: over 3 in list
             ([0, 4], 50, "GenericX9Platform.set_multiple_fan_levels() 5"),
+            # Invalid level: negative
             ([0], -1, "GenericX9Platform.set_multiple_fan_levels() 6"),
+            # Invalid level: over 100
             ([0], 101, "GenericX9Platform.set_multiple_fan_levels() 7"),
         ],
     )

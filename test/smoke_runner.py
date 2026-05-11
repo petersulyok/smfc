@@ -6,13 +6,13 @@
 import atexit
 import sys
 import threading
-import time
 from configparser import ConfigParser
 from pytest import fixture
 from pyudev import Context
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, FanController, CpuFc, HdFc, NvmeFc, GpuFc, Service
-from .test_00_data import TestData, MockedContextGood
+from smfc import Log, Ipmi, FanController, Service
+from smfc.config import Config, CpuConfig, HdConfig, NvmeConfig, GpuConfig
+from .test_data import TestData, MockedContextGood
 
 # In case of adding a new command line parameter, see `conftest.py` as well.
 
@@ -81,140 +81,57 @@ class TestSmoke:
                 temp_updater_stop.wait(1.0)
 
         # pylint: disable=unused-argument, duplicate-code
-        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
+        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg: CpuConfig) -> None:
             nonlocal my_td
+            self.config = cfg
             self.hwmon_path = my_td.cpu_files
             count = len(my_td.cpu_files)
-            # Initialize FanController class.
-            FanController.__init__(
-                self, log, ipmi,
-                config[CpuFc.CS_CPU_FC].get(CpuFc.CV_CPU_FC_IPMI_ZONE, fallback=f"{Ipmi.CPU_ZONE}"),
-                CpuFc.CS_CPU_FC, count,
-                config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
-                config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_STEPS, fallback=6),
-                config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_SENSITIVITY, fallback=3.0),
-                config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_POLLING, fallback=2),
-                config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MIN_TEMP, fallback=30.0),
-                config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MAX_TEMP, fallback=60.0),
-                config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_MIN_LEVEL, fallback=35),
-                config[CpuFc.CS_CPU_FC].getint(CpuFc.CV_CPU_FC_MAX_LEVEL, fallback=100)
-            )
+            FanController.__init__(self, log, ipmi, cfg.section, count)
 
-        def mocked_hdfc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
-            nonlocal my_td
-            nonlocal cmd_smart
+        def mocked_hdfc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg: HdConfig, sudo: bool) -> None:
+            nonlocal my_td, cmd_smart
+            self.config = cfg
             self.hd_device_names = my_td.hd_name_list
             self.hwmon_path = my_td.hd_files
             count = len(my_td.hd_files)
             self.sudo = sudo
-
-            # Initialize FanController class.
-            FanController.__init__(
-                self, log, ipmi,
-                config[HdFc.CS_HD_FC].get(HdFc.CV_HD_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}"),
-                HdFc.CS_HD_FC, count,
-                config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
-                config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_STEPS, fallback=4),
-                config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_SENSITIVITY, fallback=2),
-                config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_POLLING, fallback=10),
-                config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_MIN_TEMP, fallback=32),
-                config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_MAX_TEMP, fallback=46),
-                config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_MIN_LEVEL, fallback=35),
-                config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_MAX_LEVEL, fallback=100)
-            )
-
-            # Save path for `smartctl` command.
-            self.smartctl_path = cmd_smart
-
-            # Read and validate the configuration of standby guard if enabled.
-            self.standby_guard_enabled = config[HdFc.CS_HD_FC].getboolean(HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED,
-                                                                          fallback=False)
+            cfg.smartctl_path = cmd_smart
+            FanController.__init__(self, log, ipmi, cfg.section, count)
             if self.count == 1:
                 self.log.msg(Log.LOG_INFO, "   WARNING: Standby guard is disabled ([HD] count=1")
-            self.standby_guard_enabled = False
-            if self.standby_guard_enabled:
-                self.standby_array_states = [False] * self.count
-                # Read and validate further parameters.
-                self.standby_hd_limit = config[HdFc.CS_HD_FC].getint(HdFc.CV_HD_FC_STANDBY_HD_LIMIT, fallback=1)
-                if self.standby_hd_limit < 0:
-                    raise ValueError("standby_hd_limit < 0")
-                if self.standby_hd_limit > self.count:
-                    raise ValueError("standby_hd_limit > count")
-                # Get the current power state of the HD array.
-                n = self.check_standby_state()
-                # Set calculated parameters.
-                self.standby_change_timestamp = time.monotonic()
-                self.standby_flag = n == self.count
-
-            # Print configuration in CONFIG log level (or higher).
+            self.config.standby_guard_enabled = False
             if self.log.log_level >= Log.LOG_CONFIG:
-                self.log.msg(Log.LOG_CONFIG, f"   {self.CV_HD_FC_HD_NAMES} = {self.hd_device_names}")
-                self.log.msg(Log.LOG_CONFIG, f"   {self.CV_HD_FC_SMARTCTL_PATH} = {self.smartctl_path}")
-                if self.standby_guard_enabled:
-                    self.log.msg(Log.LOG_CONFIG, "   Standby guard is enabled:")
-                    self.log.msg(Log.LOG_CONFIG, f"     {self.CV_HD_FC_STANDBY_HD_LIMIT} = {self.standby_hd_limit}")
-                else:
-                    self.log.msg(Log.LOG_CONFIG, "   Standby guard is disabled")
+                self.log.msg(Log.LOG_CONFIG, f"   hd_names = {self.hd_device_names}")
+                self.log.msg(Log.LOG_CONFIG, f"   smartctl_path = {self.config.smartctl_path}")
+                self.log.msg(Log.LOG_CONFIG, "   Standby guard is disabled")
 
-        def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
+        def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg: NvmeConfig) -> None:
             nonlocal my_td
+            self.config = cfg
             self.nvme_device_names = my_td.nvme_name_list
             self.hwmon_path = my_td.nvme_files
             count = len(my_td.nvme_files)
-
-            # Initialize FanController class.
-
-            FanController.__init__(
-                self, log, ipmi,
-                config[NvmeFc.CS_NVME_FC].get(NvmeFc.CV_NVME_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}"),
-                NvmeFc.CS_NVME_FC, count,
-                config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
-                config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_STEPS, fallback=4),
-                config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_SENSITIVITY, fallback=2),
-                config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_POLLING, fallback=10),
-                config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_MIN_TEMP, fallback=30),
-                config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_MAX_TEMP, fallback=50),
-                config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_MIN_LEVEL, fallback=35),
-                config[NvmeFc.CS_NVME_FC].getint(NvmeFc.CV_NVME_FC_MAX_LEVEL, fallback=100)
-            )
-            # Print configuration in CONFIG log level (or higher).
+            FanController.__init__(self, log, ipmi, cfg.section, count)
             if self.log.log_level >= Log.LOG_CONFIG:
-                self.log.msg(Log.LOG_CONFIG, f"   {self.CV_NVME_FC_NVME_NAMES} = {self.nvme_device_names}")
+                self.log.msg(Log.LOG_CONFIG, f"   nvme_names = {self.nvme_device_names}")
 
-        def mocked_gpufc_init(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
+        def mocked_gpufc_init(self, log: Log, ipmi: Ipmi, cfg: GpuConfig) -> None:
             nonlocal cmd_nvidia, cmd_rocm
-            self.gpu_device_ids = list(range(gpu_num))
-            count = len(self.gpu_device_ids)
-            self.gpu_type = config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
-            self.nvidia_smi_path = cmd_nvidia
-            self.rocm_smi_path = cmd_rocm
-
-            self.amd_temp_sensor = config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_AMD_TEMP_SENSOR, fallback=0)
+            cfg.gpu_device_ids = list(range(gpu_num))
+            cfg.nvidia_smi_path = cmd_nvidia
+            cfg.rocm_smi_path = cmd_rocm
+            self.config = cfg
             self.smi_called = 0
-
-            # Initialize FanController class.
-            FanController.__init__(
-                self, log, ipmi,
-                config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_IPMI_ZONE, fallback=f"{Ipmi.HD_ZONE}"),
-                GpuFc.CS_GPU_FC, count,
-                config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_TEMP_CALC, fallback=FanController.CALC_AVG),
-                config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_STEPS, fallback=4),
-                config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_SENSITIVITY, fallback=2),
-                config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_POLLING, fallback=10),
-                config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_MIN_TEMP, fallback=45),
-                config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_MAX_TEMP, fallback=70),
-                config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_MIN_LEVEL, fallback=35),
-                config[GpuFc.CS_GPU_FC].getint(GpuFc.CV_GPU_FC_MAX_LEVEL, fallback=100)
-            )
-
-            # Print configuration in CONFIG log level (or higher).
+            self.hwmon_path = []
+            FanController.__init__(self, log, ipmi, cfg.section, len(cfg.gpu_device_ids))
             if self.log.log_level >= Log.LOG_CONFIG:
-                self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_GPU_IDS} = {self.gpu_device_ids}")
-            if self.gpu_type == "nvidia":
-                self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_NVIDIA_SMI_PATH} = {self.nvidia_smi_path}")
-            else:
-                self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_ROCM_SMI_PATH} = {self.rocm_smi_path}")
-                self.log.msg(Log.LOG_CONFIG, f"   {self.CV_GPU_FC_AMD_TEMP_SENSOR} = {self.amd_temp_sensor}")
+                self.log.msg(Log.LOG_CONFIG, f"   gpu_type = {self.config.gpu_type}")
+                self.log.msg(Log.LOG_CONFIG, f"   gpu_device_ids = {self.config.gpu_device_ids}")
+                if self.config.gpu_type == "nvidia":
+                    self.log.msg(Log.LOG_CONFIG, f"   nvidia_smi_path = {self.config.nvidia_smi_path}")
+                else:
+                    self.log.msg(Log.LOG_CONFIG, f"   rocm_smi_path = {self.config.rocm_smi_path}")
+                    self.log.msg(Log.LOG_CONFIG, f"   amd_temp_sensor = {self.config.amd_temp_sensor}")
             # pragma pylint: enable=unused-argument, duplicate-code
 
         my_td = TestData()
@@ -235,38 +152,48 @@ class TestSmoke:
         my_config = ConfigParser()
         my_config.read(config_file)
         # Add generated parameters.
-        my_config[Ipmi.CS_IPMI][Ipmi.CV_IPMI_COMMAND] = cmd_ipmi
+        my_config[Config.CS_IPMI][Config.CV_IPMI_COMMAND] = cmd_ipmi
         if hd_num:
-            my_config[HdFc.CS_HD_FC][HdFc.CV_HD_FC_HD_NAMES] = my_td.hd_names
-            my_config[HdFc.CS_HD_FC][HdFc.CV_HD_FC_SMARTCTL_PATH] = cmd_smart
+            my_config[Config.CS_HD][Config.CV_HD_NAMES] = my_td.hd_names
+            my_config[Config.CS_HD][Config.CV_HD_SMARTCTL_PATH] = cmd_smart
         if nvme_num:
-            my_config[NvmeFc.CS_NVME_FC][NvmeFc.CV_NVME_FC_NVME_NAMES] = my_td.nvme_names
+            my_config[Config.CS_NVME][Config.CV_NVME_NAMES] = my_td.nvme_names
         if gpu_num:
-            gpu_type = my_config[GpuFc.CS_GPU_FC].get(GpuFc.CV_GPU_FC_GPU_TYPE, "nvidia").lower()
-            gpu_min = my_config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_MIN_TEMP, fallback=40.0)
-            gpu_max = my_config[GpuFc.CS_GPU_FC].getfloat(GpuFc.CV_GPU_FC_MAX_TEMP, fallback=70.0)
+            gpu_type = my_config[Config.CS_GPU].get(Config.CV_GPU_TYPE, Config.DV_GPU_TYPE).lower()
+            gpu_min = my_config[Config.CS_GPU].getfloat(Config.CV_MIN_TEMP, fallback=Config.DV_GPU_MIN_TEMP)
+            gpu_max = my_config[Config.CS_GPU].getfloat(Config.CV_MAX_TEMP, fallback=Config.DV_GPU_MAX_TEMP)
             cmd_nvidia = my_td.create_nvidia_smi_command(gpu_num, min_temp=gpu_min, max_temp=gpu_max)
             cmd_rocm = my_td.create_rocm_smi_command(gpu_num, min_temp=gpu_min, max_temp=gpu_max)
             if gpu_type == "nvidia":
-                my_config[GpuFc.CS_GPU_FC][GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH] = cmd_nvidia
+                my_config[Config.CS_GPU][Config.CV_GPU_NVIDIA_SMI_PATH] = cmd_nvidia
             else:
-                my_config[GpuFc.CS_GPU_FC][GpuFc.CV_GPU_FC_ROCM_SMI_PATH] = cmd_rocm
+                my_config[Config.CS_GPU][Config.CV_GPU_ROCM_SMI_PATH] = cmd_rocm
 
         # Extract temperature ranges from config for dynamic updates.
+        # Use next() to handle both plain [CPU] and multi-section [CPU:0], [CPU:1] configs.
         if cpu_num:
+            cpu_prefix = Config.CS_CPU + ":"
+            cpu_sec = next((s for s in my_config.sections() if s == Config.CS_CPU or s.startswith(cpu_prefix)),
+                           Config.CS_CPU)
             temp_ranges["cpu"] = (
-                my_config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MIN_TEMP, fallback=30.0),
-                my_config[CpuFc.CS_CPU_FC].getfloat(CpuFc.CV_CPU_FC_MAX_TEMP, fallback=60.0)
+                my_config[cpu_sec].getfloat(Config.CV_MIN_TEMP, fallback=Config.DV_CPU_MIN_TEMP),
+                my_config[cpu_sec].getfloat(Config.CV_MAX_TEMP, fallback=Config.DV_CPU_MAX_TEMP)
             )
         if hd_num:
+            hd_prefix = Config.CS_HD + ":"
+            hd_sec = next((s for s in my_config.sections() if s == Config.CS_HD or s.startswith(hd_prefix)),
+                          Config.CS_HD)
             temp_ranges["hd"] = (
-                my_config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_MIN_TEMP, fallback=32.0),
-                my_config[HdFc.CS_HD_FC].getfloat(HdFc.CV_HD_FC_MAX_TEMP, fallback=46.0)
+                my_config[hd_sec].getfloat(Config.CV_MIN_TEMP, fallback=Config.DV_HD_MIN_TEMP),
+                my_config[hd_sec].getfloat(Config.CV_MAX_TEMP, fallback=Config.DV_HD_MAX_TEMP)
             )
         if nvme_num:
+            nvme_prefix = Config.CS_NVME + ":"
+            nvme_sec = next((s for s in my_config.sections() if s == Config.CS_NVME or s.startswith(nvme_prefix)),
+                            Config.CS_NVME)
             temp_ranges["nvme"] = (
-                my_config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_MIN_TEMP, fallback=30.0),
-                my_config[NvmeFc.CS_NVME_FC].getfloat(NvmeFc.CV_NVME_FC_MAX_TEMP, fallback=50.0)
+                my_config[nvme_sec].getfloat(Config.CV_MIN_TEMP, fallback=Config.DV_NVME_MIN_TEMP),
+                my_config[nvme_sec].getfloat(Config.CV_MAX_TEMP, fallback=Config.DV_NVME_MAX_TEMP)
             )
 
         # Create a new config file

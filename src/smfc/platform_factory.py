@@ -29,7 +29,13 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
         PlatformName.GENERIC_X9: GenericX9Platform,
         PlatformName.X10QBI: X10QBi,
     }
-    return platform_factory.get(platform_name, GenericPlatform)(platform_name, exec_ipmitool)
+    platform_class = platform_factory.get(platform_name)
+    if platform_class is None:
+        if platform_name.startswith("X9"):
+            platform_class = GenericX9Platform
+        else:
+            platform_class = GenericPlatform
+    return platform_class(platform_name, exec_ipmitool)
 
 
 # End.

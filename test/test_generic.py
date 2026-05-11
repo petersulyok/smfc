@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   test_12_generic.py (C) 2025-2026, Peter Sulyok
+#   test_generic.py (C) 2025-2026, Peter Sulyok
 #   Unit tests for smfc.generic module (GenericPlatform).
 #
 import subprocess
@@ -17,9 +17,13 @@ class TestGenericPlatform:
     @pytest.mark.parametrize(
         "mode, error",
         [
+            # STANDARD mode
             (0, "GenericPlatform.get_fan_mode() 1"),
+            # FULL mode
             (1, "GenericPlatform.get_fan_mode() 2"),
+            # OPTIMAL mode
             (2, "GenericPlatform.get_fan_mode() 3"),
+            # HEAVY_IO mode
             (4, "GenericPlatform.get_fan_mode() 4"),
         ],
     )
@@ -39,9 +43,13 @@ class TestGenericPlatform:
     @pytest.mark.parametrize(
         "zone, hex_output, expected_level, error",
         [
+            # Zone 0, level 0x32
             (0, " 32", 0x32, "GenericPlatform.get_fan_level() 1"),
+            # Zone 1, level 0x64
             (1, " 64", 0x64, "GenericPlatform.get_fan_level() 2"),
+            # Zone 50, level 0xFF
             (50, " ff", 0xFF, "GenericPlatform.get_fan_level() 3"),
+            # Zone 100, level 0x00
             (100, " 00", 0x00, "GenericPlatform.get_fan_level() 4"),
         ],
     )
@@ -61,7 +69,9 @@ class TestGenericPlatform:
     @pytest.mark.parametrize(
         "zone, error",
         [
+            # Zone negative
             (-1, "GenericPlatform.get_fan_level() 5"),
+            # Zone over 100
             (101, "GenericPlatform.get_fan_level() 6"),
         ],
     )
@@ -91,10 +101,15 @@ class TestGenericPlatform:
     @pytest.mark.parametrize(
         "mode, error",
         [
+            # STANDARD mode
             (FanMode.STANDARD, "GenericPlatform.set_fan_mode() 1"),
+            # FULL mode
             (FanMode.FULL, "GenericPlatform.set_fan_mode() 2"),
+            # OPTIMAL mode
             (FanMode.OPTIMAL, "GenericPlatform.set_fan_mode() 3"),
+            # PUE mode
             (FanMode.PUE, "GenericPlatform.set_fan_mode() 4"),
+            # HEAVY_IO mode
             (FanMode.HEAVY_IO, "GenericPlatform.set_fan_mode() 5"),
         ],
     )
@@ -115,7 +130,9 @@ class TestGenericPlatform:
     @pytest.mark.parametrize(
         "mode, error",
         [
+            # Invalid mode: negative value
             (-1, "GenericPlatform.set_fan_mode() 6"),
+            # Invalid mode: value over valid range
             (100, "GenericPlatform.set_fan_mode() 7"),
         ],
     )
@@ -134,8 +151,11 @@ class TestGenericPlatform:
     @pytest.mark.parametrize(
         "zone, level, error",
         [
+            # Zone 0, level 50
             (0, 50, "GenericPlatform.set_fan_level() 1"),
+            # Zone 1, level 100 (max)
             (1, 100, "GenericPlatform.set_fan_level() 2"),
+            # Zone 100 (max), level 0 (min)
             (100, 0, "GenericPlatform.set_fan_level() 3"),
         ],
     )
@@ -158,9 +178,13 @@ class TestGenericPlatform:
     @pytest.mark.parametrize(
         "zone, level, error",
         [
+            # Invalid zone: negative
             (-1, 50, "GenericPlatform.set_fan_level() 4"),
+            # Invalid zone: over 100
             (101, 50, "GenericPlatform.set_fan_level() 5"),
+            # Invalid level: negative
             (0, -1, "GenericPlatform.set_fan_level() 6"),
+            # Invalid level: over 100
             (0, 101, "GenericPlatform.set_fan_level() 7"),
         ],
     )
@@ -179,8 +203,11 @@ class TestGenericPlatform:
     @pytest.mark.parametrize(
         "zones, level, error",
         [
+            # Two zones, level 100
             ([0, 1], 100, "GenericPlatform.set_multiple_fan_levels() 1"),
+            # Four zones, level 50
             ([0, 1, 2, 3], 50, "GenericPlatform.set_multiple_fan_levels() 2"),
+            # Single zone, level 0
             ([0], 0, "GenericPlatform.set_multiple_fan_levels() 3"),
         ],
     )
@@ -203,9 +230,13 @@ class TestGenericPlatform:
     @pytest.mark.parametrize(
         "zones, level, error",
         [
+            # Invalid zone: negative in list
             ([-1, 0], 50, "GenericPlatform.set_multiple_fan_levels() 4"),
+            # Invalid zone: over 100 in list
             ([0, 101], 50, "GenericPlatform.set_multiple_fan_levels() 5"),
+            # Invalid level: negative
             ([0], -1, "GenericPlatform.set_multiple_fan_levels() 6"),
+            # Invalid level: over 100
             ([0], 101, "GenericPlatform.set_multiple_fan_levels() 7"),
         ],
     )

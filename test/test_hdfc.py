@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 #
-#   test_05_hdfc.py (C) 2021-2026, Peter Sulyok
+#   test_hdfc.py (C) 2021-2026, Peter Sulyok
 #   Unit tests for smfc.HdFc() class.
 #
 import random
 import subprocess
 import os
 import time
-from configparser import ConfigParser
 from typing import List, Any
 import pytest
 import pyudev
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, FanController, HdFc
-from .test_00_data import TestData, MockDevices, factory_mockdevice
+from smfc import Log, Ipmi, HdFc
+from smfc.config import Config
+from .test_data import TestData, MockDevices, factory_mockdevice, create_hd_config
 
 
 class TestHdFc:
@@ -24,14 +24,17 @@ class TestHdFc:
         "count, ipmi_zone, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, sb_limit, "
         "sudo, error",
         [
-            # Test valid parameters (hd=1 case is not tested because it turns off standby guard).
-            (1, "0", FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, True,  "HdFc.__init__() 1"),
-            (2, "1", FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 2, False, "HdFc.__init__() 2"),
-            (4, "2", FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 4, True,  "HdFc.__init__() 3"),
-            (8, "3", FanController.CALC_MAX, 4, 2, 2, 32, 48, 35, 100, 6, False, "HdFc.__init__() 4"),
+            # 1 HD, zone 0, CALC_MIN, sudo=True
+            (1, [0], Config.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, True, "HdFc.__init__() 1"),
+            # 2 HDs, zone 1, CALC_AVG, sudo=False
+            (2, [1], Config.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 2, False, "HdFc.__init__() 2"),
+            # 4 HDs, zone 2, CALC_AVG, sudo=True
+            (4, [2], Config.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 4, True, "HdFc.__init__() 3"),
+            # 8 HDs, zone 3, CALC_MAX, sudo=False
+            (8, [3], Config.CALC_MAX, 4, 2, 2, 32, 48, 35, 100, 6, False, "HdFc.__init__() 4"),
         ],
     )
-    def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: str, temp_calc: int, steps: int,
+    def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: List[int], temp_calc: int, steps: int,
                      sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
                      max_level: int, sb_limit: int, sudo: bool, error: str):
         """Positive unit test for HdFc.__init__() method. It contains the following steps:
@@ -51,49 +54,42 @@ class TestHdFc:
         mocker.patch("smfc.HdFc._exec_smartctl", mock_ipmi_exec)
         mock_fancontroller_gethwmonpath = MagicMock(side_effect=my_td.hd_files)
         mocker.patch("smfc.FanController.get_hwmon_path", mock_fancontroller_gethwmonpath)
-        my_config = ConfigParser()
-        my_config[HdFc.CS_HD_FC] = {
-            HdFc.CV_HD_FC_ENABLED: "1",
-            HdFc.CV_HD_FC_IPMI_ZONE: ipmi_zone,
-            HdFc.CV_HD_FC_TEMP_CALC: str(temp_calc),
-            HdFc.CV_HD_FC_STEPS: str(steps),
-            HdFc.CV_HD_FC_SENSITIVITY: str(sensitivity),
-            HdFc.CV_HD_FC_POLLING: str(polling),
-            HdFc.CV_HD_FC_MIN_TEMP: str(min_temp),
-            HdFc.CV_HD_FC_MAX_TEMP: str(max_temp),
-            HdFc.CV_HD_FC_MIN_LEVEL: str(min_level),
-            HdFc.CV_HD_FC_MAX_LEVEL: str(max_level),
-            HdFc.CV_HD_FC_HD_NAMES: my_td.hd_names,
-            HdFc.CV_HD_FC_SMARTCTL_PATH: cmd_smart,
-            HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED: "1",
-            HdFc.CV_HD_FC_STANDBY_HD_LIMIT: str(sb_limit),
-        }
+        cfg = create_hd_config(enabled=True, ipmi_zone=ipmi_zone, temp_calc=temp_calc, steps=steps,
+                               sensitivity=sensitivity, polling=polling, min_temp=min_temp, max_temp=max_temp,
+                               min_level=min_level, max_level=max_level, hd_names=my_td.hd_name_list,
+                               smartctl_path=cmd_smart, standby_guard_enabled=True, standby_hd_limit=sb_limit)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_udevc = pyudev.Context.__new__(pyudev.Context)
-        my_hdfc = HdFc(my_log, my_udevc, my_ipmi, my_config, sudo)
-        assert my_hdfc.ipmi_zone == [int(s) for s in ipmi_zone.split("," if "," in ipmi_zone else " ")], error
-        assert my_hdfc.name == HdFc.CS_HD_FC, error
+        my_hdfc = HdFc(my_log, my_udevc, my_ipmi, cfg, sudo)
+        assert my_hdfc.config.ipmi_zone == ipmi_zone, error
+        assert my_hdfc.name == cfg.section, error
         assert my_hdfc.count == count, error
         assert my_hdfc.sudo == sudo, error
-        assert my_hdfc.temp_calc == temp_calc, error
-        assert my_hdfc.steps == steps, error
-        assert my_hdfc.sensitivity == sensitivity, error
-        assert my_hdfc.polling == polling, error
-        assert my_hdfc.min_temp == min_temp, error
-        assert my_hdfc.max_temp == max_temp, error
-        assert my_hdfc.min_level == min_level, error
-        assert my_hdfc.max_level == max_level, error
-        assert my_hdfc.smoothing == 1, error
+        assert my_hdfc.config.temp_calc == temp_calc, error
+        assert my_hdfc.config.steps == steps, error
+        assert my_hdfc.config.sensitivity == sensitivity, error
+        assert my_hdfc.config.polling == polling, error
+        assert my_hdfc.config.min_temp == min_temp, error
+        assert my_hdfc.config.max_temp == max_temp, error
+        assert my_hdfc.config.min_level == min_level, error
+        assert my_hdfc.config.max_level == max_level, error
+        assert my_hdfc.config.smoothing == 1, error
         assert my_hdfc.hd_device_names == my_td.hd_name_list, error
-        assert my_hdfc.smartctl_path == cmd_smart, error
+        assert my_hdfc.config.smartctl_path == cmd_smart, error
         assert my_hdfc.hwmon_path == my_td.hd_files, error
         if count > 1:
-            assert my_hdfc.standby_hd_limit == sb_limit, error
-            assert my_hdfc.standby_guard_enabled is True, error
+            assert my_hdfc.config.standby_hd_limit == sb_limit, error
+            assert my_hdfc.config.standby_guard_enabled is True, error
         del my_td
 
-    @pytest.mark.parametrize("error", ["HdFc.__init__() 5"])
+    @pytest.mark.parametrize(
+        "error",
+        [
+            # Default configuration values test
+            ("HdFc.__init__() 5"),
+        ],
+    )
     def test_init_p2(self, mocker: MockerFixture, error: str):
         """Positive unit test for HdFc.__init__() method. It contains the following steps:
         - mock print(), pyudev.Devices.from_device_file(), pyudev.Device, smfc.FanController.get_hwmon_path()
@@ -109,43 +105,42 @@ class TestHdFc:
         mocker.patch("pyudev.Devices.from_device_file", MockDevices.from_device_file)
         mock_fancontroller_gethwmonpath = MagicMock(side_effect=my_td.hd_files)
         mocker.patch("smfc.FanController.get_hwmon_path", mock_fancontroller_gethwmonpath)
-        my_config = ConfigParser()
-        my_config[HdFc.CS_HD_FC] = {HdFc.CV_HD_FC_ENABLED: "1", HdFc.CV_HD_FC_HD_NAMES: my_td.hd_names}
+        cfg = create_hd_config(enabled=True, hd_names=my_td.hd_name_list)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_udevc = pyudev.Context.__new__(pyudev.Context)
-        my_hdfc = HdFc(my_log, my_udevc, my_ipmi, my_config, False)
+        my_hdfc = HdFc(my_log, my_udevc, my_ipmi, cfg, False)
         assert my_hdfc.log == my_log, error
         assert my_hdfc.ipmi == my_ipmi
-        assert my_hdfc.ipmi_zone == [Ipmi.HD_ZONE], error
-        assert my_hdfc.name == HdFc.CS_HD_FC, error
+        assert my_hdfc.config.ipmi_zone == [Config.HD_ZONE], error
+        assert my_hdfc.name == cfg.section, error
         assert my_hdfc.count == count, error
         assert my_hdfc.sudo is False
-        assert my_hdfc.temp_calc == FanController.CALC_AVG, error
-        assert my_hdfc.steps == 4, error
-        assert my_hdfc.sensitivity == 2, error
-        assert my_hdfc.polling == 10, error
-        assert my_hdfc.min_temp == 32, error
-        assert my_hdfc.max_temp == 46, error
-        assert my_hdfc.min_level == 35, error
-        assert my_hdfc.max_level == 100, error
-        assert my_hdfc.smoothing == 1, error
+        assert my_hdfc.config.temp_calc == Config.CALC_AVG, error
+        assert my_hdfc.config.steps == Config.DV_HD_STEPS, error
+        assert my_hdfc.config.sensitivity == Config.DV_HD_SENSITIVITY, error
+        assert my_hdfc.config.polling == Config.DV_HD_POLLING, error
+        assert my_hdfc.config.min_temp == Config.DV_HD_MIN_TEMP, error
+        assert my_hdfc.config.max_temp == Config.DV_HD_MAX_TEMP, error
+        assert my_hdfc.config.min_level == Config.DV_HD_MIN_LEVEL, error
+        assert my_hdfc.config.max_level == Config.DV_HD_MAX_LEVEL, error
+        assert my_hdfc.config.smoothing == Config.DV_HD_SMOOTHING, error
         assert my_hdfc.hd_device_names == my_td.hd_name_list, error
-        assert my_hdfc.smartctl_path == "/usr/sbin/smartctl", error
+        assert my_hdfc.config.smartctl_path == Config.DV_HD_SMARTCTL_PATH, error
         assert my_hdfc.hwmon_path == my_td.hd_files, error
         del my_td
 
     @pytest.mark.parametrize(
         "count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, sb_limit, error",
         [
-            # hd_names= not specified (count = 0)
-            (0, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2,  "HdFc.__init__() 6"),
+            # hd_names not specified (count=0)
+            (0, Config.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, "HdFc.__init__() 6"),
             # standby_hd_limit < 0
-            (2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, -1, "HdFc.__init__() 7"),
+            (2, Config.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, -1, "HdFc.__init__() 7"),
             # standby_hd_limit > count
-            (2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100,  4, "HdFc.__init__() 8"),
-            # Invalid device name (count == 100)
-            (100, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4, "HdFc.__init__() 9"),
+            (2, Config.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4, "HdFc.__init__() 8"),
+            # Invalid device name (count=100 triggers error)
+            (100, Config.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4, "HdFc.__init__() 9"),
         ],
     )
     def test_init_n1(self, mocker: MockerFixture, count: int, temp_calc: int, steps: int, sensitivity: float,
@@ -160,7 +155,7 @@ class TestHdFc:
         cmd_smart = my_td.create_command_file('echo "ACTIVE"')
         if count == 100:
             my_td.create_hd_data(1)
-            my_td.hd_names = "raise\n"
+            my_td.hd_name_list = ["raise"]
         else:
             my_td.create_hd_data(count)
         mock_print = MagicMock()
@@ -169,34 +164,24 @@ class TestHdFc:
         mocker.patch("pyudev.Devices.from_device_file", MockDevices.from_device_file)
         mock_fancontroller_gethwmonpath = MagicMock(side_effect=my_td.hd_files)
         mocker.patch("smfc.FanController.get_hwmon_path", mock_fancontroller_gethwmonpath)
-        my_config = ConfigParser()
-        my_config[HdFc.CS_HD_FC] = {
-            HdFc.CV_HD_FC_ENABLED: "1",
-            HdFc.CV_HD_FC_TEMP_CALC: str(temp_calc),
-            HdFc.CV_HD_FC_STEPS: str(steps),
-            HdFc.CV_HD_FC_SENSITIVITY: str(sensitivity),
-            HdFc.CV_HD_FC_POLLING: str(polling),
-            HdFc.CV_HD_FC_MIN_TEMP: str(min_temp),
-            HdFc.CV_HD_FC_MAX_TEMP: str(max_temp),
-            HdFc.CV_HD_FC_MIN_LEVEL: str(min_level),
-            HdFc.CV_HD_FC_MAX_LEVEL: str(max_level),
-            HdFc.CV_HD_FC_HD_NAMES: my_td.hd_names,
-            HdFc.CV_HD_FC_SMARTCTL_PATH: cmd_smart,
-            HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED: "1",
-            HdFc.CV_HD_FC_STANDBY_HD_LIMIT: str(sb_limit),
-        }
+        cfg = create_hd_config(enabled=True, temp_calc=temp_calc, steps=steps, sensitivity=sensitivity,
+                               polling=polling, min_temp=min_temp, max_temp=max_temp, min_level=min_level,
+                               max_level=max_level, hd_names=my_td.hd_name_list, smartctl_path=cmd_smart,
+                               standby_guard_enabled=True, standby_hd_limit=sb_limit)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_udevc = pyudev.Context.__new__(pyudev.Context)
         with pytest.raises(Exception) as cm:
-            HdFc(my_log, my_udevc, my_ipmi, my_config, False)
+            HdFc(my_log, my_udevc, my_ipmi, cfg, False)
         assert cm.type is ValueError, error
         del my_td
 
     @pytest.mark.parametrize(
         "hd_names, error",
         [
+            # NVMe device only
             ("/dev/nvme0n1", "HdFc.__init__() 10"),
+            # Mixed SATA and NVMe devices
             ("/dev/sda /dev/nvme1n1", "HdFc.__init__() 11"),
         ],
     )
@@ -211,16 +196,12 @@ class TestHdFc:
         mocker.patch("builtins.print", mock_print)
         mocker.patch.object(pyudev.Device, "__new__", new_callable=factory_mockdevice)
         mocker.patch("pyudev.Devices.from_device_file", MockDevices.from_device_file)
-        my_config = ConfigParser()
-        my_config[HdFc.CS_HD_FC] = {
-            HdFc.CV_HD_FC_ENABLED: "1",
-            HdFc.CV_HD_FC_HD_NAMES: hd_names,
-        }
+        cfg = create_hd_config(enabled=True, hd_names=hd_names.split())
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_udevc = pyudev.Context.__new__(pyudev.Context)
         with pytest.raises(Exception) as cm:
-            HdFc(my_log, my_udevc, my_ipmi, my_config, False)
+            HdFc(my_log, my_udevc, my_ipmi, cfg, False)
         assert cm.type is ValueError, error
         del my_td
 
@@ -228,11 +209,17 @@ class TestHdFc:
     @pytest.mark.parametrize(
         "args, sudo, error",
         [
+            # -a flag with sudo
             (["-a", "/dev/sda"], True, "HdFc._exec_smartctl() 1"),
+            # -a flag without sudo
             (["-a", "/dev/sda"], False, "HdFc._exec_smartctl() 2"),
+            # standby check with sudo
             (["-i", "-n", "standby", "/dev/sda"], True, "HdFc._exec_smartctl() 3"),
+            # standby check without sudo
             (["-i", "-n", "standby", "/dev/sda"], False, "HdFc._exec_smartctl() 4"),
+            # -s flag with sudo
             (["-s", "/dev/sda"], True, "HdFc._exec_smartctl() 5"),
+            # -s flag without sudo
             (["-s", "/dev/sda"], False, "HdFc._exec_smartctl() 6"),
         ],
     )
@@ -246,7 +233,7 @@ class TestHdFc:
         expected_args: List[str]
 
         my_hdfc = HdFc.__new__(HdFc)
-        my_hdfc.smartctl_path = "smartctl"
+        my_hdfc.config = create_hd_config(smartctl_path="smartctl")
         my_hdfc.sudo = sudo
         mock_subprocess_run = MagicMock()
         mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=0, stdout="", stderr="")
@@ -255,18 +242,20 @@ class TestHdFc:
         expected_args = []
         if sudo:
             expected_args.append("sudo")
-        expected_args.append(my_hdfc.smartctl_path)
+        expected_args.append(my_hdfc.config.smartctl_path)
         expected_args.extend(args)
         mock_subprocess_run.assert_called_with(expected_args, capture_output=True, check=False, text=True)
         assert mock_subprocess_run.call_count == 1, error
 
     # pylint: disable=R0801
+
+    # pylint: disable=R0801
     @pytest.mark.parametrize(
         "smartctl_command, sudo, rc, exception, error",
         [
-            # The real subprocess.run() executed (without sudo)
+            # Non-existent command path
             ("/nonexistent/command", False, 0, FileNotFoundError, "HdFc._exec_smartctl() 7"),
-            # The mocked subprocess.run() executed and returns non-zero return code
+            # Non-zero return code with sudo
             ("", True, 1, RuntimeError, "HdFc._exec_smartctl() 8"),
         ],
     )
@@ -284,7 +273,7 @@ class TestHdFc:
             mock_subprocess_run.return_value = subprocess.CompletedProcess([], returncode=rc,
                                                                            stderr="sudo: smartctl: command not found")
         my_hdfc = HdFc.__new__(HdFc)
-        my_hdfc.smartctl_path = smartctl_command
+        my_hdfc.config = create_hd_config(smartctl_path=smartctl_command)
         my_hdfc.sudo = sudo
         with pytest.raises(Exception) as cm:
             my_hdfc._exec_smartctl(["-a", "/dev/sda"])
@@ -292,12 +281,18 @@ class TestHdFc:
 
     # pylint: enable=R0801
 
+    # pylint: enable=R0801
+
     @pytest.mark.parametrize(
         "count, temperatures, error",
         [
+            # 1 HD via hwmon
             (1, [32], "HdFc._get_nth_temp() 1"),
+            # 2 HDs via hwmon
             (2, [33, 34], "HdFc._get_nth_temp() 2"),
+            # 4 HDs via hwmon
             (4, [33, 34, 35, 38], "HdFc._get_nth_temp() 3"),
+            # 8 HDs via hwmon
             (8, [33, 34, 35, 38, 36, 37, 31, 30], "HdFc._get_nth_temp() 4"),
         ],
     )
@@ -321,9 +316,13 @@ class TestHdFc:
     @pytest.mark.parametrize(
         "count, temperatures, error",
         [
+            # 1 HD via smartctl
             (1, [32], "HdFc._get_nth_temp() 5"),
+            # 2 HDs via smartctl
             (2, [33, 34], "HdFc._get_nth_temp() 6"),
+            # 4 HDs via smartctl
             (4, [33, 34, 35, 38], "HdFc._get_nth_temp() 7"),
+            # 8 HDs via smartctl
             (8, [33, 34, 35, 38, 36, 37, 31, 30], "HdFc._get_nth_temp() 8"),
         ],
     )
@@ -359,7 +358,7 @@ class TestHdFc:
         my_hdfc.hd_device_names = my_td.hd_name_list
         my_hdfc.hwmon_path = [""] * count
         my_hdfc.sudo = False
-        my_hdfc.smartctl_path = "/usr/sbin/smartctl"
+        my_hdfc.config = create_hd_config(smartctl_path="/usr/sbin/smartctl")
         mock_exec_smartclt = MagicMock()
         mock_exec_smartclt.return_value = subprocess.CompletedProcess([], returncode=0, stdout=smartctl_output)
         mocker.patch("smfc.HdFc._exec_smartctl", mock_exec_smartclt)
@@ -373,17 +372,17 @@ class TestHdFc:
     @pytest.mark.parametrize(
         "operation, exception, error",
         [
-            # 0. hwmon - FileNotFoundError
+            # hwmon - FileNotFoundError
             (0, FileNotFoundError, "HdFc._get_nth_temp() 9"),
-            # 1. hwmon - IndexError
+            # hwmon - IndexError
             (1, IndexError, "HdFc._get_nth_temp() 10"),
-            # 2. hwmon - ValueError
+            # hwmon - ValueError
             (2, ValueError, "HdFc._get_nth_temp() 11"),
-            # 3. smartctl - FileNotFoundError
+            # smartctl - FileNotFoundError
             (3, FileNotFoundError, "HdFc._get_nth_temp() 12"),
-            # 4. smartctl - IndexError
+            # smartctl - IndexError
             (4, IndexError, "HdFc._get_nth_temp() 13"),
-            # 5. smartctl - ValueError
+            # smartctl - ValueError
             (5, ValueError, "HdFc._get_nth_temp() 14"),
         ],
     )
@@ -404,6 +403,7 @@ class TestHdFc:
         my_hdfc.hd_device_names = my_td.hd_name_list
         my_hdfc.count = 1
         my_hdfc.sudo = False
+        my_hdfc.config = create_hd_config(smartctl_path="/usr/sbin/smartctl")
         # FileNotFoundError: invalid file name with hwmon
         if operation == 0:
             my_hdfc.hwmon_path[0] = "/tmp/non_existent_dir/non_existent_file"
@@ -416,7 +416,7 @@ class TestHdFc:
         # FileNotFoundError: invalid file name with smartctl
         elif operation == 3:
             my_hdfc.hwmon_path[0] = ""
-            my_hdfc.smartctl_path = "/tmp/non_existent_dir/non_existent_file"
+            my_hdfc.config = create_hd_config(smartctl_path="/tmp/non_existent_dir/non_existent_file")
         # IndexError: index error with smartctl
         elif operation == 4:
             my_hdfc.hwmon_path[0] = ""
@@ -424,7 +424,6 @@ class TestHdFc:
         # ValueError: temperature not found in smartctl's output
         elif operation == 5:
             my_hdfc.hwmon_path[0] = ""
-            my_hdfc.smartctl_path = "/usr/sbin/smartctl"
             mock_subprocess_run = MagicMock()
             mock_subprocess_run.return_value = subprocess.CompletedProcess(
                 [], returncode=0, stdout="invalid\ninvalid\ninvalid\n"
@@ -440,16 +439,26 @@ class TestHdFc:
     @pytest.mark.parametrize(
         "states, result, error",
         [
-            ([True, True, True, True, True, True, True, True],         "SSSSSSSS", "HdFc.get_standby_state_str() 1"),
+            # All drives in STANDBY
+            ([True, True, True, True, True, True, True, True], "SSSSSSSS", "HdFc.get_standby_state_str() 1"),
+            # All drives ACTIVE
             ([False, False, False, False, False, False, False, False], "AAAAAAAA", "HdFc.get_standby_state_str() 2"),
-            ([True, False, False, False, False, False, False, False],  "SAAAAAAA", "HdFc.get_standby_state_str() 3"),
-            ([False, True, False, False, False, False, False, False],  "ASAAAAAA", "HdFc.get_standby_state_str() 4"),
-            ([False, False, True, False, False, False, False, False],  "AASAAAAA", "HdFc.get_standby_state_str() 5"),
-            ([False, False, False, True, False, False, False, False],  "AAASAAAA", "HdFc.get_standby_state_str() 6"),
-            ([False, False, False, False, True, False, False, False],  "AAAASAAA", "HdFc.get_standby_state_str() 7"),
-            ([False, False, False, False, False, True, False, False],  "AAAAASAA", "HdFc.get_standby_state_str() 8"),
-            ([False, False, False, False, False, False, True, False],  "AAAAAASA", "HdFc.get_standby_state_str() 9"),
-            ([False, False, False, False, False, False, False, True],  "AAAAAAAS", "HdFc.get_standby_state_str() 10"),
+            # Drive 0 in STANDBY
+            ([True, False, False, False, False, False, False, False], "SAAAAAAA", "HdFc.get_standby_state_str() 3"),
+            # Drive 1 in STANDBY
+            ([False, True, False, False, False, False, False, False], "ASAAAAAA", "HdFc.get_standby_state_str() 4"),
+            # Drive 2 in STANDBY
+            ([False, False, True, False, False, False, False, False], "AASAAAAA", "HdFc.get_standby_state_str() 5"),
+            # Drive 3 in STANDBY
+            ([False, False, False, True, False, False, False, False], "AAASAAAA", "HdFc.get_standby_state_str() 6"),
+            # Drive 4 in STANDBY
+            ([False, False, False, False, True, False, False, False], "AAAASAAA", "HdFc.get_standby_state_str() 7"),
+            # Drive 5 in STANDBY
+            ([False, False, False, False, False, True, False, False], "AAAAASAA", "HdFc.get_standby_state_str() 8"),
+            # Drive 6 in STANDBY
+            ([False, False, False, False, False, False, True, False], "AAAAAASA", "HdFc.get_standby_state_str() 9"),
+            # Drive 7 in STANDBY
+            ([False, False, False, False, False, False, False, True], "AAAAAAAS", "HdFc.get_standby_state_str() 10"),
         ],
     )
     def test_get_standby_state_str(self, states: List[bool], result: str, error: str):
@@ -467,21 +476,37 @@ class TestHdFc:
     @pytest.mark.parametrize(
         "states, in_standby, error",
         [
-            ([True, True, True, True, True, True, True, True],         8, "HdFc.check_standby_state() 1"),
-            ([False, True, True, True, True, True, True, True],        7, "HdFc.check_standby_state() 2"),
-            ([True, False, True, True, True, True, True, True],        7, "HdFc.check_standby_state() 3"),
-            ([True, True, False, True, True, True, True, True],        7, "HdFc.check_standby_state() 4"),
-            ([True, True, True, False, True, True, True, True],        7, "HdFc.check_standby_state() 5"),
-            ([True, True, True, True, False, True, True, True],        7, "HdFc.check_standby_state() 6"),
-            ([True, True, True, True, True, False, True, True],        7, "HdFc.check_standby_state() 7"),
-            ([True, True, True, True, True, True, False, True],        7, "HdFc.check_standby_state() 8"),
-            ([True, True, True, True, True, True, True, False],        7, "HdFc.check_standby_state() 9"),
-            ([True, False, True, True, True, True, True, False],       6, "HdFc.check_standby_state() 10"),
-            ([True, False, True, True, False, True, True, False],      5, "HdFc.check_standby_state() 11"),
-            ([False, False, True, True, False, True, True, False],     4, "HdFc.check_standby_state() 12"),
-            ([False, False, True, False, False, True, True, False],    3, "HdFc.check_standby_state() 13"),
-            ([False, False, True, False, False, True, False, False],   2, "HdFc.check_standby_state() 14"),
-            ([False, False, False, False, False, True, False, False],  1, "HdFc.check_standby_state() 15"),
+            # 8 drives in STANDBY
+            ([True, True, True, True, True, True, True, True], 8, "HdFc.check_standby_state() 1"),
+            # 7 drives in STANDBY (drive 0 ACTIVE)
+            ([False, True, True, True, True, True, True, True], 7, "HdFc.check_standby_state() 2"),
+            # 7 drives in STANDBY (drive 1 ACTIVE)
+            ([True, False, True, True, True, True, True, True], 7, "HdFc.check_standby_state() 3"),
+            # 7 drives in STANDBY (drive 2 ACTIVE)
+            ([True, True, False, True, True, True, True, True], 7, "HdFc.check_standby_state() 4"),
+            # 7 drives in STANDBY (drive 3 ACTIVE)
+            ([True, True, True, False, True, True, True, True], 7, "HdFc.check_standby_state() 5"),
+            # 7 drives in STANDBY (drive 4 ACTIVE)
+            ([True, True, True, True, False, True, True, True], 7, "HdFc.check_standby_state() 6"),
+            # 7 drives in STANDBY (drive 5 ACTIVE)
+            ([True, True, True, True, True, False, True, True], 7, "HdFc.check_standby_state() 7"),
+            # 7 drives in STANDBY (drive 6 ACTIVE)
+            ([True, True, True, True, True, True, False, True], 7, "HdFc.check_standby_state() 8"),
+            # 7 drives in STANDBY (drive 7 ACTIVE)
+            ([True, True, True, True, True, True, True, False], 7, "HdFc.check_standby_state() 9"),
+            # 6 drives in STANDBY
+            ([True, False, True, True, True, True, True, False], 6, "HdFc.check_standby_state() 10"),
+            # 5 drives in STANDBY
+            ([True, False, True, True, False, True, True, False], 5, "HdFc.check_standby_state() 11"),
+            # 4 drives in STANDBY
+            ([False, False, True, True, False, True, True, False], 4, "HdFc.check_standby_state() 12"),
+            # 3 drives in STANDBY
+            ([False, False, True, False, False, True, True, False], 3, "HdFc.check_standby_state() 13"),
+            # 2 drives in STANDBY
+            ([False, False, True, False, False, True, False, False], 2, "HdFc.check_standby_state() 14"),
+            # 1 drive in STANDBY
+            ([False, False, False, False, False, True, False, False], 1, "HdFc.check_standby_state() 15"),
+            # 0 drives in STANDBY (all ACTIVE)
             ([False, False, False, False, False, False, False, False], 0, "HdFc.check_standby_state() 16"),
         ],
     )
@@ -535,7 +560,7 @@ class TestHdFc:
         my_hdfc.sudo = False
         my_hdfc.hd_device_names = my_td.hd_name_list
         my_hdfc.hwmon_path = [""] * count
-        my_hdfc.smartctl_path = "/usr/sbin/smartctl"
+        my_hdfc.config = create_hd_config(smartctl_path="/usr/sbin/smartctl")
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
@@ -550,15 +575,24 @@ class TestHdFc:
     @pytest.mark.parametrize(
         "states, count, error",
         [
+            # All ACTIVE, send 8 standby commands
             ([False, False, False, False, False, False, False, False], 8, "HdFc.go_standby_state() 1"),
-            ([True, False, False, False, False, False, False, False],  7, "HdFc.go_standby_state() 2"),
-            ([True, True, False, False, False, False, False, False],   6, "HdFc.go_standby_state() 3"),
-            ([True, True, True, False, False, False, False, False],    5, "HdFc.go_standby_state() 4"),
-            ([True, True, True, True, False, False, False, False],     4, "HdFc.go_standby_state() 5"),
-            ([True, True, True, True, True, False, False, False],      3, "HdFc.go_standby_state() 6"),
-            ([True, True, True, True, True, True, False, False],       2, "HdFc.go_standby_state() 7"),
-            ([True, True, True, True, True, True, True, False],        1, "HdFc.go_standby_state() 8"),
-            ([True, True, True, True, True, True, True, True],         0, "HdFc.go_standby_state() 9"),
+            # 1 in STANDBY, send 7 standby commands
+            ([True, False, False, False, False, False, False, False], 7, "HdFc.go_standby_state() 2"),
+            # 2 in STANDBY, send 6 standby commands
+            ([True, True, False, False, False, False, False, False], 6, "HdFc.go_standby_state() 3"),
+            # 3 in STANDBY, send 5 standby commands
+            ([True, True, True, False, False, False, False, False], 5, "HdFc.go_standby_state() 4"),
+            # 4 in STANDBY, send 4 standby commands
+            ([True, True, True, True, False, False, False, False], 4, "HdFc.go_standby_state() 5"),
+            # 5 in STANDBY, send 3 standby commands
+            ([True, True, True, True, True, False, False, False], 3, "HdFc.go_standby_state() 6"),
+            # 6 in STANDBY, send 2 standby commands
+            ([True, True, True, True, True, True, False, False], 2, "HdFc.go_standby_state() 7"),
+            # 7 in STANDBY, send 1 standby command
+            ([True, True, True, True, True, True, True, False], 1, "HdFc.go_standby_state() 8"),
+            # All in STANDBY, send 0 standby commands
+            ([True, True, True, True, True, True, True, True], 0, "HdFc.go_standby_state() 9"),
         ],
     )
     def test_go_standby_state(self, mocker: MockerFixture, states: List[bool], count: int, error: str):
@@ -574,7 +608,7 @@ class TestHdFc:
         my_hdfc.count = 8
         my_hdfc.sudo = False
         my_hdfc.hd_device_names = my_td.hd_name_list
-        my_hdfc.smartctl_path = "/usr/sbin/smartctl"
+        my_hdfc.config = create_hd_config(smartctl_path="/usr/sbin/smartctl")
         my_hdfc.standby_array_states = states
         mock_exec_smartctl = MagicMock()
         mock_exec_smartctl.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -587,16 +621,20 @@ class TestHdFc:
     @pytest.mark.parametrize(
         "old_state, states, new_state, error",
         [
-            # 1. No state changes.
+            # No state changes: all ACTIVE
             (False, [False, False, False, False, False, False, False, False], False, "HdFc.run_standby_guard() 1"),
-            (True,  [True, True, True, True, True, True, True, True],         True,  "HdFc.run_standby_guard() 2"),
-            # 2. change from ACTIVE to STANDBY.
-            (False, [False, True, False, False, False, False, False, False],  True,  "HdFc.run_standby_guard() 3"),
-            (False, [False, True, False, True, False, False, False, False],   True,  "HdFc.run_standby_guard() 4"),
-            (False, [True, True, True, True, True, True, True, True],         True,  "HdFc.run_standby_guard() 5"),
-            # 3. change from STANDBY to ACTIVE.
-            (True,  [False, False, False, False, False, False, False, False], False, "HdFc.run_standby_guard() 6"),
-            (True,  [True, False, False, True, True, True, True, True],       False, "HdFc.run_standby_guard() 7"),
+            # No state changes: all STANDBY
+            (True, [True, True, True, True, True, True, True, True], True, "HdFc.run_standby_guard() 2"),
+            # Change from ACTIVE to STANDBY: 1 drive enters STANDBY
+            (False, [False, True, False, False, False, False, False, False], True, "HdFc.run_standby_guard() 3"),
+            # Change from ACTIVE to STANDBY: 2 drives enter STANDBY
+            (False, [False, True, False, True, False, False, False, False], True, "HdFc.run_standby_guard() 4"),
+            # Change from ACTIVE to STANDBY: all enter STANDBY
+            (False, [True, True, True, True, True, True, True, True], True, "HdFc.run_standby_guard() 5"),
+            # Change from STANDBY to ACTIVE: all become ACTIVE
+            (True, [False, False, False, False, False, False, False, False], False, "HdFc.run_standby_guard() 6"),
+            # Change from STANDBY to ACTIVE: some become ACTIVE
+            (True, [True, False, False, True, True, True, True, True], False, "HdFc.run_standby_guard() 7"),
         ],
     )
     def test_run_standby_guard(self, mocker: MockerFixture, old_state: bool, states: List[bool], new_state: bool,
@@ -612,7 +650,7 @@ class TestHdFc:
         my_hdfc = HdFc.__new__(HdFc)
         my_hdfc.count = 8
         my_hdfc.hd_device_names = my_td.hd_name_list
-        my_hdfc.smartctl_path = "/usr/sbin/smartctl"
+        my_hdfc.config = create_hd_config(smartctl_path="/usr/sbin/smartctl", standby_hd_limit=1)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
@@ -622,7 +660,6 @@ class TestHdFc:
         my_hdfc.check_standby_state.return_value = states.count(True)
         my_hdfc.standby_array_states = states
         my_hdfc.standby_flag = old_state
-        my_hdfc.standby_hd_limit = 1
         my_hdfc.standby_change_timestamp = time.monotonic()
         mock_exec_smartctl = MagicMock()
         mock_exec_smartctl.return_value = subprocess.CompletedProcess([], returncode=0)
@@ -650,7 +687,7 @@ class TestHdFc:
         my_hdfc.hwmon_path = [""]
         my_hdfc.hd_device_names = ["/dev/sda"]
         my_hdfc.sudo = False
-        my_hdfc.smartctl_path = "/usr/sbin/smartctl"
+        my_hdfc.config = create_hd_config(smartctl_path="/usr/sbin/smartctl")
         assert my_hdfc._get_nth_temp(0) == 37.0, "smartctl temperature should be 37.0C"  # pylint: disable=protected-access
         del my_hdfc
 

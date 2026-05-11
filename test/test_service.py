@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 #
-#   test_08_service.py (C) 2021-2026, Peter Sulyok
+#   test_service.py (C) 2021-2026, Peter Sulyok
 #   Unit tests for smfc.Service() class.
 #
 from argparse import Namespace
+from dataclasses import dataclass
+from typing import List
 import sys
 import time
 from configparser import ConfigParser
@@ -11,9 +13,17 @@ import pytest
 from pyudev import Context
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, FanController, CpuFc, HdFc, NvmeFc, GpuFc, ConstFc, Service
-from .test_00_data import TestData, MockedContextError, MockedContextGood
-from .test_02_ipmi import BMC_INFO_OUTPUT
+from smfc import Log, Ipmi, FanController, ConstFc, Service
+from smfc.config import Config
+from .test_data import TestData, MockedContextError, MockedContextGood
+from .test_ipmi import BMC_INFO_OUTPUT
+
+
+@dataclass
+class MockControllerConfig:
+    """Simple mock config for FanController tests."""
+    ipmi_zone: List[int]
+    polling: float = 2.0
 
 
 class TestService:
@@ -24,7 +34,9 @@ class TestService:
     @pytest.mark.parametrize(
         "ipmi, log, error",
         [
+            # Both IPMI and Log initialized
             (True, True, "Service.exit_func() 1"),
+            # Neither IPMI nor Log initialized
             (False, False, "Service.exit_func() 2"),
         ],
     )
@@ -55,18 +67,26 @@ class TestService:
     @pytest.mark.parametrize(
         "module_list, cpufc, hdfc, gpufc, standby, error",
         [
-            ("something\ncoretemp\n",           True,  False, False, False, "Service.check_dependencies() 1"),
-            ("something\nk10temp\n",            True,  False, True,  False, "Service.check_dependencies() 2"),
-            ("coretemp\nsomething\nk10temp\n",  True,  False, False, False, "Service.check_dependencies() 3"),
-            ("something\ndrivetemp\n",          False, True,  True,  False, "Service.check_dependencies() 4"),
-            ("something\ndrivetemp\n",          False, True,  False, True,  "Service.check_dependencies() 5"),
-            ("something\n",                     False, True,  False, False, "Service.check_dependencies() 6"),
-            ("something\ndrivetemp\nx",         False, True,  True,  True,  "Service.check_dependencies() 7"),
-            ("coretemp\ndrivetemp\n",           True,  True,  False, True,  "Service.check_dependencies() 8"),
+            # coretemp module loaded, CPU fan controller enabled
+            ("something\ncoretemp\n", True, False, False, False, "Service.check_dependencies() 1"),
+            # k10temp module loaded, CPU and GPU enabled
+            ("something\nk10temp\n", True, False, True, False, "Service.check_dependencies() 2"),
+            # Both coretemp and k10temp loaded
+            ("coretemp\nsomething\nk10temp\n", True, False, False, False, "Service.check_dependencies() 3"),
+            # drivetemp module loaded, HD and GPU enabled
+            ("something\ndrivetemp\n", False, True, True, False, "Service.check_dependencies() 4"),
+            # drivetemp module loaded, HD with standby guard
+            ("something\ndrivetemp\n", False, True, False, True, "Service.check_dependencies() 5"),
+            # No temperature module (HD only)
+            ("something\n", False, True, False, False, "Service.check_dependencies() 6"),
+            # drivetemp module loaded, HD, GPU, and standby
+            ("something\ndrivetemp\nx", False, True, True, True, "Service.check_dependencies() 7"),
+            # Both coretemp and drivetemp loaded
+            ("coretemp\ndrivetemp\n", True, True, False, True, "Service.check_dependencies() 8"),
         ],
     )
     def test_check_dependencies_p(self, mocker: MockerFixture, module_list: str, cpufc, hdfc, gpufc, standby: bool,
-                                  error: str):
+                                  error: str, tmp_path):
         """Positive unit test for Service.check_dependencies() method. It contains the following steps:
         - mock print(), argparse.ArgumentParser._print_message() and builtins.open() functions
         - execute Service.check_dependencies()
@@ -89,35 +109,57 @@ class TestService:
         mock_open = MagicMock(side_effect=mocked_open)
         mocker.patch("builtins.open", mock_open)
 
-        service = Service()
-        service.config = ConfigParser()
-        service.config[Ipmi.CS_IPMI] = {}
-        service.config[Ipmi.CS_IPMI][Ipmi.CV_IPMI_COMMAND] = ipmi_command
-
-        service.config[CpuFc.CS_CPU_FC] = {}
-        service.config[CpuFc.CS_CPU_FC][CpuFc.CV_CPU_FC_ENABLED] = ("1" if cpufc else "0")
-
-        service.config[HdFc.CS_HD_FC] = {}
-        service.config[HdFc.CS_HD_FC][HdFc.CV_HD_FC_ENABLED] = ("1" if hdfc else "0")
+        config_content = f"[Ipmi]\ncommand = {ipmi_command}\n"
+        if cpufc:
+            config_content += "[CPU]\nenabled = 1\n"
         if hdfc:
             smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
-            service.config[HdFc.CS_HD_FC][HdFc.CV_HD_FC_SMARTCTL_PATH] = smartctl_cmd
-            service.config[HdFc.CS_HD_FC][HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED] = "1" if standby else "0"
-
-        service.config[NvmeFc.CS_NVME_FC] = {}
-        service.config[NvmeFc.CS_NVME_FC][NvmeFc.CV_NVME_FC_ENABLED] = "0"
-
-        service.config[GpuFc.CS_GPU_FC] = {}
-        service.config[GpuFc.CS_GPU_FC][GpuFc.CV_GPU_FC_ENABLED] = ("1" if gpufc else "0")
+            config_content += f"[HD]\nenabled = 1\nhd_names = /dev/sda\nsmartctl_path = {smartctl_cmd}\n"
+            if standby:
+                config_content += "standby_guard_enabled = 1\n"
         if gpufc:
             nvidia_smi_cmd = my_td.create_command_file('echo "0"')
-            service.config[GpuFc.CS_GPU_FC][GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH] = nvidia_smi_cmd
+            config_content += f"[GPU]\nenabled = 1\ngpu_type = nvidia\nnvidia_smi_path = {nvidia_smi_cmd}\n"
+
+        config_file = tmp_path / "test.conf"
+        config_file.write_text(config_content)
+
+        service = Service()
+        service.config = Config(str(config_file))
 
         assert service.check_dependencies() == "", error
         del my_td
 
-    @pytest.mark.parametrize("error", ["Service.check_dependencies() 9"])
-    def test_check_dependecies_n(self, mocker: MockerFixture, error: str):
+    def test_check_dependencies_disabled_gpu(self, mocker: MockerFixture, tmp_path):
+        """Positive unit test: GPU section present with enabled=0 is skipped by check_dependencies()."""
+        my_td = TestData()
+        ipmi_command = my_td.create_ipmi_command()
+        modules = my_td.create_text_file("something\ncoretemp\n")
+        original_open = open
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        def fake_open(path, *a, **kw):
+            target = modules if path == "/proc/modules" else path
+            return original_open(target, *a, **kw)  # pylint: disable=consider-using-with
+        mocker.patch("builtins.open", MagicMock(side_effect=fake_open))
+        config_content = (f"[Ipmi]\ncommand = {ipmi_command}\n"
+                          f"[CPU]\nenabled = 1\n"
+                          f"[GPU]\nenabled = 0\n")
+        config_file = tmp_path / "test.conf"
+        config_file.write_text(config_content)
+        service = Service()
+        service.config = Config(str(config_file))
+        assert service.check_dependencies() == ""
+        del my_td
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            # Dependency check error conditions
+            ("Service.check_dependencies() 9"),
+        ],
+    )
+    def test_check_dependecies_n(self, mocker: MockerFixture, error: str, tmp_path):
         """Negative unit test for Service.check_dependencies() method. It contains the following steps:
         - mock print() and builtins.open() functions
         - execute Service.check_dependencies()
@@ -139,28 +181,21 @@ class TestService:
         mock_open = MagicMock(side_effect=mocked_open)
         original_open = open
         mocker.patch("builtins.open", mock_open)
-        service = Service()
-        service.config = ConfigParser()
 
-        service.config[Ipmi.CS_IPMI] = {}
-        service.config[Ipmi.CS_IPMI][Ipmi.CV_IPMI_COMMAND] = ipmi_command
-
-        service.config[CpuFc.CS_CPU_FC] = {}
-        service.config[CpuFc.CS_CPU_FC][CpuFc.CV_CPU_FC_ENABLED] = "1"
-
-        service.config[HdFc.CS_HD_FC] = {}
-        service.config[HdFc.CS_HD_FC][HdFc.CV_HD_FC_ENABLED] = "1"
         smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
-        service.config[HdFc.CS_HD_FC][HdFc.CV_HD_FC_SMARTCTL_PATH] = smartctl_cmd
-        service.config[HdFc.CS_HD_FC][HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED] = "1"
-
-        service.config[NvmeFc.CS_NVME_FC] = {}
-        service.config[NvmeFc.CS_NVME_FC][NvmeFc.CV_NVME_FC_ENABLED] = "0"
-
         nvidia_smi_cmd = my_td.create_command_file('echo "0"')
-        service.config[GpuFc.CS_GPU_FC] = {}
-        service.config[GpuFc.CS_GPU_FC][GpuFc.CV_GPU_FC_ENABLED] = "1"
-        service.config[GpuFc.CS_GPU_FC][GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH] = nvidia_smi_cmd
+
+        hd_section = (f"[HD]\nenabled = 1\nhd_names = /dev/sda\n"
+                      f"smartctl_path = {smartctl_cmd}\nstandby_guard_enabled = 1\n")
+        config_content = (f"[Ipmi]\ncommand = {ipmi_command}\n"
+                          f"[CPU]\nenabled = 1\n"
+                          f"{hd_section}"
+                          f"[GPU]\nenabled = 1\ngpu_type = nvidia\nnvidia_smi_path = {nvidia_smi_cmd}\n")
+        config_file = tmp_path / "test.conf"
+        config_file.write_text(config_content)
+
+        service = Service()
+        service.config = Config(str(config_file))
 
         # Check if `nvidia-smi` command is not available.
         my_td.delete_file(nvidia_smi_cmd)
@@ -191,13 +226,21 @@ class TestService:
     @pytest.mark.parametrize(
         "command_line, exit_code, error",
         [
-            ("-h",                                                      0, "Service.run() 1"),
-            ("-v",                                                      0, "Service.run() 2"),
-            ("-l 10",                                                   2, "Service.run() 3"),
-            ("-o 9",                                                    2, "Service.run() 4"),
-            ("-o 1 -l 10",                                              2, "Service.run() 5"),
-            ("-o 9 -l 1",                                               2, "Service.run() 6"),
-            ("-o 0 -l 3 -c &.txt",                                      6, "Service.run() 7"),
+            # Help flag (exit 0)
+            ("-h", 0, "Service.run() 1"),
+            # Version flag (exit 0)
+            ("-v", 0, "Service.run() 2"),
+            # Invalid log level (exit 2)
+            ("-l 10", 2, "Service.run() 3"),
+            # Invalid output (exit 2)
+            ("-o 9", 2, "Service.run() 4"),
+            # Invalid output with valid log level (exit 2)
+            ("-o 1 -l 10", 2, "Service.run() 5"),
+            # Valid output with invalid log level (exit 2)
+            ("-o 9 -l 1", 2, "Service.run() 6"),
+            # Invalid config file path: special char (exit 6)
+            ("-o 0 -l 3 -c &.txt", 6, "Service.run() 7"),
+            # Invalid config file path: non-existent (exit 6)
             ("-o 0 -l 3 -c ./nonexistent_folder/nonexistent_file.conf", 6, "Service.run() 8"),
         ],
     )
@@ -219,7 +262,12 @@ class TestService:
 
     @pytest.mark.parametrize(
         "level, output, exit_code, error",
-        [(10, 0, 5, "Service.run() 9"), (0, 9, 5, "Service.run() 10")],
+        [
+            # Invalid log level via namespace (exit 5)
+            (10, 0, 5, "Service.run() 9"),
+            # Invalid output via namespace (exit 5)
+            (0, 9, 5, "Service.run() 10"),
+        ],
     )
     def test_run_5n(self, mocker: MockerFixture, level: int, output: int, exit_code: int, error: str):
         """Negative unit test for Service.run() method. It contains the following steps:
@@ -237,7 +285,13 @@ class TestService:
             service.run()
         assert cm.value.code == exit_code, error
 
-    @pytest.mark.parametrize("exit_code, error", [(7, "Service.run() 11")])
+    @pytest.mark.parametrize(
+        "exit_code, error",
+        [
+            # Check dependency error (exit 7)
+            (7, "Service.run() 11"),
+        ],
+    )
     def test_run_7n(self, mocker: MockerFixture, exit_code: int, error: str):
         """Negative unit test for Service.run() method. It contains the following steps:
         - mock print(), argparse.ArgumentParser.parse_args(), smfc.Service.check_dependencies() functions
@@ -246,11 +300,12 @@ class TestService:
         """
         my_td = TestData()
         my_config = ConfigParser()
-        my_config[CpuFc.CS_CPU_FC] = {CpuFc.CV_CPU_FC_ENABLED: "0"}
-        my_config[HdFc.CS_HD_FC] = {HdFc.CV_HD_FC_ENABLED: "0"}
-        my_config[NvmeFc.CS_NVME_FC] = {NvmeFc.CV_NVME_FC_ENABLED: "0"}
-        my_config[GpuFc.CS_GPU_FC] = {GpuFc.CV_GPU_FC_ENABLED: "0"}
-        my_config[ConstFc.CS_CONST_FC] = {ConstFc.CV_CONST_FC_ENABLED: "0"}
+        my_config[Config.CS_IPMI] = {}
+        my_config[Config.CS_CPU] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_HD] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_NVME] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_GPU] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_CONST] = {Config.CV_ENABLED: "0"}
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -269,11 +324,16 @@ class TestService:
     @pytest.mark.parametrize(
         "ipmi_command, mode_delay, level_delay, exit_code, error",
         [
-            ("NON_EXIST",  0,  0,  8, "Service.run() 12"),
-            ("GOOD",      -1,  0,  8, "Service.run() 13"),
-            ("GOOD",       0, -1,  8, "Service.run() 14"),
-            ("BAD",        0,  0,  8, "Service.run() 15"),
-            ("GOOD",       0,  0, 10, "Service.run() 16"),
+            # Non-existent IPMI command (exit 8)
+            ("NON_EXIST", 0, 0, 8, "Service.run() 12"),
+            # Invalid mode_delay (exit 6 - caught by Config validation)
+            ("GOOD", -1, 0, 6, "Service.run() 13"),
+            # Invalid level_delay (exit 6 - caught by Config validation)
+            ("GOOD", 0, -1, 6, "Service.run() 14"),
+            # Bad IPMI command (exit 8)
+            ("BAD", 0, 0, 8, "Service.run() 15"),
+            # No enabled zone (exit 10)
+            ("GOOD", 0, 0, 10, "Service.run() 16"),
         ],
     )
     def test_run_810n(self, mocker: MockerFixture, ipmi_command: str, mode_delay: int, level_delay: int,
@@ -291,16 +351,16 @@ class TestService:
             ipmi_command = my_td.create_command_file()
         if ipmi_command == "GOOD":
             ipmi_command = my_td.create_ipmi_command()
-        my_config[Ipmi.CS_IPMI] = {
-            Ipmi.CV_IPMI_COMMAND: ipmi_command,
-            Ipmi.CV_IPMI_FAN_MODE_DELAY: str(mode_delay),
-            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: str(level_delay),
+        my_config[Config.CS_IPMI] = {
+            Config.CV_IPMI_COMMAND: ipmi_command,
+            Config.CV_IPMI_FAN_MODE_DELAY: str(mode_delay),
+            Config.CV_IPMI_FAN_LEVEL_DELAY: str(level_delay),
         }
-        my_config[CpuFc.CS_CPU_FC] = {CpuFc.CV_CPU_FC_ENABLED: "0"}
-        my_config[HdFc.CS_HD_FC] = {HdFc.CV_HD_FC_ENABLED: "0"}
-        my_config[NvmeFc.CS_NVME_FC] = {NvmeFc.CV_NVME_FC_ENABLED: "0"}
-        my_config[GpuFc.CS_GPU_FC] = {GpuFc.CV_GPU_FC_ENABLED: "0"}
-        my_config[ConstFc.CS_CONST_FC] = {ConstFc.CV_CONST_FC_ENABLED: "0"}
+        my_config[Config.CS_CPU] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_HD] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_NVME] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_GPU] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_CONST] = {Config.CV_ENABLED: "0"}
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -312,7 +372,7 @@ class TestService:
         assert cm.value.code == exit_code, error
         del my_td
 
-    def test_check_dependencies_amd_p(self, mocker: MockerFixture):
+    def test_check_dependencies_amd_p(self, mocker: MockerFixture, tmp_path):
         """Positive unit test for Service.check_dependencies() with AMD GPU. It contains the following steps:
         - mock print() and builtins.open() functions
         - configure gpu_type=amd with a valid rocm_smi_path
@@ -337,59 +397,45 @@ class TestService:
         mock_open = MagicMock(side_effect=mocked_open)
         mocker.patch("builtins.open", mock_open)
 
+        config_content = (f"[Ipmi]\ncommand = {ipmi_command}\n"
+                          f"[GPU]\nenabled = 1\ngpu_type = amd\nrocm_smi_path = {rocm_smi_cmd}\n")
+        config_file = tmp_path / "test.conf"
+        config_file.write_text(config_content)
+
         service = Service()
-        service.config = ConfigParser()
-        service.config[Ipmi.CS_IPMI] = {Ipmi.CV_IPMI_COMMAND: ipmi_command}
-        service.config[CpuFc.CS_CPU_FC] = {CpuFc.CV_CPU_FC_ENABLED: "0"}
-        service.config[HdFc.CS_HD_FC] = {HdFc.CV_HD_FC_ENABLED: "0"}
-        service.config[NvmeFc.CS_NVME_FC] = {NvmeFc.CV_NVME_FC_ENABLED: "0"}
-        service.config[GpuFc.CS_GPU_FC] = {
-            GpuFc.CV_GPU_FC_ENABLED: "1",
-            GpuFc.CV_GPU_FC_GPU_TYPE: "amd",
-            GpuFc.CV_GPU_FC_ROCM_SMI_PATH: rocm_smi_cmd,
-        }
+        service.config = Config(str(config_file))
         assert service.check_dependencies() == "", "Service.check_dependencies() AMD p1"
         del my_td
 
-    def test_check_dependencies_invalid_gpu_type_n(self, mocker: MockerFixture):
-        """Negative unit test for Service.check_dependencies() with invalid gpu_type. It contains the following steps:
-        - mock print() and builtins.open() functions
+    def test_check_dependencies_invalid_gpu_type_n(self, mocker: MockerFixture, tmp_path):
+        """Negative unit test for Config parsing with invalid gpu_type. It contains the following steps:
         - configure gpu_type=invalid
-        - execute Service.check_dependencies()
-        - ASSERT: if it does not return an error message containing the invalid value
+        - attempt to create Config
+        - ASSERT: if ValueError is not raised with "invalid" in the message
         """
-
-        def mocked_open(path: str, *args, **kwargs):
-            return (
-                original_open(modules, *args, **kwargs)
-                if path == "/proc/modules"
-                else original_open(path, *args, **kwargs)
-            )
 
         my_td = TestData()
         ipmi_command = my_td.create_ipmi_command()
-        modules = my_td.create_text_file("something\ncoretemp\n")
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
-        original_open = open
-        mock_open = MagicMock(side_effect=mocked_open)
-        mocker.patch("builtins.open", mock_open)
 
-        service = Service()
-        service.config = ConfigParser()
-        service.config[Ipmi.CS_IPMI] = {Ipmi.CV_IPMI_COMMAND: ipmi_command}
-        service.config[CpuFc.CS_CPU_FC] = {CpuFc.CV_CPU_FC_ENABLED: "0"}
-        service.config[HdFc.CS_HD_FC] = {HdFc.CV_HD_FC_ENABLED: "0"}
-        service.config[NvmeFc.CS_NVME_FC] = {NvmeFc.CV_NVME_FC_ENABLED: "0"}
-        service.config[GpuFc.CS_GPU_FC] = {
-            GpuFc.CV_GPU_FC_ENABLED: "1",
-            GpuFc.CV_GPU_FC_GPU_TYPE: "invalid",
-        }
-        error_str = service.check_dependencies()
-        assert "invalid" in error_str, "Service.check_dependencies() invalid gpu_type n1"
+        config_content = (f"[Ipmi]\ncommand = {ipmi_command}\n"
+                          f"[GPU]\nenabled = 1\ngpu_type = invalid\n")
+        config_file = tmp_path / "test.conf"
+        config_file.write_text(config_content)
+
+        with pytest.raises(ValueError) as exc_info:
+            Config(str(config_file))
+        assert "invalid" in str(exc_info.value), "Config parsing should reject invalid gpu_type"
         del my_td
 
-    @pytest.mark.parametrize("exit_code, error", [(9, "Service.run() 17")])
+    @pytest.mark.parametrize(
+        "exit_code, error",
+        [
+            # pyudev.Context init error (exit 9)
+            (9, "Service.run() 17"),
+        ],
+    )
     def test_run_9n(self, mocker: MockerFixture, exit_code: int, error: str):
         """Negative unit test for Service.run() method. It contains the following steps:
         - mock print(), pyudev.Context.__init__() functions
@@ -399,16 +445,16 @@ class TestService:
         my_td = TestData()
         my_config = ConfigParser()
         ipmi_command = my_td.create_ipmi_command()
-        my_config[Ipmi.CS_IPMI] = {
-            Ipmi.CV_IPMI_COMMAND: ipmi_command,
-            Ipmi.CV_IPMI_FAN_MODE_DELAY: "0",
-            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: "0",
+        my_config[Config.CS_IPMI] = {
+            Config.CV_IPMI_COMMAND: ipmi_command,
+            Config.CV_IPMI_FAN_MODE_DELAY: "0",
+            Config.CV_IPMI_FAN_LEVEL_DELAY: "0",
         }
-        my_config[CpuFc.CS_CPU_FC] = {CpuFc.CV_CPU_FC_ENABLED: "0"}
-        my_config[HdFc.CS_HD_FC] = {HdFc.CV_HD_FC_ENABLED: "0"}
-        my_config[NvmeFc.CS_NVME_FC] = {NvmeFc.CV_NVME_FC_ENABLED: "0"}
-        my_config[GpuFc.CS_GPU_FC] = {GpuFc.CV_GPU_FC_ENABLED: "0"}
-        my_config[ConstFc.CS_CONST_FC] = {ConstFc.CV_CONST_FC_ENABLED: "0"}
+        my_config[Config.CS_CPU] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_HD] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_NVME] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_GPU] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_CONST] = {Config.CV_ENABLED: "0"}
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -423,11 +469,16 @@ class TestService:
     @pytest.mark.parametrize(
         "cpufc, hdfc, nvmefc, gpufc, constfc, exit_code, error",
         [
-            (True,  False, False, True,  False, 100, "Service.run() 18"),
-            (False, True,  False, False, True,  100, "Service.run() 19"),
-            (True,  False, False, True,  False, 100, "Service.run() 20"),
-            (True,  False, True,  False, False, 100, "Service.run() 21"),
-            (True,  True,  True,  True,  True,  100, "Service.run() 22"),
+            # CPU and GPU enabled
+            (True, False, False, True, False, 100, "Service.run() 18"),
+            # HD and CONST enabled
+            (False, True, False, False, True, 100, "Service.run() 19"),
+            # CPU and GPU enabled (duplicate)
+            (True, False, False, True, False, 100, "Service.run() 20"),
+            # CPU and NVME enabled
+            (True, False, True, False, False, 100, "Service.run() 21"),
+            # All controllers enabled
+            (True, True, True, True, True, 100, "Service.run() 22"),
         ],
     )
     def test_run_100p(self, mocker: MockerFixture, cpufc: bool, hdfc: bool, nvmefc: bool, gpufc: bool,
@@ -445,59 +496,46 @@ class TestService:
             if self.sleep_counter >= 10:
                 sys.exit(100)
 
-        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
+        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
             nonlocal my_td
             self.hwmon_path = my_td.cpu_files
-            count = len(my_td.cpu_files)
-            FanController.__init__(self, log, ipmi, f"{Ipmi.CPU_ZONE} {Ipmi.HD_ZONE}", CpuFc.CS_CPU_FC, count,
-                                   1, 5, 5, 0, 30, 60, 35, 100,)
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(my_td.cpu_files))
 
-        def mocked_hdfc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser, sudo: bool) -> None:
+        def mocked_hdfc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg, sudo: bool) -> None:
             nonlocal my_td
-            nonlocal cmd_smart
             self.hd_device_names = my_td.hd_name_list
             self.hwmon_path = my_td.hd_files
-            count = len(my_td.hd_files)
             self.sudo = sudo
-            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", HdFc.CS_HD_FC, count,
-                                   1, 5, 2, 0, 32, 46, 35, 100)
-            self.smartctl_path = cmd_smart
-            self.standby_guard_enabled = True
-            self.standby_hd_limit = 1
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(my_td.hd_files))
             self.standby_array_states = [False] * self.count
             self.standby_flag = False
             self.standby_change_timestamp = time.monotonic()
 
-        def mocked_gpufc_init(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
+        def mocked_gpufc_init(self, log: Log, ipmi: Ipmi, cfg) -> None:
             nonlocal my_td
-            nonlocal cmd_nvidia
-            self.gpu_device_ids = [0]
-            count = 1
-            self.gpu_type = "nvidia"
-            self.nvidia_smi_path = cmd_nvidia
-            self.rocm_smi_path = "/usr/bin/rocm-smi"
             self.smi_called = 0
-            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", GpuFc.CS_GPU_FC, count,
-                                   1, 5, 2, 0, 45, 70, 35, 100)
+            self.hwmon_path = []
+            self.gpu_temperature = []
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(cfg.gpu_device_ids))
 
-        def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, config: ConfigParser) -> None:
+        def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
             nonlocal my_td
             self.nvme_device_names = my_td.nvme_name_list
             self.hwmon_path = my_td.nvme_files
-            count = len(my_td.nvme_files)
-            FanController.__init__(self, log, ipmi, f"{Ipmi.HD_ZONE}", NvmeFc.CS_NVME_FC, count,
-                                   1, 5, 2, 0, 30, 50, 35, 100,)
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(my_td.nvme_files))
 
-        def mocked_constfc_init(self, log: Log, ipmi: Ipmi, config: ConfigParser) -> None:
+        def mocked_constfc_init(self, log: Log, ipmi: Ipmi, cfg) -> None:
             self.ipmi = ipmi
             self.log = log
-            self.name = ConstFc.CS_CONST_FC
-            self.ipmi_zone = [Ipmi.HD_ZONE]
-            self.polling = 30
-            self.level = 50
+            self.name = cfg.section
+            self.config = cfg
             self.last_time = 0
             self.last_temp = 0.0
-            self.last_level = self.level
+            self.last_level = cfg.level
             self.deferred_apply = False
 
         # pragma pylint: enable=unused-argument
@@ -519,68 +557,68 @@ class TestService:
         my_td.create_hd_data(8)
         my_td.create_nvme_data(2)
         my_config = ConfigParser()
-        my_config[Ipmi.CS_IPMI] = {
-            Ipmi.CV_IPMI_COMMAND: cmd_ipmi,
-            Ipmi.CV_IPMI_FAN_MODE_DELAY: "0",
-            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: "0",
+        my_config[Config.CS_IPMI] = {
+            Config.CV_IPMI_COMMAND: cmd_ipmi,
+            Config.CV_IPMI_FAN_MODE_DELAY: "0",
+            Config.CV_IPMI_FAN_LEVEL_DELAY: "0",
         }
-        my_config[CpuFc.CS_CPU_FC] = {
-            CpuFc.CV_CPU_FC_ENABLED: str(cpufc),
-            CpuFc.CV_CPU_FC_TEMP_CALC: "1",
-            CpuFc.CV_CPU_FC_STEPS: "5",
-            CpuFc.CV_CPU_FC_SENSITIVITY: "5",
-            CpuFc.CV_CPU_FC_POLLING: "0",
-            CpuFc.CV_CPU_FC_MIN_TEMP: "30",
-            CpuFc.CV_CPU_FC_MAX_TEMP: "60",
-            CpuFc.CV_CPU_FC_MIN_LEVEL: "35",
-            CpuFc.CV_CPU_FC_MAX_LEVEL: "100",
+        my_config[Config.CS_CPU] = {
+            Config.CV_ENABLED: str(cpufc),
+            Config.CV_TEMP_CALC: "1",
+            Config.CV_STEPS: "5",
+            Config.CV_SENSITIVITY: "5",
+            Config.CV_POLLING: "0",
+            Config.CV_MIN_TEMP: "30",
+            Config.CV_MAX_TEMP: "60",
+            Config.CV_MIN_LEVEL: "35",
+            Config.CV_MAX_LEVEL: "100",
         }
-        my_config[HdFc.CS_HD_FC] = {
-            HdFc.CV_HD_FC_ENABLED: str(hdfc),
-            HdFc.CV_HD_FC_TEMP_CALC: "1",
-            HdFc.CV_HD_FC_STEPS: "4",
-            HdFc.CV_HD_FC_SENSITIVITY: "2",
-            HdFc.CV_HD_FC_POLLING: "0",
-            HdFc.CV_HD_FC_MIN_TEMP: "30",
-            HdFc.CV_HD_FC_MAX_TEMP: "45",
-            HdFc.CV_HD_FC_MIN_LEVEL: "35",
-            HdFc.CV_HD_FC_MAX_LEVEL: "100",
-            HdFc.CV_HD_FC_HD_NAMES: my_td.hd_names,
-            HdFc.CV_HD_FC_SMARTCTL_PATH: cmd_smart,
-            HdFc.CV_HD_FC_STANDBY_GUARD_ENABLED: "1",
-            HdFc.CV_HD_FC_STANDBY_HD_LIMIT: "2",
+        my_config[Config.CS_HD] = {
+            Config.CV_ENABLED: str(hdfc),
+            Config.CV_TEMP_CALC: "1",
+            Config.CV_STEPS: "4",
+            Config.CV_SENSITIVITY: "2",
+            Config.CV_POLLING: "0",
+            Config.CV_MIN_TEMP: "30",
+            Config.CV_MAX_TEMP: "45",
+            Config.CV_MIN_LEVEL: "35",
+            Config.CV_MAX_LEVEL: "100",
+            Config.CV_HD_NAMES: my_td.hd_names,
+            Config.CV_HD_SMARTCTL_PATH: cmd_smart,
+            Config.CV_HD_STANDBY_GUARD_ENABLED: "1",
+            Config.CV_HD_STANDBY_HD_LIMIT: "2",
         }
-        my_config[NvmeFc.CS_NVME_FC] = {
-            NvmeFc.CV_NVME_FC_ENABLED: str(nvmefc),
-            NvmeFc.CV_NVME_FC_TEMP_CALC: "1",
-            NvmeFc.CV_NVME_FC_STEPS: "4",
-            NvmeFc.CV_NVME_FC_SENSITIVITY: "2",
-            NvmeFc.CV_NVME_FC_POLLING: "0",
-            NvmeFc.CV_NVME_FC_MIN_TEMP: "30",
-            NvmeFc.CV_NVME_FC_MAX_TEMP: "50",
-            NvmeFc.CV_NVME_FC_MIN_LEVEL: "35",
-            NvmeFc.CV_NVME_FC_MAX_LEVEL: "100",
-            NvmeFc.CV_NVME_FC_NVME_NAMES: my_td.nvme_names,
+        my_config[Config.CS_NVME] = {
+            Config.CV_ENABLED: str(nvmefc),
+            Config.CV_TEMP_CALC: "1",
+            Config.CV_STEPS: "4",
+            Config.CV_SENSITIVITY: "2",
+            Config.CV_POLLING: "0",
+            Config.CV_MIN_TEMP: "30",
+            Config.CV_MAX_TEMP: "50",
+            Config.CV_MIN_LEVEL: "35",
+            Config.CV_MAX_LEVEL: "100",
+            Config.CV_NVME_NAMES: my_td.nvme_names,
         }
-        my_config[GpuFc.CS_GPU_FC] = {
-            GpuFc.CV_GPU_FC_ENABLED: str(gpufc),
-            GpuFc.CV_GPU_FC_IPMI_ZONE: "2",
-            GpuFc.CV_GPU_FC_TEMP_CALC: "1",
-            GpuFc.CV_GPU_FC_STEPS: "4",
-            GpuFc.CV_GPU_FC_SENSITIVITY: "2",
-            GpuFc.CV_GPU_FC_POLLING: "0",
-            GpuFc.CV_GPU_FC_MIN_TEMP: "45",
-            GpuFc.CV_GPU_FC_MAX_TEMP: "70",
-            GpuFc.CV_GPU_FC_MIN_LEVEL: "35",
-            GpuFc.CV_GPU_FC_MAX_LEVEL: "100",
-            GpuFc.CV_GPU_FC_GPU_IDS: "0",
-            GpuFc.CV_GPU_FC_NVIDIA_SMI_PATH: cmd_nvidia,
+        my_config[Config.CS_GPU] = {
+            Config.CV_ENABLED: str(gpufc),
+            Config.CV_IPMI_ZONE: "2",
+            Config.CV_TEMP_CALC: "1",
+            Config.CV_STEPS: "4",
+            Config.CV_SENSITIVITY: "2",
+            Config.CV_POLLING: "0",
+            Config.CV_MIN_TEMP: "45",
+            Config.CV_MAX_TEMP: "70",
+            Config.CV_MIN_LEVEL: "35",
+            Config.CV_MAX_LEVEL: "100",
+            Config.CV_GPU_IDS: "0",
+            Config.CV_GPU_NVIDIA_SMI_PATH: cmd_nvidia,
         }
-        my_config[ConstFc.CS_CONST_FC] = {
-            ConstFc.CV_CONST_FC_ENABLED: str(constfc),
-            ConstFc.CV_CONST_FC_IPMI_ZONE: "2",
-            ConstFc.CV_CONST_FC_POLLING: "0",
-            ConstFc.CV_CONST_FC_LEVEL: "35",
+        my_config[Config.CS_CONST] = {
+            Config.CV_ENABLED: str(constfc),
+            Config.CV_IPMI_ZONE: "2",
+            Config.CV_POLLING: "0",
+            Config.CV_CONST_LEVEL: "35",
         }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
@@ -608,10 +646,10 @@ class TestService:
         """Positive unit test for Service._collect_desired_levels() method. It contains the following steps:
         - mock print() function
         - initialize a Service class with enabled controllers (CPU, HD, CONST)
-        - set last_level values for controllers (CPU=60, HD=0, CONST=0)
+        - set last_level values for controllers (CPU=60, HD=0, CONST=50)
         - call _collect_desired_levels()
-        - ASSERT: if controllers with last_level=0 are not skipped (except ConstFc)
-        - ASSERT: if ConstFc with last_level=0 is not still collected
+        - ASSERT: controllers with last_level=0 are skipped
+        - ASSERT: controllers with last_level>0 are collected (including ConstFc)
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -623,24 +661,23 @@ class TestService:
 
         # Create mock controllers
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [0]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[0])
         cpu_fc.last_level = 60
         cpu_fc.last_temp = 45.0
         cpu_fc.deferred_apply = True
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 0  # Should be skipped (not yet computed)
         hd_fc.last_temp = 0.0
         hd_fc.deferred_apply = True
 
-        # ConstFc with last_level=0 should NOT be skipped
         const_fc = ConstFc.__new__(ConstFc)
-        const_fc.name = ConstFc.CS_CONST_FC
-        const_fc.ipmi_zone = [1]
-        const_fc.last_level = 0
+        const_fc.name = Config.CS_CONST
+        const_fc.config = MockControllerConfig(ipmi_zone=[1])
+        const_fc.last_level = 50
         const_fc.last_temp = 0.0
         const_fc.deferred_apply = True
 
@@ -648,9 +685,9 @@ class TestService:
 
         levels = service._collect_desired_levels()  # pylint: disable=protected-access
         names = [name for name, _, _, _ in levels]
-        assert CpuFc.CS_CPU_FC in names, "CPU controller should be collected"
-        assert HdFc.CS_HD_FC not in names, "HD controller with level 0 should be skipped"
-        assert ConstFc.CS_CONST_FC in names, "ConstFc with level 0 should still be collected"
+        assert Config.CS_CPU in names, "CPU controller should be collected"
+        assert Config.CS_HD not in names, "HD controller with level 0 should be skipped"
+        assert Config.CS_CONST in names, "ConstFc with level > 0 should be collected"
 
     def test_apply_fan_levels_shared_zone(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with shared zone. It contains the following steps:
@@ -674,15 +711,15 @@ class TestService:
 
         # Two controllers on zone 1: HD at 45%, NVME at 70%
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 45
         hd_fc.last_temp = 38.0
         hd_fc.deferred_apply = True
 
         nvme_fc = FanController.__new__(FanController)
-        nvme_fc.name = NvmeFc.CS_NVME_FC
-        nvme_fc.ipmi_zone = [1]
+        nvme_fc.name = Config.CS_NVME
+        nvme_fc.config = MockControllerConfig(ipmi_zone=[1])
         nvme_fc.last_level = 70
         nvme_fc.last_temp = 42.5
         nvme_fc.deferred_apply = True
@@ -720,8 +757,8 @@ class TestService:
 
         # Single controller on zone 0
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [0]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[0])
         cpu_fc.last_level = 60
         cpu_fc.last_temp = 45.0
         cpu_fc.deferred_apply = True
@@ -757,8 +794,8 @@ class TestService:
 
         # Single CONST controller on zone 0
         const_fc = ConstFc.__new__(ConstFc)
-        const_fc.name = ConstFc.CS_CONST_FC
-        const_fc.ipmi_zone = [0]
+        const_fc.name = Config.CS_CONST
+        const_fc.config = MockControllerConfig(ipmi_zone=[0])
         const_fc.last_level = 50
         const_fc.last_temp = 0.0
         const_fc.deferred_apply = True
@@ -794,15 +831,15 @@ class TestService:
 
         # CONST at 80% wins over HD at 45% on zone 1
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 45
         hd_fc.last_temp = 38.0
         hd_fc.deferred_apply = True
 
         const_fc = ConstFc.__new__(ConstFc)
-        const_fc.name = ConstFc.CS_CONST_FC
-        const_fc.ipmi_zone = [1]
+        const_fc.name = Config.CS_CONST
+        const_fc.config = MockControllerConfig(ipmi_zone=[1])
         const_fc.last_level = 80
         const_fc.last_temp = 0.0
         const_fc.deferred_apply = True
@@ -838,15 +875,15 @@ class TestService:
 
         # HD at 70% wins over CONST at 40% on zone 1
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 70
         hd_fc.last_temp = 55.0
         hd_fc.deferred_apply = True
 
         const_fc = ConstFc.__new__(ConstFc)
-        const_fc.name = ConstFc.CS_CONST_FC
-        const_fc.ipmi_zone = [1]
+        const_fc.name = Config.CS_CONST
+        const_fc.config = MockControllerConfig(ipmi_zone=[1])
         const_fc.last_level = 40
         const_fc.last_temp = 0.0
         const_fc.deferred_apply = True
@@ -880,15 +917,15 @@ class TestService:
 
         # CPU deferred on shared zone 0, HD non-deferred on non-shared zone 1
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [0]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[0])
         cpu_fc.last_level = 60
         cpu_fc.last_temp = 45.0
         cpu_fc.deferred_apply = True
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 40
         hd_fc.last_temp = 23.0
         hd_fc.deferred_apply = False
@@ -920,8 +957,8 @@ class TestService:
         service.last_desired = []
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 70
         hd_fc.last_temp = 40.0
         hd_fc.deferred_apply = True
@@ -954,22 +991,22 @@ class TestService:
 
         # Three controllers on zone 1: CPU 40%, HD 60%, NVME 50%
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [1]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[1])
         cpu_fc.last_level = 40
         cpu_fc.last_temp = 50.0
         cpu_fc.deferred_apply = True
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 60
         hd_fc.last_temp = 38.0
         hd_fc.deferred_apply = True
 
         nvme_fc = FanController.__new__(FanController)
-        nvme_fc.name = NvmeFc.CS_NVME_FC
-        nvme_fc.ipmi_zone = [1]
+        nvme_fc.name = Config.CS_NVME
+        nvme_fc.config = MockControllerConfig(ipmi_zone=[1])
         nvme_fc.last_level = 50
         nvme_fc.last_temp = 42.0
         nvme_fc.deferred_apply = True
@@ -1007,15 +1044,15 @@ class TestService:
 
         # Two controllers on zone 1 with identical levels (70%)
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [1]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[1])
         cpu_fc.last_level = 70
         cpu_fc.last_temp = 55.0
         cpu_fc.deferred_apply = True
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 70
         hd_fc.last_temp = 40.0
         hd_fc.deferred_apply = True
@@ -1054,15 +1091,15 @@ class TestService:
 
         # CPU on zones [0, 1] at 55%, HD on zone [1] at 70%
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [0, 1]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[0, 1])
         cpu_fc.last_level = 55
         cpu_fc.last_temp = 48.0
         cpu_fc.deferred_apply = True
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 70
         hd_fc.last_temp = 42.0
         hd_fc.deferred_apply = True
@@ -1103,8 +1140,8 @@ class TestService:
         service.last_desired = []
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_temp = 40.0
         hd_fc.deferred_apply = True
 
@@ -1144,12 +1181,12 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
 
         nvme_fc = FanController.__new__(FanController)
-        nvme_fc.name = NvmeFc.CS_NVME_FC
-        nvme_fc.ipmi_zone = [1]
+        nvme_fc.name = Config.CS_NVME
+        nvme_fc.config = MockControllerConfig(ipmi_zone=[1])
 
         service.controllers = [hd_fc, nvme_fc]
 
@@ -1172,12 +1209,12 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
 
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [0]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[0])
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
 
         service.controllers = [cpu_fc, hd_fc]
 
@@ -1200,12 +1237,12 @@ class TestService:
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
 
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [0, 1]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[0, 1])
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
 
         service.controllers = [cpu_fc, hd_fc]
 
@@ -1230,18 +1267,18 @@ class TestService:
 
         # CPU on zone 0 (exclusive), HD on zone 1, NVME on zone 1 (shared)
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [0]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[0])
         cpu_fc.deferred_apply = False
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.deferred_apply = False
 
         nvme_fc = FanController.__new__(FanController)
-        nvme_fc.name = NvmeFc.CS_NVME_FC
-        nvme_fc.ipmi_zone = [1]
+        nvme_fc.name = Config.CS_NVME
+        nvme_fc.config = MockControllerConfig(ipmi_zone=[1])
         nvme_fc.deferred_apply = False
 
         service.controllers = [cpu_fc, hd_fc, nvme_fc]
@@ -1251,13 +1288,19 @@ class TestService:
         # Apply deferred only to controllers on shared zones
         if service.shared_zones:
             for fc in service.controllers:
-                if set(fc.ipmi_zone) & service.shared_zones:
+                if set(fc.config.ipmi_zone) & service.shared_zones:
                     fc.deferred_apply = True
         assert cpu_fc.deferred_apply is False, "CPU on zone 0 should not be deferred"
         assert hd_fc.deferred_apply is True, "HD on shared zone 1 should be deferred"
         assert nvme_fc.deferred_apply is True, "NVME on shared zone 1 should be deferred"
 
-    @pytest.mark.parametrize("exit_code, error", [(10, "Service.run() 23")])
+    @pytest.mark.parametrize(
+        "exit_code, error",
+        [
+            # Old-style section names migration (exit 10)
+            (10, "Service.run() 23"),
+        ],
+    )
     def test_run_old_section_names(self, mocker: MockerFixture, exit_code: int, error: str):
         """Positive unit test for Service.run() method with old section names. It contains the following steps:
         - mock print(), pyudev.Context.__init__() functions
@@ -1269,17 +1312,17 @@ class TestService:
         my_td = TestData()
         my_config = ConfigParser()
         ipmi_command = my_td.create_ipmi_command()
-        my_config[Ipmi.CS_IPMI] = {
-            Ipmi.CV_IPMI_COMMAND: ipmi_command,
-            Ipmi.CV_IPMI_FAN_MODE_DELAY: "0",
-            Ipmi.CV_IPMI_FAN_LEVEL_DELAY: "0",
+        my_config[Config.CS_IPMI] = {
+            Config.CV_IPMI_COMMAND: ipmi_command,
+            Config.CV_IPMI_FAN_MODE_DELAY: "0",
+            Config.CV_IPMI_FAN_LEVEL_DELAY: "0",
         }
         # Use old-style section names with 'zone' tag.
-        my_config["CPU zone"] = {CpuFc.CV_CPU_FC_ENABLED: "0"}
-        my_config["HD zone"] = {HdFc.CV_HD_FC_ENABLED: "0"}
-        my_config["NVME zone"] = {NvmeFc.CV_NVME_FC_ENABLED: "0"}
-        my_config["GPU zone"] = {GpuFc.CV_GPU_FC_ENABLED: "0"}
-        my_config["CONST zone"] = {ConstFc.CV_CONST_FC_ENABLED: "0"}
+        my_config["CPU zone"] = {Config.CV_ENABLED: "0"}
+        my_config["HD zone"] = {Config.CV_ENABLED: "0"}
+        my_config["NVME zone"] = {Config.CV_ENABLED: "0"}
+        my_config["GPU zone"] = {Config.CV_ENABLED: "0"}
+        my_config["CONST zone"] = {Config.CV_ENABLED: "0"}
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -1314,29 +1357,29 @@ class TestService:
 
         # Four controllers on zone 1: CPU 40%, HD 60%, NVME 50%, GPU 75%
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [1]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[1])
         cpu_fc.last_level = 40
         cpu_fc.last_temp = 45.0
         cpu_fc.deferred_apply = True
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 60
         hd_fc.last_temp = 38.0
         hd_fc.deferred_apply = True
 
         nvme_fc = FanController.__new__(FanController)
-        nvme_fc.name = NvmeFc.CS_NVME_FC
-        nvme_fc.ipmi_zone = [1]
+        nvme_fc.name = Config.CS_NVME
+        nvme_fc.config = MockControllerConfig(ipmi_zone=[1])
         nvme_fc.last_level = 50
         nvme_fc.last_temp = 42.0
         nvme_fc.deferred_apply = True
 
         gpu_fc = FanController.__new__(FanController)
-        gpu_fc.name = GpuFc.CS_GPU_FC
-        gpu_fc.ipmi_zone = [1]
+        gpu_fc.name = Config.CS_GPU
+        gpu_fc.config = MockControllerConfig(ipmi_zone=[1])
         gpu_fc.last_level = 75
         gpu_fc.last_temp = 65.0
         gpu_fc.deferred_apply = True
@@ -1376,36 +1419,36 @@ class TestService:
 
         # Five controllers on zone 1: CPU 40%, HD 60%, NVME 50%, GPU 55%, CONST 80%
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [1]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[1])
         cpu_fc.last_level = 40
         cpu_fc.last_temp = 45.0
         cpu_fc.deferred_apply = True
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 60
         hd_fc.last_temp = 38.0
         hd_fc.deferred_apply = True
 
         nvme_fc = FanController.__new__(FanController)
-        nvme_fc.name = NvmeFc.CS_NVME_FC
-        nvme_fc.ipmi_zone = [1]
+        nvme_fc.name = Config.CS_NVME
+        nvme_fc.config = MockControllerConfig(ipmi_zone=[1])
         nvme_fc.last_level = 50
         nvme_fc.last_temp = 42.0
         nvme_fc.deferred_apply = True
 
         gpu_fc = FanController.__new__(FanController)
-        gpu_fc.name = GpuFc.CS_GPU_FC
-        gpu_fc.ipmi_zone = [1]
+        gpu_fc.name = Config.CS_GPU
+        gpu_fc.config = MockControllerConfig(ipmi_zone=[1])
         gpu_fc.last_level = 55
         gpu_fc.last_temp = 60.0
         gpu_fc.deferred_apply = True
 
         const_fc = ConstFc.__new__(ConstFc)
-        const_fc.name = ConstFc.CS_CONST_FC
-        const_fc.ipmi_zone = [1]
+        const_fc.name = Config.CS_CONST
+        const_fc.config = MockControllerConfig(ipmi_zone=[1])
         const_fc.last_level = 80
         const_fc.last_temp = 0.0
         const_fc.deferred_apply = True
@@ -1448,24 +1491,24 @@ class TestService:
 
         # CPU on zones [0, 1, 2] at 50%
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [0, 1, 2]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[0, 1, 2])
         cpu_fc.last_level = 50
         cpu_fc.last_temp = 45.0
         cpu_fc.deferred_apply = True
 
         # HD on zones [1, 2] at 65%
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1, 2]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1, 2])
         hd_fc.last_level = 65
         hd_fc.last_temp = 40.0
         hd_fc.deferred_apply = True
 
         # NVME on zone [2] at 80%
         nvme_fc = FanController.__new__(FanController)
-        nvme_fc.name = NvmeFc.CS_NVME_FC
-        nvme_fc.ipmi_zone = [2]
+        nvme_fc.name = Config.CS_NVME
+        nvme_fc.config = MockControllerConfig(ipmi_zone=[2])
         nvme_fc.last_level = 80
         nvme_fc.last_temp = 55.0
         nvme_fc.deferred_apply = True
@@ -1506,15 +1549,15 @@ class TestService:
 
         # Two controllers on zone 1, both with last_level=0 (not yet computed)
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [1]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[1])
         cpu_fc.last_level = 0
         cpu_fc.last_temp = 0.0
         cpu_fc.deferred_apply = True
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
         hd_fc.last_level = 0
         hd_fc.last_temp = 0.0
         hd_fc.deferred_apply = True
@@ -1545,16 +1588,16 @@ class TestService:
         # CPU on zones [0, 1, 2], HD on [1, 2], NVME on [2]
         # Shared zones: 1 (CPU+HD), 2 (CPU+HD+NVME)
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [0, 1, 2]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[0, 1, 2])
 
         hd_fc = FanController.__new__(FanController)
-        hd_fc.name = HdFc.CS_HD_FC
-        hd_fc.ipmi_zone = [1, 2]
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1, 2])
 
         nvme_fc = FanController.__new__(FanController)
-        nvme_fc.name = NvmeFc.CS_NVME_FC
-        nvme_fc.ipmi_zone = [2]
+        nvme_fc.name = Config.CS_NVME
+        nvme_fc.config = MockControllerConfig(ipmi_zone=[2])
 
         service.controllers = [cpu_fc, hd_fc, nvme_fc]
 
@@ -1586,8 +1629,8 @@ class TestService:
 
         # CPU on zones [0, 1] with deferred apply
         cpu_fc = FanController.__new__(FanController)
-        cpu_fc.name = CpuFc.CS_CPU_FC
-        cpu_fc.ipmi_zone = [0, 1]
+        cpu_fc.name = Config.CS_CPU
+        cpu_fc.config = MockControllerConfig(ipmi_zone=[0, 1])
         cpu_fc.last_level = 60
         cpu_fc.last_temp = 45.0
         cpu_fc.deferred_apply = True

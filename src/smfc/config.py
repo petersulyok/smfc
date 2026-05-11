@@ -1,0 +1,595 @@
+#
+#   config.py (C) 2020-2026, Peter Sulyok
+#   smfc package: Supermicro fan control for Linux (home) servers.
+#   smfc.Config() class implementation - centralized configuration parsing.
+#
+import re
+from configparser import ConfigParser
+from dataclasses import dataclass
+from typing import List
+
+
+@dataclass
+class IpmiConfig:
+    """Configuration for IPMI interface."""
+    command: str            # Full path for ipmitool command
+    fan_mode_delay: int     # Delay time after execution of IPMI set fan mode function (sec)
+    fan_level_delay: int    # Delay time after execution of IPMI set fan level function (sec)
+    remote_parameters: str  # Remote IPMI parameters (e.g. "-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1")
+    platform_name: str      # Platform name (from config or "auto" for auto-detection)
+
+
+@dataclass
+class CpuConfig:
+    """Configuration for CPU fan controller."""
+    section: str            # Section name used for logging (e.g. "CPU", "CPU:1")
+    enabled: bool           # Fan controller enabled
+    ipmi_zone: List[int]    # IPMI zone(s) assigned to the controller
+    temp_calc: int          # Temperature calculation method (0-min, 1-avg, 2-max)
+    steps: int              # Discrete steps in temperatures and fan levels
+    sensitivity: float      # Temperature change to activate fan controller (C)
+    polling: float          # Polling interval to read temperature (sec)
+    min_temp: float         # Minimum temperature value (C)
+    max_temp: float         # Maximum temperature value (C)
+    min_level: int          # Minimum fan level (0..100%)
+    max_level: int          # Maximum fan level (0..100%)
+    smoothing: int          # Moving average window size for temperature readings (1=disabled)
+
+
+@dataclass
+class HdConfig:
+    """Configuration for HD fan controller."""
+    section: str                # Section name used for logging (e.g. "HD", "HD:1")
+    enabled: bool               # Fan controller enabled
+    ipmi_zone: List[int]        # IPMI zone(s) assigned to the controller
+    temp_calc: int              # Temperature calculation method (0-min, 1-avg, 2-max)
+    steps: int                  # Discrete steps in temperatures and fan levels
+    sensitivity: float          # Temperature change to activate fan controller (C)
+    polling: float              # Polling interval to read temperature (sec)
+    min_temp: float             # Minimum temperature value (C)
+    max_temp: float             # Maximum temperature value (C)
+    min_level: int              # Minimum fan level (0..100%)
+    max_level: int              # Maximum fan level (0..100%)
+    smoothing: int              # Moving average window size for temperature readings (1=disabled)
+    hd_names: List[str]         # Device names of the hard disks (e.g. '/dev/disk/by-id/...')
+    smartctl_path: str          # Path for 'smartctl' command
+    standby_guard_enabled: bool # Standby guard feature enabled
+    standby_hd_limit: int       # Number of HDs in STANDBY state before the full array goes STANDBY
+
+
+@dataclass
+class NvmeConfig:
+    """Configuration for NVME fan controller."""
+    section: str            # Section name used for logging (e.g. "NVME", "NVME:1")
+    enabled: bool           # Fan controller enabled
+    ipmi_zone: List[int]    # IPMI zone(s) assigned to the controller
+    temp_calc: int          # Temperature calculation method (0-min, 1-avg, 2-max)
+    steps: int              # Discrete steps in temperatures and fan levels
+    sensitivity: float      # Temperature change to activate fan controller (C)
+    polling: float          # Polling interval to read temperature (sec)
+    min_temp: float         # Minimum temperature value (C)
+    max_temp: float         # Maximum temperature value (C)
+    min_level: int          # Minimum fan level (0..100%)
+    max_level: int          # Maximum fan level (0..100%)
+    smoothing: int          # Moving average window size for temperature readings (1=disabled)
+    nvme_names: List[str]   # Device names of the NVMe drives (e.g. '/dev/disk/by-id/...')
+
+
+@dataclass
+class GpuConfig:
+    """Configuration for GPU fan controller."""
+    section: str                # Section name used for logging (e.g. "GPU", "GPU:1")
+    enabled: bool               # Fan controller enabled
+    ipmi_zone: List[int]        # IPMI zone(s) assigned to the controller
+    temp_calc: int              # Temperature calculation method (0-min, 1-avg, 2-max)
+    steps: int                  # Discrete steps in temperatures and fan levels
+    sensitivity: float          # Temperature change to activate fan controller (C)
+    polling: float              # Polling interval to read temperature (sec)
+    min_temp: float             # Minimum temperature value (C)
+    max_temp: float             # Maximum temperature value (C)
+    min_level: int              # Minimum fan level (0..100%)
+    max_level: int              # Maximum fan level (0..100%)
+    smoothing: int              # Moving average window size for temperature readings (1=disabled)
+    gpu_type: str               # GPU type: 'nvidia' or 'amd'
+    gpu_device_ids: List[int]   # GPU device IDs (indexes)
+    nvidia_smi_path: str        # Path for 'nvidia-smi' command
+    rocm_smi_path: str          # Path for 'rocm-smi' command
+    amd_temp_sensor: int        # AMD temperature sensor (0-junction, 1-edge, 2-memory)
+
+
+@dataclass
+class ConstConfig:
+    """Configuration for CONST fan controller."""
+    section: str            # Section name used for logging (e.g. "CONST", "CONST:1")
+    enabled: bool           # Fan controller enabled
+    ipmi_zone: List[int]    # IPMI zone(s) assigned to the controller
+    polling: float          # Polling interval to check fan level (sec)
+    level: int              # Constant fan level (0..100%)
+
+
+class Config:
+    """Centralized configuration class that parses the INI file and produces typed dataclass instances."""
+
+    # Section names
+    CS_IPMI: str = "Ipmi"       # [Ipmi] section name
+    CS_CPU: str = "CPU"         # [CPU] section name
+    CS_HD: str = "HD"           # [HD] section name
+    CS_NVME: str = "NVME"       # [NVME] section name
+    CS_GPU: str = "GPU"         # [GPU] section name
+    CS_CONST: str = "CONST"     # [CONST] section name
+
+    # Shared variable names (common across multiple controller types)
+    CV_ENABLED: str = "enabled"             # Fan controller enabled flag
+    CV_IPMI_ZONE: str = "ipmi_zone"         # IPMI zone(s) assigned to controller
+    CV_TEMP_CALC: str = "temp_calc"         # Temperature calculation method
+    CV_STEPS: str = "steps"                 # Discrete steps in temperatures and fan levels
+    CV_SENSITIVITY: str = "sensitivity"     # Temperature change to activate fan controller
+    CV_POLLING: str = "polling"             # Polling interval to read temperature
+    CV_MIN_TEMP: str = "min_temp"           # Minimum temperature value
+    CV_MAX_TEMP: str = "max_temp"           # Maximum temperature value
+    CV_MIN_LEVEL: str = "min_level"         # Minimum fan level
+    CV_MAX_LEVEL: str = "max_level"         # Maximum fan level
+    CV_SMOOTHING: str = "smoothing"         # Moving average window size
+
+    # [Ipmi] section variable names
+    CV_IPMI_COMMAND: str = "command"                        # Full path for ipmitool command
+    CV_IPMI_FAN_MODE_DELAY: str = "fan_mode_delay"          # Delay after set fan mode
+    CV_IPMI_FAN_LEVEL_DELAY: str = "fan_level_delay"        # Delay after set fan level
+    CV_IPMI_REMOTE_PARAMETERS: str = "remote_parameters"    # Remote IPMI parameters
+    CV_IPMI_PLATFORM_NAME: str = "platform_name"            # Platform name or "auto"
+
+    # [HD] section variable names
+    CV_HD_NAMES: str = "hd_names"                            # HD device names
+    CV_HD_SMARTCTL_PATH: str = "smartctl_path"               # Path to smartctl command
+    CV_HD_STANDBY_GUARD_ENABLED: str = "standby_guard_enabled"  # Enable standby guard
+    CV_HD_STANDBY_HD_LIMIT: str = "standby_hd_limit"         # Standby HD limit
+
+    # [NVME] section variable names
+    CV_NVME_NAMES: str = "nvme_names"    # NVMe device names
+
+    # [GPU] section variable names
+    CV_GPU_TYPE: str = "gpu_type"                   # GPU type: 'nvidia' or 'amd'
+    CV_GPU_IDS: str = "gpu_device_ids"              # GPU device IDs (indexes)
+    CV_GPU_NVIDIA_SMI_PATH: str = "nvidia_smi_path" # Path to nvidia-smi command
+    CV_GPU_ROCM_SMI_PATH: str = "rocm_smi_path"     # Path to rocm-smi command
+    CV_GPU_AMD_TEMP_SENSOR: str = "amd_temp_sensor" # AMD temperature sensor index
+
+    # AMD temperature sensor key names (for rocm-smi output parsing)
+    CV_AMD_TEMP_JUNCTION: str = "Temperature (Sensor junction) (C)"
+    CV_AMD_TEMP_EDGE: str = "Temperature (Sensor edge) (C)"
+    CV_AMD_TEMP_MEMORY: str = "Temperature (Sensor memory) (C)"
+    CV_AMD_TEMP_KEYS: tuple = (CV_AMD_TEMP_JUNCTION, CV_AMD_TEMP_EDGE, CV_AMD_TEMP_MEMORY)
+
+    # [CONST] section variable names
+    CV_CONST_LEVEL: str = "level"   # Constant fan level
+
+    # Constant values for temperature calculation
+    CALC_MIN: int = 0   # Use minimum temperature
+    CALC_AVG: int = 1   # Use average temperature
+    CALC_MAX: int = 2   # Use maximum temperature
+
+    # Constant values for IPMI fan zones (defaults)
+    CPU_ZONE: int = 0   # Default CPU zone ID
+    HD_ZONE: int = 1    # Default HD zone ID
+
+    # Default values — [Ipmi] section
+    DV_IPMI_COMMAND: str = "/usr/bin/ipmitool"
+    DV_IPMI_FAN_MODE_DELAY: int = 10
+    DV_IPMI_FAN_LEVEL_DELAY: int = 2
+    DV_IPMI_REMOTE_PARAMETERS: str = ""
+    DV_IPMI_PLATFORM_NAME: str = "auto"
+
+    # Default values — [CPU] section
+    DV_CPU_STEPS: int = 6
+    DV_CPU_SENSITIVITY: float = 3.0
+    DV_CPU_POLLING: float = 2.0
+    DV_CPU_MIN_TEMP: float = 30.0
+    DV_CPU_MAX_TEMP: float = 60.0
+    DV_CPU_MIN_LEVEL: int = 35
+    DV_CPU_MAX_LEVEL: int = 100
+    DV_CPU_SMOOTHING: int = 1
+
+    # Default values — [HD] section
+    DV_HD_STEPS: int = 4
+    DV_HD_SENSITIVITY: float = 2.0
+    DV_HD_POLLING: float = 10.0
+    DV_HD_MIN_TEMP: float = 32.0
+    DV_HD_MAX_TEMP: float = 46.0
+    DV_HD_MIN_LEVEL: int = 35
+    DV_HD_MAX_LEVEL: int = 100
+    DV_HD_SMOOTHING: int = 1
+    DV_HD_SMARTCTL_PATH: str = "/usr/sbin/smartctl"
+    DV_HD_STANDBY_HD_LIMIT: int = 1
+
+    # Default values — [NVME] section
+    DV_NVME_STEPS: int = 4
+    DV_NVME_SENSITIVITY: float = 2.0
+    DV_NVME_POLLING: float = 10.0
+    DV_NVME_MIN_TEMP: float = 35.0
+    DV_NVME_MAX_TEMP: float = 70.0
+    DV_NVME_MIN_LEVEL: int = 35
+    DV_NVME_MAX_LEVEL: int = 100
+    DV_NVME_SMOOTHING: int = 1
+
+    # Default values — [GPU] section
+    DV_GPU_TYPE: str = "nvidia"
+    DV_GPU_STEPS: int = 5
+    DV_GPU_SENSITIVITY: float = 2.0
+    DV_GPU_POLLING: float = 2.0
+    DV_GPU_MIN_TEMP: float = 40.0
+    DV_GPU_MAX_TEMP: float = 70.0
+    DV_GPU_MIN_LEVEL: int = 35
+    DV_GPU_MAX_LEVEL: int = 100
+    DV_GPU_SMOOTHING: int = 1
+    DV_GPU_DEVICE_IDS: str = "0"
+    DV_GPU_NVIDIA_SMI_PATH: str = "/usr/bin/nvidia-smi"
+    DV_GPU_ROCM_SMI_PATH: str = "/usr/bin/rocm-smi"
+    DV_GPU_AMD_TEMP_SENSOR: int = 0
+
+    # Default values — [CONST] section
+    DV_CONST_POLLING: float = 30.0
+    DV_CONST_LEVEL: int = 50
+
+    # Parsed configuration dataclasses
+    ipmi: IpmiConfig            # IPMI configuration
+    cpu: List[CpuConfig]        # List of CPU fan controller configurations
+    hd: List[HdConfig]          # List of HD fan controller configurations
+    nvme: List[NvmeConfig]      # List of NVME fan controller configurations
+    gpu: List[GpuConfig]        # List of GPU fan controller configurations
+    const: List[ConstConfig]    # List of CONST fan controller configurations
+
+    def __init__(self, path: str) -> None:
+        """Initialize the Config class by reading and parsing the INI file.
+        Args:
+            path (str): path to the configuration file
+        Raises:
+            FileNotFoundError: configuration file not found
+            ValueError: invalid configuration parameters
+        """
+        parser = ConfigParser()
+        if not parser.read(path):
+            raise FileNotFoundError(f"Cannot load configuration file: {path}")
+        self.ipmi = self._parse_ipmi(parser)
+        self.cpu = self._parse_cpu_sections(parser)
+        self._validate_no_duplicate_zones(self.cpu)
+        self.hd = self._parse_hd_sections(parser)
+        self._validate_no_duplicate_zones(self.hd)
+        self.nvme = self._parse_nvme_sections(parser)
+        self._validate_no_duplicate_zones(self.nvme)
+        self.gpu = self._parse_gpu_sections(parser)
+        self._validate_no_duplicate_zones(self.gpu)
+        self.const = self._parse_const_sections(parser)
+        self._validate_no_duplicate_zones(self.const)
+
+    @staticmethod
+    def _get_sections(parser: ConfigParser, base_name: str) -> List[str]:
+        """Collect [BASE], [BASE:0], [BASE:1] ... sections in order.
+        Args:
+            parser (ConfigParser): configuration parser
+            base_name (str): base section name (e.g. "CPU", "HD")
+        Returns:
+            List[str]: list of section names in order
+        """
+        sections = []
+        if parser.has_section(base_name):
+            sections.append(base_name)
+        prefix = f"{base_name}:"
+        numbered = sorted(
+            [s for s in parser.sections() if s.startswith(prefix) and s[len(prefix):].isdigit()],
+            key=lambda s: int(s[len(prefix):])
+        )
+        sections.extend(numbered)
+        return sections
+
+    @staticmethod
+    def parse_ipmi_zones(ipmi_zone: str) -> List[int]:
+        """Parse a comma- or space-separated string of IPMI zone IDs into a validated list.
+        Args:
+            ipmi_zone (str): IPMI zone(s) string
+        Returns:
+            List[int]: list of zone IDs
+        Raises:
+            ValueError: invalid zone string or zone value out of range
+        """
+        zone_str = re.sub(" +", " ", ipmi_zone.strip())
+        zones = [int(s) for s in zone_str.split("," if "," in ipmi_zone else " ")]
+        for zone in zones:
+            if zone not in range(0, 101):
+                raise ValueError(f"invalid value: ipmi_zone={ipmi_zone}.")
+        return zones
+
+    @staticmethod
+    def parse_device_names(names_str: str) -> List[str]:
+        """Parse a newline- or space-separated string of device names.
+        Args:
+            names_str (str): device names string
+        Returns:
+            List[str]: list of device names
+        """
+        if "\n" in names_str:
+            return names_str.splitlines()
+        return names_str.split()
+
+    @staticmethod
+    def parse_gpu_ids(gpu_id_str: str) -> List[int]:
+        """Parse a comma- or space-separated string of GPU device IDs.
+        Args:
+            gpu_id_str (str): GPU device IDs string
+        Returns:
+            List[int]: list of GPU device IDs
+        Raises:
+            ValueError: invalid GPU ID string or value out of range
+        """
+        gpu_id_list = re.sub(" +", " ", gpu_id_str.strip())
+        ids = [int(s) for s in gpu_id_list.split("," if "," in gpu_id_list else " ")]
+        for gid in ids:
+            if gid not in range(0, 101):
+                raise ValueError(f"invalid value: gpu_device_ids={gpu_id_str}.")
+        return ids
+
+    def _parse_ipmi(self, parser: ConfigParser) -> IpmiConfig:
+        """Parse [Ipmi] section.
+        Args:
+            parser (ConfigParser): configuration parser
+        Returns:
+            IpmiConfig: parsed IPMI configuration
+        Raises:
+            ValueError: invalid configuration parameters or missing [Ipmi] section
+        """
+        s = self.CS_IPMI
+        if s not in parser:
+            raise ValueError(f"Missing mandatory [{s}] section in configuration file")
+        fan_mode_delay = parser[s].getint(self.CV_IPMI_FAN_MODE_DELAY, fallback=self.DV_IPMI_FAN_MODE_DELAY)
+        if fan_mode_delay < 0:
+            raise ValueError(f"Negative {self.CV_IPMI_FAN_MODE_DELAY}= parameter ({fan_mode_delay})")
+        fan_level_delay = parser[s].getint(self.CV_IPMI_FAN_LEVEL_DELAY, fallback=self.DV_IPMI_FAN_LEVEL_DELAY)
+        if fan_level_delay < 0:
+            raise ValueError(f"Negative {self.CV_IPMI_FAN_LEVEL_DELAY}= parameter ({fan_level_delay})")
+        return IpmiConfig(
+            command=parser[s].get(self.CV_IPMI_COMMAND, self.DV_IPMI_COMMAND),
+            fan_mode_delay=fan_mode_delay,
+            fan_level_delay=fan_level_delay,
+            remote_parameters=parser[s].get(self.CV_IPMI_REMOTE_PARAMETERS, fallback=self.DV_IPMI_REMOTE_PARAMETERS),
+            platform_name=parser[s].get(self.CV_IPMI_PLATFORM_NAME, fallback=self.DV_IPMI_PLATFORM_NAME),
+        )
+
+    def _parse_cpu_sections(self, parser: ConfigParser) -> List[CpuConfig]:
+        """Parse [CPU], [CPU:0], [CPU:1] ... sections.
+        Args:
+            parser (ConfigParser): configuration parser
+        Returns:
+            List[CpuConfig]: list of parsed CPU configurations
+        Raises:
+            ValueError: invalid configuration parameters
+        """
+        result = []
+        for s in self._get_sections(parser, self.CS_CPU):
+            cfg = CpuConfig(
+                section=s,
+                enabled=parser[s].getboolean(self.CV_ENABLED, fallback=False),
+                ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.CPU_ZONE))),
+                temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
+                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_CPU_STEPS),
+                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_CPU_SENSITIVITY),
+                polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_CPU_POLLING),
+                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_CPU_MIN_TEMP),
+                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=self.DV_CPU_MAX_TEMP),
+                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_CPU_MIN_LEVEL),
+                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_CPU_MAX_LEVEL),
+                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_CPU_SMOOTHING),
+            )
+            self._validate_fan_controller_config(cfg, s)
+            result.append(cfg)
+        return result
+
+    def _parse_hd_sections(self, parser: ConfigParser) -> List[HdConfig]:
+        """Parse [HD], [HD:0], [HD:1] ... sections.
+        Args:
+            parser (ConfigParser): configuration parser
+        Returns:
+            List[HdConfig]: list of parsed HD configurations
+        Raises:
+            ValueError: invalid configuration parameters
+        """
+        result = []
+        for s in self._get_sections(parser, self.CS_HD):
+            enabled = parser[s].getboolean(self.CV_ENABLED, fallback=False)
+            hd_names_str = parser[s].get(self.CV_HD_NAMES, "")
+            hd_names = self.parse_device_names(hd_names_str) if hd_names_str else []
+            # Validate hd_names is specified when enabled
+            if enabled and not hd_names:
+                raise ValueError(f"[{s}] {self.CV_HD_NAMES} is not specified")
+            for name in hd_names:
+                if "nvme" in name.lower():
+                    raise ValueError(f"NVMe drives are not allowed in [{s}], use [NVME] instead: '{name}'")
+            smartctl_path = parser[s].get(self.CV_HD_SMARTCTL_PATH, self.DV_HD_SMARTCTL_PATH)
+            if enabled and not smartctl_path.strip():
+                raise ValueError(f"[{s}] {self.CV_HD_SMARTCTL_PATH} is empty")
+            standby_guard_enabled = parser[s].getboolean(self.CV_HD_STANDBY_GUARD_ENABLED, fallback=False)
+            standby_hd_limit = parser[s].getint(self.CV_HD_STANDBY_HD_LIMIT, fallback=self.DV_HD_STANDBY_HD_LIMIT)
+            if standby_guard_enabled and standby_hd_limit < 0:
+                raise ValueError(f"[{s}] {self.CV_HD_STANDBY_HD_LIMIT} < 0")
+            cfg = HdConfig(
+                section=s,
+                enabled=enabled,
+                ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
+                temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
+                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_HD_STEPS),
+                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_HD_SENSITIVITY),
+                polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_HD_POLLING),
+                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_HD_MIN_TEMP),
+                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=self.DV_HD_MAX_TEMP),
+                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_HD_MIN_LEVEL),
+                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_HD_MAX_LEVEL),
+                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_HD_SMOOTHING),
+                hd_names=hd_names,
+                smartctl_path=smartctl_path,
+                standby_guard_enabled=standby_guard_enabled,
+                standby_hd_limit=standby_hd_limit,
+            )
+            self._validate_fan_controller_config(cfg, s)
+            result.append(cfg)
+        return result
+
+    def _parse_nvme_sections(self, parser: ConfigParser) -> List[NvmeConfig]:
+        """Parse [NVME], [NVME:0], [NVME:1] ... sections.
+        Args:
+            parser (ConfigParser): configuration parser
+        Returns:
+            List[NvmeConfig]: list of parsed NVME configurations
+        Raises:
+            ValueError: invalid configuration parameters
+        """
+        result = []
+        for s in self._get_sections(parser, self.CS_NVME):
+            enabled = parser[s].getboolean(self.CV_ENABLED, fallback=False)
+            nvme_names_str = parser[s].get(self.CV_NVME_NAMES, "")
+            nvme_names = self.parse_device_names(nvme_names_str) if nvme_names_str else []
+            # Validate nvme_names is specified when enabled
+            if enabled and not nvme_names:
+                raise ValueError(f"[{s}] {self.CV_NVME_NAMES} is not specified")
+            cfg = NvmeConfig(
+                section=s,
+                enabled=enabled,
+                ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
+                temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
+                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_NVME_STEPS),
+                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_NVME_SENSITIVITY),
+                polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_NVME_POLLING),
+                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_NVME_MIN_TEMP),
+                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=self.DV_NVME_MAX_TEMP),
+                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_NVME_MIN_LEVEL),
+                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_NVME_MAX_LEVEL),
+                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_NVME_SMOOTHING),
+                nvme_names=nvme_names,
+            )
+            self._validate_fan_controller_config(cfg, s)
+            result.append(cfg)
+        return result
+
+    def _parse_gpu_sections(self, parser: ConfigParser) -> List[GpuConfig]:
+        """Parse [GPU], [GPU:0], [GPU:1] ... sections.
+        Args:
+            parser (ConfigParser): configuration parser
+        Returns:
+            List[GpuConfig]: list of parsed GPU configurations
+        Raises:
+            ValueError: invalid configuration parameters
+        """
+        result = []
+        for s in self._get_sections(parser, self.CS_GPU):
+            gpu_type = parser[s].get(self.CV_GPU_TYPE, self.DV_GPU_TYPE).lower()
+            if gpu_type not in ["nvidia", "amd"]:
+                raise ValueError(f"[{s}] invalid value: {self.CV_GPU_TYPE}={gpu_type}.")
+            enabled = parser[s].getboolean(self.CV_ENABLED, fallback=False)
+            amd_temp_sensor = parser[s].getint(self.CV_GPU_AMD_TEMP_SENSOR, fallback=self.DV_GPU_AMD_TEMP_SENSOR)
+            if gpu_type == "amd" and amd_temp_sensor not in range(0, 3):
+                raise ValueError(f"[{s}] invalid value: {self.CV_GPU_AMD_TEMP_SENSOR}={amd_temp_sensor}.")
+            gpu_device_ids = self.parse_gpu_ids(parser[s].get(self.CV_GPU_IDS, self.DV_GPU_DEVICE_IDS))
+            nvidia_smi_path = parser[s].get(self.CV_GPU_NVIDIA_SMI_PATH, self.DV_GPU_NVIDIA_SMI_PATH)
+            if enabled and gpu_type == "nvidia" and not nvidia_smi_path.strip():
+                raise ValueError(f"[{s}] {self.CV_GPU_NVIDIA_SMI_PATH} is empty")
+            rocm_smi_path = parser[s].get(self.CV_GPU_ROCM_SMI_PATH, self.DV_GPU_ROCM_SMI_PATH)
+            if enabled and gpu_type == "amd" and not rocm_smi_path.strip():
+                raise ValueError(f"[{s}] {self.CV_GPU_ROCM_SMI_PATH} is empty")
+            cfg = GpuConfig(
+                section=s,
+                enabled=enabled,
+                ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
+                temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
+                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_GPU_STEPS),
+                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_GPU_SENSITIVITY),
+                polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_GPU_POLLING),
+                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_GPU_MIN_TEMP),
+                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=self.DV_GPU_MAX_TEMP),
+                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_GPU_MIN_LEVEL),
+                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_GPU_MAX_LEVEL),
+                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_GPU_SMOOTHING),
+                gpu_type=gpu_type,
+                gpu_device_ids=gpu_device_ids,
+                nvidia_smi_path=nvidia_smi_path,
+                rocm_smi_path=rocm_smi_path,
+                amd_temp_sensor=amd_temp_sensor,
+            )
+            self._validate_fan_controller_config(cfg, s)
+            result.append(cfg)
+        return result
+
+    def _parse_const_sections(self, parser: ConfigParser) -> List[ConstConfig]:
+        """Parse [CONST], [CONST:0], [CONST:1] ... sections.
+        Args:
+            parser (ConfigParser): configuration parser
+        Returns:
+            List[ConstConfig]: list of parsed CONST configurations
+        Raises:
+            ValueError: invalid configuration parameters
+        """
+        result = []
+        for s in self._get_sections(parser, self.CS_CONST):
+            polling = parser[s].getfloat(self.CV_POLLING, fallback=self.DV_CONST_POLLING)
+            if polling < 0:
+                raise ValueError(f"[{s}] {self.CV_POLLING} < 0")
+            level = parser[s].getint(self.CV_CONST_LEVEL, fallback=self.DV_CONST_LEVEL)
+            if level not in range(1, 101):
+                raise ValueError(f"[{s}] invalid {self.CV_CONST_LEVEL}")
+            result.append(ConstConfig(
+                section=s,
+                enabled=parser[s].getboolean(self.CV_ENABLED, fallback=False),
+                ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
+                polling=polling,
+                level=level,
+            ))
+        return result
+
+    @staticmethod
+    def _validate_no_duplicate_zones(configs: list) -> None:
+        """Validate that enabled instances of the same controller type do not share IPMI zones.
+        Args:
+            configs (list): list of parsed config dataclasses (e.g. CpuConfig, HdConfig)
+        Raises:
+            ValueError: two enabled instances share the same IPMI zone
+        """
+        zone_owners: dict = {}
+        for cfg in configs:
+            if not cfg.enabled:
+                continue
+            for zone in set(cfg.ipmi_zone):
+                if zone in zone_owners:
+                    raise ValueError(f"[{cfg.section}] IPMI zone {zone} is already used by [{zone_owners[zone]}]")
+                zone_owners[zone] = cfg.section
+
+    def _validate_fan_controller_config(self, cfg, section: str) -> None:
+        """Validate common fan controller configuration parameters.
+        Args:
+            cfg: configuration dataclass (CpuConfig, HdConfig, NvmeConfig, or GpuConfig)
+            section (str): section name for error messages
+        Raises:
+            ValueError: invalid configuration parameters
+        """
+        if cfg.temp_calc not in {self.CALC_MIN, self.CALC_AVG, self.CALC_MAX}:
+            raise ValueError(f"[{section}] invalid value: {self.CV_TEMP_CALC} ({cfg.temp_calc}).")
+        if cfg.steps <= 0:
+            raise ValueError(f"[{section}] invalid value: {self.CV_STEPS} <= 0")
+        if cfg.max_level > cfg.min_level and cfg.steps > cfg.max_level - cfg.min_level:
+            raise ValueError(f"[{section}] invalid value: {self.CV_STEPS} > {self.CV_MAX_LEVEL} - {self.CV_MIN_LEVEL}")
+        if cfg.sensitivity <= 0:
+            raise ValueError(f"[{section}] invalid value: {self.CV_SENSITIVITY} <= 0")
+        if cfg.polling < 0:
+            raise ValueError(f"[{section}] {self.CV_POLLING} < 0")
+        if cfg.min_temp < 0:
+            raise ValueError(f"[{section}] invalid value: {self.CV_MIN_TEMP} < 0")
+        if cfg.max_temp > 200:
+            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} > 200")
+        if cfg.max_temp < cfg.min_temp:
+            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} < {self.CV_MIN_TEMP}")
+        if cfg.min_level < 0:
+            raise ValueError(f"[{section}] invalid value: {self.CV_MIN_LEVEL} < 0")
+        if cfg.max_level > 100:
+            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} > 100")
+        if cfg.max_level < cfg.min_level:
+            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} < {self.CV_MIN_LEVEL}")
+        if cfg.smoothing < 1:
+            raise ValueError(f"[{section}] invalid value: {self.CV_SMOOTHING} < 1")
+
+
+# End.
