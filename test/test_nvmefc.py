@@ -21,13 +21,13 @@ class TestNvmeFc:
         "count, ipmi_zone, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, error",
         [
             # 1 NVMe, zone 0, CALC_MIN
-            (1, [0], FanController.CALC_MIN, 4, 2, 2, 35, 70, 35, 100, "NvmeFc.__init__() 1"),
+            (1, [0], Config.CALC_MIN, 4, 2, 2, 35, 70, 35, 100, "NvmeFc.__init__() 1"),
             # 2 NVMes, zone 1, CALC_AVG
-            (2, [1], FanController.CALC_AVG, 4, 2, 2, 35, 70, 35, 100, "NvmeFc.__init__() 2"),
+            (2, [1], Config.CALC_AVG, 4, 2, 2, 35, 70, 35, 100, "NvmeFc.__init__() 2"),
             # 4 NVMes, zone 2, CALC_AVG
-            (4, [2], FanController.CALC_AVG, 4, 2, 2, 35, 70, 35, 100, "NvmeFc.__init__() 3"),
+            (4, [2], Config.CALC_AVG, 4, 2, 2, 35, 70, 35, 100, "NvmeFc.__init__() 3"),
             # 1 NVMe, zone 3, CALC_MAX
-            (1, [3], FanController.CALC_MAX, 5, 3, 5, 32, 48, 36, 99, "NvmeFc.__init__() 4"),
+            (1, [3], Config.CALC_MAX, 5, 3, 5, 32, 48, 36, 99, "NvmeFc.__init__() 4"),
         ],
     )
     def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: List[int], temp_calc: int, steps: int,
@@ -103,7 +103,7 @@ class TestNvmeFc:
         assert mynvmefc.config.ipmi_zone == [Config.HD_ZONE], error
         assert mynvmefc.name == cfg.section, error
         assert mynvmefc.count == count, error
-        assert mynvmefc.config.temp_calc == FanController.CALC_AVG, error
+        assert mynvmefc.config.temp_calc == Config.CALC_AVG, error
         assert mynvmefc.config.steps == Config.DV_NVME_STEPS, error
         assert mynvmefc.config.sensitivity == Config.DV_NVME_SENSITIVITY, error
         assert mynvmefc.config.polling == Config.DV_NVME_POLLING, error

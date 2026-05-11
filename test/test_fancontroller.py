@@ -11,6 +11,7 @@ import pyudev
 from mock import MagicMock, call
 from pytest_mock import MockerFixture
 from smfc import FanController, Log, Ipmi
+from smfc.config import Config
 from .test_data import MockDevice, MockContext, create_cpu_config
 
 
@@ -58,33 +59,33 @@ class TestFanController:
         "smoothing, error",
         [
             # CPU zone 0, CALC_MIN, 1 device
-            ([0], 1, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 1"),
+            ([0], 1, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 1"),
             # CPU zone 0, CALC_MIN, 4 devices
-            ([0], 4, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 2"),
+            ([0], 4, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 2"),
             # CPU zone 0, CALC_AVG, 6 devices
-            ([0], 6, FanController.CALC_AVG, 6, 5, 4, 32, 52, 37, 95, 1, "FanController.__init__() 3"),
+            ([0], 6, Config.CALC_AVG, 6, 5, 4, 32, 52, 37, 95, 1, "FanController.__init__() 3"),
             # CPU zone 0, CALC_MAX, 8 devices
-            ([0], 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 4"),
+            ([0], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 4"),
             # HD zone 1, CALC_MIN, 1 device
-            ([1], 1, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 5"),
+            ([1], 1, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 5"),
             # HD zone 1, CALC_MIN, 4 devices
-            ([1], 4, FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 6"),
+            ([1], 4, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 6"),
             # HD zone 1, CALC_AVG, 6 devices
-            ([1], 6, FanController.CALC_AVG, 6, 5, 4, 32, 52, 37, 95, 1, "FanController.__init__() 7"),
+            ([1], 6, Config.CALC_AVG, 6, 5, 4, 32, 52, 37, 95, 1, "FanController.__init__() 7"),
             # HD zone 1, CALC_MAX, 8 devices
-            ([1], 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 8"),
+            ([1], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 8"),
             # Multiple zones comma-separated
-            ([0, 1], 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 9"),
+            ([0, 1], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 9"),
             # Three zones comma-separated
-            ([0, 1, 2], 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 10"),
+            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 10"),
             # Three zones space-separated
-            ([0, 1, 2], 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 11"),
+            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 11"),
             # Three zones extra whitespace
-            ([0, 1, 2], 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 12"),
+            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 12"),
             # Three zones comma with whitespace
-            ([0, 1, 2], 8, FanController.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 13"),
+            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 13"),
             # Smoothing enabled (4)
-            ([0], 1, FanController.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 4, "FanController.__init__() 14"),
+            ([0], 1, Config.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 4, "FanController.__init__() 14"),
         ],
     )
     # pylint: enable=line-too-long
@@ -202,24 +203,24 @@ class TestFanController:
         "count, temp_calc, temps, expected, error",
         [
             # Single device (temp_calc irrelevant)
-            (1, FanController.CALC_AVG, [38.5], 38.5, "FanController.get_temp() 1"),
+            (1, Config.CALC_AVG, [38.5], 38.5, "FanController.get_temp() 1"),
             # CALC_MIN - all same
-            (3, FanController.CALC_MIN, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() 2"),
+            (3, Config.CALC_MIN, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() 2"),
             # CALC_MIN - different values
-            (3, FanController.CALC_MIN, [38.5, 40.5, 42.5], 38.5, "FanController.get_temp() 3"),
+            (3, Config.CALC_MIN, [38.5, 40.5, 42.5], 38.5, "FanController.get_temp() 3"),
             # CALC_AVG - all same
-            (3, FanController.CALC_AVG, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() 4"),
+            (3, Config.CALC_AVG, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() 4"),
             # CALC_AVG - different values
-            (3, FanController.CALC_AVG, [38.5, 40.5, 42.5], 40.5, "FanController.get_temp() 5"),
+            (3, Config.CALC_AVG, [38.5, 40.5, 42.5], 40.5, "FanController.get_temp() 5"),
             # CALC_AVG - 8 devices
-            (8, FanController.CALC_AVG, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 45.0,
+            (8, Config.CALC_AVG, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 45.0,
              "FanController.get_temp() 6"),
             # CALC_MAX - all same
-            (3, FanController.CALC_MAX, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() 7"),
+            (3, Config.CALC_MAX, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() 7"),
             # CALC_MAX - different values
-            (3, FanController.CALC_MAX, [38.5, 40.5, 42.5], 42.5, "FanController.get_temp() 8"),
+            (3, Config.CALC_MAX, [38.5, 40.5, 42.5], 42.5, "FanController.get_temp() 8"),
             # CALC_MAX - 8 devices
-            (8, FanController.CALC_MAX, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 52.0,
+            (8, Config.CALC_MAX, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 52.0,
              "FanController.get_temp() 9"),
         ],
     )
@@ -606,7 +607,7 @@ class TestFanController:
         mock_get_nth_temp.return_value = 38.5
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
-        cfg = create_cpu_config(ipmi_zone=ipmi_zone, temp_calc=FanController.CALC_AVG, steps=5, sensitivity=4,
+        cfg = create_cpu_config(ipmi_zone=ipmi_zone, temp_calc=Config.CALC_AVG, steps=5, sensitivity=4,
                                 polling=2, min_temp=30, max_temp=50, min_level=35, max_level=100, smoothing=1)
         my_fc = FanController.__new__(FanController)
         my_fc.config = cfg

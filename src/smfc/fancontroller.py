@@ -6,23 +6,32 @@
 import os
 import time
 from collections import deque
-from typing import List, Union
+from typing import List, Protocol
 from pyudev import Context, Device
 from smfc.ipmi import Ipmi
 from smfc.log import Log
-from smfc.config import CpuConfig, HdConfig, NvmeConfig, GpuConfig
+from smfc.config import Config
+
+
+class FanControllerConfig(Protocol):  # pylint: disable=too-few-public-methods
+    """Protocol for fan controller configuration (shared fields across CPU, HD, NVME, GPU configs)."""
+    ipmi_zone: List[int]    # IPMI zone(s) assigned to the controller
+    temp_calc: int          # Temperature calculation method (0-min, 1-avg, 2-max)
+    steps: int              # Discrete steps in temperatures and fan levels
+    sensitivity: float      # Temperature change to activate fan controller (C)
+    polling: float          # Polling interval to read temperature (sec)
+    min_temp: float         # Minimum temperature value (C)
+    max_temp: float         # Maximum temperature value (C)
+    min_level: int          # Minimum fan level (0..100%)
+    max_level: int          # Maximum fan level (0..100%)
+    smoothing: int          # Moving average window size for temperature readings (1=disabled)
 
 
 class FanController:
     """Generic fan controller class."""
 
-    # Constant values for temperature calculation
-    CALC_MIN: int = 0
-    CALC_AVG: int = 1
-    CALC_MAX: int = 2
-
     # Configuration reference (set by derived classes before calling super().__init__())
-    config: Union[CpuConfig, HdConfig, NvmeConfig, GpuConfig]
+    config: FanControllerConfig
 
     # Core references
     log: Log                # Reference to a Log class instance
@@ -130,9 +139,9 @@ class FanController:
         if self.count == 1:
             return self._get_nth_temp(0)
         temps = [self._get_nth_temp(i) for i in range(self.count)]
-        if self.config.temp_calc == self.CALC_MIN:
+        if self.config.temp_calc == Config.CALC_MIN:
             result = min(temps)
-        elif self.config.temp_calc == self.CALC_MAX:
+        elif self.config.temp_calc == Config.CALC_MAX:
             result = max(temps)
         else:
             result = sum(temps) / len(temps)

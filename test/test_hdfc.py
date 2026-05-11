@@ -25,13 +25,13 @@ class TestHdFc:
         "sudo, error",
         [
             # 1 HD, zone 0, CALC_MIN, sudo=True
-            (1, [0], FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, True, "HdFc.__init__() 1"),
+            (1, [0], Config.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, True, "HdFc.__init__() 1"),
             # 2 HDs, zone 1, CALC_AVG, sudo=False
-            (2, [1], FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 2, False, "HdFc.__init__() 2"),
+            (2, [1], Config.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 2, False, "HdFc.__init__() 2"),
             # 4 HDs, zone 2, CALC_AVG, sudo=True
-            (4, [2], FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 4, True, "HdFc.__init__() 3"),
+            (4, [2], Config.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, 4, True, "HdFc.__init__() 3"),
             # 8 HDs, zone 3, CALC_MAX, sudo=False
-            (8, [3], FanController.CALC_MAX, 4, 2, 2, 32, 48, 35, 100, 6, False, "HdFc.__init__() 4"),
+            (8, [3], Config.CALC_MAX, 4, 2, 2, 32, 48, 35, 100, 6, False, "HdFc.__init__() 4"),
         ],
     )
     def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: List[int], temp_calc: int, steps: int,
@@ -116,7 +116,7 @@ class TestHdFc:
         assert my_hdfc.name == cfg.section, error
         assert my_hdfc.count == count, error
         assert my_hdfc.sudo is False
-        assert my_hdfc.config.temp_calc == FanController.CALC_AVG, error
+        assert my_hdfc.config.temp_calc == Config.CALC_AVG, error
         assert my_hdfc.config.steps == Config.DV_HD_STEPS, error
         assert my_hdfc.config.sensitivity == Config.DV_HD_SENSITIVITY, error
         assert my_hdfc.config.polling == Config.DV_HD_POLLING, error
@@ -134,13 +134,13 @@ class TestHdFc:
         "count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, sb_limit, error",
         [
             # hd_names not specified (count=0)
-            (0, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, "HdFc.__init__() 6"),
+            (0, Config.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 2, "HdFc.__init__() 6"),
             # standby_hd_limit < 0
-            (2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, -1, "HdFc.__init__() 7"),
+            (2, Config.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, -1, "HdFc.__init__() 7"),
             # standby_hd_limit > count
-            (2, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4, "HdFc.__init__() 8"),
+            (2, Config.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4, "HdFc.__init__() 8"),
             # Invalid device name (count=100 triggers error)
-            (100, FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4, "HdFc.__init__() 9"),
+            (100, Config.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, 4, "HdFc.__init__() 9"),
         ],
     )
     def test_init_n1(self, mocker: MockerFixture, count: int, temp_calc: int, steps: int, sensitivity: float,

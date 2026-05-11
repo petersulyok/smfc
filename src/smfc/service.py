@@ -179,6 +179,26 @@ class Service:
                 shared.add(zone)
         return shared
 
+    @staticmethod
+    def _parse_args() -> Namespace:
+        """Parse command-line arguments.
+
+        Returns:
+            Namespace: parsed arguments
+        """
+        parser = ArgumentParser()
+        parser.add_argument("-c", action="store", dest="config_file", default="smfc.conf",
+                            help="configuration file (default is /etc/smfc/smfc.conf)")
+        parser.add_argument("-v", "--version", action="version", version="%(prog)s " + version("smfc"))
+        parser.add_argument("-l", type=int, choices=[0, 1, 2, 3, 4], default=1,
+                            help="set log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG")
+        parser.add_argument("-o", type=int, choices=[0, 1, 2], default=2,
+                            help="set log output: 0-stdout, 1-stderr, 2-syslog(default)")
+        parser.add_argument("-nd", action="store_true", default=False, help="no dependency checking at start")
+        parser.add_argument("-s", action="store_true", default=False, help="use sudo command")
+        parser.add_argument("-ne", action="store_true", default=False, help="no fan speed recovery at exit")
+        return parser.parse_args()
+
     def run(self) -> None:
         """Run function: main execution function of the systemd service.
 
@@ -192,26 +212,10 @@ class Service:
         9 - udev initialization error
         10 - none of the fan controllers is enabled
         """
-        app_parser: ArgumentParser  # Instance for an ArgumentParser class
-        parsed_results: Namespace   # Results of parsed command line arguments
         old_mode: int               # Old IPMI fan mode
 
-        # Handling of the command line arguments.
-        app_parser = ArgumentParser()
-        # Syntax definition of the command-line parameters.
-        app_parser.add_argument("-c", action="store", dest="config_file", default="smfc.conf",
-                                help="configuration file (default is /etc/smfc/smfc.conf)",)
-        app_parser.add_argument("-v", "--version", action="version", version="%(prog)s " + version("smfc"))
-        app_parser.add_argument("-l", type=int, choices=[0, 1, 2, 3, 4], default=1,
-                                help="set log level: 0-NONE, 1-ERROR(default), 2-CONFIG, 3-INFO, 4-DEBUG",)
-        app_parser.add_argument("-o", type=int, choices=[0, 1, 2], default=2,
-                                help="set log output: 0-stdout, 1-stderr, 2-syslog(default)",)
-        app_parser.add_argument("-nd", action="store_true", default=False,
-                                help="no dependency checking at start",)
-        app_parser.add_argument("-s", action="store_true", default=False, help="use sudo command")
-        app_parser.add_argument("-ne", action="store_true", default=False, help="no fan speed recovery at exit",)
-        # Parsing of the current arguments.
-        parsed_results = app_parser.parse_args()
+        # Parse command line arguments.
+        parsed_results = self._parse_args()
 
         # Register the emergency exit function for service termination.
         if not parsed_results.ne:

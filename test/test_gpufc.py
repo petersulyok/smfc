@@ -22,11 +22,11 @@ class TestGpuFc:
         "min_level, max_level, error",
         [
             # 1 NVIDIA GPU, zone 0, CALC_MIN
-            ("nvidia", 1, [0], [0], FanController.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, "GpuFc.__init__() 1"),
+            ("nvidia", 1, [0], [0], Config.CALC_MIN, 4, 2, 2, 32, 48, 35, 100, "GpuFc.__init__() 1"),
             # 2 NVIDIA GPUs, zone 1, CALC_AVG
-            ("nvidia", 2, [1], [0, 1], FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, "GpuFc.__init__() 2"),
+            ("nvidia", 2, [1], [0, 1], Config.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, "GpuFc.__init__() 2"),
             # 4 AMD GPUs, zone 2, CALC_AVG
-            ("amd", 4, [2], [0, 1, 2, 3], FanController.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, "GpuFc.__init__() 3"),
+            ("amd", 4, [2], [0, 1, 2, 3], Config.CALC_AVG, 4, 2, 2, 32, 48, 35, 100, "GpuFc.__init__() 3"),
         ],
     )
     def test_init_p1(self, mocker: MockerFixture, gpu_type: str, count: int, ipmi_zone: List[int],
@@ -116,7 +116,7 @@ class TestGpuFc:
         assert my_gpufc.config.ipmi_zone == [Config.HD_ZONE], error
         assert my_gpufc.name == cfg.section, error
         assert my_gpufc.count == count, error
-        assert my_gpufc.config.temp_calc == FanController.CALC_AVG, error
+        assert my_gpufc.config.temp_calc == Config.CALC_AVG, error
         assert my_gpufc.config.steps == Config.DV_GPU_STEPS, error
         assert my_gpufc.config.sensitivity == Config.DV_GPU_SENSITIVITY, error
         assert my_gpufc.config.polling == Config.DV_GPU_POLLING, error

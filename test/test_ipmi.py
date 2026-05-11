@@ -66,7 +66,7 @@ class TestIpmi:
         assert my_ipmi.config.fan_mode_delay == mode_delay, error
         assert my_ipmi.config.fan_level_delay == level_delay, error
         assert my_ipmi.config.remote_parameters == remote_pars, error
-        assert mock_print.call_count == 12, error  # Ipmi-12 (11 base + 1 platform info)
+        assert mock_print.call_count == 11, error  # Ipmi-11
         assert my_ipmi.sudo == sudo, error
         assert my_ipmi.bmc_device_id == 32, error
         assert my_ipmi.bmc_device_rev == 1, error

@@ -22,23 +22,23 @@ class TestCpuFc:
         "smoothing, error",
         [
             # 1 CPU, zone 0, CALC_MIN
-            (1, [0], FanController.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 1"),
+            (1, [0], Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 1"),
             # 2 CPUs, zone 1, CALC_MIN
-            (2, [1], FanController.CALC_MIN, 6, 5, 3, 35, 55, 36, 99, 1, "CpuFc.__init__() 2"),
+            (2, [1], Config.CALC_MIN, 6, 5, 3, 35, 55, 36, 99, 1, "CpuFc.__init__() 2"),
             # 4 CPUs, zone 2, CALC_MIN
-            (4, [2], FanController.CALC_MIN, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 3"),
+            (4, [2], Config.CALC_MIN, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 3"),
             # 1 CPU, zone 3, CALC_AVG
-            (1, [3], FanController.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 4"),
+            (1, [3], Config.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 4"),
             # 2 CPUs, zone 4, CALC_AVG, smoothing=4
-            (2, [4], FanController.CALC_AVG, 6, 5, 3, 35, 55, 36, 99, 4, "CpuFc.__init__() 5"),
+            (2, [4], Config.CALC_AVG, 6, 5, 3, 35, 55, 36, 99, 4, "CpuFc.__init__() 5"),
             # 4 CPUs, zone 5, CALC_AVG
-            (4, [5], FanController.CALC_AVG, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 6"),
+            (4, [5], Config.CALC_AVG, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 6"),
             # 1 CPU, zone 6, CALC_MAX
-            (1, [6], FanController.CALC_MAX, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 7"),
+            (1, [6], Config.CALC_MAX, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 7"),
             # 2 CPUs, zone 7, CALC_MAX
-            (2, [7], FanController.CALC_MAX, 6, 5, 3, 35, 55, 36, 99, 1, "CpuFc.__init__() 8"),
+            (2, [7], Config.CALC_MAX, 6, 5, 3, 35, 55, 36, 99, 1, "CpuFc.__init__() 8"),
             # 4 CPUs, zone 8, CALC_MAX
-            (4, [8], FanController.CALC_MAX, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 9"),
+            (4, [8], Config.CALC_MAX, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 9"),
         ]
     )
     def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: List[int], temp_calc: int, steps: int,
@@ -118,7 +118,7 @@ class TestCpuFc:
         assert my_cpufc.config.ipmi_zone == [Config.CPU_ZONE], error
         assert my_cpufc.name == cfg.section, error
         assert my_cpufc.count == 1, error
-        assert my_cpufc.config.temp_calc == FanController.CALC_AVG, error
+        assert my_cpufc.config.temp_calc == Config.CALC_AVG, error
         assert my_cpufc.config.steps == Config.DV_CPU_STEPS, error
         assert my_cpufc.config.sensitivity == Config.DV_CPU_SENSITIVITY, error
         assert my_cpufc.config.polling == Config.DV_CPU_POLLING, error
