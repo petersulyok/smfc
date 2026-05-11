@@ -58,5 +58,16 @@ class TestCreatePlatform:
         assert isinstance(platform, GenericPlatform)
         assert platform.name == "X11SCH-LN4F"
 
+    def test_create_genericx9_fallback(self) -> None:
+        """Positive unit test for create_platform() function. It contains the following steps:
+        - call create_platform() with a BMC product name starting with X9
+        - ASSERT: if the returned platform is not a GenericX9Platform instance
+        - ASSERT: if the platform name is different from expected
+        """
+        mock_exec = MagicMock()
+        platform = create_platform("X9DRi-LN4+", mock_exec)
+        assert isinstance(platform, GenericX9Platform)
+        assert platform.name == "X9DRi-LN4+"
+
 
 # End.

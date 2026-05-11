@@ -111,7 +111,6 @@ class Ipmi:
         if platform_name == PlatformName.AUTO:
             platform_name = self.bmc_product_name
         self.platform = create_platform(platform_name, self._exec_ipmitool)
-        self.log.msg(Log.LOG_CONFIG, f"   platform = {self.platform.name} ({type(self.platform).__name__})")
         self.platform.set_fan_manual_mode()
 
         # Print the configuration out at CONFIG log level.
