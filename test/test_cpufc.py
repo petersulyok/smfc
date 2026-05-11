@@ -9,7 +9,7 @@ import pyudev
 import pytest
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, FanController, CpuFc
+from smfc import Log, Ipmi, CpuFc
 from smfc.config import Config
 from .test_data import TestData, create_cpu_config
 

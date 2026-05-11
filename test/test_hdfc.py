@@ -12,7 +12,7 @@ import pytest
 import pyudev
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, FanController, HdFc
+from smfc import Log, Ipmi, HdFc
 from smfc.config import Config
 from .test_data import TestData, MockDevices, factory_mockdevice, create_hd_config
 

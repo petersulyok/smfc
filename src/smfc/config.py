@@ -251,15 +251,15 @@ class Config:
             raise FileNotFoundError(f"Cannot load configuration file: {path}")
         self.ipmi = self._parse_ipmi(parser)
         self.cpu = self._parse_cpu_sections(parser)
-        self._validate_no_duplicate_zones(self.cpu, self.CS_CPU)
+        self._validate_no_duplicate_zones(self.cpu)
         self.hd = self._parse_hd_sections(parser)
-        self._validate_no_duplicate_zones(self.hd, self.CS_HD)
+        self._validate_no_duplicate_zones(self.hd)
         self.nvme = self._parse_nvme_sections(parser)
-        self._validate_no_duplicate_zones(self.nvme, self.CS_NVME)
+        self._validate_no_duplicate_zones(self.nvme)
         self.gpu = self._parse_gpu_sections(parser)
-        self._validate_no_duplicate_zones(self.gpu, self.CS_GPU)
+        self._validate_no_duplicate_zones(self.gpu)
         self.const = self._parse_const_sections(parser)
-        self._validate_no_duplicate_zones(self.const, self.CS_CONST)
+        self._validate_no_duplicate_zones(self.const)
 
     @staticmethod
     def _get_sections(parser: ConfigParser, base_name: str) -> List[str]:
@@ -542,11 +542,10 @@ class Config:
         return result
 
     @staticmethod
-    def _validate_no_duplicate_zones(configs: list, base_name: str) -> None:
+    def _validate_no_duplicate_zones(configs: list) -> None:
         """Validate that enabled instances of the same controller type do not share IPMI zones.
         Args:
             configs (list): list of parsed config dataclasses (e.g. CpuConfig, HdConfig)
-            base_name (str): controller type name for error messages (e.g. "CPU", "HD")
         Raises:
             ValueError: two enabled instances share the same IPMI zone
         """

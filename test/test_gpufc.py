@@ -9,7 +9,7 @@ from typing import List, Any
 import pytest
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, FanController, GpuFc
+from smfc import Log, Ipmi, GpuFc
 from smfc.config import Config
 from .test_data import TestData, create_gpu_config
 
