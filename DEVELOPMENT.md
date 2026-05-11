@@ -1,6 +1,6 @@
 ﻿# Development
 
-> For an overview of the internal structure (classes, execution order, IPMI zone arbitration, etc.) see [ARCHITECTURE.md](ARCHITECTURE.md).
+> For an overview of the internal structure (classes, execution order, shared IPMI zones, etc.) see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 This project is using `uv` for Python project management, see more details about [installation of `uv`](https://docs.astral.sh/uv/getting-started/installation/).
 `uv` can provide everything that multiple tools (e.g. `pip`, `pyenv`, `venv`) provide, but much faster. For example:
@@ -108,118 +108,128 @@ Several smoke tests have been provided for `smfc` where the service is executed 
 
 The whole project (all source code) is completely unit tested. The unit tests are executed with `pytest`:
 
+```console
+$ pytest
+============================= test session starts ==============================
+platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
+rootdir: /home/petersulyok/git/github/smfc
+configfile: pyproject.toml
+plugins: cov-6.0.0, mock-3.14.0
+collected 708 items                                                            
 
-      $ pytest
-      ============================== test session starts ==============================
-      platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
-      rootdir: /home/petersulyok/git/github/smfc
-      configfile: pyproject.toml
-      plugins: cov-6.0.0, mock-3.14.0
-      collected 514 items
+test/test_cmd.py .                                                       [  0%]
+test/test_config.py .................................................... [  7%]
+........................................................................ [ 17%]
+..................................................                       [ 24%]
+test/test_constfc.py ................                                    [ 26%]
+test/test_cpufc.py .....................                                 [ 29%]
+test/test_fancontroller.py ............................................. [ 36%]
+.....                                                                    [ 37%]
+test/test_generic.py ................................                    [ 41%]
+test/test_genericx9.py .................................                 [ 46%]
+test/test_gpufc.py ...................                                   [ 48%]
+test/test_hdfc.py ...................................................... [ 56%]
+......................                                                   [ 59%]
+test/test_ipmi.py ...................................................... [ 67%]
+.................                                                        [ 69%]
+test/test_log.py ....................................................... [ 77%]
+..................................................                       [ 84%]
+test/test_nvmefc.py ..............                                       [ 86%]
+test/test_platform.py .....                                              [ 87%]
+test/test_service.py ................................................... [ 94%]
+........                                                                 [ 95%]
+test/test_x10qbi.py ................................                     [100%]
 
-      test/test_01_log.py .................................................... [ 10%]
-      .....................................................                    [ 20%]
-      test/test_02_ipmi.py ................................................... [ 30%]
-      ....................                                                     [ 34%]
-      test/test_03_fancontroller.py .......................................... [ 42%]
-      .........                                                                [ 44%]
-      test/test_04_cpufc.py .....................                              [ 48%]
-      test/test_05_hdfc.py ................................................... [ 58%]
-      ........................                                                 [ 62%]
-      test/test_06_gpufc.py ..............                                     [ 65%]
-      test/test_07_constfc.py ...................                              [ 69%]
-      test/test_08_service.py ..........................................       [ 77%]
-      test/test_09_cmd.py .                                                    [ 77%]
-      test/test_10_nvmefc.py ..............                                    [ 80%]
-      test/test_11_platform.py ....                                            [ 81%]
-      test/test_12_generic.py ................................                 [ 87%]
-      test/test_13_x10qbi.py ................................                  [ 93%]
-      test/test_14_genericx9.py .................................              [100%]
-
-      ============================== 514 passed in 1.26s ==============================
-
+============================= 708 passed in 1.59s ==============================
+```
 
 The code coverage could be also measured and displayed during the test execution:
 
+```console
+pytest --cov=test --cov=src  
+======================================= test session starts ========================================
+platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
+rootdir: /home/petersulyok/git/github/smfc
+configfile: pyproject.toml
+plugins: cov-6.0.0, mock-3.14.0
+collected 708 items                                                                                
 
-      $ pytest --cov=test --cov=src
-      ============================== test session starts ==============================
-      platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
-      rootdir: /home/petersulyok/git/github/smfc
-      configfile: pyproject.toml
-      plugins: cov-6.0.0, mock-3.14.0
-      collected 514 items
+test/test_cmd.py .                                                                           [  0%]
+test/test_config.py ........................................................................ [ 10%]
+............................................................................................ [ 23%]
+..........                                                                                   [ 24%]
+test/test_constfc.py ................                                                        [ 26%]
+test/test_cpufc.py .....................                                                     [ 29%]
+test/test_fancontroller.py ..................................................                [ 37%]
+test/test_generic.py ................................                                        [ 41%]
+test/test_genericx9.py .................................                                     [ 46%]
+test/test_gpufc.py ...................                                                       [ 48%]
+test/test_hdfc.py .......................................................................... [ 59%]
+..                                                                                           [ 59%]
+test/test_ipmi.py .......................................................................    [ 69%]
+test/test_log.py ........................................................................... [ 80%]
+..............................                                                               [ 84%]
+test/test_nvmefc.py ..............                                                           [ 86%]
+test/test_platform.py .....                                                                  [ 87%]
+test/test_service.py ...........................................................             [ 95%]
+test/test_x10qbi.py ................................                                         [100%]
 
-      test/test_01_log.py .................................................... [ 10%]
-      .....................................................                    [ 20%]
-      test/test_02_ipmi.py ................................................... [ 30%]
-      ....................                                                     [ 34%]
-      test/test_03_fancontroller.py .......................................... [ 42%]
-      .........                                                                [ 44%]
-      test/test_04_cpufc.py .....................                              [ 48%]
-      test/test_05_hdfc.py ................................................... [ 58%]
-      ........................                                                 [ 62%]
-      test/test_06_gpufc.py ..............                                     [ 65%]
-      test/test_07_constfc.py ...................                              [ 69%]
-      test/test_08_service.py ..........................................       [ 77%]
-      test/test_09_cmd.py .                                                    [ 77%]
-      test/test_10_nvmefc.py ..............                                    [ 80%]
-      test/test_11_platform.py ....                                            [ 81%]
-      test/test_12_generic.py ................................                 [ 87%]
-      test/test_13_x10qbi.py ................................                  [ 93%]
-      test/test_14_genericx9.py .................................              [100%]
-
-      ---------- coverage: platform linux, python 3.14.3-final-0 -----------
-      Name                            Stmts   Miss  Cover
-      ---------------------------------------------------
-      src/smfc/__init__.py               12      0   100%
-      src/smfc/cmd.py                     4      0   100%
-      src/smfc/constfc.py                51      0   100%
-      src/smfc/cpufc.py                  34      0   100%
-      src/smfc/fancontroller.py         130      0   100%
-      src/smfc/generic.py                27      0   100%
-      src/smfc/genericx9.py              34      0   100%
-      src/smfc/gpufc.py                  58      0   100%
-      src/smfc/hdfc.py                  143      0   100%
-      src/smfc/ipmi.py                  128      0   100%
-      src/smfc/log.py                    57      0   100%
-      src/smfc/nvmefc.py                 47      0   100%
-      src/smfc/platform.py               41      0   100%
-      src/smfc/service.py               241      0   100%
-      src/smfc/x10qbi.py                 42      0   100%
-      test/__init__.py                    0      0   100%
-      test/test_00_data.py              134      0   100%
-      test/test_01_log.py                52      0   100%
-      test/test_02_ipmi.py              253      0   100%
-      test/test_03_fancontroller.py     163      0   100%
-      test/test_04_cpufc.py             142      0   100%
-      test/test_05_hdfc.py              293      0   100%
-      test/test_06_gpufc.py             111      0   100%
-      test/test_07_constfc.py            86      0   100%
-      test/test_08_service.py           510      0   100%
-      test/test_09_cmd.py                 9      0   100%
-      test/test_10_nvmefc.py            144      0   100%
-      test/test_11_platform.py           26      0   100%
-      test/test_12_generic.py            80      0   100%
-      test/test_13_x10qbi.py             85      0   100%
-      test/test_14_genericx9.py          82      0   100%
-      ---------------------------------------------------
-      TOTAL                            3219      0   100%
+---------- coverage: platform linux, python 3.14.3-final-0 -----------
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+src/smfc/__init__.py              13      0   100%
+src/smfc/cmd.py                    4      0   100%
+src/smfc/config.py               269      0   100%
+src/smfc/constfc.py               33      0   100%
+src/smfc/cpufc.py                 16      0   100%
+src/smfc/fancontroller.py        105      0   100%
+src/smfc/generic.py               27      0   100%
+src/smfc/genericx9.py             34      0   100%
+src/smfc/gpufc.py                 55      0   100%
+src/smfc/hdfc.py                 120      0   100%
+src/smfc/ipmi.py                 122      0   100%
+src/smfc/log.py                   57      0   100%
+src/smfc/nvmefc.py                23      0   100%
+src/smfc/platform.py              37      0   100%
+src/smfc/platform_factory.py      14      0   100%
+src/smfc/service.py              209      0   100%
+src/smfc/x10qbi.py                42      0   100%
+test/__init__.py                   0      0   100%
+test/test_cmd.py                   9      0   100%
+test/test_config.py              522      0   100%
+test/test_constfc.py              80      0   100%
+test/test_cpufc.py               139      0   100%
+test/test_data.py                173      0   100%
+test/test_fancontroller.py       318      0   100%
+test/test_generic.py              80      0   100%
+test/test_genericx9.py            82      0   100%
+test/test_gpufc.py               131      0   100%
+test/test_hdfc.py                305      0   100%
+test/test_ipmi.py                245      0   100%
+test/test_log.py                  52      0   100%
+test/test_nvmefc.py              142      0   100%
+test/test_platform.py             32      0   100%
+test/test_service.py             981      0   100%
+test/test_x10qbi.py               85      0   100%
+--------------------------------------------------
+TOTAL                           4556      0   100%
 
 
-      ============================== 514 passed in 2.11s ==============================
-
+======================================= 708 passed in 2.34s ========================================
+```
 
 For a more detailed HTML coverage report run this command:
 
-	$ pytest --cov=src --cov=test --cov-report=html
+```commandline
+$ pytest --cov=src --cov=test --cov-report=html
+```
 
 The detailed HTML report will be available in folder `htmlcov/index.html` with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage is 100%.  
 
 
 # GitHub
 
-## Github workflow
+## GitHub workflow
 The project implemented the following GitHub workflows:
 
 1. Unit test and lint execution (`test.yml`). A commit can trigger this action:
