@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0] - TBD
+
+### New
+- Multiple fan curve instances per controller type: a single controller family can now define more than one section (`[CPU]` + `[CPU:1]`, `[HD]` + `[HD:1]`, …) with independent fan curves applied to different IPMI zones. Parse-time validation rejects same-family sections that share an IPMI zone.
+- New smoke test [`run_test_shared_zones_2.sh`](https://github.com/petersulyok/smfc/blob/main/test/run_test_shared_zones_2.sh) exercises multi-curve CPU (`CPU:0` + `CPU:1`) combined with cross-family shared-zone arbitration (`CPU:1` + `HD` on zone 1).
+- New sample configuration file [`smfc-sample8.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample8.conf) demonstrating the multi-curve feature.
+- [`ARCHITECTURE.md`](https://github.com/petersulyok/smfc/blob/main/ARCHITECTURE.md) added: contributor-facing document describing the internal structure, classes, execution order, IPMI zone arbitration, and edge cases, with Mermaid diagrams.
+
+### Changed
+- Centralized configuration parsing in a new `Config` class with per-controller `@dataclass` instances (`IpmiConfig`, `CpuConfig`, `HdConfig`, `NvmeConfig`, `GpuConfig`, `ConstConfig`). All parameter parsing, default values and range validation now happens in one place.
+- `FanControllerConfig` Protocol introduced to type the shared configuration fields across temperature-driven controllers; `CALC_MIN/AVG/MAX` constants deduplicated and moved to `Config`.
+- Platform auto-detection improved: when `platform_name=auto`, the BMC product name is matched by prefix (boards starting with `X9` → `GenericX9Platform`, everything else → `GenericPlatform`).
+- `ConstConfig.level` validation tightened to the range `[1..100]` (level 0 is unsafe — fans off). The `ConstFc` special case in `Service._collect_desired_levels()` was removed, unifying shared-zone arbitration across all controller types.
+- HD and GPU fan controllers gained missing configuration-parameter validations (e.g. empty `smartctl_path`, `nvidia_smi_path`, `rocm_smi_path`; `amd_temp_sensor` range; NVMe device names rejected from `[HD]`).
+- Unit-test suite refactored around the new `Config` class; smoke-test runner reworked accordingly.
+- `DEVELOPMENT.md` updated: pointer to `ARCHITECTURE.md` added at the top, new smoke test listed in the table.
+- README updated: feature list, IPMI zone description, and multi-curve documentation.
+- Pylint warnings corrected.
+
 ## [5.4.0] - 2026.04.30
 
 ### New
