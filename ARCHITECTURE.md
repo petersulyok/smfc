@@ -648,7 +648,81 @@ sequenceDiagram
 
 ---
 
-## 13. Where to look next
+## 13. Special architectural considerations
+
+Non-obvious behaviors and design choices that have caused (or could cause)
+confusion when reading the code.
+
+### 13.1 `deferred_apply` is decided once at startup
+
+It is set during `Service.run()` after all controllers exist, based on
+config-time zone assignment. There is no mechanism to add/remove
+controllers at runtime; SIGHUP-style config reload is not implemented.
+Changing the config requires a service restart.
+
+### 13.2 BMC initialization timeout is 120 s
+
+If the BMC needs longer than 2 minutes to become responsive (cold boot of
+some boards), `Ipmi.__init__` gives up and the service exits with code 8.
+`systemd` will normally restart it — the next attempt usually succeeds.
+
+### 13.3 X10QBi re-applies manual mode on every fan write
+
+The Nuvoton NCT7904D on X10QBi tends to drift back into SmartFan mode, so
+both `set_fan_level()` and `set_multiple_fan_levels()` call
+`set_fan_manual_mode()` first. This is a deliberate but expensive choice:
+each level write incurs 11 extra `ipmitool raw` calls.
+
+### 13.4 Polling intervals and the outer loop
+
+`wait = min(polling) / 2` means a `[CONST]` with the default `polling=30`
+combined with a `[CPU]` with `polling=2` results in a 1-second main loop,
+which is fine. But misconfiguring all controllers to `polling=0.1` would
+cause near-busy-spin and high ipmitool traffic. There is no minimum-bound
+enforcement.
+
+### 13.5 No locking around BMC access
+
+There is only one thread, so this is safe today. If anyone introduces
+concurrency in the future, *every* `Ipmi` method assumes it is the sole
+caller — the `time.sleep(fan_level_delay)` after each write is the only
+synchronization with the BMC and is not thread-safe.
+
+### 13.6 Fan-mode fall-back at exit
+
+`exit_func` calls `ipmi.set_fan_mode(FULL_MODE)`, which (1) puts the BMC
+back into FULL mode and (2) brings fans to 100% on most boards. On a board
+that doesn't auto-100% in FULL mode, fans may stay at whatever the last
+written duty cycle was. This is rare but worth knowing when investigating
+"my fans didn't spin up after smfc crashed".
+
+### 13.7 GPU SMI calls are batched across indices
+
+`GpuFc._get_nth_temp(i)` runs `nvidia-smi`/`rocm-smi` once per `polling`
+interval and caches the *full* per-GPU temperature list. The `i` argument
+just indexes into that cache. This is why GPU polling is per-controller,
+not per-device — and why the SMI tool is invoked only once even when
+monitoring multiple GPUs.
+
+### 13.8 First-poll behavior
+
+`last_time = monotonic() - (polling + 1)` in the base controller
+constructor: this forces the first `run()` call to actually poll, regardless
+of how soon after startup it happens. Without this, the first iteration
+would be a no-op and the fans would sit at the BMC's default level until
+the first elapsed polling interval.
+
+### 13.9 `last_level == 0` is treated as "not initialized"
+
+`Service._collect_desired_levels` filters out controllers with
+`last_level <= 0`, meaning a brand-new controller that hasn't completed a
+full poll cycle does not participate in arbitration. This avoids a race
+where a deferred controller wins a zone with a stale `0%` desired level on
+the first iteration.
+
+---
+
+## 14. Where to look next
 
 - `test/test_*.py` — unit tests structured per source file; the
   `MockDevices` / `factory_mockdevice` helpers in `test/test_data.py`
