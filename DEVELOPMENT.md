@@ -13,48 +13,53 @@ This project is using `uv` for Python project management, see more details about
 `uv` has a lock file (`uv.lock`) for storing dependencies, this should be part of version control.
 
 Building a development environment from scratch (with Python 3.14) contains the following steps:
+
+```commandline
+curl -LsSf https://astral.sh/uv/install.sh | sh
+git clone https://github.com/petersulyok/smfc.git
+uv python install 3.14
+uv python pin 3.14
+uv sync
+source .venv/bin/activate
 ```
-      curl -LsSf https://astral.sh/uv/install.sh | sh
-      git clone https://github.com/petersulyok/smfc.git
-      uv python install 3.14
-      uv python pin 3.14
-      uv sync
-      source .venv/bin/activate
-```
+
 Dependencies are listed in `pyproject.toml` file and the proper version numbers are handled by `uv`:
-```
-    dependencies = [
-        "pyudev"
-    ]
 
-    [dependency-groups]
-    dev = [
-        "build",
-        "coverage",
-        "mock",
-        "pytest",
-        "pytest-cov",
-        "pytest-mock",
-        "twine"
-    ]
+```ini
+dependencies = [
+    "pyudev"
+]
 
-    lint = [
-        "ruff",
-        "pylint"
-	]
+[dependency-groups]
+dev = [
+    "build",
+    "coverage",
+    "mock",
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+    "twine"
+]
+
+lint = [
+    "ruff",
+    "pylint"
+]
 ```
 
 All the steps above (installing `uv`, Python, and dependencies) can be automated with the `./bin/create_python_env.sh` script:
-```
-      ./bin/create_python_env.sh 3.14
+
+```commandline
+./bin/create_python_env.sh 3.14
 ```
 
 ## Linting
 
 The code can be checked with `pylint` and `ruff`:
-```
-	pylint src test
-    ruff check
+
+```commandline
+pylint src test
+ruff check
 ```
 
 # Testing
@@ -67,9 +72,9 @@ Important notes:
 * Test are executed by `pytest`
 * All development dependencies (defined in `pyproject.toml`) will be installed after the execution of these commands:
 
-```
-      uv sync
-      source .venv/bin/activate
+```commandline
+uv sync
+source .venv/bin/activate
 ```
 
 ## Smoke tests  
@@ -78,7 +83,9 @@ Several smoke tests have been provided for `smfc` where the service is executed 
   
 * all smoke tests should be executed from the project root folder and can be stopped by pressing `CTRL+C`:
 
-	`$ ./test/run_test_cpu_1.sh`
+```commandline
+$ ./test/run_test_cpu_1.sh
+```
 
 * the following smoke scripts and fan controller configurations can be executed:
 
@@ -108,7 +115,7 @@ Several smoke tests have been provided for `smfc` where the service is executed 
 
 The whole project (all source code) is completely unit tested. The unit tests are executed with `pytest`:
 
-```console
+```commandline
 $ pytest
 ============================= test session starts ==============================
 platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
@@ -145,8 +152,8 @@ test/test_x10qbi.py ................................                     [100%]
 
 The code coverage could be also measured and displayed during the test execution:
 
-```console
-pytest --cov=test --cov=src  
+```commandline
+$ pytest --cov=test --cov=src  
 ======================================= test session starts ========================================
 platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
 rootdir: /home/petersulyok/git/github/smfc
