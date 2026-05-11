@@ -96,6 +96,8 @@ systemctl restart docker
 
 Restart is needed because NVIDIA Container Toolkit modified the `/etc/docker/daemon.json` file, and added the nvidia runtime parameters.
 
+> For running this docker image on TrueNAs see [issue #107](https://github.com/petersulyok/smfc/issues/107).
+
 ## Usage #1: docker CLI
 The service can be started:
 ```
