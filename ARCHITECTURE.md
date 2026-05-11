@@ -480,6 +480,54 @@ flowchart TD
   *winner* and lists *losers* with their per-controller temperatures, which
   makes triage of "why is my zone louder than I expected" straightforward.
 
+### 9.4 Multiple fan curves per controller family
+
+A related but *opposite* feature: the user can define more than one
+controller of the **same family** (e.g. `[HD]` + `[HD:1]`) to apply
+different fan curves to different IPMI zones. Two HD curves with the same
+parameters but different zone assignments would be pointless — the value is
+in per-zone *tuning* (different disk sets, different airflow,
+different temperature targets).
+
+`Config._get_sections()` collects `[HD]`, `[HD:0]`, `[HD:1]`, … in numeric
+order and produces one `HdConfig` per section. `Service.run()` then
+instantiates one `HdFc` per enabled config.
+
+Example: front backplane vs. rear cage on the same chassis, controlled
+independently:
+
+```ini
+[HD]                    ; front backplane → zone 1
+ipmi_zone   = 1
+hd_names    = /dev/disk/by-id/ata-front-1 /dev/disk/by-id/ata-front-2
+min_temp    = 32
+max_temp    = 46
+
+[HD:1]                  ; rear cage, hotter, less airflow → zone 2
+ipmi_zone   = 2
+hd_names    = /dev/disk/by-id/ata-rear-1 /dev/disk/by-id/ata-rear-2
+min_temp    = 30
+max_temp    = 42
+sensitivity = 1.0
+```
+
+**Parse-time invariant**: `Config._validate_no_duplicate_zones()` rejects
+two *enabled* sections of the same family that target the same zone:
+
+```mermaid
+flowchart TD
+    A[Parse all sections of family X] --> B[For each enabled section]
+    B --> C{Any of its zones<br/>already claimed by<br/>another enabled<br/>section in this family?}
+    C -- no --> D[Claim zones, continue]
+    C -- yes --> E([ValueError: zone N is<br/>already used by section M])
+    D --> B
+```
+
+The rule is *deliberately strict*: there is no arbitration logic for
+same-family clashes, so two HD curves are not allowed to fight over one
+zone. The rule does not apply across families (that is what §9.1–9.3 are
+for), and it does not apply to *disabled* sections.
+
 ---
 
 ## 10. Special features
@@ -561,88 +609,7 @@ main()                                          (cmd.py)
 
 ---
 
-## 12. Problematic / edge cases
-
-This section documents non-obvious behaviors that have caused (or could
-cause) confusion.
-
-### 12.1 Same-family duplicate zone rejected at parse time
-
-`_validate_no_duplicate_zones` is run **per family**. So `[CPU]` and
-`[CPU:1]` cannot both point at zone 0, but `[CPU]` and `[HD]` can — that
-case is what the runtime arbiter (§9) is for. Error message names the
-offending section.
-
-### 12.2 `deferred_apply` is decided once at startup
-
-It is set during `Service.run()` after all controllers exist, based on
-config-time zone assignment. There is no mechanism to add/remove
-controllers at runtime; SIGHUP-style config reload is not implemented.
-Changing the config requires a service restart.
-
-### 12.3 BMC initialization timeout is 120 s
-
-If the BMC needs longer than 2 minutes to become responsive (cold boot of
-some boards), `Ipmi.__init__` gives up and the service exits with code 8.
-systemd will normally restart it — the next attempt usually succeeds.
-
-### 12.4 X10QBi re-applies manual mode on every fan write
-
-The Nuvoton NCT7904D on X10QBi tends to drift back into SmartFan mode, so
-both `set_fan_level()` and `set_multiple_fan_levels()` call
-`set_fan_manual_mode()` first. This is a deliberate but expensive choice:
-each level write incurs 11 extra `ipmitool raw` calls.
-
-### 12.5 Polling intervals and the outer loop
-
-`wait = min(polling) / 2` means a `[CONST]` with the default `polling=30`
-combined with a `[CPU]` with `polling=2` results in a 1-second main loop,
-which is fine. But misconfiguring all controllers to `polling=0.1` would
-cause near-busy-spin and high ipmitool traffic. There is no minimum-bound
-enforcement.
-
-### 12.6 No locking around BMC access
-
-There is only one thread, so this is safe today. If anyone introduces
-concurrency in the future, *every* `Ipmi` method assumes it is the sole
-caller — the `time.sleep(fan_level_delay)` after each write is the only
-synchronization with the BMC and is not thread-safe.
-
-### 12.7 Fan-mode fall-back at exit
-
-`exit_func` calls `ipmi.set_fan_mode(FULL_MODE)`, which (1) puts the BMC
-back into FULL mode and (2) brings fans to 100% on most boards. On a board
-that doesn't auto-100% in FULL mode, fans may stay at whatever the last
-written duty cycle was. This is rare but worth knowing when investigating
-"my fans didn't spin up after smfc crashed".
-
-### 12.8 GPU SMI calls are batched across indices
-
-`GpuFc._get_nth_temp(i)` runs `nvidia-smi`/`rocm-smi` once per `polling`
-interval and caches the *full* per-GPU temperature list. The `i` argument
-just indexes into that cache. This is why GPU polling is per-controller,
-not per-device — and why the SMI tool is invoked only once even when
-monitoring multiple GPUs.
-
-### 12.9 First-poll behavior
-
-`last_time = monotonic() - (polling + 1)` in the base controller
-constructor: this forces the first `run()` call to actually poll, regardless
-of how soon after startup it happens. Without this, the first iteration
-would be a no-op and the fans would sit at the BMC's default level until
-the first elapsed polling interval.
-
-### 12.10 `last_level == 0` is treated as "not initialized"
-
-`Service._collect_desired_levels` filters out controllers with
-`last_level <= 0`, meaning a brand-new controller that hasn't completed a
-full poll cycle does not participate in arbitration. This avoids a race
-where a deferred controller wins a zone with a stale `0%` desired level on
-the first iteration.
-
----
-
-## 13. Data flow per cooling iteration (sequence)
+## 12. Data flow per cooling iteration (sequence)
 
 ```mermaid
 sequenceDiagram
@@ -681,7 +648,7 @@ sequenceDiagram
 
 ---
 
-## 14. Where to look next
+## 13. Where to look next
 
 - `test/test_*.py` — unit tests structured per source file; the
   `MockDevices` / `factory_mockdevice` helpers in `test/test_data.py`
