@@ -20,10 +20,11 @@ class TestCreatePlatform:
         - ASSERT: if the returned platform is not a GenericX9Platform instance
         - ASSERT: if the platform name is different from expected
         """
+        f = "TestCreatePlatform.test_create_genericx9"
         mock_exec = MagicMock()
         platform = create_platform(PlatformName.GENERIC_X9, mock_exec)
-        assert isinstance(platform, GenericX9Platform)
-        assert platform.name == PlatformName.GENERIC_X9
+        assert isinstance(platform, GenericX9Platform), f"{f}: should be GenericX9Platform"
+        assert platform.name == PlatformName.GENERIC_X9, f"{f}: platform name"
 
     def test_create_x10qbi(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
@@ -31,10 +32,11 @@ class TestCreatePlatform:
         - ASSERT: if the returned platform is not an X10QBi instance
         - ASSERT: if the platform name is different from expected
         """
+        f = "TestCreatePlatform.test_create_x10qbi"
         mock_exec = MagicMock()
         platform = create_platform(PlatformName.X10QBI, mock_exec)
-        assert isinstance(platform, X10QBi)
-        assert platform.name == PlatformName.X10QBI
+        assert isinstance(platform, X10QBi), f"{f}: should be X10QBi"
+        assert platform.name == PlatformName.X10QBI, f"{f}: platform name"
 
     def test_create_generic_explicit(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
@@ -42,10 +44,11 @@ class TestCreatePlatform:
         - ASSERT: if the returned platform is not a GenericPlatform instance
         - ASSERT: if the platform name is 'generic'
         """
+        f = "TestCreatePlatform.test_create_generic_explicit"
         mock_exec = MagicMock()
         platform = create_platform(PlatformName.GENERIC, mock_exec)
-        assert isinstance(platform, GenericPlatform)
-        assert platform.name == PlatformName.GENERIC
+        assert isinstance(platform, GenericPlatform), f"{f}: should be GenericPlatform"
+        assert platform.name == PlatformName.GENERIC, f"{f}: platform name"
 
     def test_create_generic_fallback(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
@@ -53,10 +56,11 @@ class TestCreatePlatform:
         - ASSERT: if the returned platform is not a GenericPlatform instance
         - ASSERT: if the platform name is different from expected
         """
+        f = "TestCreatePlatform.test_create_generic_fallback"
         mock_exec = MagicMock()
         platform = create_platform("X11SCH-LN4F", mock_exec)
-        assert isinstance(platform, GenericPlatform)
-        assert platform.name == "X11SCH-LN4F"
+        assert isinstance(platform, GenericPlatform), f"{f}: should be GenericPlatform"
+        assert platform.name == "X11SCH-LN4F", f"{f}: platform name"
 
     def test_create_genericx9_fallback(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
@@ -64,10 +68,11 @@ class TestCreatePlatform:
         - ASSERT: if the returned platform is not a GenericX9Platform instance
         - ASSERT: if the platform name is different from expected
         """
+        f = "TestCreatePlatform.test_create_genericx9_fallback"
         mock_exec = MagicMock()
         platform = create_platform("X9DRi-LN4+", mock_exec)
-        assert isinstance(platform, GenericX9Platform)
-        assert platform.name == "X9DRi-LN4+"
+        assert isinstance(platform, GenericX9Platform), f"{f}: should be GenericX9Platform"
+        assert platform.name == "X9DRi-LN4+", f"{f}: platform name"
 
 
 # End.

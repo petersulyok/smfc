@@ -688,7 +688,8 @@ class TestHdFc:
         my_hdfc.hd_device_names = ["/dev/sda"]
         my_hdfc.sudo = False
         my_hdfc.config = create_hd_config(smartctl_path="/usr/sbin/smartctl")
-        assert my_hdfc._get_nth_temp(0) == 37.0, "smartctl temperature should be 37.0C"  # pylint: disable=protected-access
+        f = "TestHdFc.test_get_nth_temp_smartctl_debug"
+        assert my_hdfc._get_nth_temp(0) == 37.0, f"{f}: smartctl temperature should be 37.0C"  # pylint: disable=protected-access
         del my_hdfc
 
 

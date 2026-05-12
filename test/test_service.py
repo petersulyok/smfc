@@ -149,7 +149,8 @@ class TestService:
         config_file.write_text(config_content)
         service = Service()
         service.config = Config(str(config_file))
-        assert service.check_dependencies() == "", "TestService.test_check_dependencies_disabled_gpu: should return empty string"
+        f = "TestService.test_check_dependencies_disabled_gpu"
+        assert service.check_dependencies() == "", f"{f}: should return empty string"
         del my_td
 
     @pytest.mark.parametrize(
@@ -404,7 +405,8 @@ class TestService:
 
         service = Service()
         service.config = Config(str(config_file))
-        assert service.check_dependencies() == "", "Service.check_dependencies() AMD p1"
+        f = "TestService.test_check_dependencies_amd_p"
+        assert service.check_dependencies() == "", f"{f}: should return empty string"
         del my_td
 
     def test_check_dependencies_invalid_gpu_type_n(self, mocker: MockerFixture, tmp_path):
@@ -426,7 +428,8 @@ class TestService:
 
         with pytest.raises(ValueError) as exc_info:
             Config(str(config_file))
-        assert "invalid" in str(exc_info.value), "Config parsing should reject invalid gpu_type"
+        f = "TestService.test_check_dependencies_invalid_gpu_type_n"
+        assert "invalid" in str(exc_info.value), f"{f}: should reject invalid gpu_type"
         del my_td
 
     @pytest.mark.parametrize(
@@ -651,6 +654,7 @@ class TestService:
         - ASSERT: controllers with last_level=0 are skipped
         - ASSERT: controllers with last_level>0 are collected (including ConstFc)
         """
+        f = "TestService.test_collect_desired_levels"
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         service = Service()
@@ -685,9 +689,9 @@ class TestService:
 
         levels = service._collect_desired_levels()  # pylint: disable=protected-access
         names = [name for name, _, _, _ in levels]
-        assert Config.CS_CPU in names, "CPU controller should be collected"
-        assert Config.CS_HD not in names, "HD controller with level 0 should be skipped"
-        assert Config.CS_CONST in names, "ConstFc with level > 0 should be collected"
+        assert Config.CS_CPU in names, f"{f}: CPU controller should be collected"
+        assert Config.CS_HD not in names, f"{f}: HD controller with level 0 should be skipped"
+        assert Config.CS_CONST in names, f"{f}: ConstFc with level > 0 should be collected"
 
     def test_apply_fan_levels_shared_zone(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with shared zone. It contains the following steps:
@@ -729,11 +733,12 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # Zone 1 should be set to 70% (the higher level wins)
         mock_set_fan_level.assert_called_once_with(1, 70)
-        assert service.applied_levels[1] == 70, "Zone 1 should cache level 70"
+        f = "TestService.test_apply_fan_levels_shared_zone"
+        assert service.applied_levels[1] == 70, f"{f}: zone 1 should cache level 70"
         # Log should mention the winner and losers for shared zones with temperatures
         log_output = str(mock_log_msg.call_args_list)
-        assert "winner: NVME=70%/42.5C" in log_output, "Shared zone log should mention winner with temp"
-        assert "losers: HD=45%/38.0C" in log_output, "Shared zone log should mention losers with temp"
+        assert "winner: NVME=70%/42.5C" in log_output, f"{f}: shared zone log should mention winner with temp"
+        assert "losers: HD=45%/38.0C" in log_output, f"{f}: shared zone log should mention losers with temp"
 
     def test_apply_fan_levels_single_zone(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with single-controller zone.
@@ -743,6 +748,7 @@ class TestService:
         - call _apply_fan_levels()
         - ASSERT: if the fan level is not logged for a single-controller zone
         """
+        f = "TestService.test_apply_fan_levels_single_zone"
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -767,10 +773,10 @@ class TestService:
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(0, 60)
-        assert service.applied_levels[0] == 60, "TestService.test_apply_fan_levels_single_zone: zone 0 should cache level 60"
+        assert service.applied_levels[0] == 60, f"{f}: zone 0 should cache level 60"
         # Single-contributor zone should log the fan level with temperature
         log_output = str(mock_log_msg.call_args_list)
-        assert "IPMI zone [0]: new level = 60% (CPU=45.0C)" in log_output, "TestService.test_apply_fan_levels_single_zone: log should contain level and temp"
+        assert "IPMI zone [0]: new level = 60% (CPU=45.0C)" in log_output, f"{f}: log should contain level and temp"
 
     def test_apply_fan_levels_single_zone_const(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with single CONST controller.
@@ -780,6 +786,7 @@ class TestService:
         - call _apply_fan_levels()
         - ASSERT: if the log output does not exclude temperature for CONST controller
         """
+        f = "TestService.test_apply_fan_levels_single_zone_const"
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -804,10 +811,10 @@ class TestService:
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(0, 50)
-        assert service.applied_levels[0] == 50, "TestService.test_apply_fan_levels_single_zone_const: zone 0 should cache level 50"
+        assert service.applied_levels[0] == 50, f"{f}: zone 0 should cache level 50"
         # Single CONST zone should log without temperature
         log_output = str(mock_log_msg.call_args_list)
-        assert "IPMI zone [0]: new level = 50% (CONST)" in log_output, "TestService.test_apply_fan_levels_single_zone_const: log should not include temperature"
+        assert "IPMI zone [0]: new level = 50% (CONST)" in log_output, f"{f}: log should not include temperature"
 
     def test_apply_fan_levels_shared_zone_const_winner(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method when CONST wins. It contains the following steps:
@@ -817,6 +824,7 @@ class TestService:
         - ASSERT: if CONST (80%) does not win over HD (45%)
         - ASSERT: if the log output does not show CONST winner without temperature
         """
+        f = "TestService.test_apply_fan_levels_shared_zone_const_winner"
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -848,10 +856,10 @@ class TestService:
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(1, 80)
-        assert service.applied_levels[1] == 80, "TestService.test_apply_fan_levels_shared_zone_const_winner: zone 1 should cache level 80"
+        assert service.applied_levels[1] == 80, f"{f}: zone 1 should cache level 80"
         log_output = str(mock_log_msg.call_args_list)
-        assert "winner: CONST=80%" in log_output, "CONST winner should have no temperature"
-        assert "losers: HD=45%/38.0C" in log_output, "TestService.test_apply_fan_levels_shared_zone_const_winner: loser should show HD with temp"
+        assert "winner: CONST=80%" in log_output, f"{f}: CONST winner should have no temperature"
+        assert "losers: HD=45%/38.0C" in log_output, f"{f}: loser should show HD with temp"
 
     def test_apply_fan_levels_shared_zone_const_loser(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method when CONST loses. It contains the following steps:
@@ -861,6 +869,7 @@ class TestService:
         - ASSERT: if HD (70%) does not win over CONST (40%)
         - ASSERT: if the log output does not show CONST loser without temperature
         """
+        f = "TestService.test_apply_fan_levels_shared_zone_const_loser"
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -892,10 +901,10 @@ class TestService:
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(1, 70)
-        assert service.applied_levels[1] == 70, "TestService.test_apply_fan_levels_shared_zone_const_loser: zone 1 should cache level 70"
+        assert service.applied_levels[1] == 70, f"{f}: zone 1 should cache level 70"
         log_output = str(mock_log_msg.call_args_list)
-        assert "winner: HD=70%/55.0C" in log_output, "TestService.test_apply_fan_levels_shared_zone_const_loser: HD should win at 70%"
-        assert "losers: CONST=40%" in log_output, "CONST loser should have no temperature"
+        assert "winner: HD=70%/55.0C" in log_output, f"{f}: HD should win at 70%"
+        assert "losers: CONST=40%" in log_output, f"{f}: CONST loser should have no temperature"
 
     def test_apply_fan_levels_skips_non_deferred(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with non-deferred controllers.
@@ -905,6 +914,7 @@ class TestService:
         - call _apply_fan_levels()
         - ASSERT: if non-deferred controllers are not skipped in _apply_fan_levels()
         """
+        f = "TestService.test_apply_fan_levels_skips_non_deferred"
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -935,8 +945,8 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # Only zone 0 should get an IPMI call, zone 1 is handled by HD directly
         mock_set_fan_level.assert_called_once_with(0, 60)
-        assert 0 in service.applied_levels, "TestService.test_apply_fan_levels_skips_non_deferred: zone 0 should be cached"
-        assert 1 not in service.applied_levels, "TestService.test_apply_fan_levels_skips_non_deferred: zone 1 should not be cached"
+        assert 0 in service.applied_levels, f"{f}: zone 0 should be cached"
+        assert 1 not in service.applied_levels, f"{f}: zone 1 should not be cached"
 
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with level caching.
@@ -967,7 +977,8 @@ class TestService:
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         # No IPMI call since level hasn't changed
-        assert mock_set_fan_level.call_count == 0, "Should skip IPMI call when level is cached"
+        f = "TestService.test_apply_fan_levels_cache"
+        assert mock_set_fan_level.call_count == 0, f"{f}: should skip IPMI call when level is cached"
 
     def test_apply_fan_levels_three_controllers(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
@@ -977,6 +988,7 @@ class TestService:
         - ASSERT: if the highest level (HD 60%) is not applied to zone 1
         - ASSERT: if the log output does not contain the correct winner and losers
         """
+        f = "TestService.test_apply_fan_levels_three_controllers"
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -1016,11 +1028,11 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # HD at 60% should win (highest level among the three)
         mock_set_fan_level.assert_called_once_with(1, 60)
-        assert service.applied_levels[1] == 60, "TestService.test_apply_fan_levels_three_controllers: zone 1 should cache level 60"
+        assert service.applied_levels[1] == 60, f"{f}: zone 1 should cache level 60"
         log_output = str(mock_log_msg.call_args_list)
-        assert "winner: HD=60%/38.0C" in log_output, "TestService.test_apply_fan_levels_three_controllers: HD should be winner"
-        assert "CPU=40%/50.0C" in log_output, "TestService.test_apply_fan_levels_three_controllers: CPU should be a loser"
-        assert "NVME=50%/42.0C" in log_output, "TestService.test_apply_fan_levels_three_controllers: NVME should be a loser"
+        assert "winner: HD=60%/38.0C" in log_output, f"{f}: HD should be winner"
+        assert "CPU=40%/50.0C" in log_output, f"{f}: CPU should be a loser"
+        assert "NVME=50%/42.0C" in log_output, f"{f}: NVME should be a loser"
 
     def test_apply_fan_levels_equal_levels(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
@@ -1030,6 +1042,7 @@ class TestService:
         - ASSERT: if level 70% is not applied to zone 1
         - ASSERT: if the first collected controller (CPU) is not the winner (tie-breaking uses > not >=)
         """
+        f = "TestService.test_apply_fan_levels_equal_levels"
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -1062,11 +1075,11 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # Level 70% should be applied correctly
         mock_set_fan_level.assert_called_once_with(1, 70)
-        assert service.applied_levels[1] == 70, "TestService.test_apply_fan_levels_equal_levels: zone 1 should cache level 70"
+        assert service.applied_levels[1] == 70, f"{f}: zone 1 should cache level 70"
         # First collected controller (CPU) should be the winner (uses > not >=)
         log_output = str(mock_log_msg.call_args_list)
-        assert "winner: CPU=70%/55.0C" in log_output, "TestService.test_apply_fan_levels_equal_levels: CPU should win the tie"
-        assert "losers: HD=70%/40.0C" in log_output, "TestService.test_apply_fan_levels_equal_levels: HD should be the loser in tie"
+        assert "winner: CPU=70%/55.0C" in log_output, f"{f}: CPU should win the tie"
+        assert "losers: HD=70%/40.0C" in log_output, f"{f}: HD should be the loser in tie"
 
     def test_apply_fan_levels_multi_zone_partial_shared(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
@@ -1077,6 +1090,7 @@ class TestService:
         - ASSERT: if zone 1 is not set to HD's 70% (winner of shared zone arbitration)
         - ASSERT: if the log output does not contain correct single-zone and shared-zone messages
         """
+        f = "TestService.test_apply_fan_levels_multi_zone_partial_shared"
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -1110,16 +1124,16 @@ class TestService:
         # Zone 0: only CPU contributes → 55%
         # Zone 1: CPU 55% vs HD 70% → HD wins at 70%
         calls = mock_set_fan_level.call_args_list
-        assert len(calls) == 2, "Both zone 0 and zone 1 should get IPMI calls"
+        assert len(calls) == 2, f"{f}: both zone 0 and zone 1 should get IPMI calls"
         call_dict = {c.args[0]: c.args[1] for c in calls}
-        assert call_dict[0] == 55, "Zone 0 should be set to CPU's 55%"
-        assert call_dict[1] == 70, "Zone 1 should be set to HD's 70% (winner)"
-        assert service.applied_levels[0] == 55, "TestService.test_apply_fan_levels_multi_zone_partial_shared: zone 0 should cache 55"
-        assert service.applied_levels[1] == 70, "TestService.test_apply_fan_levels_multi_zone_partial_shared: zone 1 should cache 70"
+        assert call_dict[0] == 55, f"{f}: zone 0 should be set to CPU's 55%"
+        assert call_dict[1] == 70, f"{f}: zone 1 should be set to HD's 70% (winner)"
+        assert service.applied_levels[0] == 55, f"{f}: zone 0 should cache 55"
+        assert service.applied_levels[1] == 70, f"{f}: zone 1 should cache 70"
         # Zone 0 should log as single-contributor, zone 1 as shared
         log_output = str(mock_log_msg.call_args_list)
-        assert "IPMI zone [0]: new level = 55% (CPU=48.0C)" in log_output, "TestService.test_apply_fan_levels_multi_zone_partial_shared: zone 0 single log"
-        assert "winner: HD=70%/42.0C" in log_output, "TestService.test_apply_fan_levels_multi_zone_partial_shared: HD wins zone 1"
+        assert "IPMI zone [0]: new level = 55% (CPU=48.0C)" in log_output, f"{f}: zone 0 single log"
+        assert "winner: HD=70%/42.0C" in log_output, f"{f}: HD wins zone 1"
 
     def test_apply_fan_levels_cache_oscillation(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
@@ -1129,6 +1143,7 @@ class TestService:
         - ASSERT: if each level change does not trigger a new IPMI call (3 calls total)
         - ASSERT: if the cache does not correctly reflect the current level after each step
         """
+        f = "TestService.test_apply_fan_levels_cache_oscillation"
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_set_fan_level = MagicMock()
@@ -1150,20 +1165,20 @@ class TestService:
         # Step 1: level = 70%
         hd_fc.last_level = 70
         service._apply_fan_levels()  # pylint: disable=protected-access
-        assert mock_set_fan_level.call_count == 1, "TestService.test_apply_fan_levels_cache_oscillation: first call should trigger IPMI"
-        assert service.applied_levels[1] == 70, "TestService.test_apply_fan_levels_cache_oscillation: zone 1 should cache 70 after step 1"
+        assert mock_set_fan_level.call_count == 1, f"{f}: first call should trigger IPMI"
+        assert service.applied_levels[1] == 70, f"{f}: zone 1 should cache 70 after step 1"
 
         # Step 2: level drops to 50%
         hd_fc.last_level = 50
         service._apply_fan_levels()  # pylint: disable=protected-access
-        assert mock_set_fan_level.call_count == 2, "TestService.test_apply_fan_levels_cache_oscillation: level change should trigger IPMI"
-        assert service.applied_levels[1] == 50, "TestService.test_apply_fan_levels_cache_oscillation: zone 1 should cache 50 after step 2"
+        assert mock_set_fan_level.call_count == 2, f"{f}: level change should trigger IPMI"
+        assert service.applied_levels[1] == 50, f"{f}: zone 1 should cache 50 after step 2"
 
         # Step 3: level returns to 70% — must trigger a new IPMI call
         hd_fc.last_level = 70
         service._apply_fan_levels()  # pylint: disable=protected-access
-        assert mock_set_fan_level.call_count == 3, "Returning to previous level should trigger IPMI call"
-        assert service.applied_levels[1] == 70, "TestService.test_apply_fan_levels_cache_oscillation: zone 1 should cache 70 after step 3"
+        assert mock_set_fan_level.call_count == 3, f"{f}: returning to previous level should trigger IPMI call"
+        assert service.applied_levels[1] == 70, f"{f}: zone 1 should cache 70 after step 3"
 
     def test_check_shared_zones_detected(self, mocker: MockerFixture):
         """Positive unit test for Service._check_shared_zones() method with shared zone detection.
@@ -1190,10 +1205,11 @@ class TestService:
 
         service.controllers = [hd_fc, nvme_fc]
 
+        f = "TestService.test_check_shared_zones_detected"
         result = service._check_shared_zones()  # pylint: disable=protected-access
-        assert result == {1}, "Should detect shared zone 1"
+        assert result == {1}, f"{f}: should detect shared zone 1"
         log_output = str(mock_log_msg.call_args_list)
-        assert "Shared IPMI zone 1" in log_output, "Should log shared zone 1"
+        assert "Shared IPMI zone 1" in log_output, f"{f}: should log shared zone 1"
 
     def test_check_shared_zones_none(self, mocker: MockerFixture):
         """Positive unit test for Service._check_shared_zones() method with no shared zones.
@@ -1219,7 +1235,7 @@ class TestService:
         service.controllers = [cpu_fc, hd_fc]
 
         result = service._check_shared_zones()  # pylint: disable=protected-access
-        assert result == set(), "Should not detect shared zones"
+        assert result == set(), "TestService.test_check_shared_zones_none: should not detect shared zones"
 
     def test_check_shared_zones_multi_zone(self, mocker: MockerFixture):
         """Positive unit test for Service._check_shared_zones() method with multi-zone controller.
@@ -1246,10 +1262,11 @@ class TestService:
 
         service.controllers = [cpu_fc, hd_fc]
 
+        f = "TestService.test_check_shared_zones_multi_zone"
         result = service._check_shared_zones()  # pylint: disable=protected-access
-        assert result == {1}, "Should detect shared zone 1"
+        assert result == {1}, f"{f}: should detect shared zone 1"
         log_output = str(mock_log_msg.call_args_list)
-        assert "Shared IPMI zone 1" in log_output, "Should log shared zone 1"
+        assert "Shared IPMI zone 1" in log_output, f"{f}: should log shared zone 1"
 
     def test_check_shared_zones_selective_deferred(self, mocker: MockerFixture):
         """Positive unit test for Service._check_shared_zones() method with selective deferred mode.
@@ -1283,16 +1300,17 @@ class TestService:
 
         service.controllers = [cpu_fc, hd_fc, nvme_fc]
 
+        f = "TestService.test_check_shared_zones_selective_deferred"
         service.shared_zones = service._check_shared_zones()  # pylint: disable=protected-access
-        assert service.shared_zones == {1}, "TestService.test_check_shared_zones_selective_deferred: zone 1 should be shared"
+        assert service.shared_zones == {1}, f"{f}: zone 1 should be shared"
         # Apply deferred only to controllers on shared zones
         if service.shared_zones:
             for fc in service.controllers:
                 if set(fc.config.ipmi_zone) & service.shared_zones:
                     fc.deferred_apply = True
-        assert cpu_fc.deferred_apply is False, "CPU on zone 0 should not be deferred"
-        assert hd_fc.deferred_apply is True, "HD on shared zone 1 should be deferred"
-        assert nvme_fc.deferred_apply is True, "NVME on shared zone 1 should be deferred"
+        assert cpu_fc.deferred_apply is False, f"{f}: CPU on zone 0 should not be deferred"
+        assert hd_fc.deferred_apply is True, f"{f}: HD on shared zone 1 should be deferred"
+        assert nvme_fc.deferred_apply is True, f"{f}: NVME on shared zone 1 should be deferred"
 
     @pytest.mark.parametrize(
         "exit_code, error_str",
@@ -1386,15 +1404,16 @@ class TestService:
 
         service.controllers = [cpu_fc, hd_fc, nvme_fc, gpu_fc]
 
+        f = "TestService.test_apply_fan_levels_four_controllers_same_zone"
         service._apply_fan_levels()  # pylint: disable=protected-access
         # GPU at 75% should win (highest level among the four)
         mock_set_fan_level.assert_called_once_with(1, 75)
-        assert service.applied_levels[1] == 75, "TestService.test_apply_fan_levels_four_controllers_same_zone: zone 1 should cache 75"
+        assert service.applied_levels[1] == 75, f"{f}: zone 1 should cache 75"
         log_output = str(mock_log_msg.call_args_list)
-        assert "winner: GPU=75%/65.0C" in log_output, "TestService.test_apply_fan_levels_four_controllers_same_zone: GPU should win"
-        assert "CPU=40%/45.0C" in log_output, "TestService.test_apply_fan_levels_four_controllers_same_zone: CPU should be a loser"
-        assert "HD=60%/38.0C" in log_output, "TestService.test_apply_fan_levels_four_controllers_same_zone: HD should be a loser"
-        assert "NVME=50%/42.0C" in log_output, "TestService.test_apply_fan_levels_four_controllers_same_zone: NVME should be a loser"
+        assert "winner: GPU=75%/65.0C" in log_output, f"{f}: GPU should win"
+        assert "CPU=40%/45.0C" in log_output, f"{f}: CPU should be a loser"
+        assert "HD=60%/38.0C" in log_output, f"{f}: HD should be a loser"
+        assert "NVME=50%/42.0C" in log_output, f"{f}: NVME should be a loser"
 
     def test_apply_fan_levels_five_controllers_with_const(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with all five controller types.
@@ -1455,17 +1474,18 @@ class TestService:
 
         service.controllers = [cpu_fc, hd_fc, nvme_fc, gpu_fc, const_fc]
 
+        f = "TestService.test_apply_fan_levels_five_controllers_with_const"
         service._apply_fan_levels()  # pylint: disable=protected-access
         # CONST at 80% should win (highest level among all five)
         mock_set_fan_level.assert_called_once_with(1, 80)
-        assert service.applied_levels[1] == 80, "TestService.test_apply_fan_levels_five_controllers_with_const: zone 1 should cache 80"
+        assert service.applied_levels[1] == 80, f"{f}: zone 1 should cache 80"
         log_output = str(mock_log_msg.call_args_list)
         assert "winner: CONST=80%" in log_output  # CONST has no temperature
         # All losers should be listed
-        assert "CPU=40%/45.0C" in log_output, "TestService.test_apply_fan_levels_five_controllers_with_const: CPU should be a loser"
-        assert "HD=60%/38.0C" in log_output, "TestService.test_apply_fan_levels_five_controllers_with_const: HD should be a loser"
-        assert "NVME=50%/42.0C" in log_output, "TestService.test_apply_fan_levels_five_controllers_with_const: NVME should be a loser"
-        assert "GPU=55%/60.0C" in log_output, "TestService.test_apply_fan_levels_five_controllers_with_const: GPU should be a loser"
+        assert "CPU=40%/45.0C" in log_output, f"{f}: CPU should be a loser"
+        assert "HD=60%/38.0C" in log_output, f"{f}: HD should be a loser"
+        assert "NVME=50%/42.0C" in log_output, f"{f}: NVME should be a loser"
+        assert "GPU=55%/60.0C" in log_output, f"{f}: GPU should be a loser"
 
     def test_apply_fan_levels_complex_three_zone_overlap(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with complex zone overlap.
@@ -1515,19 +1535,20 @@ class TestService:
 
         service.controllers = [cpu_fc, hd_fc, nvme_fc]
 
+        f = "TestService.test_apply_fan_levels_complex_three_zone_overlap"
         service._apply_fan_levels()  # pylint: disable=protected-access
         # Zone 0: only CPU → 50%
         # Zone 1: CPU 50% vs HD 65% → HD wins at 65%
         # Zone 2: CPU 50% vs HD 65% vs NVME 80% → NVME wins at 80%
         calls = mock_set_fan_level.call_args_list
-        assert len(calls) == 3, "All three zones should get IPMI calls"
+        assert len(calls) == 3, f"{f}: all three zones should get IPMI calls"
         call_dict = {c.args[0]: c.args[1] for c in calls}
-        assert call_dict[0] == 50, "Zone 0 should be set to CPU's 50%"
-        assert call_dict[1] == 65, "Zone 1 should be set to HD's 65%"
-        assert call_dict[2] == 80, "Zone 2 should be set to NVME's 80%"
-        assert service.applied_levels[0] == 50, "TestService.test_apply_fan_levels_complex_three_zone_overlap: zone 0 should cache 50"
-        assert service.applied_levels[1] == 65, "TestService.test_apply_fan_levels_complex_three_zone_overlap: zone 1 should cache 65"
-        assert service.applied_levels[2] == 80, "TestService.test_apply_fan_levels_complex_three_zone_overlap: zone 2 should cache 80"
+        assert call_dict[0] == 50, f"{f}: zone 0 should be set to CPU's 50%"
+        assert call_dict[1] == 65, f"{f}: zone 1 should be set to HD's 65%"
+        assert call_dict[2] == 80, f"{f}: zone 2 should be set to NVME's 80%"
+        assert service.applied_levels[0] == 50, f"{f}: zone 0 should cache 50"
+        assert service.applied_levels[1] == 65, f"{f}: zone 1 should cache 65"
+        assert service.applied_levels[2] == 80, f"{f}: zone 2 should cache 80"
 
     def test_apply_fan_levels_all_controllers_last_level_zero(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with last_level=0. It contains the following steps:
@@ -1567,7 +1588,8 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # Both controllers have last_level=0, so they should be skipped in _collect_desired_levels
         # No IPMI call should be made
-        assert mock_set_fan_level.call_count == 0, "Controllers with last_level=0 should be skipped"
+        f = "TestService.test_apply_fan_levels_all_controllers_last_level_zero"
+        assert mock_set_fan_level.call_count == 0, f"{f}: controllers with last_level=0 should be skipped"
 
     def test_check_shared_zones_three_plus_zones_partial_overlap(self, mocker: MockerFixture):
         """Positive unit test for Service._check_shared_zones() method with complex overlap.
@@ -1601,11 +1623,12 @@ class TestService:
 
         service.controllers = [cpu_fc, hd_fc, nvme_fc]
 
+        f = "TestService.test_check_shared_zones_three_plus_zones_partial_overlap"
         result = service._check_shared_zones()  # pylint: disable=protected-access
-        assert result == {1, 2}, "Should detect shared zones 1 and 2"
+        assert result == {1, 2}, f"{f}: should detect shared zones 1 and 2"
         log_output = str(mock_log_msg.call_args_list)
-        assert "Shared IPMI zone 1" in log_output, "TestService.test_check_shared_zones_three_plus_zones_partial_overlap: zone 1 should be logged"
-        assert "Shared IPMI zone 2" in log_output, "TestService.test_check_shared_zones_three_plus_zones_partial_overlap: zone 2 should be logged"
+        assert "Shared IPMI zone 1" in log_output, f"{f}: zone 1 should be logged"
+        assert "Shared IPMI zone 2" in log_output, f"{f}: zone 2 should be logged"
 
     def test_apply_fan_levels_multi_zone_deferred_caching(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with multi-zone caching.
@@ -1637,24 +1660,25 @@ class TestService:
 
         service.controllers = [cpu_fc]
 
+        f = "TestService.test_apply_fan_levels_multi_zone_deferred_caching"
         # First call - should set both zones
         service._apply_fan_levels()  # pylint: disable=protected-access
-        assert mock_set_fan_level.call_count == 2, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: first call should set both zones"
-        assert service.applied_levels[0] == 60, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: zone 0 should cache 60"
-        assert service.applied_levels[1] == 60, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: zone 1 should cache 60"
+        assert mock_set_fan_level.call_count == 2, f"{f}: first call should set both zones"
+        assert service.applied_levels[0] == 60, f"{f}: zone 0 should cache 60"
+        assert service.applied_levels[1] == 60, f"{f}: zone 1 should cache 60"
 
         # Second call with same level - should NOT make IPMI calls (cached)
         mock_set_fan_level.reset_mock()
         service._apply_fan_levels()  # pylint: disable=protected-access
-        assert mock_set_fan_level.call_count == 0, "Same level should be cached"
+        assert mock_set_fan_level.call_count == 0, f"{f}: same level should be cached"
 
         # Third call with different level - should update both zones
         cpu_fc.last_level = 80
         mock_set_fan_level.reset_mock()
         service._apply_fan_levels()  # pylint: disable=protected-access
-        assert mock_set_fan_level.call_count == 2, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: third call should update both zones"
-        assert service.applied_levels[0] == 80, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: zone 0 should cache 80"
-        assert service.applied_levels[1] == 80, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: zone 1 should cache 80"
+        assert mock_set_fan_level.call_count == 2, f"{f}: third call should update both zones"
+        assert service.applied_levels[0] == 80, f"{f}: zone 0 should cache 80"
+        assert service.applied_levels[1] == 80, f"{f}: zone 1 should cache 80"
 
 
 # End.
