@@ -163,6 +163,76 @@ class FanController:
     def callback_func(self) -> None:
         """Call-back function for a child class."""
 
+    def create_control_function(input_str: str, steps: int) -> List[int]:
+        '''
+        Creates user-defined control function based ont input string from configuration file.
+        Args:
+            input_str (str): comma or space separated list of temperature-level values (e.g. "30-35, 50-38, 60-50, 70-100")
+            steps (int): discrete steps for digitalization
+        Return:
+            List[int]: user-defined control function (values IPMI zone levels, index temperature
+        Raise:
+            ValueError: invalid input string
+        '''
+        tl_pairs_str: List[List[str]]    # List of temperature-level string value pairs
+        tl_pairs: List[List[int]]        # List of temperature-level integer value pairs
+        levels: List[int]                # User-defined control function.
+
+        if steps < 1:
+            raise ValueError(f"ERROR: Invalid steps value ({steps})!")
+        
+        # Step 1: Split the list to value pair strings.
+        split_char = "," if "," in input_str else " "
+        tl_pairs_str = input_str.split(split_char)
+        if len(tl_pairs_str) < 2:
+            raise ValueError(f"ERROR: User-defined control function should have minimum 2 points ({input_str})!")
+
+        # Step 2: Convert list of [temperature, level] strings to list of [temperature, level] integer values.
+        tl_pairs=[]
+        for i in range(len(tl_pairs_str)):
+            temp_str, level_str=tl_pairs_str[i].split("-")
+            temp=int(temp_str.strip())
+            level=int(level_str.strip())
+            tl_pairs.append([temp, level])
+
+        if (tl_pairs[-1][0]-tl_pairs[0][0]+1) < steps:
+            raise ValueError(f"ERROR: Too many steps for a small temperature intervall ({steps})!")
+        
+        # Step 3: Create the user-defined control function for temperature-level mapping. This function has a list of fan levels (%)
+        # and the indices of the list are the temperature values.
+        levels=[]
+        # Step 3.1: Fill level values on interval [0..t1-1]
+        levels.extend([tl_pairs[0][1]] * tl_pairs[0][0])
+        # Step 3.2: Calculate level values on the [t1..tn] interval.
+        for i in range(len(tl_pairs)-1):
+            t1,l1=tl_pairs[i]
+            t2,l2=tl_pairs[i+1]
+            temps=t2-t1
+            levels.extend([int(l1 + (i * (l2-l1) / temps)) for i in range(temps)])
+        # Step 3.3: Fill level values on last [tn..100] interval 
+        levels.extend([l2] * (100-t2+1))
+
+        # Step 4: Create temperature intervals for digitalization based on steps parameter.
+        length = tl_pairs[-1][0] - tl_pairs[0][0] + 1  # number of discrete points
+        base = length // steps
+        remainder = length % steps
+        digitalized_levels = levels.copy()
+        start = tl_pairs[0][0]
+        for i in range(steps):
+            size = base + (1 if i < remainder else 0)
+            end = start + size - 1  # inclusive end
+            # Calculate average level value on the given temperature sub-interval.
+            average=0
+            for t in range(start, end+1):
+                average+=levels[t]
+            average=int(average / size)
+            # Fill the given temperature sub-interval with the average level value.
+            for t in range(start, end+1):
+                digitalized_levels[t]=average
+            start = end + 1
+   
+        return digitalized_levels
+
     def run(self) -> None:
         """Run IPMI zone controller function with the following steps:
 
