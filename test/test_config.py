@@ -34,36 +34,36 @@ class TestConfigStaticMethods:
     """Unit tests for Config static helper methods."""
 
     @pytest.mark.parametrize(
-        "input_str, expected, error",
+        "input_str, expected, error_str",
         [
             # Single zone 0
-            ("0", [0], "Config.parse_ipmi_zones() 1"),
+            ("0", [0], "Config.parse_ipmi_zones() p1"),
             # Single zone 1
-            ("1", [1], "Config.parse_ipmi_zones() 2"),
+            ("1", [1], "Config.parse_ipmi_zones() p2"),
             # Comma-separated with spaces
-            ("0, 1", [0, 1], "Config.parse_ipmi_zones() 3"),
+            ("0, 1", [0, 1], "Config.parse_ipmi_zones() p3"),
             # Comma-separated without spaces
-            ("0,1,2", [0, 1, 2], "Config.parse_ipmi_zones() 4"),
+            ("0,1,2", [0, 1, 2], "Config.parse_ipmi_zones() p4"),
             # Space-separated
-            ("0 1", [0, 1], "Config.parse_ipmi_zones() 5"),
+            ("0 1", [0, 1], "Config.parse_ipmi_zones() p5"),
             # Space-separated multiple
-            ("0 1 2", [0, 1, 2], "Config.parse_ipmi_zones() 6"),
+            ("0 1 2", [0, 1, 2], "Config.parse_ipmi_zones() p6"),
             # Extra whitespace
-            ("  0  1  2  ", [0, 1, 2], "Config.parse_ipmi_zones() 7"),
+            ("  0  1  2  ", [0, 1, 2], "Config.parse_ipmi_zones() p7"),
             # Comma with extra whitespace
-            ("  0,  1,  2  ", [0, 1, 2], "Config.parse_ipmi_zones() 8"),
+            ("  0,  1,  2  ", [0, 1, 2], "Config.parse_ipmi_zones() p8"),
             # Max valid zone
-            ("100", [100], "Config.parse_ipmi_zones() 9"),
+            ("100", [100], "Config.parse_ipmi_zones() p9"),
             # Duplicate zones preserved
-            ("0, 1, 0", [0, 1, 0], "Config.parse_ipmi_zones() 10"),
+            ("0, 1, 0", [0, 1, 0], "Config.parse_ipmi_zones() p10"),
         ],
     )
-    def test_parse_ipmi_zones_valid(self, input_str: str, expected: List[int], error: str):
+    def test_parse_ipmi_zones_valid(self, input_str: str, expected: List[int], error_str: str):
         """Positive unit test for Config.parse_ipmi_zones() method."""
-        assert Config.parse_ipmi_zones(input_str) == expected, error
+        assert Config.parse_ipmi_zones(input_str) == expected, error_str
 
     @pytest.mark.parametrize(
-        "input_str, error",
+        "input_str, error_str",
         [
             # Negative zone
             ("-1", "Config.parse_ipmi_zones() n1"),
@@ -77,52 +77,52 @@ class TestConfigStaticMethods:
             ("", "Config.parse_ipmi_zones() n5"),
         ],
     )
-    def test_parse_ipmi_zones_invalid(self, input_str: str, error: str):
+    def test_parse_ipmi_zones_invalid(self, input_str: str, error_str: str):
         """Negative unit test for Config.parse_ipmi_zones() method."""
         with pytest.raises((ValueError, IndexError)):
             Config.parse_ipmi_zones(input_str)
 
     @pytest.mark.parametrize(
-        "input_str, expected, error",
+        "input_str, expected, error_str",
         [
             # Single device
-            ("/dev/sda", ["/dev/sda"], "Config.parse_device_names() 1"),
+            ("/dev/sda", ["/dev/sda"], "Config.parse_device_names() p1"),
             # Space-separated
-            ("/dev/sda /dev/sdb", ["/dev/sda", "/dev/sdb"], "Config.parse_device_names() 2"),
+            ("/dev/sda /dev/sdb", ["/dev/sda", "/dev/sdb"], "Config.parse_device_names() p2"),
             # Newline-separated
-            ("/dev/sda\n/dev/sdb", ["/dev/sda", "/dev/sdb"], "Config.parse_device_names() 3"),
+            ("/dev/sda\n/dev/sdb", ["/dev/sda", "/dev/sdb"], "Config.parse_device_names() p3"),
             # Multiple newline-separated
-            ("/dev/sda\n/dev/sdb\n/dev/sdc", ["/dev/sda", "/dev/sdb", "/dev/sdc"], "Config.parse_device_names() 4"),
+            ("/dev/sda\n/dev/sdb\n/dev/sdc", ["/dev/sda", "/dev/sdb", "/dev/sdc"], "Config.parse_device_names() p4"),
             # By-id paths
             ("/dev/disk/by-id/wwn-0x5000 /dev/disk/by-id/wwn-0x5001",
-             ["/dev/disk/by-id/wwn-0x5000", "/dev/disk/by-id/wwn-0x5001"], "Config.parse_device_names() 5"),
+             ["/dev/disk/by-id/wwn-0x5000", "/dev/disk/by-id/wwn-0x5001"], "Config.parse_device_names() p5"),
         ],
     )
-    def test_parse_device_names_valid(self, input_str: str, expected: List[str], error: str):
+    def test_parse_device_names_valid(self, input_str: str, expected: List[str], error_str: str):
         """Positive unit test for Config.parse_device_names() method."""
-        assert Config.parse_device_names(input_str) == expected, error
+        assert Config.parse_device_names(input_str) == expected, error_str
 
     @pytest.mark.parametrize(
-        "input_str, expected, error",
+        "input_str, expected, error_str",
         [
             # Single GPU ID
-            ("0", [0], "Config.parse_gpu_ids() 1"),
+            ("0", [0], "Config.parse_gpu_ids() p1"),
             # Comma-separated with space
-            ("0, 1", [0, 1], "Config.parse_gpu_ids() 2"),
+            ("0, 1", [0, 1], "Config.parse_gpu_ids() p2"),
             # Comma-separated multiple
-            ("0,1,2,3", [0, 1, 2, 3], "Config.parse_gpu_ids() 3"),
+            ("0,1,2,3", [0, 1, 2, 3], "Config.parse_gpu_ids() p3"),
             # Space-separated
-            ("0 1 2", [0, 1, 2], "Config.parse_gpu_ids() 4"),
+            ("0 1 2", [0, 1, 2], "Config.parse_gpu_ids() p4"),
             # Extra whitespace
-            ("  0  1  2  ", [0, 1, 2], "Config.parse_gpu_ids() 5"),
+            ("  0  1  2  ", [0, 1, 2], "Config.parse_gpu_ids() p5"),
         ],
     )
-    def test_parse_gpu_ids_valid(self, input_str: str, expected: List[int], error: str):
+    def test_parse_gpu_ids_valid(self, input_str: str, expected: List[int], error_str: str):
         """Positive unit test for Config.parse_gpu_ids() method."""
-        assert Config.parse_gpu_ids(input_str) == expected, error
+        assert Config.parse_gpu_ids(input_str) == expected, error_str
 
     @pytest.mark.parametrize(
-        "input_str, error",
+        "input_str, error_str",
         [
             # Negative ID
             ("-1", "Config.parse_gpu_ids() n1"),
@@ -132,7 +132,7 @@ class TestConfigStaticMethods:
             ("abc", "Config.parse_gpu_ids() n3"),
         ],
     )
-    def test_parse_gpu_ids_invalid(self, input_str: str, error: str):
+    def test_parse_gpu_ids_invalid(self, input_str: str, error_str: str):
         """Negative unit test for Config.parse_gpu_ids() method."""
         with pytest.raises(ValueError):
             Config.parse_gpu_ids(input_str)
@@ -149,14 +149,14 @@ class TestConfigFileLoading:
     def test_config_load_minimal(self, create_config):
         """Positive test: Config loads minimal valid configuration."""
         cfg = create_config("[Ipmi]\ncommand = /usr/bin/ipmitool\n")
-        assert cfg.ipmi.command == Config.DV_IPMI_COMMAND
-        assert cfg.ipmi.fan_mode_delay == Config.DV_IPMI_FAN_MODE_DELAY
-        assert cfg.ipmi.fan_level_delay == Config.DV_IPMI_FAN_LEVEL_DELAY
-        assert cfg.cpu == []
-        assert cfg.hd == []
-        assert cfg.nvme == []
-        assert cfg.gpu == []
-        assert cfg.const == []
+        assert cfg.ipmi.command == Config.DV_IPMI_COMMAND, "TestConfigFileLoading.test_config_load_minimal: command default"
+        assert cfg.ipmi.fan_mode_delay == Config.DV_IPMI_FAN_MODE_DELAY, "TestConfigFileLoading.test_config_load_minimal: fan_mode_delay default"
+        assert cfg.ipmi.fan_level_delay == Config.DV_IPMI_FAN_LEVEL_DELAY, "TestConfigFileLoading.test_config_load_minimal: fan_level_delay default"
+        assert cfg.cpu == [], "TestConfigFileLoading.test_config_load_minimal: no cpu sections"
+        assert cfg.hd == [], "TestConfigFileLoading.test_config_load_minimal: no hd sections"
+        assert cfg.nvme == [], "TestConfigFileLoading.test_config_load_minimal: no nvme sections"
+        assert cfg.gpu == [], "TestConfigFileLoading.test_config_load_minimal: no gpu sections"
+        assert cfg.const == [], "TestConfigFileLoading.test_config_load_minimal: no const sections"
 
     def test_config_missing_ipmi_section(self, create_config_file):
         """Negative test: Config raises ValueError when [Ipmi] section is missing."""
@@ -202,11 +202,11 @@ class TestIpmiConfigParsing:
     def test_ipmi_defaults(self, create_config):
         """Positive test: IpmiConfig uses correct default values."""
         cfg = create_config("[Ipmi]\n")
-        assert cfg.ipmi.command == Config.DV_IPMI_COMMAND
-        assert cfg.ipmi.fan_mode_delay == Config.DV_IPMI_FAN_MODE_DELAY
-        assert cfg.ipmi.fan_level_delay == Config.DV_IPMI_FAN_LEVEL_DELAY
-        assert cfg.ipmi.remote_parameters == Config.DV_IPMI_REMOTE_PARAMETERS
-        assert cfg.ipmi.platform_name == Config.DV_IPMI_PLATFORM_NAME
+        assert cfg.ipmi.command == Config.DV_IPMI_COMMAND, "TestIpmiConfigParsing.test_ipmi_defaults: command default"
+        assert cfg.ipmi.fan_mode_delay == Config.DV_IPMI_FAN_MODE_DELAY, "TestIpmiConfigParsing.test_ipmi_defaults: fan_mode_delay default"
+        assert cfg.ipmi.fan_level_delay == Config.DV_IPMI_FAN_LEVEL_DELAY, "TestIpmiConfigParsing.test_ipmi_defaults: fan_level_delay default"
+        assert cfg.ipmi.remote_parameters == Config.DV_IPMI_REMOTE_PARAMETERS, "TestIpmiConfigParsing.test_ipmi_defaults: remote_parameters default"
+        assert cfg.ipmi.platform_name == Config.DV_IPMI_PLATFORM_NAME, "TestIpmiConfigParsing.test_ipmi_defaults: platform_name default"
 
     def test_ipmi_custom_values(self, create_config):
         """Positive test: IpmiConfig parses custom values."""
@@ -218,22 +218,22 @@ fan_level_delay = 1
 remote_parameters = -I lanplus -U admin -P secret -H 192.168.1.100
 platform_name = X11DPH-T
 """)
-        assert cfg.ipmi.command == "/opt/ipmitool"
-        assert cfg.ipmi.fan_mode_delay == 5
-        assert cfg.ipmi.fan_level_delay == 1
-        assert cfg.ipmi.remote_parameters == "-I lanplus -U admin -P secret -H 192.168.1.100"
-        assert cfg.ipmi.platform_name == "X11DPH-T"
+        assert cfg.ipmi.command == "/opt/ipmitool", "TestIpmiConfigParsing.test_ipmi_custom_values: command"
+        assert cfg.ipmi.fan_mode_delay == 5, "TestIpmiConfigParsing.test_ipmi_custom_values: fan_mode_delay"
+        assert cfg.ipmi.fan_level_delay == 1, "TestIpmiConfigParsing.test_ipmi_custom_values: fan_level_delay"
+        assert cfg.ipmi.remote_parameters == "-I lanplus -U admin -P secret -H 192.168.1.100", "TestIpmiConfigParsing.test_ipmi_custom_values: remote_parameters"
+        assert cfg.ipmi.platform_name == "X11DPH-T", "TestIpmiConfigParsing.test_ipmi_custom_values: platform_name"
 
     @pytest.mark.parametrize(
-        "param, value, error",
+        "param, value, error_str",
         [
             # Negative fan_mode_delay
-            ("fan_mode_delay", "-1", "Config._parse_ipmi() 1"),
+            ("fan_mode_delay", "-1", "Config._parse_ipmi() n1"),
             # Negative fan_level_delay
-            ("fan_level_delay", "-5", "Config._parse_ipmi() 2"),
+            ("fan_level_delay", "-5", "Config._parse_ipmi() n2"),
         ],
     )
-    def test_ipmi_invalid_values(self, create_config_file, param: str, value: str, error: str):
+    def test_ipmi_invalid_values(self, create_config_file, param: str, value: str, error_str: str):
         """Negative test: IpmiConfig rejects invalid values."""
         config_path = create_config_file(f"[Ipmi]\n{param} = {value}\n")
         with pytest.raises(ValueError):
@@ -246,20 +246,20 @@ class TestCpuConfigParsing:
     def test_cpu_defaults(self, create_config):
         """Positive test: CpuConfig uses correct default values."""
         cfg = create_config("[Ipmi]\n[CPU]\nenabled = 1\n")
-        assert len(cfg.cpu) == 1
+        assert len(cfg.cpu) == 1, "TestCpuConfigParsing.test_cpu_defaults: one CPU section"
         cpu = cfg.cpu[0]
-        assert cpu.section == "CPU"
-        assert cpu.enabled is True
-        assert cpu.ipmi_zone == [Config.CPU_ZONE]
-        assert cpu.temp_calc == Config.CALC_AVG
-        assert cpu.steps == Config.DV_CPU_STEPS
-        assert cpu.sensitivity == Config.DV_CPU_SENSITIVITY
-        assert cpu.polling == Config.DV_CPU_POLLING
-        assert cpu.min_temp == Config.DV_CPU_MIN_TEMP
-        assert cpu.max_temp == Config.DV_CPU_MAX_TEMP
-        assert cpu.min_level == Config.DV_CPU_MIN_LEVEL
-        assert cpu.max_level == Config.DV_CPU_MAX_LEVEL
-        assert cpu.smoothing == Config.DV_CPU_SMOOTHING
+        assert cpu.section == "CPU", "TestCpuConfigParsing.test_cpu_defaults: section name"
+        assert cpu.enabled is True, "TestCpuConfigParsing.test_cpu_defaults: enabled default"
+        assert cpu.ipmi_zone == [Config.CPU_ZONE], "TestCpuConfigParsing.test_cpu_defaults: ipmi_zone default"
+        assert cpu.temp_calc == Config.CALC_AVG, "TestCpuConfigParsing.test_cpu_defaults: temp_calc default"
+        assert cpu.steps == Config.DV_CPU_STEPS, "TestCpuConfigParsing.test_cpu_defaults: steps default"
+        assert cpu.sensitivity == Config.DV_CPU_SENSITIVITY, "TestCpuConfigParsing.test_cpu_defaults: sensitivity default"
+        assert cpu.polling == Config.DV_CPU_POLLING, "TestCpuConfigParsing.test_cpu_defaults: polling default"
+        assert cpu.min_temp == Config.DV_CPU_MIN_TEMP, "TestCpuConfigParsing.test_cpu_defaults: min_temp default"
+        assert cpu.max_temp == Config.DV_CPU_MAX_TEMP, "TestCpuConfigParsing.test_cpu_defaults: max_temp default"
+        assert cpu.min_level == Config.DV_CPU_MIN_LEVEL, "TestCpuConfigParsing.test_cpu_defaults: min_level default"
+        assert cpu.max_level == Config.DV_CPU_MAX_LEVEL, "TestCpuConfigParsing.test_cpu_defaults: max_level default"
+        assert cpu.smoothing == Config.DV_CPU_SMOOTHING, "TestCpuConfigParsing.test_cpu_defaults: smoothing default"
 
     def test_cpu_custom_values(self, create_config):
         """Positive test: CpuConfig parses custom values."""
@@ -279,16 +279,16 @@ max_level = 95
 smoothing = 4
 """)
         cpu = cfg.cpu[0]
-        assert cpu.ipmi_zone == [0, 1]
-        assert cpu.temp_calc == 2
-        assert cpu.steps == 8
-        assert cpu.sensitivity == 2.5
-        assert cpu.polling == 5.0
-        assert cpu.min_temp == 25.0
-        assert cpu.max_temp == 70.0
-        assert cpu.min_level == 30
-        assert cpu.max_level == 95
-        assert cpu.smoothing == 4
+        assert cpu.ipmi_zone == [0, 1], "TestCpuConfigParsing.test_cpu_custom_values: ipmi_zone"
+        assert cpu.temp_calc == 2, "TestCpuConfigParsing.test_cpu_custom_values: temp_calc"
+        assert cpu.steps == 8, "TestCpuConfigParsing.test_cpu_custom_values: steps"
+        assert cpu.sensitivity == 2.5, "TestCpuConfigParsing.test_cpu_custom_values: sensitivity"
+        assert cpu.polling == 5.0, "TestCpuConfigParsing.test_cpu_custom_values: polling"
+        assert cpu.min_temp == 25.0, "TestCpuConfigParsing.test_cpu_custom_values: min_temp"
+        assert cpu.max_temp == 70.0, "TestCpuConfigParsing.test_cpu_custom_values: max_temp"
+        assert cpu.min_level == 30, "TestCpuConfigParsing.test_cpu_custom_values: min_level"
+        assert cpu.max_level == 95, "TestCpuConfigParsing.test_cpu_custom_values: max_level"
+        assert cpu.smoothing == 4, "TestCpuConfigParsing.test_cpu_custom_values: smoothing"
 
     def test_cpu_multi_section(self, create_config):
         """Positive test: Multiple CPU sections [CPU], [CPU:0], [CPU:1] parsed in order."""
@@ -306,57 +306,57 @@ min_temp = 32
 enabled = 0
 min_temp = 34
 """)
-        assert len(cfg.cpu) == 3
-        assert cfg.cpu[0].section == "CPU"
-        assert cfg.cpu[0].min_temp == 30.0
-        assert cfg.cpu[1].section == "CPU:0"
-        assert cfg.cpu[1].min_temp == 32.0
-        assert cfg.cpu[2].section == "CPU:1"
-        assert cfg.cpu[2].min_temp == 34.0
-        assert cfg.cpu[2].enabled is False
+        assert len(cfg.cpu) == 3, "TestCpuConfigParsing.test_cpu_multi_section: three sections parsed"
+        assert cfg.cpu[0].section == "CPU", "TestCpuConfigParsing.test_cpu_multi_section: first section name"
+        assert cfg.cpu[0].min_temp == 30.0, "TestCpuConfigParsing.test_cpu_multi_section: first min_temp"
+        assert cfg.cpu[1].section == "CPU:0", "TestCpuConfigParsing.test_cpu_multi_section: second section name"
+        assert cfg.cpu[1].min_temp == 32.0, "TestCpuConfigParsing.test_cpu_multi_section: second min_temp"
+        assert cfg.cpu[2].section == "CPU:1", "TestCpuConfigParsing.test_cpu_multi_section: third section name"
+        assert cfg.cpu[2].min_temp == 34.0, "TestCpuConfigParsing.test_cpu_multi_section: third min_temp"
+        assert cfg.cpu[2].enabled is False, "TestCpuConfigParsing.test_cpu_multi_section: third enabled=False"
 
     def test_cpu_disabled(self, create_config):
         """Positive test: Disabled CPU section is still parsed."""
         cfg = create_config("[Ipmi]\n[CPU]\nenabled = 0\n")
-        assert len(cfg.cpu) == 1
-        assert cfg.cpu[0].enabled is False
+        assert len(cfg.cpu) == 1, "TestCpuConfigParsing.test_cpu_disabled: one CPU section"
+        assert cfg.cpu[0].enabled is False, "TestCpuConfigParsing.test_cpu_disabled: enabled=False"
 
 
 class TestHdConfigParsing:
     """Unit tests for [HD] section parsing."""
 
     @pytest.mark.parametrize(
-        "param, value, error",
+        "param, value, error_str",
         [
             # Invalid temp_calc value
-            ("temp_calc", "5", "Config._validate_fan_controller_config() 1"),
+            ("temp_calc", "5", "Config._validate_fan_controller_config() n1"),
             # steps = 0
-            ("steps", "0", "Config._validate_fan_controller_config() 2"),
+            ("steps", "0", "Config._validate_fan_controller_config() n2"),
             # steps negative
-            ("steps", "-1", "Config._validate_fan_controller_config() 3"),
+            ("steps", "-1", "Config._validate_fan_controller_config() n3"),
             # steps > max_level - min_level (default max_level=100, min_level=35 -> 65)
-            ("steps", "66", "Config._validate_fan_controller_config() 3a"),
+            ("steps", "66", "Config._validate_fan_controller_config() n4"),
             # sensitivity = 0
-            ("sensitivity", "0", "Config._validate_fan_controller_config() 4"),
+            ("sensitivity", "0", "Config._validate_fan_controller_config() n5"),
             # sensitivity negative
-            ("sensitivity", "-1", "Config._validate_fan_controller_config() 5"),
+            ("sensitivity", "-1", "Config._validate_fan_controller_config() n6"),
             # polling negative
-            ("polling", "-1", "Config._validate_fan_controller_config() 6"),
+            ("polling", "-1", "Config._validate_fan_controller_config() n7"),
             # smoothing = 0
-            ("smoothing", "0", "Config._validate_fan_controller_config() 7"),
+            ("smoothing", "0", "Config._validate_fan_controller_config() n8"),
             # smoothing negative
-            ("smoothing", "-1", "Config._validate_fan_controller_config() 8"),
+            ("smoothing", "-1", "Config._validate_fan_controller_config() n9"),
             # min_temp negative
-            ("min_temp", "-1", "Config._validate_fan_controller_config() 9"),
+            ("min_temp", "-1", "Config._validate_fan_controller_config() n10"),
             # max_temp over 200
-            ("max_temp", "201", "Config._validate_fan_controller_config() 10"),
+            ("max_temp", "201", "Config._validate_fan_controller_config() n11"),
             # min_level negative
-            ("min_level", "-1", "Config._validate_fan_controller_config() 11"),
+            ("min_level", "-1", "Config._validate_fan_controller_config() n12"),
             # max_level over 100
-            ("max_level", "101", "Config._validate_fan_controller_config() 12"),
+            ("max_level", "101", "Config._validate_fan_controller_config() n13"),
         ],
     )
-    def test_hd_validation_errors(self, create_config_file, param: str, value: str, error: str):  # noqa: ARG002
+    def test_hd_validation_errors(self, create_config_file, param: str, value: str, error_str: str):  # noqa: ARG002
         """Negative test: HdConfig validation catches invalid parameters."""
         config_path = create_config_file(f"[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\n{param} = {value}\n")
         with pytest.raises(ValueError):
@@ -379,52 +379,52 @@ class TestHdConfigParsing:
         assert "max_level" in str(exc_info.value) and "min_level" in str(exc_info.value)
 
     @pytest.mark.parametrize(
-        "temp_calc, error",
+        "temp_calc, error_str",
         [
             # Use minimum temperature
-            (0, "Config._parse_hd_sections() 1"),
+            (0, "Config._parse_hd_sections() p1"),
             # Use average temperature
-            (1, "Config._parse_hd_sections() 2"),
+            (1, "Config._parse_hd_sections() p2"),
             # Use maximum temperature
-            (2, "Config._parse_hd_sections() 3"),
+            (2, "Config._parse_hd_sections() p3"),
         ],
     )
-    def test_hd_temp_calc_all_values(self, create_config, temp_calc: int, error: str):
+    def test_hd_temp_calc_all_values(self, create_config, temp_calc: int, error_str: str):
         """Positive test: All temp_calc values (0=MIN, 1=AVG, 2=MAX) are valid for HD."""
         cfg = create_config(f"[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\ntemp_calc = {temp_calc}\n")
-        assert cfg.hd[0].temp_calc == temp_calc, error
+        assert cfg.hd[0].temp_calc == temp_calc, error_str
 
     def test_hd_defaults(self, create_config):
         """Positive test: HdConfig uses correct default values when enabled with hd_names."""
         cfg = create_config("[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\n")
-        assert len(cfg.hd) == 1
+        assert len(cfg.hd) == 1, "TestHdConfigParsing.test_hd_defaults: one HD section"
         hd = cfg.hd[0]
-        assert hd.section == "HD"
-        assert hd.enabled is True
-        assert hd.ipmi_zone == [Config.HD_ZONE]
-        assert hd.temp_calc == Config.CALC_AVG
-        assert hd.steps == Config.DV_HD_STEPS
-        assert hd.sensitivity == Config.DV_HD_SENSITIVITY
-        assert hd.polling == Config.DV_HD_POLLING
-        assert hd.min_temp == Config.DV_HD_MIN_TEMP
-        assert hd.max_temp == Config.DV_HD_MAX_TEMP
-        assert hd.min_level == Config.DV_HD_MIN_LEVEL
-        assert hd.max_level == Config.DV_HD_MAX_LEVEL
-        assert hd.smoothing == Config.DV_HD_SMOOTHING
-        assert hd.hd_names == ["/dev/sda"]
-        assert hd.smartctl_path == Config.DV_HD_SMARTCTL_PATH
-        assert hd.standby_guard_enabled is False
-        assert hd.standby_hd_limit == Config.DV_HD_STANDBY_HD_LIMIT
+        assert hd.section == "HD", "TestHdConfigParsing.test_hd_defaults: section name"
+        assert hd.enabled is True, "TestHdConfigParsing.test_hd_defaults: enabled default"
+        assert hd.ipmi_zone == [Config.HD_ZONE], "TestHdConfigParsing.test_hd_defaults: ipmi_zone default"
+        assert hd.temp_calc == Config.CALC_AVG, "TestHdConfigParsing.test_hd_defaults: temp_calc default"
+        assert hd.steps == Config.DV_HD_STEPS, "TestHdConfigParsing.test_hd_defaults: steps default"
+        assert hd.sensitivity == Config.DV_HD_SENSITIVITY, "TestHdConfigParsing.test_hd_defaults: sensitivity default"
+        assert hd.polling == Config.DV_HD_POLLING, "TestHdConfigParsing.test_hd_defaults: polling default"
+        assert hd.min_temp == Config.DV_HD_MIN_TEMP, "TestHdConfigParsing.test_hd_defaults: min_temp default"
+        assert hd.max_temp == Config.DV_HD_MAX_TEMP, "TestHdConfigParsing.test_hd_defaults: max_temp default"
+        assert hd.min_level == Config.DV_HD_MIN_LEVEL, "TestHdConfigParsing.test_hd_defaults: min_level default"
+        assert hd.max_level == Config.DV_HD_MAX_LEVEL, "TestHdConfigParsing.test_hd_defaults: max_level default"
+        assert hd.smoothing == Config.DV_HD_SMOOTHING, "TestHdConfigParsing.test_hd_defaults: smoothing default"
+        assert hd.hd_names == ["/dev/sda"], "TestHdConfigParsing.test_hd_defaults: hd_names"
+        assert hd.smartctl_path == Config.DV_HD_SMARTCTL_PATH, "TestHdConfigParsing.test_hd_defaults: smartctl_path default"
+        assert hd.standby_guard_enabled is False, "TestHdConfigParsing.test_hd_defaults: standby_guard_enabled default"
+        assert hd.standby_hd_limit == Config.DV_HD_STANDBY_HD_LIMIT, "TestHdConfigParsing.test_hd_defaults: standby_hd_limit default"
 
     def test_hd_multi_names_newline(self, create_config):
         """Positive test: HdConfig parses multiple device names with newlines."""
         cfg = create_config("[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\n    /dev/sdb\n    /dev/sdc\n")
-        assert cfg.hd[0].hd_names == ["/dev/sda", "/dev/sdb", "/dev/sdc"]
+        assert cfg.hd[0].hd_names == ["/dev/sda", "/dev/sdb", "/dev/sdc"], "TestHdConfigParsing.test_hd_multi_names_newline: hd_names"
 
     def test_hd_multi_names_space(self, create_config):
         """Positive test: HdConfig parses multiple device names with spaces."""
         cfg = create_config("[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda /dev/sdb /dev/sdc\n")
-        assert cfg.hd[0].hd_names == ["/dev/sda", "/dev/sdb", "/dev/sdc"]
+        assert cfg.hd[0].hd_names == ["/dev/sda", "/dev/sdb", "/dev/sdc"], "TestHdConfigParsing.test_hd_multi_names_space: hd_names"
 
     def test_hd_standby_guard(self, create_config):
         """Positive test: HdConfig parses standby guard settings."""
@@ -436,8 +436,8 @@ hd_names = /dev/sda /dev/sdb
 standby_guard_enabled = 1
 standby_hd_limit = 2
 """)
-        assert cfg.hd[0].standby_guard_enabled is True
-        assert cfg.hd[0].standby_hd_limit == 2
+        assert cfg.hd[0].standby_guard_enabled is True, "TestHdConfigParsing.test_hd_standby_guard: standby_guard_enabled"
+        assert cfg.hd[0].standby_hd_limit == 2, "TestHdConfigParsing.test_hd_standby_guard: standby_hd_limit"
 
     def test_hd_enabled_without_names_error(self, create_config_file):
         """Negative test: HdConfig raises error when enabled but hd_names not specified."""
@@ -482,48 +482,48 @@ enabled = 1
 hd_names = /dev/sdb
 ipmi_zone = 2
 """)
-        assert len(cfg.hd) == 2
-        assert cfg.hd[0].section == "HD"
-        assert cfg.hd[0].ipmi_zone == [1]
-        assert cfg.hd[1].section == "HD:0"
-        assert cfg.hd[1].ipmi_zone == [2]
+        assert len(cfg.hd) == 2, "TestHdConfigParsing.test_hd_multi_section: two sections parsed"
+        assert cfg.hd[0].section == "HD", "TestHdConfigParsing.test_hd_multi_section: first section name"
+        assert cfg.hd[0].ipmi_zone == [1], "TestHdConfigParsing.test_hd_multi_section: first ipmi_zone"
+        assert cfg.hd[1].section == "HD:0", "TestHdConfigParsing.test_hd_multi_section: second section name"
+        assert cfg.hd[1].ipmi_zone == [2], "TestHdConfigParsing.test_hd_multi_section: second ipmi_zone"
 
 
 class TestNvmeConfigParsing:
     """Unit tests for [NVME] section parsing."""
 
     @pytest.mark.parametrize(
-        "param, value, error",
+        "param, value, error_str",
         [
             # Invalid temp_calc value
-            ("temp_calc", "5", "Config._validate_fan_controller_config() 1"),
+            ("temp_calc", "5", "Config._validate_fan_controller_config() n14"),
             # steps = 0
-            ("steps", "0", "Config._validate_fan_controller_config() 2"),
+            ("steps", "0", "Config._validate_fan_controller_config() n15"),
             # steps negative
-            ("steps", "-1", "Config._validate_fan_controller_config() 3"),
+            ("steps", "-1", "Config._validate_fan_controller_config() n16"),
             # steps > max_level - min_level (default max_level=100, min_level=35 -> 65)
-            ("steps", "66", "Config._validate_fan_controller_config() 3a"),
+            ("steps", "66", "Config._validate_fan_controller_config() n17"),
             # sensitivity = 0
-            ("sensitivity", "0", "Config._validate_fan_controller_config() 4"),
+            ("sensitivity", "0", "Config._validate_fan_controller_config() n18"),
             # sensitivity negative
-            ("sensitivity", "-1", "Config._validate_fan_controller_config() 5"),
+            ("sensitivity", "-1", "Config._validate_fan_controller_config() n19"),
             # polling negative
-            ("polling", "-1", "Config._validate_fan_controller_config() 6"),
+            ("polling", "-1", "Config._validate_fan_controller_config() n20"),
             # smoothing = 0
-            ("smoothing", "0", "Config._validate_fan_controller_config() 7"),
+            ("smoothing", "0", "Config._validate_fan_controller_config() n21"),
             # smoothing negative
-            ("smoothing", "-1", "Config._validate_fan_controller_config() 8"),
+            ("smoothing", "-1", "Config._validate_fan_controller_config() n22"),
             # min_temp negative
-            ("min_temp", "-1", "Config._validate_fan_controller_config() 9"),
+            ("min_temp", "-1", "Config._validate_fan_controller_config() n23"),
             # max_temp over 200
-            ("max_temp", "201", "Config._validate_fan_controller_config() 10"),
+            ("max_temp", "201", "Config._validate_fan_controller_config() n24"),
             # min_level negative
-            ("min_level", "-1", "Config._validate_fan_controller_config() 11"),
+            ("min_level", "-1", "Config._validate_fan_controller_config() n25"),
             # max_level over 100
-            ("max_level", "101", "Config._validate_fan_controller_config() 12"),
+            ("max_level", "101", "Config._validate_fan_controller_config() n26"),
         ],
     )
-    def test_nvme_validation_errors(self, create_config_file, param: str, value: str, error: str):  # noqa: ARG002
+    def test_nvme_validation_errors(self, create_config_file, param: str, value: str, error_str: str):  # noqa: ARG002
         """Negative test: NvmeConfig validation catches invalid parameters."""
         config_path = create_config_file(f"[Ipmi]\n[NVME]\nenabled = 1\nnvme_names = /dev/nvme0n1\n{param} = {value}\n")
         with pytest.raises(ValueError):
@@ -546,32 +546,32 @@ class TestNvmeConfigParsing:
         assert "max_level" in str(exc_info.value) and "min_level" in str(exc_info.value)
 
     @pytest.mark.parametrize(
-        "temp_calc, error",
+        "temp_calc, error_str",
         [
             # Use minimum temperature
-            (0, "Config._parse_nvme_sections() 1"),
+            (0, "Config._parse_nvme_sections() p1"),
             # Use average temperature
-            (1, "Config._parse_nvme_sections() 2"),
+            (1, "Config._parse_nvme_sections() p2"),
             # Use maximum temperature
-            (2, "Config._parse_nvme_sections() 3"),
+            (2, "Config._parse_nvme_sections() p3"),
         ],
     )
-    def test_nvme_temp_calc_all_values(self, create_config, temp_calc: int, error: str):
+    def test_nvme_temp_calc_all_values(self, create_config, temp_calc: int, error_str: str):
         """Positive test: All temp_calc values (0=MIN, 1=AVG, 2=MAX) are valid for NVME."""
         cfg = create_config(f"[Ipmi]\n[NVME]\nenabled = 1\nnvme_names = /dev/nvme0n1\ntemp_calc = {temp_calc}\n")
-        assert cfg.nvme[0].temp_calc == temp_calc, error
+        assert cfg.nvme[0].temp_calc == temp_calc, error_str
 
     def test_nvme_defaults(self, create_config):
         """Positive test: NvmeConfig uses correct default values."""
         cfg = create_config("[Ipmi]\n[NVME]\nenabled = 1\nnvme_names = /dev/nvme0n1\n")
-        assert len(cfg.nvme) == 1
+        assert len(cfg.nvme) == 1, "TestNvmeConfigParsing.test_nvme_defaults: one NVME section"
         nvme = cfg.nvme[0]
-        assert nvme.section == "NVME"
-        assert nvme.enabled is True
-        assert nvme.ipmi_zone == [Config.HD_ZONE]
-        assert nvme.min_temp == Config.DV_NVME_MIN_TEMP
-        assert nvme.max_temp == Config.DV_NVME_MAX_TEMP
-        assert nvme.nvme_names == ["/dev/nvme0n1"]
+        assert nvme.section == "NVME", "TestNvmeConfigParsing.test_nvme_defaults: section name"
+        assert nvme.enabled is True, "TestNvmeConfigParsing.test_nvme_defaults: enabled default"
+        assert nvme.ipmi_zone == [Config.HD_ZONE], "TestNvmeConfigParsing.test_nvme_defaults: ipmi_zone default"
+        assert nvme.min_temp == Config.DV_NVME_MIN_TEMP, "TestNvmeConfigParsing.test_nvme_defaults: min_temp default"
+        assert nvme.max_temp == Config.DV_NVME_MAX_TEMP, "TestNvmeConfigParsing.test_nvme_defaults: max_temp default"
+        assert nvme.nvme_names == ["/dev/nvme0n1"], "TestNvmeConfigParsing.test_nvme_defaults: nvme_names"
 
     def test_nvme_enabled_without_names_error(self, create_config_file):
         """Negative test: NvmeConfig raises error when enabled but nvme_names not specified."""
@@ -593,46 +593,46 @@ enabled = 1
 ipmi_zone = 1
 nvme_names = /dev/nvme1n1
 """)
-        assert len(cfg.nvme) == 2
-        assert cfg.nvme[0].section == "NVME"
-        assert cfg.nvme[1].section == "NVME:0"
+        assert len(cfg.nvme) == 2, "TestNvmeConfigParsing.test_nvme_multi_section: two sections parsed"
+        assert cfg.nvme[0].section == "NVME", "TestNvmeConfigParsing.test_nvme_multi_section: first section name"
+        assert cfg.nvme[1].section == "NVME:0", "TestNvmeConfigParsing.test_nvme_multi_section: second section name"
 
 
 class TestGpuConfigParsing:
     """Unit tests for [GPU] section parsing."""
 
     @pytest.mark.parametrize(
-        "param, value, error",
+        "param, value, error_str",
         [
             # Invalid temp_calc value
-            ("temp_calc", "5", "Config._validate_fan_controller_config() 1"),
+            ("temp_calc", "5", "Config._validate_fan_controller_config() n27"),
             # steps = 0
-            ("steps", "0", "Config._validate_fan_controller_config() 2"),
+            ("steps", "0", "Config._validate_fan_controller_config() n28"),
             # steps negative
-            ("steps", "-1", "Config._validate_fan_controller_config() 3"),
+            ("steps", "-1", "Config._validate_fan_controller_config() n29"),
             # steps > max_level - min_level (default max_level=100, min_level=35 -> 65)
-            ("steps", "66", "Config._validate_fan_controller_config() 3a"),
+            ("steps", "66", "Config._validate_fan_controller_config() n30"),
             # sensitivity = 0
-            ("sensitivity", "0", "Config._validate_fan_controller_config() 4"),
+            ("sensitivity", "0", "Config._validate_fan_controller_config() n31"),
             # sensitivity negative
-            ("sensitivity", "-1", "Config._validate_fan_controller_config() 5"),
+            ("sensitivity", "-1", "Config._validate_fan_controller_config() n32"),
             # polling negative
-            ("polling", "-1", "Config._validate_fan_controller_config() 6"),
+            ("polling", "-1", "Config._validate_fan_controller_config() n33"),
             # smoothing = 0
-            ("smoothing", "0", "Config._validate_fan_controller_config() 7"),
+            ("smoothing", "0", "Config._validate_fan_controller_config() n34"),
             # smoothing negative
-            ("smoothing", "-1", "Config._validate_fan_controller_config() 8"),
+            ("smoothing", "-1", "Config._validate_fan_controller_config() n35"),
             # min_temp negative
-            ("min_temp", "-1", "Config._validate_fan_controller_config() 9"),
+            ("min_temp", "-1", "Config._validate_fan_controller_config() n36"),
             # max_temp over 200
-            ("max_temp", "201", "Config._validate_fan_controller_config() 10"),
+            ("max_temp", "201", "Config._validate_fan_controller_config() n37"),
             # min_level negative
-            ("min_level", "-1", "Config._validate_fan_controller_config() 11"),
+            ("min_level", "-1", "Config._validate_fan_controller_config() n38"),
             # max_level over 100
-            ("max_level", "101", "Config._validate_fan_controller_config() 12"),
+            ("max_level", "101", "Config._validate_fan_controller_config() n39"),
         ],
     )
-    def test_gpu_validation_errors(self, create_config_file, param: str, value: str, error: str):  # noqa: ARG002
+    def test_gpu_validation_errors(self, create_config_file, param: str, value: str, error_str: str):  # noqa: ARG002
         """Negative test: GpuConfig validation catches invalid parameters."""
         config_path = create_config_file(f"[Ipmi]\n[GPU]\nenabled = 1\n{param} = {value}\n")
         with pytest.raises(ValueError):
@@ -653,46 +653,46 @@ class TestGpuConfigParsing:
         assert "max_level" in str(exc_info.value) and "min_level" in str(exc_info.value)
 
     @pytest.mark.parametrize(
-        "temp_calc, error",
+        "temp_calc, error_str",
         [
             # Use minimum temperature
-            (0, "Config._parse_gpu_sections() 1"),
+            (0, "Config._parse_gpu_sections() p1"),
             # Use average temperature
-            (1, "Config._parse_gpu_sections() 2"),
+            (1, "Config._parse_gpu_sections() p2"),
             # Use maximum temperature
-            (2, "Config._parse_gpu_sections() 3"),
+            (2, "Config._parse_gpu_sections() p3"),
         ],
     )
-    def test_gpu_temp_calc_all_values(self, create_config, temp_calc: int, error: str):
+    def test_gpu_temp_calc_all_values(self, create_config, temp_calc: int, error_str: str):
         """Positive test: All temp_calc values (0=MIN, 1=AVG, 2=MAX) are valid for GPU."""
         cfg = create_config(f"[Ipmi]\n[GPU]\nenabled = 1\ntemp_calc = {temp_calc}\n")
-        assert cfg.gpu[0].temp_calc == temp_calc, error
+        assert cfg.gpu[0].temp_calc == temp_calc, error_str
 
     def test_gpu_defaults_nvidia(self, create_config):
         """Positive test: GpuConfig uses correct default values for NVIDIA."""
         cfg = create_config("[Ipmi]\n[GPU]\nenabled = 1\n")
-        assert len(cfg.gpu) == 1
+        assert len(cfg.gpu) == 1, "TestGpuConfigParsing.test_gpu_defaults_nvidia: one GPU section"
         gpu = cfg.gpu[0]
-        assert gpu.section == "GPU"
-        assert gpu.enabled is True
-        assert gpu.gpu_type == Config.DV_GPU_TYPE
-        assert gpu.gpu_device_ids == Config.parse_gpu_ids(Config.DV_GPU_DEVICE_IDS)
-        assert gpu.nvidia_smi_path == Config.DV_GPU_NVIDIA_SMI_PATH
-        assert gpu.rocm_smi_path == Config.DV_GPU_ROCM_SMI_PATH
-        assert gpu.amd_temp_sensor == Config.DV_GPU_AMD_TEMP_SENSOR
-        assert gpu.min_temp == Config.DV_GPU_MIN_TEMP
-        assert gpu.max_temp == Config.DV_GPU_MAX_TEMP
+        assert gpu.section == "GPU", "TestGpuConfigParsing.test_gpu_defaults_nvidia: section name"
+        assert gpu.enabled is True, "TestGpuConfigParsing.test_gpu_defaults_nvidia: enabled default"
+        assert gpu.gpu_type == Config.DV_GPU_TYPE, "TestGpuConfigParsing.test_gpu_defaults_nvidia: gpu_type default"
+        assert gpu.gpu_device_ids == Config.parse_gpu_ids(Config.DV_GPU_DEVICE_IDS), "TestGpuConfigParsing.test_gpu_defaults_nvidia: gpu_device_ids default"
+        assert gpu.nvidia_smi_path == Config.DV_GPU_NVIDIA_SMI_PATH, "TestGpuConfigParsing.test_gpu_defaults_nvidia: nvidia_smi_path default"
+        assert gpu.rocm_smi_path == Config.DV_GPU_ROCM_SMI_PATH, "TestGpuConfigParsing.test_gpu_defaults_nvidia: rocm_smi_path default"
+        assert gpu.amd_temp_sensor == Config.DV_GPU_AMD_TEMP_SENSOR, "TestGpuConfigParsing.test_gpu_defaults_nvidia: amd_temp_sensor default"
+        assert gpu.min_temp == Config.DV_GPU_MIN_TEMP, "TestGpuConfigParsing.test_gpu_defaults_nvidia: min_temp default"
+        assert gpu.max_temp == Config.DV_GPU_MAX_TEMP, "TestGpuConfigParsing.test_gpu_defaults_nvidia: max_temp default"
 
     def test_gpu_amd_type(self, create_config):
         """Positive test: GpuConfig parses AMD GPU type."""
         cfg = create_config("[Ipmi]\n[GPU]\nenabled = 1\ngpu_type = amd\namd_temp_sensor = 1\n")
-        assert cfg.gpu[0].gpu_type == "amd"
-        assert cfg.gpu[0].amd_temp_sensor == 1
+        assert cfg.gpu[0].gpu_type == "amd", "TestGpuConfigParsing.test_gpu_amd_type: gpu_type=amd"
+        assert cfg.gpu[0].amd_temp_sensor == 1, "TestGpuConfigParsing.test_gpu_amd_type: amd_temp_sensor"
 
     def test_gpu_multiple_ids(self, create_config):
         """Positive test: GpuConfig parses multiple GPU device IDs."""
         cfg = create_config("[Ipmi]\n[GPU]\nenabled = 1\ngpu_device_ids = 0, 1, 2\n")
-        assert cfg.gpu[0].gpu_device_ids == [0, 1, 2]
+        assert cfg.gpu[0].gpu_device_ids == [0, 1, 2], "TestGpuConfigParsing.test_gpu_multiple_ids: gpu_device_ids"
 
     def test_gpu_invalid_type_error(self, create_config_file):
         """Negative test: GpuConfig raises error for invalid gpu_type."""
@@ -739,9 +739,9 @@ ipmi_zone = 1
 gpu_type = amd
 gpu_device_ids = 1
 """)
-        assert len(cfg.gpu) == 2
-        assert cfg.gpu[0].gpu_type == "nvidia"
-        assert cfg.gpu[1].gpu_type == "amd"
+        assert len(cfg.gpu) == 2, "TestGpuConfigParsing.test_gpu_multi_section: two sections parsed"
+        assert cfg.gpu[0].gpu_type == "nvidia", "TestGpuConfigParsing.test_gpu_multi_section: first gpu_type"
+        assert cfg.gpu[1].gpu_type == "amd", "TestGpuConfigParsing.test_gpu_multi_section: second gpu_type"
 
 
 class TestConstConfigParsing:
@@ -750,21 +750,21 @@ class TestConstConfigParsing:
     def test_const_defaults(self, create_config):
         """Positive test: ConstConfig uses correct default values."""
         cfg = create_config("[Ipmi]\n[CONST]\nenabled = 1\n")
-        assert len(cfg.const) == 1
+        assert len(cfg.const) == 1, "TestConstConfigParsing.test_const_defaults: one CONST section"
         const = cfg.const[0]
-        assert const.section == "CONST"
-        assert const.enabled is True
-        assert const.ipmi_zone == [Config.HD_ZONE]
-        assert const.polling == Config.DV_CONST_POLLING
-        assert const.level == Config.DV_CONST_LEVEL
+        assert const.section == "CONST", "TestConstConfigParsing.test_const_defaults: section name"
+        assert const.enabled is True, "TestConstConfigParsing.test_const_defaults: enabled default"
+        assert const.ipmi_zone == [Config.HD_ZONE], "TestConstConfigParsing.test_const_defaults: ipmi_zone default"
+        assert const.polling == Config.DV_CONST_POLLING, "TestConstConfigParsing.test_const_defaults: polling default"
+        assert const.level == Config.DV_CONST_LEVEL, "TestConstConfigParsing.test_const_defaults: level default"
 
     def test_const_custom_values(self, create_config):
         """Positive test: ConstConfig parses custom values."""
         cfg = create_config("[Ipmi]\n[CONST]\nenabled = 1\nipmi_zone = 0, 1\npolling = 60\nlevel = 75\n")
         const = cfg.const[0]
-        assert const.ipmi_zone == [0, 1]
-        assert const.polling == 60.0
-        assert const.level == 75
+        assert const.ipmi_zone == [0, 1], "TestConstConfigParsing.test_const_custom_values: ipmi_zone"
+        assert const.polling == 60.0, "TestConstConfigParsing.test_const_custom_values: polling"
+        assert const.level == 75, "TestConstConfigParsing.test_const_custom_values: level"
 
     def test_const_invalid_level_error(self, create_config_file):
         """Negative test: ConstConfig raises error for invalid level."""
@@ -792,46 +792,46 @@ enabled = 1
 ipmi_zone = 1
 level = 60
 """)
-        assert len(cfg.const) == 2
-        assert cfg.const[0].level == 40
-        assert cfg.const[1].level == 60
+        assert len(cfg.const) == 2, "TestConstConfigParsing.test_const_multi_section: two sections parsed"
+        assert cfg.const[0].level == 40, "TestConstConfigParsing.test_const_multi_section: first level"
+        assert cfg.const[1].level == 60, "TestConstConfigParsing.test_const_multi_section: second level"
 
 
 class TestFanControllerValidation:
     """Unit tests for _validate_fan_controller_config() validation logic."""
 
     @pytest.mark.parametrize(
-        "param, value, error",
+        "param, value, error_str",
         [
             # Invalid temp_calc value
-            ("temp_calc", "5", "Config._validate_fan_controller_config() 1"),
+            ("temp_calc", "5", "Config._validate_fan_controller_config() n40"),
             # steps = 0
-            ("steps", "0", "Config._validate_fan_controller_config() 2"),
+            ("steps", "0", "Config._validate_fan_controller_config() n41"),
             # steps negative
-            ("steps", "-1", "Config._validate_fan_controller_config() 3"),
+            ("steps", "-1", "Config._validate_fan_controller_config() n42"),
             # steps > max_level - min_level (default max_level=100, min_level=35 -> 65)
-            ("steps", "66", "Config._validate_fan_controller_config() 3a"),
+            ("steps", "66", "Config._validate_fan_controller_config() n43"),
             # sensitivity = 0
-            ("sensitivity", "0", "Config._validate_fan_controller_config() 4"),
+            ("sensitivity", "0", "Config._validate_fan_controller_config() n44"),
             # sensitivity negative
-            ("sensitivity", "-1", "Config._validate_fan_controller_config() 5"),
+            ("sensitivity", "-1", "Config._validate_fan_controller_config() n45"),
             # polling negative
-            ("polling", "-1", "Config._validate_fan_controller_config() 6"),
+            ("polling", "-1", "Config._validate_fan_controller_config() n46"),
             # smoothing = 0
-            ("smoothing", "0", "Config._validate_fan_controller_config() 7"),
+            ("smoothing", "0", "Config._validate_fan_controller_config() n47"),
             # smoothing negative
-            ("smoothing", "-1", "Config._validate_fan_controller_config() 8"),
+            ("smoothing", "-1", "Config._validate_fan_controller_config() n48"),
             # min_temp negative
-            ("min_temp", "-1", "Config._validate_fan_controller_config() 9"),
+            ("min_temp", "-1", "Config._validate_fan_controller_config() n49"),
             # max_temp over 200
-            ("max_temp", "201", "Config._validate_fan_controller_config() 10"),
+            ("max_temp", "201", "Config._validate_fan_controller_config() n50"),
             # min_level negative
-            ("min_level", "-1", "Config._validate_fan_controller_config() 11"),
+            ("min_level", "-1", "Config._validate_fan_controller_config() n51"),
             # max_level over 100
-            ("max_level", "101", "Config._validate_fan_controller_config() 12"),
+            ("max_level", "101", "Config._validate_fan_controller_config() n52"),
         ],
     )
-    def test_cpu_validation_errors(self, create_config_file, param: str, value: str, error: str):  # noqa: ARG002
+    def test_cpu_validation_errors(self, create_config_file, param: str, value: str, error_str: str):  # noqa: ARG002
         """Negative test: CpuConfig validation catches invalid parameters."""
         config_path = create_config_file(f"[Ipmi]\n[CPU]\nenabled = 1\n{param} = {value}\n")
         with pytest.raises(ValueError):
@@ -857,30 +857,30 @@ class TestConfigConstants:
 
     def test_section_name_constants(self):
         """Verify Config section name constants."""
-        assert Config.CS_IPMI == "Ipmi"
-        assert Config.CS_CPU == "CPU"
-        assert Config.CS_HD == "HD"
-        assert Config.CS_NVME == "NVME"
-        assert Config.CS_GPU == "GPU"
-        assert Config.CS_CONST == "CONST"
+        assert Config.CS_IPMI == "Ipmi", "TestConfigConstants.test_section_name_constants: CS_IPMI"
+        assert Config.CS_CPU == "CPU", "TestConfigConstants.test_section_name_constants: CS_CPU"
+        assert Config.CS_HD == "HD", "TestConfigConstants.test_section_name_constants: CS_HD"
+        assert Config.CS_NVME == "NVME", "TestConfigConstants.test_section_name_constants: CS_NVME"
+        assert Config.CS_GPU == "GPU", "TestConfigConstants.test_section_name_constants: CS_GPU"
+        assert Config.CS_CONST == "CONST", "TestConfigConstants.test_section_name_constants: CS_CONST"
 
     def test_calc_constants(self):
         """Verify Config calculation method constants."""
-        assert Config.CALC_MIN == 0
-        assert Config.CALC_AVG == 1
-        assert Config.CALC_MAX == 2
+        assert Config.CALC_MIN == 0, "TestConfigConstants.test_calc_constants: CALC_MIN"
+        assert Config.CALC_AVG == 1, "TestConfigConstants.test_calc_constants: CALC_AVG"
+        assert Config.CALC_MAX == 2, "TestConfigConstants.test_calc_constants: CALC_MAX"
 
     def test_zone_constants(self):
         """Verify Config zone constants."""
-        assert Config.CPU_ZONE == 0
-        assert Config.HD_ZONE == 1
+        assert Config.CPU_ZONE == 0, "TestConfigConstants.test_zone_constants: CPU_ZONE"
+        assert Config.HD_ZONE == 1, "TestConfigConstants.test_zone_constants: HD_ZONE"
 
     def test_amd_temp_keys(self):
         """Verify Config AMD temperature sensor keys."""
-        assert len(Config.CV_AMD_TEMP_KEYS) == 3
-        assert "junction" in Config.CV_AMD_TEMP_KEYS[0].lower()
-        assert "edge" in Config.CV_AMD_TEMP_KEYS[1].lower()
-        assert "memory" in Config.CV_AMD_TEMP_KEYS[2].lower()
+        assert len(Config.CV_AMD_TEMP_KEYS) == 3, "TestConfigConstants.test_amd_temp_keys: three keys"
+        assert "junction" in Config.CV_AMD_TEMP_KEYS[0].lower(), "TestConfigConstants.test_amd_temp_keys: key[0] is junction"
+        assert "edge" in Config.CV_AMD_TEMP_KEYS[1].lower(), "TestConfigConstants.test_amd_temp_keys: key[1] is edge"
+        assert "memory" in Config.CV_AMD_TEMP_KEYS[2].lower(), "TestConfigConstants.test_amd_temp_keys: key[2] is memory"
 
 
 class TestEdgeCases:
@@ -889,52 +889,52 @@ class TestEdgeCases:
     def test_hd_disabled_without_names(self, create_config):
         """Positive test: HD disabled without hd_names should not raise error."""
         cfg = create_config("[Ipmi]\n[HD]\nenabled = 0\n")
-        assert len(cfg.hd) == 1
-        assert cfg.hd[0].enabled is False
-        assert cfg.hd[0].hd_names == []
+        assert len(cfg.hd) == 1, "TestEdgeCases.test_hd_disabled_without_names: one HD section"
+        assert cfg.hd[0].enabled is False, "TestEdgeCases.test_hd_disabled_without_names: enabled=False"
+        assert cfg.hd[0].hd_names == [], "TestEdgeCases.test_hd_disabled_without_names: hd_names empty"
 
     def test_nvme_disabled_without_names(self, create_config):
         """Positive test: NVME disabled without nvme_names should not raise error."""
         cfg = create_config("[Ipmi]\n[NVME]\nenabled = 0\n")
-        assert len(cfg.nvme) == 1
-        assert cfg.nvme[0].enabled is False
-        assert cfg.nvme[0].nvme_names == []
+        assert len(cfg.nvme) == 1, "TestEdgeCases.test_nvme_disabled_without_names: one NVME section"
+        assert cfg.nvme[0].enabled is False, "TestEdgeCases.test_nvme_disabled_without_names: enabled=False"
+        assert cfg.nvme[0].nvme_names == [], "TestEdgeCases.test_nvme_disabled_without_names: nvme_names empty"
 
     def test_hd_custom_smartctl_path(self, create_config):
         """Positive test: HdConfig parses custom smartctl_path."""
         cfg = create_config("[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\nsmartctl_path = /opt/smartctl\n")
-        assert cfg.hd[0].smartctl_path == "/opt/smartctl"
+        assert cfg.hd[0].smartctl_path == "/opt/smartctl", "TestEdgeCases.test_hd_custom_smartctl_path: smartctl_path"
 
     def test_gpu_custom_nvidia_path(self, create_config):
         """Positive test: GpuConfig parses custom nvidia_smi_path."""
         cfg = create_config("[Ipmi]\n[GPU]\nenabled = 1\nnvidia_smi_path = /opt/nvidia-smi\n")
-        assert cfg.gpu[0].nvidia_smi_path == "/opt/nvidia-smi"
+        assert cfg.gpu[0].nvidia_smi_path == "/opt/nvidia-smi", "TestEdgeCases.test_gpu_custom_nvidia_path: nvidia_smi_path"
 
     def test_gpu_custom_rocm_path(self, create_config):
         """Positive test: GpuConfig parses custom rocm_smi_path."""
         cfg = create_config("[Ipmi]\n[GPU]\nenabled = 1\ngpu_type = amd\nrocm_smi_path = /opt/rocm-smi\n")
-        assert cfg.gpu[0].rocm_smi_path == "/opt/rocm-smi"
+        assert cfg.gpu[0].rocm_smi_path == "/opt/rocm-smi", "TestEdgeCases.test_gpu_custom_rocm_path: rocm_smi_path"
 
     @pytest.mark.parametrize(
-        "temp_calc, error",
+        "temp_calc, error_str",
         [
             # Use minimum temperature
-            (0, "Config._parse_cpu_sections() 1"),
+            (0, "Config._parse_cpu_sections() p1"),
             # Use average temperature
-            (1, "Config._parse_cpu_sections() 2"),
+            (1, "Config._parse_cpu_sections() p2"),
             # Use maximum temperature
-            (2, "Config._parse_cpu_sections() 3"),
+            (2, "Config._parse_cpu_sections() p3"),
         ],
     )
-    def test_cpu_temp_calc_all_values(self, create_config, temp_calc: int, error: str):
+    def test_cpu_temp_calc_all_values(self, create_config, temp_calc: int, error_str: str):
         """Positive test: All temp_calc values (0=MIN, 1=AVG, 2=MAX) are valid."""
         cfg = create_config(f"[Ipmi]\n[CPU]\nenabled = 1\ntemp_calc = {temp_calc}\n")
-        assert cfg.cpu[0].temp_calc == temp_calc, error
+        assert cfg.cpu[0].temp_calc == temp_calc, error_str
 
     def test_cpu_polling_zero(self, create_config):
         """Positive test: polling = 0 is valid (immediate polling)."""
         cfg = create_config("[Ipmi]\n[CPU]\nenabled = 1\npolling = 0\n")
-        assert cfg.cpu[0].polling == 0.0
+        assert cfg.cpu[0].polling == 0.0, "TestEdgeCases.test_cpu_polling_zero: polling=0.0"
 
     def test_const_level_boundary_zero(self, create_config_file):
         """Negative test: CONST level = 0 is invalid (fans off is not allowed)."""
@@ -946,34 +946,34 @@ class TestEdgeCases:
     def test_const_level_boundary_one(self, create_config):
         """Positive test: CONST level = 1 is valid (minimum allowed)."""
         cfg = create_config("[Ipmi]\n[CONST]\nenabled = 1\nlevel = 1\n")
-        assert cfg.const[0].level == 1
+        assert cfg.const[0].level == 1, "TestEdgeCases.test_const_level_boundary_one: level=1"
 
     def test_const_level_boundary_hundred(self, create_config):
         """Positive test: CONST level = 100 is valid."""
         cfg = create_config("[Ipmi]\n[CONST]\nenabled = 1\nlevel = 100\n")
-        assert cfg.const[0].level == 100
+        assert cfg.const[0].level == 100, "TestEdgeCases.test_const_level_boundary_hundred: level=100"
 
     def test_ipmi_zone_boundary_zero(self, create_config):
         """Positive test: ipmi_zone = 0 is valid."""
         cfg = create_config("[Ipmi]\n[CPU]\nenabled = 1\nipmi_zone = 0\n")
-        assert cfg.cpu[0].ipmi_zone == [0]
+        assert cfg.cpu[0].ipmi_zone == [0], "TestEdgeCases.test_ipmi_zone_boundary_zero: ipmi_zone=[0]"
 
     def test_ipmi_zone_boundary_hundred(self, create_config):
         """Positive test: ipmi_zone = 100 is valid."""
         cfg = create_config("[Ipmi]\n[CPU]\nenabled = 1\nipmi_zone = 100\n")
-        assert cfg.cpu[0].ipmi_zone == [100]
+        assert cfg.cpu[0].ipmi_zone == [100], "TestEdgeCases.test_ipmi_zone_boundary_hundred: ipmi_zone=[100]"
 
     def test_min_equals_max_temp(self, create_config):
         """Positive test: min_temp == max_temp is valid (constant temperature mapping)."""
         cfg = create_config("[Ipmi]\n[CPU]\nenabled = 1\nmin_temp = 40\nmax_temp = 40\n")
-        assert cfg.cpu[0].min_temp == 40.0
-        assert cfg.cpu[0].max_temp == 40.0
+        assert cfg.cpu[0].min_temp == 40.0, "TestEdgeCases.test_min_equals_max_temp: min_temp=40.0"
+        assert cfg.cpu[0].max_temp == 40.0, "TestEdgeCases.test_min_equals_max_temp: max_temp=40.0"
 
     def test_min_equals_max_level(self, create_config):
         """Positive test: min_level == max_level is valid (constant fan level)."""
         cfg = create_config("[Ipmi]\n[CPU]\nenabled = 1\nmin_level = 50\nmax_level = 50\n")
-        assert cfg.cpu[0].min_level == 50
-        assert cfg.cpu[0].max_level == 50
+        assert cfg.cpu[0].min_level == 50, "TestEdgeCases.test_min_equals_max_level: min_level=50"
+        assert cfg.cpu[0].max_level == 50, "TestEdgeCases.test_min_equals_max_level: max_level=50"
 
     def test_hd_nvme_mixed_case_detection(self, create_config_file):
         """Negative test: NVMe detection is case-insensitive."""
@@ -985,31 +985,31 @@ class TestEdgeCases:
     def test_gpu_type_case_insensitive(self, create_config):
         """Positive test: gpu_type is case-insensitive."""
         cfg = create_config("[Ipmi]\n[GPU]\nenabled = 1\ngpu_type = NVIDIA\n")
-        assert cfg.gpu[0].gpu_type == "nvidia"
+        assert cfg.gpu[0].gpu_type == "nvidia", "TestEdgeCases.test_gpu_type_case_insensitive: gpu_type normalized to lowercase"
 
     def test_no_controller_sections(self, create_config):
         """Positive test: Config with only [Ipmi] section is valid."""
         cfg = create_config("[Ipmi]\ncommand = /usr/bin/ipmitool\n")
-        assert cfg.cpu == []
-        assert cfg.hd == []
-        assert cfg.nvme == []
-        assert cfg.gpu == []
-        assert cfg.const == []
+        assert cfg.cpu == [], "TestEdgeCases.test_no_controller_sections: no cpu sections"
+        assert cfg.hd == [], "TestEdgeCases.test_no_controller_sections: no hd sections"
+        assert cfg.nvme == [], "TestEdgeCases.test_no_controller_sections: no nvme sections"
+        assert cfg.gpu == [], "TestEdgeCases.test_no_controller_sections: no gpu sections"
+        assert cfg.const == [], "TestEdgeCases.test_no_controller_sections: no const sections"
 
     def test_numbered_sections_only(self, create_config):
         """Positive test: Only numbered sections without base section."""
         cfg = create_config("[Ipmi]\n[CPU:0]\nenabled = 1\n[CPU:1]\nenabled = 0\n")
-        assert len(cfg.cpu) == 2
-        assert cfg.cpu[0].section == "CPU:0"
-        assert cfg.cpu[1].section == "CPU:1"
+        assert len(cfg.cpu) == 2, "TestEdgeCases.test_numbered_sections_only: two CPU sections"
+        assert cfg.cpu[0].section == "CPU:0", "TestEdgeCases.test_numbered_sections_only: first section name"
+        assert cfg.cpu[1].section == "CPU:1", "TestEdgeCases.test_numbered_sections_only: second section name"
 
     def test_unordered_numbered_sections_sorted(self, create_config):
         """Positive test: Unordered numbered sections are sorted correctly."""
         cfg = create_config("[Ipmi]\n[HD:5]\nenabled = 0\n[HD:1]\nenabled = 0\n[HD:3]\nenabled = 0\n")
-        assert len(cfg.hd) == 3
-        assert cfg.hd[0].section == "HD:1"
-        assert cfg.hd[1].section == "HD:3"
-        assert cfg.hd[2].section == "HD:5"
+        assert len(cfg.hd) == 3, "TestEdgeCases.test_unordered_numbered_sections_sorted: three HD sections"
+        assert cfg.hd[0].section == "HD:1", "TestEdgeCases.test_unordered_numbered_sections_sorted: first section HD:1"
+        assert cfg.hd[1].section == "HD:3", "TestEdgeCases.test_unordered_numbered_sections_sorted: second section HD:3"
+        assert cfg.hd[2].section == "HD:5", "TestEdgeCases.test_unordered_numbered_sections_sorted: third section HD:5"
 
     def test_const_level_negative_error(self, create_config_file):
         """Negative test: CONST level = -1 raises ValueError."""
@@ -1027,18 +1027,18 @@ class TestEdgeCases:
         """Positive test: Many GPU device IDs are valid."""
         ids = ", ".join(str(i) for i in range(10))
         cfg = create_config(f"[Ipmi]\n[GPU]\nenabled = 1\ngpu_device_ids = {ids}\n")
-        assert cfg.gpu[0].gpu_device_ids == list(range(10))
+        assert cfg.gpu[0].gpu_device_ids == list(range(10)), "TestEdgeCases.test_gpu_device_ids_many: gpu_device_ids 0-9"
 
     def test_multi_zone_duplicates(self, create_config):
         """Positive test: Duplicate zones in ipmi_zone are preserved."""
         cfg = create_config("[Ipmi]\n[CPU]\nenabled = 1\nipmi_zone = 0, 0, 1, 1\n")
-        assert cfg.cpu[0].ipmi_zone == [0, 0, 1, 1]
+        assert cfg.cpu[0].ipmi_zone == [0, 0, 1, 1], "TestEdgeCases.test_multi_zone_duplicates: duplicate zones preserved"
 
     def test_multi_zone_many(self, create_config):
         """Positive test: Many zones in ipmi_zone are valid."""
         zones = ", ".join(str(i) for i in range(10))
         cfg = create_config(f"[Ipmi]\n[CPU]\nenabled = 1\nipmi_zone = {zones}\n")
-        assert cfg.cpu[0].ipmi_zone == list(range(10))
+        assert cfg.cpu[0].ipmi_zone == list(range(10)), "TestEdgeCases.test_multi_zone_many: zones 0-9"
 
 
 class TestConfigFullIntegration:
@@ -1088,16 +1088,16 @@ enabled = 1
 ipmi_zone = 2
 level = 40
 """)
-        assert cfg.ipmi.command == "/usr/bin/ipmitool"
-        assert len(cfg.cpu) == 1
-        assert cfg.cpu[0].enabled is True
-        assert len(cfg.hd) == 1
-        assert len(cfg.hd[0].hd_names) == 2
-        assert len(cfg.nvme) == 1
-        assert len(cfg.gpu) == 1
-        assert cfg.gpu[0].gpu_device_ids == [0, 1]
-        assert len(cfg.const) == 1
-        assert cfg.const[0].level == 40
+        assert cfg.ipmi.command == "/usr/bin/ipmitool", "TestConfigFullIntegration.test_full_config_all_controllers: ipmi command"
+        assert len(cfg.cpu) == 1, "TestConfigFullIntegration.test_full_config_all_controllers: one CPU section"
+        assert cfg.cpu[0].enabled is True, "TestConfigFullIntegration.test_full_config_all_controllers: CPU enabled"
+        assert len(cfg.hd) == 1, "TestConfigFullIntegration.test_full_config_all_controllers: one HD section"
+        assert len(cfg.hd[0].hd_names) == 2, "TestConfigFullIntegration.test_full_config_all_controllers: two HD names"
+        assert len(cfg.nvme) == 1, "TestConfigFullIntegration.test_full_config_all_controllers: one NVME section"
+        assert len(cfg.gpu) == 1, "TestConfigFullIntegration.test_full_config_all_controllers: one GPU section"
+        assert cfg.gpu[0].gpu_device_ids == [0, 1], "TestConfigFullIntegration.test_full_config_all_controllers: gpu_device_ids"
+        assert len(cfg.const) == 1, "TestConfigFullIntegration.test_full_config_all_controllers: one CONST section"
+        assert cfg.const[0].level == 40, "TestConfigFullIntegration.test_full_config_all_controllers: const level=40"
 
     def test_multi_section_ordering(self, create_config):
         """Positive test: Multi-section ordering is preserved correctly."""
@@ -1117,11 +1117,11 @@ enabled = 1
 ipmi_zone = 2
 """)
         # Should be ordered: CPU, CPU:0, CPU:1, CPU:2
-        assert len(cfg.cpu) == 4
-        assert cfg.cpu[0].section == "CPU"
-        assert cfg.cpu[1].section == "CPU:0"
-        assert cfg.cpu[2].section == "CPU:1"
-        assert cfg.cpu[3].section == "CPU:2"
+        assert len(cfg.cpu) == 4, "TestConfigFullIntegration.test_multi_section_ordering: four CPU sections"
+        assert cfg.cpu[0].section == "CPU", "TestConfigFullIntegration.test_multi_section_ordering: first section CPU"
+        assert cfg.cpu[1].section == "CPU:0", "TestConfigFullIntegration.test_multi_section_ordering: second section CPU:0"
+        assert cfg.cpu[2].section == "CPU:1", "TestConfigFullIntegration.test_multi_section_ordering: third section CPU:1"
+        assert cfg.cpu[3].section == "CPU:2", "TestConfigFullIntegration.test_multi_section_ordering: fourth section CPU:2"
 
 
 class TestDuplicateZoneValidation:
@@ -1141,12 +1141,12 @@ class TestDuplicateZoneValidation:
     def test_disabled_instance_no_conflict(self, create_config):
         """Positive test: Disabled instance on the same zone does not raise."""
         cfg = create_config("[Ipmi]\n[CPU]\nenabled = 1\nipmi_zone = 0\n[CPU:1]\nenabled = 0\nipmi_zone = 0\n")
-        assert len(cfg.cpu) == 2
+        assert len(cfg.cpu) == 2, "TestDuplicateZoneValidation.test_disabled_instance_no_conflict: two CPU sections"
 
     def test_different_zones_no_conflict(self, create_config):
         """Positive test: Enabled instances on different zones is valid."""
         cfg = create_config("[Ipmi]\n[CPU:0]\nenabled = 1\nipmi_zone = 0\n[CPU:1]\nenabled = 1\nipmi_zone = 1\n")
-        assert len(cfg.cpu) == 2
+        assert len(cfg.cpu) == 2, "TestDuplicateZoneValidation.test_different_zones_no_conflict: two CPU sections"
 
 
 # End.

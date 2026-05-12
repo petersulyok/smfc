@@ -32,15 +32,15 @@ class TestService:
     sleep_counter: int
 
     @pytest.mark.parametrize(
-        "ipmi, log, error",
+        "ipmi, log, error_str",
         [
             # Both IPMI and Log initialized
-            (True, True, "Service.exit_func() 1"),
+            (True, True, "Service.exit_func() p1"),
             # Neither IPMI nor Log initialized
-            (False, False, "Service.exit_func() 2"),
+            (False, False, "Service.exit_func() p2"),
         ],
     )
-    def test_exit_func(self, mocker: MockerFixture, ipmi: bool, log: bool, error: str) -> None:
+    def test_exit_func(self, mocker: MockerFixture, ipmi: bool, log: bool, error_str: str) -> None:
         """Positive unit test for Service.exit_func() method. It contains the following steps:
         - mock atexit.unregister(), Ipmi.set_fan_mode(), Log.msg_to_stdout() functions
         - execute Service.exit_func()
@@ -58,35 +58,35 @@ class TestService:
         if ipmi:
             service.ipmi = Ipmi.__new__(Ipmi)
         service.exit_func()
-        assert mock_atexit_unregister.call_count == 1, error
+        assert mock_atexit_unregister.call_count == 1, error_str
         if ipmi:
-            assert mock_ipmi_set_fan_mode.call_count == 1, error
+            assert mock_ipmi_set_fan_mode.call_count == 1, error_str
             if log:
-                assert mock_log_msg.call_count == 1, error
+                assert mock_log_msg.call_count == 1, error_str
 
     @pytest.mark.parametrize(
-        "module_list, cpufc, hdfc, gpufc, standby, error",
+        "module_list, cpufc, hdfc, gpufc, standby, error_str",
         [
             # coretemp module loaded, CPU fan controller enabled
-            ("something\ncoretemp\n", True, False, False, False, "Service.check_dependencies() 1"),
+            ("something\ncoretemp\n", True, False, False, False, "Service.check_dependencies() p1"),
             # k10temp module loaded, CPU and GPU enabled
-            ("something\nk10temp\n", True, False, True, False, "Service.check_dependencies() 2"),
+            ("something\nk10temp\n", True, False, True, False, "Service.check_dependencies() p2"),
             # Both coretemp and k10temp loaded
-            ("coretemp\nsomething\nk10temp\n", True, False, False, False, "Service.check_dependencies() 3"),
+            ("coretemp\nsomething\nk10temp\n", True, False, False, False, "Service.check_dependencies() p3"),
             # drivetemp module loaded, HD and GPU enabled
-            ("something\ndrivetemp\n", False, True, True, False, "Service.check_dependencies() 4"),
+            ("something\ndrivetemp\n", False, True, True, False, "Service.check_dependencies() p4"),
             # drivetemp module loaded, HD with standby guard
-            ("something\ndrivetemp\n", False, True, False, True, "Service.check_dependencies() 5"),
+            ("something\ndrivetemp\n", False, True, False, True, "Service.check_dependencies() p5"),
             # No temperature module (HD only)
-            ("something\n", False, True, False, False, "Service.check_dependencies() 6"),
+            ("something\n", False, True, False, False, "Service.check_dependencies() p6"),
             # drivetemp module loaded, HD, GPU, and standby
-            ("something\ndrivetemp\nx", False, True, True, True, "Service.check_dependencies() 7"),
+            ("something\ndrivetemp\nx", False, True, True, True, "Service.check_dependencies() p7"),
             # Both coretemp and drivetemp loaded
-            ("coretemp\ndrivetemp\n", True, True, False, True, "Service.check_dependencies() 8"),
+            ("coretemp\ndrivetemp\n", True, True, False, True, "Service.check_dependencies() p8"),
         ],
     )
     def test_check_dependencies_p(self, mocker: MockerFixture, module_list: str, cpufc, hdfc, gpufc, standby: bool,
-                                  error: str, tmp_path):
+                                  error_str: str, tmp_path):
         """Positive unit test for Service.check_dependencies() method. It contains the following steps:
         - mock print(), argparse.ArgumentParser._print_message() and builtins.open() functions
         - execute Service.check_dependencies()
@@ -127,7 +127,7 @@ class TestService:
         service = Service()
         service.config = Config(str(config_file))
 
-        assert service.check_dependencies() == "", error
+        assert service.check_dependencies() == "", error_str
         del my_td
 
     def test_check_dependencies_disabled_gpu(self, mocker: MockerFixture, tmp_path):
@@ -149,17 +149,17 @@ class TestService:
         config_file.write_text(config_content)
         service = Service()
         service.config = Config(str(config_file))
-        assert service.check_dependencies() == ""
+        assert service.check_dependencies() == "", "TestService.test_check_dependencies_disabled_gpu: should return empty string"
         del my_td
 
     @pytest.mark.parametrize(
-        "error",
+        "error_str",
         [
             # Dependency check error conditions
-            ("Service.check_dependencies() 9"),
+            ("Service.check_dependencies() n1"),
         ],
     )
-    def test_check_dependecies_n(self, mocker: MockerFixture, error: str, tmp_path):
+    def test_check_dependecies_n(self, mocker: MockerFixture, error_str: str, tmp_path):
         """Negative unit test for Service.check_dependencies() method. It contains the following steps:
         - mock print() and builtins.open() functions
         - execute Service.check_dependencies()
@@ -199,52 +199,52 @@ class TestService:
 
         # Check if `nvidia-smi` command is not available.
         my_td.delete_file(nvidia_smi_cmd)
-        error_str = service.check_dependencies()
-        assert error_str.find("command cannot be found!") != -1, error
+        check_result = service.check_dependencies()
+        assert check_result.find("command cannot be found!") != -1, error_str
 
         # Check if `smartctl` command is not available.
         my_td.delete_file(smartctl_cmd)
-        error_str = service.check_dependencies()
-        assert error_str.find("smartctl") != -1, error
+        check_result = service.check_dependencies()
+        assert check_result.find("smartctl") != -1, error_str
 
         # Check if `drivetemp` is not on the module list.
         modules = my_td.create_text_file("coretemp something")
-        error_str = service.check_dependencies()
-        assert error_str.find("drivetemp") != -1, error
+        check_result = service.check_dependencies()
+        assert check_result.find("drivetemp") != -1, error_str
 
         # Check if `coretemp` is not on the module list.
         modules = my_td.create_text_file("drivetemp something")
-        error_str = service.check_dependencies()
-        assert error_str.find("coretemp") != -1, error
+        check_result = service.check_dependencies()
+        assert check_result.find("coretemp") != -1, error_str
 
         # Check if `ipmitool` is not available.
         my_td.delete_file(ipmi_command)
-        error_str = service.check_dependencies()
-        assert error_str.find("ipmitool") != -1, error
+        check_result = service.check_dependencies()
+        assert check_result.find("ipmitool") != -1, error_str
         del my_td
 
     @pytest.mark.parametrize(
-        "command_line, exit_code, error",
+        "command_line, exit_code, error_str",
         [
             # Help flag (exit 0)
-            ("-h", 0, "Service.run() 1"),
+            ("-h", 0, "Service.run() n1"),
             # Version flag (exit 0)
-            ("-v", 0, "Service.run() 2"),
+            ("-v", 0, "Service.run() n2"),
             # Invalid log level (exit 2)
-            ("-l 10", 2, "Service.run() 3"),
+            ("-l 10", 2, "Service.run() n3"),
             # Invalid output (exit 2)
-            ("-o 9", 2, "Service.run() 4"),
+            ("-o 9", 2, "Service.run() n4"),
             # Invalid output with valid log level (exit 2)
-            ("-o 1 -l 10", 2, "Service.run() 5"),
+            ("-o 1 -l 10", 2, "Service.run() n5"),
             # Valid output with invalid log level (exit 2)
-            ("-o 9 -l 1", 2, "Service.run() 6"),
+            ("-o 9 -l 1", 2, "Service.run() n6"),
             # Invalid config file path: special char (exit 6)
-            ("-o 0 -l 3 -c &.txt", 6, "Service.run() 7"),
+            ("-o 0 -l 3 -c &.txt", 6, "Service.run() n7"),
             # Invalid config file path: non-existent (exit 6)
-            ("-o 0 -l 3 -c ./nonexistent_folder/nonexistent_file.conf", 6, "Service.run() 8"),
+            ("-o 0 -l 3 -c ./nonexistent_folder/nonexistent_file.conf", 6, "Service.run() n8"),
         ],
     )
-    def test_run_026n(self, mocker: MockerFixture, command_line: str, exit_code: int, error: str):
+    def test_run_026n(self, mocker: MockerFixture, command_line: str, exit_code: int, error_str: str):
         """Negative unit test for Service.run() method. It contains the following steps:
         - mock print(), argparse.ArgumentParser._print_message() functions
         - execute Service.run()
@@ -258,18 +258,18 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error
+        assert cm.value.code == exit_code, error_str
 
     @pytest.mark.parametrize(
-        "level, output, exit_code, error",
+        "level, output, exit_code, error_str",
         [
             # Invalid log level via namespace (exit 5)
-            (10, 0, 5, "Service.run() 9"),
+            (10, 0, 5, "Service.run() n9"),
             # Invalid output via namespace (exit 5)
-            (0, 9, 5, "Service.run() 10"),
+            (0, 9, 5, "Service.run() n10"),
         ],
     )
-    def test_run_5n(self, mocker: MockerFixture, level: int, output: int, exit_code: int, error: str):
+    def test_run_5n(self, mocker: MockerFixture, level: int, output: int, exit_code: int, error_str: str):
         """Negative unit test for Service.run() method. It contains the following steps:
         - mock print(), argparse.ArgumentParser.parse_args() functions
         - execute Service.run()
@@ -283,16 +283,16 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error
+        assert cm.value.code == exit_code, error_str
 
     @pytest.mark.parametrize(
-        "exit_code, error",
+        "exit_code, error_str",
         [
             # Check dependency error (exit 7)
-            (7, "Service.run() 11"),
+            (7, "Service.run() n11"),
         ],
     )
-    def test_run_7n(self, mocker: MockerFixture, exit_code: int, error: str):
+    def test_run_7n(self, mocker: MockerFixture, exit_code: int, error_str: str):
         """Negative unit test for Service.run() method. It contains the following steps:
         - mock print(), argparse.ArgumentParser.parse_args(), smfc.Service.check_dependencies() functions
         - execute Service.run()
@@ -318,26 +318,26 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error
+        assert cm.value.code == exit_code, error_str
         del my_td
 
     @pytest.mark.parametrize(
-        "ipmi_command, mode_delay, level_delay, exit_code, error",
+        "ipmi_command, mode_delay, level_delay, exit_code, error_str",
         [
             # Non-existent IPMI command (exit 8)
-            ("NON_EXIST", 0, 0, 8, "Service.run() 12"),
+            ("NON_EXIST", 0, 0, 8, "Service.run() n12"),
             # Invalid mode_delay (exit 6 - caught by Config validation)
-            ("GOOD", -1, 0, 6, "Service.run() 13"),
+            ("GOOD", -1, 0, 6, "Service.run() n13"),
             # Invalid level_delay (exit 6 - caught by Config validation)
-            ("GOOD", 0, -1, 6, "Service.run() 14"),
+            ("GOOD", 0, -1, 6, "Service.run() n14"),
             # Bad IPMI command (exit 8)
-            ("BAD", 0, 0, 8, "Service.run() 15"),
+            ("BAD", 0, 0, 8, "Service.run() n15"),
             # No enabled zone (exit 10)
-            ("GOOD", 0, 0, 10, "Service.run() 16"),
+            ("GOOD", 0, 0, 10, "Service.run() n16"),
         ],
     )
     def test_run_810n(self, mocker: MockerFixture, ipmi_command: str, mode_delay: int, level_delay: int,
-                      exit_code: int, error: str):
+                      exit_code: int, error_str: str):
         """Negative unit test for Service.run() method. It contains the following steps:
         - mock print(), pyudev.Context.__init__() functions
         - execute Service.run()
@@ -369,7 +369,7 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error
+        assert cm.value.code == exit_code, error_str
         del my_td
 
     def test_check_dependencies_amd_p(self, mocker: MockerFixture, tmp_path):
@@ -430,13 +430,13 @@ class TestService:
         del my_td
 
     @pytest.mark.parametrize(
-        "exit_code, error",
+        "exit_code, error_str",
         [
             # pyudev.Context init error (exit 9)
-            (9, "Service.run() 17"),
+            (9, "Service.run() n17"),
         ],
     )
-    def test_run_9n(self, mocker: MockerFixture, exit_code: int, error: str):
+    def test_run_9n(self, mocker: MockerFixture, exit_code: int, error_str: str):
         """Negative unit test for Service.run() method. It contains the following steps:
         - mock print(), pyudev.Context.__init__() functions
         - execute Service.run()
@@ -463,26 +463,26 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error
+        assert cm.value.code == exit_code, error_str
         del my_td
 
     @pytest.mark.parametrize(
-        "cpufc, hdfc, nvmefc, gpufc, constfc, exit_code, error",
+        "cpufc, hdfc, nvmefc, gpufc, constfc, exit_code, error_str",
         [
             # CPU and GPU enabled
-            (True, False, False, True, False, 100, "Service.run() 18"),
+            (True, False, False, True, False, 100, "Service.run() p1"),
             # HD and CONST enabled
-            (False, True, False, False, True, 100, "Service.run() 19"),
+            (False, True, False, False, True, 100, "Service.run() p2"),
             # CPU and GPU enabled (duplicate)
-            (True, False, False, True, False, 100, "Service.run() 20"),
+            (True, False, False, True, False, 100, "Service.run() p3"),
             # CPU and NVME enabled
-            (True, False, True, False, False, 100, "Service.run() 21"),
+            (True, False, True, False, False, 100, "Service.run() p4"),
             # All controllers enabled
-            (True, True, True, True, True, 100, "Service.run() 22"),
+            (True, True, True, True, True, 100, "Service.run() p5"),
         ],
     )
     def test_run_100p(self, mocker: MockerFixture, cpufc: bool, hdfc: bool, nvmefc: bool, gpufc: bool,
-                      constfc: bool, exit_code: int, error: str):
+                      constfc: bool, exit_code: int, error_str: str):
         """Positive unit test for Service.run() method. It contains the following steps:
         - mock print(), time.sleep() functions
         - execute smfc.run()
@@ -639,7 +639,7 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error
+        assert cm.value.code == exit_code, error_str
         del my_td
 
     def test_collect_desired_levels(self, mocker: MockerFixture):
@@ -767,10 +767,10 @@ class TestService:
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(0, 60)
-        assert service.applied_levels[0] == 60
+        assert service.applied_levels[0] == 60, "TestService.test_apply_fan_levels_single_zone: zone 0 should cache level 60"
         # Single-contributor zone should log the fan level with temperature
         log_output = str(mock_log_msg.call_args_list)
-        assert "IPMI zone [0]: new level = 60% (CPU=45.0C)" in log_output
+        assert "IPMI zone [0]: new level = 60% (CPU=45.0C)" in log_output, "TestService.test_apply_fan_levels_single_zone: log should contain level and temp"
 
     def test_apply_fan_levels_single_zone_const(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with single CONST controller.
@@ -804,10 +804,10 @@ class TestService:
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(0, 50)
-        assert service.applied_levels[0] == 50
+        assert service.applied_levels[0] == 50, "TestService.test_apply_fan_levels_single_zone_const: zone 0 should cache level 50"
         # Single CONST zone should log without temperature
         log_output = str(mock_log_msg.call_args_list)
-        assert "IPMI zone [0]: new level = 50% (CONST)" in log_output
+        assert "IPMI zone [0]: new level = 50% (CONST)" in log_output, "TestService.test_apply_fan_levels_single_zone_const: log should not include temperature"
 
     def test_apply_fan_levels_shared_zone_const_winner(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method when CONST wins. It contains the following steps:
@@ -848,10 +848,10 @@ class TestService:
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(1, 80)
-        assert service.applied_levels[1] == 80
+        assert service.applied_levels[1] == 80, "TestService.test_apply_fan_levels_shared_zone_const_winner: zone 1 should cache level 80"
         log_output = str(mock_log_msg.call_args_list)
         assert "winner: CONST=80%" in log_output, "CONST winner should have no temperature"
-        assert "losers: HD=45%/38.0C" in log_output
+        assert "losers: HD=45%/38.0C" in log_output, "TestService.test_apply_fan_levels_shared_zone_const_winner: loser should show HD with temp"
 
     def test_apply_fan_levels_shared_zone_const_loser(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method when CONST loses. It contains the following steps:
@@ -892,9 +892,9 @@ class TestService:
 
         service._apply_fan_levels()  # pylint: disable=protected-access
         mock_set_fan_level.assert_called_once_with(1, 70)
-        assert service.applied_levels[1] == 70
+        assert service.applied_levels[1] == 70, "TestService.test_apply_fan_levels_shared_zone_const_loser: zone 1 should cache level 70"
         log_output = str(mock_log_msg.call_args_list)
-        assert "winner: HD=70%/55.0C" in log_output
+        assert "winner: HD=70%/55.0C" in log_output, "TestService.test_apply_fan_levels_shared_zone_const_loser: HD should win at 70%"
         assert "losers: CONST=40%" in log_output, "CONST loser should have no temperature"
 
     def test_apply_fan_levels_skips_non_deferred(self, mocker: MockerFixture):
@@ -935,8 +935,8 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # Only zone 0 should get an IPMI call, zone 1 is handled by HD directly
         mock_set_fan_level.assert_called_once_with(0, 60)
-        assert 0 in service.applied_levels
-        assert 1 not in service.applied_levels
+        assert 0 in service.applied_levels, "TestService.test_apply_fan_levels_skips_non_deferred: zone 0 should be cached"
+        assert 1 not in service.applied_levels, "TestService.test_apply_fan_levels_skips_non_deferred: zone 1 should not be cached"
 
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with level caching.
@@ -1016,11 +1016,11 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # HD at 60% should win (highest level among the three)
         mock_set_fan_level.assert_called_once_with(1, 60)
-        assert service.applied_levels[1] == 60
+        assert service.applied_levels[1] == 60, "TestService.test_apply_fan_levels_three_controllers: zone 1 should cache level 60"
         log_output = str(mock_log_msg.call_args_list)
-        assert "winner: HD=60%/38.0C" in log_output
-        assert "CPU=40%/50.0C" in log_output
-        assert "NVME=50%/42.0C" in log_output
+        assert "winner: HD=60%/38.0C" in log_output, "TestService.test_apply_fan_levels_three_controllers: HD should be winner"
+        assert "CPU=40%/50.0C" in log_output, "TestService.test_apply_fan_levels_three_controllers: CPU should be a loser"
+        assert "NVME=50%/42.0C" in log_output, "TestService.test_apply_fan_levels_three_controllers: NVME should be a loser"
 
     def test_apply_fan_levels_equal_levels(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
@@ -1062,11 +1062,11 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # Level 70% should be applied correctly
         mock_set_fan_level.assert_called_once_with(1, 70)
-        assert service.applied_levels[1] == 70
+        assert service.applied_levels[1] == 70, "TestService.test_apply_fan_levels_equal_levels: zone 1 should cache level 70"
         # First collected controller (CPU) should be the winner (uses > not >=)
         log_output = str(mock_log_msg.call_args_list)
-        assert "winner: CPU=70%/55.0C" in log_output
-        assert "losers: HD=70%/40.0C" in log_output
+        assert "winner: CPU=70%/55.0C" in log_output, "TestService.test_apply_fan_levels_equal_levels: CPU should win the tie"
+        assert "losers: HD=70%/40.0C" in log_output, "TestService.test_apply_fan_levels_equal_levels: HD should be the loser in tie"
 
     def test_apply_fan_levels_multi_zone_partial_shared(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
@@ -1114,12 +1114,12 @@ class TestService:
         call_dict = {c.args[0]: c.args[1] for c in calls}
         assert call_dict[0] == 55, "Zone 0 should be set to CPU's 55%"
         assert call_dict[1] == 70, "Zone 1 should be set to HD's 70% (winner)"
-        assert service.applied_levels[0] == 55
-        assert service.applied_levels[1] == 70
+        assert service.applied_levels[0] == 55, "TestService.test_apply_fan_levels_multi_zone_partial_shared: zone 0 should cache 55"
+        assert service.applied_levels[1] == 70, "TestService.test_apply_fan_levels_multi_zone_partial_shared: zone 1 should cache 70"
         # Zone 0 should log as single-contributor, zone 1 as shared
         log_output = str(mock_log_msg.call_args_list)
-        assert "IPMI zone [0]: new level = 55% (CPU=48.0C)" in log_output
-        assert "winner: HD=70%/42.0C" in log_output
+        assert "IPMI zone [0]: new level = 55% (CPU=48.0C)" in log_output, "TestService.test_apply_fan_levels_multi_zone_partial_shared: zone 0 single log"
+        assert "winner: HD=70%/42.0C" in log_output, "TestService.test_apply_fan_levels_multi_zone_partial_shared: HD wins zone 1"
 
     def test_apply_fan_levels_cache_oscillation(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
@@ -1150,20 +1150,20 @@ class TestService:
         # Step 1: level = 70%
         hd_fc.last_level = 70
         service._apply_fan_levels()  # pylint: disable=protected-access
-        assert mock_set_fan_level.call_count == 1
-        assert service.applied_levels[1] == 70
+        assert mock_set_fan_level.call_count == 1, "TestService.test_apply_fan_levels_cache_oscillation: first call should trigger IPMI"
+        assert service.applied_levels[1] == 70, "TestService.test_apply_fan_levels_cache_oscillation: zone 1 should cache 70 after step 1"
 
         # Step 2: level drops to 50%
         hd_fc.last_level = 50
         service._apply_fan_levels()  # pylint: disable=protected-access
-        assert mock_set_fan_level.call_count == 2
-        assert service.applied_levels[1] == 50
+        assert mock_set_fan_level.call_count == 2, "TestService.test_apply_fan_levels_cache_oscillation: level change should trigger IPMI"
+        assert service.applied_levels[1] == 50, "TestService.test_apply_fan_levels_cache_oscillation: zone 1 should cache 50 after step 2"
 
         # Step 3: level returns to 70% — must trigger a new IPMI call
         hd_fc.last_level = 70
         service._apply_fan_levels()  # pylint: disable=protected-access
         assert mock_set_fan_level.call_count == 3, "Returning to previous level should trigger IPMI call"
-        assert service.applied_levels[1] == 70
+        assert service.applied_levels[1] == 70, "TestService.test_apply_fan_levels_cache_oscillation: zone 1 should cache 70 after step 3"
 
     def test_check_shared_zones_detected(self, mocker: MockerFixture):
         """Positive unit test for Service._check_shared_zones() method with shared zone detection.
@@ -1284,7 +1284,7 @@ class TestService:
         service.controllers = [cpu_fc, hd_fc, nvme_fc]
 
         service.shared_zones = service._check_shared_zones()  # pylint: disable=protected-access
-        assert service.shared_zones == {1}
+        assert service.shared_zones == {1}, "TestService.test_check_shared_zones_selective_deferred: zone 1 should be shared"
         # Apply deferred only to controllers on shared zones
         if service.shared_zones:
             for fc in service.controllers:
@@ -1295,13 +1295,13 @@ class TestService:
         assert nvme_fc.deferred_apply is True, "NVME on shared zone 1 should be deferred"
 
     @pytest.mark.parametrize(
-        "exit_code, error",
+        "exit_code, error_str",
         [
             # Old-style section names migration (exit 10)
-            (10, "Service.run() 23"),
+            (10, "Service.run() p6"),
         ],
     )
-    def test_run_old_section_names(self, mocker: MockerFixture, exit_code: int, error: str):
+    def test_run_old_section_names(self, mocker: MockerFixture, exit_code: int, error_str: str):
         """Positive unit test for Service.run() method with old section names. It contains the following steps:
         - mock print(), pyudev.Context.__init__() functions
         - create config with old-style section names ([CPU zone], [HD zone], etc.)
@@ -1331,7 +1331,7 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error
+        assert cm.value.code == exit_code, error_str
         del my_td
 
     def test_apply_fan_levels_four_controllers_same_zone(self, mocker: MockerFixture):
@@ -1389,12 +1389,12 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # GPU at 75% should win (highest level among the four)
         mock_set_fan_level.assert_called_once_with(1, 75)
-        assert service.applied_levels[1] == 75
+        assert service.applied_levels[1] == 75, "TestService.test_apply_fan_levels_four_controllers_same_zone: zone 1 should cache 75"
         log_output = str(mock_log_msg.call_args_list)
-        assert "winner: GPU=75%/65.0C" in log_output
-        assert "CPU=40%/45.0C" in log_output
-        assert "HD=60%/38.0C" in log_output
-        assert "NVME=50%/42.0C" in log_output
+        assert "winner: GPU=75%/65.0C" in log_output, "TestService.test_apply_fan_levels_four_controllers_same_zone: GPU should win"
+        assert "CPU=40%/45.0C" in log_output, "TestService.test_apply_fan_levels_four_controllers_same_zone: CPU should be a loser"
+        assert "HD=60%/38.0C" in log_output, "TestService.test_apply_fan_levels_four_controllers_same_zone: HD should be a loser"
+        assert "NVME=50%/42.0C" in log_output, "TestService.test_apply_fan_levels_four_controllers_same_zone: NVME should be a loser"
 
     def test_apply_fan_levels_five_controllers_with_const(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with all five controller types.
@@ -1458,14 +1458,14 @@ class TestService:
         service._apply_fan_levels()  # pylint: disable=protected-access
         # CONST at 80% should win (highest level among all five)
         mock_set_fan_level.assert_called_once_with(1, 80)
-        assert service.applied_levels[1] == 80
+        assert service.applied_levels[1] == 80, "TestService.test_apply_fan_levels_five_controllers_with_const: zone 1 should cache 80"
         log_output = str(mock_log_msg.call_args_list)
         assert "winner: CONST=80%" in log_output  # CONST has no temperature
         # All losers should be listed
-        assert "CPU=40%/45.0C" in log_output
-        assert "HD=60%/38.0C" in log_output
-        assert "NVME=50%/42.0C" in log_output
-        assert "GPU=55%/60.0C" in log_output
+        assert "CPU=40%/45.0C" in log_output, "TestService.test_apply_fan_levels_five_controllers_with_const: CPU should be a loser"
+        assert "HD=60%/38.0C" in log_output, "TestService.test_apply_fan_levels_five_controllers_with_const: HD should be a loser"
+        assert "NVME=50%/42.0C" in log_output, "TestService.test_apply_fan_levels_five_controllers_with_const: NVME should be a loser"
+        assert "GPU=55%/60.0C" in log_output, "TestService.test_apply_fan_levels_five_controllers_with_const: GPU should be a loser"
 
     def test_apply_fan_levels_complex_three_zone_overlap(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with complex zone overlap.
@@ -1525,9 +1525,9 @@ class TestService:
         assert call_dict[0] == 50, "Zone 0 should be set to CPU's 50%"
         assert call_dict[1] == 65, "Zone 1 should be set to HD's 65%"
         assert call_dict[2] == 80, "Zone 2 should be set to NVME's 80%"
-        assert service.applied_levels[0] == 50
-        assert service.applied_levels[1] == 65
-        assert service.applied_levels[2] == 80
+        assert service.applied_levels[0] == 50, "TestService.test_apply_fan_levels_complex_three_zone_overlap: zone 0 should cache 50"
+        assert service.applied_levels[1] == 65, "TestService.test_apply_fan_levels_complex_three_zone_overlap: zone 1 should cache 65"
+        assert service.applied_levels[2] == 80, "TestService.test_apply_fan_levels_complex_three_zone_overlap: zone 2 should cache 80"
 
     def test_apply_fan_levels_all_controllers_last_level_zero(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with last_level=0. It contains the following steps:
@@ -1604,8 +1604,8 @@ class TestService:
         result = service._check_shared_zones()  # pylint: disable=protected-access
         assert result == {1, 2}, "Should detect shared zones 1 and 2"
         log_output = str(mock_log_msg.call_args_list)
-        assert "Shared IPMI zone 1" in log_output
-        assert "Shared IPMI zone 2" in log_output
+        assert "Shared IPMI zone 1" in log_output, "TestService.test_check_shared_zones_three_plus_zones_partial_overlap: zone 1 should be logged"
+        assert "Shared IPMI zone 2" in log_output, "TestService.test_check_shared_zones_three_plus_zones_partial_overlap: zone 2 should be logged"
 
     def test_apply_fan_levels_multi_zone_deferred_caching(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with multi-zone caching.
@@ -1639,9 +1639,9 @@ class TestService:
 
         # First call - should set both zones
         service._apply_fan_levels()  # pylint: disable=protected-access
-        assert mock_set_fan_level.call_count == 2
-        assert service.applied_levels[0] == 60
-        assert service.applied_levels[1] == 60
+        assert mock_set_fan_level.call_count == 2, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: first call should set both zones"
+        assert service.applied_levels[0] == 60, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: zone 0 should cache 60"
+        assert service.applied_levels[1] == 60, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: zone 1 should cache 60"
 
         # Second call with same level - should NOT make IPMI calls (cached)
         mock_set_fan_level.reset_mock()
@@ -1652,9 +1652,9 @@ class TestService:
         cpu_fc.last_level = 80
         mock_set_fan_level.reset_mock()
         service._apply_fan_levels()  # pylint: disable=protected-access
-        assert mock_set_fan_level.call_count == 2
-        assert service.applied_levels[0] == 80
-        assert service.applied_levels[1] == 80
+        assert mock_set_fan_level.call_count == 2, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: third call should update both zones"
+        assert service.applied_levels[0] == 80, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: zone 0 should cache 80"
+        assert service.applied_levels[1] == 80, "TestService.test_apply_fan_levels_multi_zone_deferred_caching: zone 1 should cache 80"
 
 
 # End.

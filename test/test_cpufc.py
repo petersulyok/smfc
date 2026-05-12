@@ -19,31 +19,31 @@ class TestCpuFc:
 
     @pytest.mark.parametrize(
         "count, ipmi_zone, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, "
-        "smoothing, error",
+        "smoothing, error_str",
         [
             # 1 CPU, zone 0, CALC_MIN
-            (1, [0], Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 1"),
+            (1, [0], Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() p1"),
             # 2 CPUs, zone 1, CALC_MIN
-            (2, [1], Config.CALC_MIN, 6, 5, 3, 35, 55, 36, 99, 1, "CpuFc.__init__() 2"),
+            (2, [1], Config.CALC_MIN, 6, 5, 3, 35, 55, 36, 99, 1, "CpuFc.__init__() p2"),
             # 4 CPUs, zone 2, CALC_MIN
-            (4, [2], Config.CALC_MIN, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 3"),
+            (4, [2], Config.CALC_MIN, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() p3"),
             # 1 CPU, zone 3, CALC_AVG
-            (1, [3], Config.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 4"),
+            (1, [3], Config.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() p4"),
             # 2 CPUs, zone 4, CALC_AVG, smoothing=4
-            (2, [4], Config.CALC_AVG, 6, 5, 3, 35, 55, 36, 99, 4, "CpuFc.__init__() 5"),
+            (2, [4], Config.CALC_AVG, 6, 5, 3, 35, 55, 36, 99, 4, "CpuFc.__init__() p5"),
             # 4 CPUs, zone 5, CALC_AVG
-            (4, [5], Config.CALC_AVG, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 6"),
+            (4, [5], Config.CALC_AVG, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() p6"),
             # 1 CPU, zone 6, CALC_MAX
-            (1, [6], Config.CALC_MAX, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() 7"),
+            (1, [6], Config.CALC_MAX, 5, 4, 2, 30, 50, 35, 100, 1, "CpuFc.__init__() p7"),
             # 2 CPUs, zone 7, CALC_MAX
-            (2, [7], Config.CALC_MAX, 6, 5, 3, 35, 55, 36, 99, 1, "CpuFc.__init__() 8"),
+            (2, [7], Config.CALC_MAX, 6, 5, 3, 35, 55, 36, 99, 1, "CpuFc.__init__() p8"),
             # 4 CPUs, zone 8, CALC_MAX
-            (4, [8], Config.CALC_MAX, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() 9"),
+            (4, [8], Config.CALC_MAX, 7, 6, 4, 40, 60, 37, 98, 1, "CpuFc.__init__() p9"),
         ]
     )
     def test_init_p1(self, mocker: MockerFixture, count: int, ipmi_zone: List[int], temp_calc: int, steps: int,
                      sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
-                     max_level: int, smoothing: int, error: str):
+                     max_level: int, smoothing: int, error_str: str):
         """Positive unit test for CpuFc.__init__() method. It contains the following steps:
         - mock print(), pyudev.Context.list_devices(), smfc.FanController.get_hwmon_path() functions
         - create CPU config using factory function
@@ -70,25 +70,25 @@ class TestCpuFc:
         my_ipmi = Ipmi.__new__(Ipmi)
         my_udevc = pyudev.Context.__new__(pyudev.Context)
         my_cpufc = CpuFc(my_log, my_udevc, my_ipmi, cfg)
-        assert my_cpufc.log == my_log, error
-        assert my_cpufc.ipmi == my_ipmi
-        assert my_cpufc.config.ipmi_zone == ipmi_zone, error
-        assert my_cpufc.name == cfg.section, error
-        assert my_cpufc.count == count, error
-        assert my_cpufc.config.temp_calc == temp_calc, error
-        assert my_cpufc.config.steps == steps, error
-        assert my_cpufc.config.sensitivity == sensitivity, error
-        assert my_cpufc.config.polling == polling, error
-        assert my_cpufc.config.min_temp == min_temp, error
-        assert my_cpufc.config.max_temp == max_temp, error
-        assert my_cpufc.config.min_level == min_level, error
-        assert my_cpufc.config.max_level == max_level, error
-        assert my_cpufc.config.smoothing == smoothing, error
-        assert my_cpufc.hwmon_path == my_td.cpu_files, error
+        assert my_cpufc.log == my_log, error_str
+        assert my_cpufc.ipmi == my_ipmi, error_str
+        assert my_cpufc.config.ipmi_zone == ipmi_zone, error_str
+        assert my_cpufc.name == cfg.section, error_str
+        assert my_cpufc.count == count, error_str
+        assert my_cpufc.config.temp_calc == temp_calc, error_str
+        assert my_cpufc.config.steps == steps, error_str
+        assert my_cpufc.config.sensitivity == sensitivity, error_str
+        assert my_cpufc.config.polling == polling, error_str
+        assert my_cpufc.config.min_temp == min_temp, error_str
+        assert my_cpufc.config.max_temp == max_temp, error_str
+        assert my_cpufc.config.min_level == min_level, error_str
+        assert my_cpufc.config.max_level == max_level, error_str
+        assert my_cpufc.config.smoothing == smoothing, error_str
+        assert my_cpufc.hwmon_path == my_td.cpu_files, error_str
         del my_td
 
-    @pytest.mark.parametrize("error", [("CpuFc.__init__() 10")])
-    def test_init_p2(self, mocker: MockerFixture, error: str):
+    @pytest.mark.parametrize("error_str", [("CpuFc.__init__() p10")])
+    def test_init_p2(self, mocker: MockerFixture, error_str: str):
         """Positive unit test for CpuFc.__init__() method. It contains the following steps:
         - mock print(), pyudev.Context.list_devices(), smfc.FanController.get_hwmon_path() functions
         - create CPU config using factory function with default values
@@ -113,25 +113,25 @@ class TestCpuFc:
         my_ipmi = Ipmi.__new__(Ipmi)
         my_udevc = pyudev.Context.__new__(pyudev.Context)
         my_cpufc = CpuFc(my_log, my_udevc, my_ipmi, cfg)
-        assert my_cpufc.log == my_log, error
-        assert my_cpufc.ipmi == my_ipmi
-        assert my_cpufc.config.ipmi_zone == [Config.CPU_ZONE], error
-        assert my_cpufc.name == cfg.section, error
-        assert my_cpufc.count == 1, error
-        assert my_cpufc.config.temp_calc == Config.CALC_AVG, error
-        assert my_cpufc.config.steps == Config.DV_CPU_STEPS, error
-        assert my_cpufc.config.sensitivity == Config.DV_CPU_SENSITIVITY, error
-        assert my_cpufc.config.polling == Config.DV_CPU_POLLING, error
-        assert my_cpufc.config.min_temp == Config.DV_CPU_MIN_TEMP, error
-        assert my_cpufc.config.max_temp == Config.DV_CPU_MAX_TEMP, error
-        assert my_cpufc.config.min_level == Config.DV_CPU_MIN_LEVEL, error
-        assert my_cpufc.config.max_level == Config.DV_CPU_MAX_LEVEL, error
-        assert my_cpufc.config.smoothing == Config.DV_CPU_SMOOTHING, error
-        assert my_cpufc.hwmon_path == my_td.cpu_files, error
+        assert my_cpufc.log == my_log, error_str
+        assert my_cpufc.ipmi == my_ipmi, error_str
+        assert my_cpufc.config.ipmi_zone == [Config.CPU_ZONE], error_str
+        assert my_cpufc.name == cfg.section, error_str
+        assert my_cpufc.count == 1, error_str
+        assert my_cpufc.config.temp_calc == Config.CALC_AVG, error_str
+        assert my_cpufc.config.steps == Config.DV_CPU_STEPS, error_str
+        assert my_cpufc.config.sensitivity == Config.DV_CPU_SENSITIVITY, error_str
+        assert my_cpufc.config.polling == Config.DV_CPU_POLLING, error_str
+        assert my_cpufc.config.min_temp == Config.DV_CPU_MIN_TEMP, error_str
+        assert my_cpufc.config.max_temp == Config.DV_CPU_MAX_TEMP, error_str
+        assert my_cpufc.config.min_level == Config.DV_CPU_MIN_LEVEL, error_str
+        assert my_cpufc.config.max_level == Config.DV_CPU_MAX_LEVEL, error_str
+        assert my_cpufc.config.smoothing == Config.DV_CPU_SMOOTHING, error_str
+        assert my_cpufc.hwmon_path == my_td.cpu_files, error_str
         del my_td
 
-    @pytest.mark.parametrize("error", [("CpuFc.__init__() 11")])
-    def test_init_n(self, mocker: MockerFixture, error: str):
+    @pytest.mark.parametrize("error_str", [("CpuFc.__init__() n1")])
+    def test_init_n(self, mocker: MockerFixture, error_str: str):
         """Negative unit test for CpuFc.__init__() method. It contains the following steps:
         - mock print(), pyudev.Context.list_devices(), smfc.FanController.get_hwmon_path() functions
         - create CPU config using factory function
@@ -151,29 +151,30 @@ class TestCpuFc:
         my_udevc = pyudev.Context.__new__(pyudev.Context)
         with pytest.raises(Exception) as cm:
             CpuFc(my_log, my_udevc, my_ipmi, cfg)
-        assert cm.type is RuntimeError, error
+        assert cm.type is RuntimeError, error_str
 
     # pylint: disable=protected-access
     @pytest.mark.parametrize(
-        "count, index, temperatures, error",
+        "count, index, temperatures, error_str",
         [
             # 1 CPU, index 0
-            (1, 0, [38.5], "CpuFc._get_nth_temp() 1"),
+            (1, 0, [38.5], "CpuFc._get_nth_temp() p1"),
             # 2 CPUs, index 0
-            (2, 0, [38.5, 40.5], "CpuFc._get_nth_temp() 2"),
+            (2, 0, [38.5, 40.5], "CpuFc._get_nth_temp() p2"),
             # 2 CPUs, index 1
-            (2, 1, [38.5, 40.5], "CpuFc._get_nth_temp() 3"),
+            (2, 1, [38.5, 40.5], "CpuFc._get_nth_temp() p3"),
             # 4 CPUs, index 0
-            (4, 0, [38.5, 40.5, 42.5, 44.5], "CpuFc._get_nth_temp() 4"),
+            (4, 0, [38.5, 40.5, 42.5, 44.5], "CpuFc._get_nth_temp() p4"),
             # 4 CPUs, index 1
-            (4, 1, [38.5, 40.5, 42.5, 44.5], "CpuFc._get_nth_temp() 5"),
+            (4, 1, [38.5, 40.5, 42.5, 44.5], "CpuFc._get_nth_temp() p5"),
             # 4 CPUs, index 2
-            (4, 2, [38.5, 40.5, 42.5, 44.5], "CpuFc._get_nth_temp() 6"),
+            (4, 2, [38.5, 40.5, 42.5, 44.5], "CpuFc._get_nth_temp() p6"),
             # 4 CPUs, index 3
-            (4, 3, [38.5, 40.5, 42.5, 44.5], "CpuFc._get_nth_temp() 7"),
+            (4, 3, [38.5, 40.5, 42.5, 44.5], "CpuFc._get_nth_temp() p7"),
         ],
     )
-    def test_get_nth_temp_p(self, mocker: MockerFixture, count: int, index: int, temperatures: List[float], error: str):
+    def test_get_nth_temp_p(self, mocker: MockerFixture, count: int, index: int, temperatures: List[float],
+                            error_str: str):
         """Positive unit test for CpuFc._get_nth_temp() method. It contains the following steps:
         - mock print(), pyudev.Context.list_devices(), smfc.FanController.get_hwmon_path() functions
         - create CPU config using factory function
@@ -197,21 +198,21 @@ class TestCpuFc:
         my_ipmi = Ipmi.__new__(Ipmi)
         my_udevc = pyudev.Context.__new__(pyudev.Context)
         my_cpuzone = CpuFc(my_log, my_udevc, my_ipmi, cfg)
-        assert my_cpuzone._get_nth_temp(index) == temperatures[index], error
+        assert my_cpuzone._get_nth_temp(index) == temperatures[index], error_str
         del my_td
 
     @pytest.mark.parametrize(
-        "operation, error",
+        "operation, error_str",
         [
             # FileNotFoundError - delete file
-            (1, "CpuFc._get_nth_temp() 8"),
+            (1, "CpuFc._get_nth_temp() n1"),
             # ValueError - invalid numeric value
-            (2, "CpuFc._get_nth_temp() 9"),
+            (2, "CpuFc._get_nth_temp() n2"),
             # IndexError - index overflow
-            (3, "CpuFc._get_nth_temp() 10"),
+            (3, "CpuFc._get_nth_temp() n3"),
         ],
     )
-    def test_get_nth_temp_n(self, mocker: MockerFixture, operation: int, error: str):
+    def test_get_nth_temp_n(self, mocker: MockerFixture, operation: int, error_str: str):
         """Negative unit test for CpuFc._get_nth_temp() method. It contains the following steps:
         - mock print(), pyudev.Context.list_devices(), smfc.FanController.get_hwmon_path() functions
         - create CPU config using factory function
@@ -249,7 +250,7 @@ class TestCpuFc:
             index = 100
         with pytest.raises(Exception) as cm:
             my_cpuzone._get_nth_temp(index)
-        assert cm.type in [IOError, FileNotFoundError, ValueError, IndexError], error
+        assert cm.type in [IOError, FileNotFoundError, ValueError, IndexError], error_str
         del my_td
 
     # pylint: enable=protected-access

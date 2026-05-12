@@ -31,16 +31,16 @@ class TestIpmi:
     """Unit test class for smfc.Ipmi() class"""
 
     @pytest.mark.parametrize(
-        "mode_delay, level_delay, remote_pars, sudo, error",
+        "mode_delay, level_delay, remote_pars, sudo, error_str",
         [
             # Local mode, sudo=False
-            (10, 2, "", False, "Ipmi.__init__() 1"),
+            (10, 2, "", False, "Ipmi.__init__() p1"),
             # Remote mode via lanplus, sudo=True
-            (2, 10, "-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1", True, "Ipmi.__init__() 2"),
+            (2, 10, "-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1", True, "Ipmi.__init__() p2"),
         ],
     )
     def test_init_p1(self, mocker: MockerFixture, mode_delay: int, level_delay: int, remote_pars: str, sudo: bool,
-                     error: str) -> None:
+                     error_str: str) -> None:
         """Positive unit test function for Ipmi.__init__() method. It contains the following steps:
         - create a shell script for IPMI command
         - mock print() function
@@ -62,41 +62,41 @@ class TestIpmi:
                                  remote_parameters=remote_pars)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, cfg, sudo)
-        assert my_ipmi.config.command == command, error
-        assert my_ipmi.config.fan_mode_delay == mode_delay, error
-        assert my_ipmi.config.fan_level_delay == level_delay, error
-        assert my_ipmi.config.remote_parameters == remote_pars, error
-        assert mock_print.call_count == 11, error  # Ipmi-11
-        assert my_ipmi.sudo == sudo, error
-        assert my_ipmi.bmc_device_id == 32, error
-        assert my_ipmi.bmc_device_rev == 1, error
-        assert my_ipmi.bmc_firmware_rev == "1.74", error
-        assert my_ipmi.bmc_ipmi_version == "2.0", error
-        assert my_ipmi.bmc_manufacturer_id == 10876, error
-        assert my_ipmi.bmc_manufacturer_name == "Super Micro Computer Inc.", error
-        assert my_ipmi.bmc_product_id == 6929, error
-        assert my_ipmi.bmc_product_name == "X11SCH-LN4F", error
+        assert my_ipmi.config.command == command, error_str
+        assert my_ipmi.config.fan_mode_delay == mode_delay, error_str
+        assert my_ipmi.config.fan_level_delay == level_delay, error_str
+        assert my_ipmi.config.remote_parameters == remote_pars, error_str
+        assert mock_print.call_count == 11, error_str  # Ipmi-11
+        assert my_ipmi.sudo == sudo, error_str
+        assert my_ipmi.bmc_device_id == 32, error_str
+        assert my_ipmi.bmc_device_rev == 1, error_str
+        assert my_ipmi.bmc_firmware_rev == "1.74", error_str
+        assert my_ipmi.bmc_ipmi_version == "2.0", error_str
+        assert my_ipmi.bmc_manufacturer_id == 10876, error_str
+        assert my_ipmi.bmc_manufacturer_name == "Super Micro Computer Inc.", error_str
+        assert my_ipmi.bmc_product_id == 6929, error_str
+        assert my_ipmi.bmc_product_name == "X11SCH-LN4F", error_str
         del my_td
 
     @pytest.mark.parametrize(
-        "case, cmd_exists, mode_delay, level_delay, remote_pars, exception, error",
+        "case, cmd_exists, mode_delay, level_delay, remote_pars, exception, error_str",
         [
             # Invalid mode_delay (negative)
-            (0, True, -1, 2, None, ValueError, "Ipmi.__init__() 3"),
+            (0, True, -1, 2, None, ValueError, "Ipmi.__init__() n1"),
             # Invalid level_delay (negative)
-            (1, True, 10, -2, "-I lanplus", ValueError, "Ipmi.__init__() 4"),
+            (1, True, 10, -2, "-I lanplus", ValueError, "Ipmi.__init__() n2"),
             # Command file does not exist
-            (2, False, 1, 1, "", FileNotFoundError, "Ipmi.__init__() 5"),
+            (2, False, 1, 1, "", FileNotFoundError, "Ipmi.__init__() n3"),
             # sudo error
-            (3, True, 1, 1, "-I lanplus", RuntimeError, "Ipmi.__init__() 6"),
+            (3, True, 1, 1, "-I lanplus", RuntimeError, "Ipmi.__init__() n4"),
             # ipmitool error, but recovered
-            (4, True, 1, 1, "", RuntimeError, "Ipmi.__init__() 7"),
+            (4, True, 1, 1, "", RuntimeError, "Ipmi.__init__() n5"),
             # ipmitool error with exit
-            (5, True, 1, 1, "", RuntimeError, "Ipmi.__init__() 8"),
+            (5, True, 1, 1, "", RuntimeError, "Ipmi.__init__() n6"),
         ],
     )
     def test_init_n1(self, mocker: MockerFixture, case: int, cmd_exists: bool, mode_delay: int, level_delay: int,
-                     remote_pars: str, exception: Any, error: str,) -> None:
+                     remote_pars: str, exception: Any, error_str: str,) -> None:
         """Negative unit test for Ipmi.__init__() method. It contains the following steps:
         - create a shell script depending on `cmd_exists` flag
         - initialize a Config, Log, Ipmi classes
@@ -140,37 +140,37 @@ class TestIpmi:
         my_log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
         if case == 4:
             Ipmi(my_log, cfg, False)
-            assert wait_time >= Ipmi.BMC_INIT_TIMEOUT / 2, error
+            assert wait_time >= Ipmi.BMC_INIT_TIMEOUT / 2, error_str
         else:
             with pytest.raises(Exception) as cm:
                 Ipmi(my_log, cfg, False)
-            assert cm.type is exception, error
+            assert cm.type is exception, error_str
         del my_td
 
     # pylint: disable=duplicate-code, protected-access
     @pytest.mark.parametrize(
-        "args, remote_args, sudo, error",
+        "args, remote_args, sudo, error_str",
         [
             # With args, no remote, no sudo
-            (["1", "2", "3", "4", "5"], "", False, "Ipmi.exec() 1"),
+            (["1", "2", "3", "4", "5"], "", False, "Ipmi.exec() p1"),
             # With args, no remote, with sudo
-            (["1", "2", "3", "4", "5"], "", True, "Ipmi.exec() 2"),
+            (["1", "2", "3", "4", "5"], "", True, "Ipmi.exec() p2"),
             # With args, with remote, no sudo
-            (["1", "2", "3", "4", "5"], "-I lanplus", False, "Ipmi.exec() 3"),
+            (["1", "2", "3", "4", "5"], "-I lanplus", False, "Ipmi.exec() p3"),
             # With args, with remote, with sudo
-            (["1", "2", "3", "4", "5"], "-I lanplus", True, "Ipmi.exec() 4"),
+            (["1", "2", "3", "4", "5"], "-I lanplus", True, "Ipmi.exec() p4"),
             # No args, no remote, no sudo
-            ([], "", False, "Ipmi.exec() 5"),
+            ([], "", False, "Ipmi.exec() p5"),
             # No args, no remote, with sudo
-            ([], "", True, "Ipmi.exec() 6"),
+            ([], "", True, "Ipmi.exec() p6"),
             # No args, with remote, no sudo
-            ([], "-I lanplus", False, "Ipmi.exec() 7"),
+            ([], "-I lanplus", False, "Ipmi.exec() p7"),
             # No args, with remote, with sudo
-            ([], "-I lanplus", True, "Ipmi.exec() 8"),
+            ([], "-I lanplus", True, "Ipmi.exec() p8"),
         ],
     )
     def test_exec_ipmitool_p(self, mocker: MockerFixture, args: List[str], remote_args: str, sudo: bool,
-                             error: str) -> None:
+                             error_str: str) -> None:
         """Positive unit test for Ipmi.exec() method. It contains the following steps:
         - mock print(), subprocess.run() functions
         - create an Ipmi classes
@@ -199,21 +199,21 @@ class TestIpmi:
         mock_subprocess_run.assert_called_with(
             expected, check=False, capture_output=True, text=True
         )
-        assert mock_subprocess_run.call_count == 1, error
+        assert mock_subprocess_run.call_count == 1, error_str
 
     @pytest.mark.parametrize(
-        "ipmi_command, sudo, rc, exception, error",
+        "ipmi_command, sudo, rc, exception, error_str",
         [
             # Non-existent command path
-            ("/nonexistent/command", False, 0, FileNotFoundError, "Ipmi.exec() 9"),
+            ("/nonexistent/command", False, 0, FileNotFoundError, "Ipmi.exec() n1"),
             # Non-zero return code with sudo
-            ("", True, 1, RuntimeError, "Ipmi.exec() 10"),
+            ("", True, 1, RuntimeError, "Ipmi.exec() n2"),
             # Non-zero return code without sudo
-            ("", False, 1, RuntimeError, "Ipmi.exec() 10"),
+            ("", False, 1, RuntimeError, "Ipmi.exec() n3"),
         ],
     )
     def test_exec_ipmitool_n(self, mocker: MockerFixture, ipmi_command, sudo: bool, rc: int, exception: Any,
-                             error: str) -> None:
+                             error_str: str) -> None:
         """Negative unit test for Ipmi.exec() method. It contains the following steps:
         - create a shell script for IPMI command
         - mock print(), subprocess.run() functions
@@ -237,24 +237,24 @@ class TestIpmi:
         my_ipmi.sudo = sudo
         with pytest.raises(Exception) as cm:
             my_ipmi._exec_ipmitool(["1", "2", "3"])
-        assert cm.type == exception, error
+        assert cm.type == exception, error_str
 
     # pylint: enable=duplicate-code, protected-access
 
     @pytest.mark.parametrize(
-        "expected_mode, error",
+        "expected_mode, error_str",
         [
             # STANDARD mode
-            (Ipmi.STANDARD_MODE, "Ipmi.get_fan_mode() 1"),
+            (Ipmi.STANDARD_MODE, "Ipmi.get_fan_mode() p1"),
             # FULL mode
-            (Ipmi.FULL_MODE, "Ipmi.get_fan_mode() 2"),
+            (Ipmi.FULL_MODE, "Ipmi.get_fan_mode() p2"),
             # OPTIMAL mode
-            (Ipmi.OPTIMAL_MODE, "Ipmi.get_fan_mode() 3"),
+            (Ipmi.OPTIMAL_MODE, "Ipmi.get_fan_mode() p3"),
             # HEAVY_IO mode
-            (Ipmi.HEAVY_IO_MODE, "Ipmi.get_fan_mode() 4"),
+            (Ipmi.HEAVY_IO_MODE, "Ipmi.get_fan_mode() p4"),
         ],
     )
-    def test_get_fan_mode_p1(self, mocker: MockerFixture, expected_mode: int, error: str) -> None:
+    def test_get_fan_mode_p1(self, mocker: MockerFixture, expected_mode: int, error_str: str) -> None:
         """Positive unit test for Ipmi.get_fan_mode() method. It contains the following steps:
         - mock _exec_ipmitool() function
         - create an empty Ipmi class
@@ -265,18 +265,18 @@ class TestIpmi:
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
-        assert my_ipmi.get_fan_mode() == expected_mode, error
+        assert my_ipmi.get_fan_mode() == expected_mode, error_str
 
     @pytest.mark.parametrize(
-        "value, exception, error",
+        "value, exception, error_str",
         [
             # Invalid output: "NA"
-            ("NA", ValueError, "Ipmi.get_fan_mode() 5"),
+            ("NA", ValueError, "Ipmi.get_fan_mode() n1"),
             # Invalid output: empty string
-            ("", ValueError, "Ipmi.get_fan_mode() 6"),
+            ("", ValueError, "Ipmi.get_fan_mode() n2"),
         ],
     )
-    def test_get_fan_mode_n1(self, mocker: MockerFixture, value: str, exception: Any, error: str) -> None:
+    def test_get_fan_mode_n1(self, mocker: MockerFixture, value: str, exception: Any, error_str: str) -> None:
         """Negative unit test for Ipmi.get_fan_mode() method. It contains the following steps:
         - mock _exec_ipmitool() function with invalid output
         - create an empty Ipmi class
@@ -290,26 +290,26 @@ class TestIpmi:
         my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
         with pytest.raises(Exception) as cm:
             my_ipmi.get_fan_mode()
-        assert cm.type == exception, error
+        assert cm.type == exception, error_str
 
     @pytest.mark.parametrize(
-        "fm, fms, error",
+        "fm, fms, error_str",
         [
             # STANDARD mode name
-            (Ipmi.STANDARD_MODE, "STANDARD", "Ipmi.get_fan_mode_name() 1"),
+            (Ipmi.STANDARD_MODE, "STANDARD", "Ipmi.get_fan_mode_name() p1"),
             # FULL mode name
-            (Ipmi.FULL_MODE, "FULL", "Ipmi.get_fan_mode_name() 2"),
+            (Ipmi.FULL_MODE, "FULL", "Ipmi.get_fan_mode_name() p2"),
             # OPTIMAL mode name
-            (Ipmi.OPTIMAL_MODE, "OPTIMAL", "Ipmi.get_fan_mode_name() 3"),
+            (Ipmi.OPTIMAL_MODE, "OPTIMAL", "Ipmi.get_fan_mode_name() p3"),
             # PUE mode name
-            (Ipmi.PUE_MODE, "PUE", "Ipmi.get_fan_mode_name() 4"),
+            (Ipmi.PUE_MODE, "PUE", "Ipmi.get_fan_mode_name() p4"),
             # HEAVY_IO mode name
-            (Ipmi.HEAVY_IO_MODE, "HEAVY IO", "Ipmi.get_fan_mode_name() 5"),
+            (Ipmi.HEAVY_IO_MODE, "HEAVY IO", "Ipmi.get_fan_mode_name() p5"),
             # Unknown mode name
-            (100, "UNKNOWN", "Ipmi.get_fan_mode_name() 6"),
+            (100, "UNKNOWN", "Ipmi.get_fan_mode_name() p6"),
         ],
     )
-    def test_get_fan_mode_name(self, fm: int, fms: str, error: str) -> None:
+    def test_get_fan_mode_name(self, fm: int, fms: str, error_str: str) -> None:
         """Positive unit test for Ipmi.get_fan_mode_name() method. It contains the following steps:
         - create a shell script for ipmitool substitution
         - mock print() function
@@ -317,24 +317,24 @@ class TestIpmi:
         - ASSERT: if the get_fan_mode_name() returns with a different string from the expected one
         - delete all instances
         """
-        assert Ipmi.get_fan_mode_name(fm) == fms, error
+        assert Ipmi.get_fan_mode_name(fm) == fms, error_str
 
     @pytest.mark.parametrize(
-        "fan_mode, error",
+        "fan_mode, error_str",
         [
             # STANDARD mode
-            (Ipmi.STANDARD_MODE, "Ipmi.set_fan_mode() 1"),
+            (Ipmi.STANDARD_MODE, "Ipmi.set_fan_mode() p1"),
             # FULL mode
-            (Ipmi.FULL_MODE, "Ipmi.set_fan_mode() 2"),
+            (Ipmi.FULL_MODE, "Ipmi.set_fan_mode() p2"),
             # OPTIMAL mode
-            (Ipmi.OPTIMAL_MODE, "Ipmi.set_fan_mode() 3"),
+            (Ipmi.OPTIMAL_MODE, "Ipmi.set_fan_mode() p3"),
             # PUE mode
-            (Ipmi.PUE_MODE, "Ipmi.set_fan_mode() 4"),
+            (Ipmi.PUE_MODE, "Ipmi.set_fan_mode() p4"),
             # HEAVY_IO mode
-            (Ipmi.HEAVY_IO_MODE, "Ipmi.set_fan_mode() 5"),
+            (Ipmi.HEAVY_IO_MODE, "Ipmi.set_fan_mode() p5"),
         ],
     )
-    def test_set_fan_mode_p1(self, mocker: MockerFixture, fan_mode: int, error: str) -> None:
+    def test_set_fan_mode_p1(self, mocker: MockerFixture, fan_mode: int, error_str: str) -> None:
         """Positive unit test for Ipmi.set_fan_mode() method. It contains the following steps:
         - mock Ipmi.exec() and time.sleep() functions
         - create an empty Ipmi class
@@ -352,20 +352,20 @@ class TestIpmi:
         mock_ipmi_exec.assert_called_with(
             ["raw", "0x30", "0x45", "0x01", f"0x{fan_mode:02x}"]
         )
-        assert mock_ipmi_exec.call_count == 1, error
+        assert mock_ipmi_exec.call_count == 1, error_str
         mock_time_sleep.assert_called_with(my_ipmi.config.fan_mode_delay)
-        assert mock_time_sleep.call_count == 1, error
+        assert mock_time_sleep.call_count == 1, error_str
 
     @pytest.mark.parametrize(
-        "fan_mode, exception, error",
+        "fan_mode, exception, error_str",
         [
             # Invalid mode: negative
-            (-1, ValueError, "Ipmi.set_fan_mode() 6"),
+            (-1, ValueError, "Ipmi.set_fan_mode() n1"),
             # Invalid mode: over valid range
-            (100, ValueError, "Ipmi.set_fan_mode() 7"),
+            (100, ValueError, "Ipmi.set_fan_mode() n2"),
         ],
     )
-    def test_set_fan_mode_n1(self, mocker: MockerFixture, fan_mode: int, exception: Any, error: str) -> None:
+    def test_set_fan_mode_n1(self, mocker: MockerFixture, fan_mode: int, exception: Any, error_str: str) -> None:
         """Negative unit test for Ipmi.set_fan_mode(). It contains the following steps:
         - mock Ipmi.exec() function
         - create an empty Ipmi class
@@ -380,26 +380,26 @@ class TestIpmi:
         my_ipmi.sudo = False
         with pytest.raises(ValueError) as cm:
             my_ipmi.set_fan_mode(fan_mode)
-        assert cm.type == exception, error
+        assert cm.type == exception, error_str
 
     @pytest.mark.parametrize(
-        "zone, level, error",
+        "zone, level, error_str",
         [
             # Zone 0, level 0 (min)
-            (0, 0, "Ipmi.set_fan_level() 1"),
+            (0, 0, "Ipmi.set_fan_level() p1"),
             # Zone 0, level 50 (mid)
-            (0, 50, "Ipmi.set_fan_level() 2"),
+            (0, 50, "Ipmi.set_fan_level() p2"),
             # Zone 0, level 100 (max)
-            (0, 100, "Ipmi.set_fan_level() 3"),
+            (0, 100, "Ipmi.set_fan_level() p3"),
             # Zone 1, level 0 (min)
-            (1, 0, "Ipmi.set_fan_level() 4"),
+            (1, 0, "Ipmi.set_fan_level() p4"),
             # Zone 1, level 50 (mid)
-            (1, 50, "Ipmi.set_fan_level() 5"),
+            (1, 50, "Ipmi.set_fan_level() p5"),
             # Zone 1, level 100 (max)
-            (1, 100, "Ipmi.set_fan_level() 6"),
+            (1, 100, "Ipmi.set_fan_level() p6"),
         ],
     )
-    def test_set_fan_level_p1(self, mocker: MockerFixture, zone: int, level: int, error: str) -> None:
+    def test_set_fan_level_p1(self, mocker: MockerFixture, zone: int, level: int, error_str: str) -> None:
         """Positive unit test for Ipmi.set_fan_level() method. It contains the following steps:
         - mock Ipmi._exec_ipmitool() and time.sleep() functions
         - create an empty Ipmi class
@@ -417,24 +417,24 @@ class TestIpmi:
         mock_ipmi_exec.assert_called_with(
             ["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{level:02x}"]
         )
-        assert mock_ipmi_exec.call_count == 1, error
+        assert mock_ipmi_exec.call_count == 1, error_str
         mock_time_sleep.assert_called_with(my_ipmi.config.fan_level_delay)
-        assert mock_time_sleep.call_count == 1, error
+        assert mock_time_sleep.call_count == 1, error_str
 
     @pytest.mark.parametrize(
-        "zone, level, error",
+        "zone, level, error_str",
         [
             # Invalid level: negative
-            (Ipmi.CPU_ZONE, -1, "Ipmi.set_fan_level() 7"),
+            (Ipmi.CPU_ZONE, -1, "Ipmi.set_fan_level() n1"),
             # Invalid level: over 100
-            (Ipmi.CPU_ZONE, 101, "Ipmi.set_fan_level() 8"),
+            (Ipmi.CPU_ZONE, 101, "Ipmi.set_fan_level() n2"),
             # Invalid zone: negative
-            (-1, 50, "Ipmi.set_fan_level() 9"),
+            (-1, 50, "Ipmi.set_fan_level() n3"),
             # Invalid zone: over 100
-            (101, 50, "Ipmi.set_fan_level() 10"),
+            (101, 50, "Ipmi.set_fan_level() n4"),
         ],
     )
-    def test_set_fan_level_n1(self, mocker: MockerFixture, zone: int, level: int, error: str) -> None:
+    def test_set_fan_level_n1(self, mocker: MockerFixture, zone: int, level: int, error_str: str) -> None:
         """Negative unit test for Ipmi.set_fan_level() method. It contains the following steps:
         - mock Ipmi.exec() function
         - create an empty Ipmi class
@@ -449,20 +449,21 @@ class TestIpmi:
         my_ipmi.sudo = False
         with pytest.raises(ValueError) as cm:
             my_ipmi.set_fan_level(zone, level)
-        assert cm.type is ValueError, error
+        assert cm.type is ValueError, error_str
 
     @pytest.mark.parametrize(
-        "zones, level, error",
+        "zones, level, error_str",
         [
             # Single zone, level 0
-            ([0], 0, "Ipmi.set_multiple_fan_levels() 1"),
+            ([0], 0, "Ipmi.set_multiple_fan_levels() p1"),
             # Two zones, level 50
-            ([0, 1], 50, "Ipmi.set_multiple_fan_levels() 2"),
+            ([0, 1], 50, "Ipmi.set_multiple_fan_levels() p2"),
             # Three zones, level 100
-            ([0, 1, 2], 100, "Ipmi.set_multiple_fan_levels() 3"),
+            ([0, 1, 2], 100, "Ipmi.set_multiple_fan_levels() p3"),
         ],
     )
-    def test_set_multiple_fan_levels_p1(self, mocker: MockerFixture, zones: List[int], level: int, error: str) -> None:
+    def test_set_multiple_fan_levels_p1(self, mocker: MockerFixture, zones: List[int], level: int,
+                                        error_str: str) -> None:
         """Positive unit test for Ipmi.set_multiple_fan_levels() method. It contains the following steps:
         - mock Ipmi._exec_ipmitool() and time.sleep() functions
         - create an empty Ipmi class
@@ -483,28 +484,29 @@ class TestIpmi:
             calls.append(call(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{z:02x}", f"0x{level:02x}"]))
         # pylint: enable=duplicate-code
         mock_ipmi_exec.assert_has_calls(calls)
-        assert mock_ipmi_exec.call_count == len(zones), error
+        assert mock_ipmi_exec.call_count == len(zones), error_str
         mock_time_sleep.assert_called_with(my_ipmi.config.fan_level_delay)
-        assert mock_time_sleep.call_count == 1, error
+        assert mock_time_sleep.call_count == 1, error_str
 
     @pytest.mark.parametrize(
-        "zones, level, error",
+        "zones, level, error_str",
         [
             # Invalid level: negative
-            ([0], -1, "Ipmi.set_multiple_fan_levels() 4"),
+            ([0], -1, "Ipmi.set_multiple_fan_levels() n1"),
             # Invalid level: over 100
-            ([0], 101, "Ipmi.set_multiple_fan_levels() 5"),
+            ([0], 101, "Ipmi.set_multiple_fan_levels() n2"),
             # Invalid zone: negative
-            ([-1], 50, "Ipmi.set_multiple_fan_levels() 6"),
+            ([-1], 50, "Ipmi.set_multiple_fan_levels() n3"),
             # Invalid zone: over 100
-            ([101], 50, "Ipmi.set_multiple_fan_levels() 7"),
+            ([101], 50, "Ipmi.set_multiple_fan_levels() n4"),
             # Invalid zone in list: negative
-            ([0, -1], 50, "Ipmi.set_multiple_fan_levels() 8"),
+            ([0, -1], 50, "Ipmi.set_multiple_fan_levels() n5"),
             # Invalid zone in list: over 100
-            ([101, 0], 50, "Ipmi.set_multiple_fan_levels() 9"),
+            ([101, 0], 50, "Ipmi.set_multiple_fan_levels() n6"),
         ],
     )
-    def test_set_multiple_fan_levels_n1(self, mocker: MockerFixture, zones: List[int], level: int, error: str) -> None:
+    def test_set_multiple_fan_levels_n1(self, mocker: MockerFixture, zones: List[int], level: int,
+                                        error_str: str) -> None:
         """Negative unit test for Ipmi.set_fan_level() method. It contains the following steps:
         - mock Ipmi.exec() function
         - create an empty Ipmi class
@@ -519,26 +521,26 @@ class TestIpmi:
         my_ipmi.sudo = False
         with pytest.raises(ValueError) as cm:
             my_ipmi.set_multiple_fan_levels(zones, level)
-        assert cm.type is ValueError, error
+        assert cm.type is ValueError, error_str
 
     @pytest.mark.parametrize(
-        "zone, expected_level, error",
+        "zone, expected_level, error_str",
         [
             # CPU zone, level 0
-            (Ipmi.CPU_ZONE, 0, "Ipmi.get_fan_level() 1"),
+            (Ipmi.CPU_ZONE, 0, "Ipmi.get_fan_level() p1"),
             # CPU zone, level 50
-            (Ipmi.CPU_ZONE, 50, "Ipmi.get_fan_level() 2"),
+            (Ipmi.CPU_ZONE, 50, "Ipmi.get_fan_level() p2"),
             # CPU zone, level 100
-            (Ipmi.CPU_ZONE, 100, "Ipmi.get_fan_level() 3"),
+            (Ipmi.CPU_ZONE, 100, "Ipmi.get_fan_level() p3"),
             # HD zone, level 0
-            (Ipmi.HD_ZONE, 0, "Ipmi.get_fan_level() 4"),
+            (Ipmi.HD_ZONE, 0, "Ipmi.get_fan_level() p4"),
             # HD zone, level 50
-            (Ipmi.HD_ZONE, 50, "Ipmi.get_fan_level() 5"),
+            (Ipmi.HD_ZONE, 50, "Ipmi.get_fan_level() p5"),
             # HD zone, level 100
-            (Ipmi.HD_ZONE, 100, "Ipmi.get_fan_level() 6"),
+            (Ipmi.HD_ZONE, 100, "Ipmi.get_fan_level() p6"),
         ],
     )
-    def test_get_fan_level_p1(self, mocker: MockerFixture, zone: int, expected_level: int, error: str) -> None:
+    def test_get_fan_level_p1(self, mocker: MockerFixture, zone: int, expected_level: int, error_str: str) -> None:
         """Positive unit test for Ipmi.get_fan_level() method. It contains the following steps:
         - mock _exec_ipmitool() function
         - create an empty Ipmi class
@@ -549,26 +551,26 @@ class TestIpmi:
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
         my_ipmi = Ipmi.__new__(Ipmi)
         my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
-        assert my_ipmi.get_fan_level(zone) == expected_level, error
+        assert my_ipmi.get_fan_level(zone) == expected_level, error_str
 
     @pytest.mark.parametrize(
-        "zone, level, error",
+        "zone, level, error_str",
         [
             # CPU zone, invalid output "NA"
-            (Ipmi.CPU_ZONE, "NA", "Ipmi.get_fan_level() 7"),
+            (Ipmi.CPU_ZONE, "NA", "Ipmi.get_fan_level() n1"),
             # CPU zone, empty output
-            (Ipmi.CPU_ZONE, "", "Ipmi.get_fan_level() 8"),
+            (Ipmi.CPU_ZONE, "", "Ipmi.get_fan_level() n2"),
             # HD zone, invalid output "NA"
-            (Ipmi.HD_ZONE, "NA", "Ipmi.get_fan_level() 9"),
+            (Ipmi.HD_ZONE, "NA", "Ipmi.get_fan_level() n3"),
             # HD zone, empty output
-            (Ipmi.HD_ZONE, "", "Ipmi.get_fan_level() 10"),
+            (Ipmi.HD_ZONE, "", "Ipmi.get_fan_level() n4"),
             # Invalid zone: negative
-            (-1, "NA", "Ipmi.get_fan_level() 11"),
+            (-1, "NA", "Ipmi.get_fan_level() n5"),
             # Invalid zone: over 100
-            (200, "", "Ipmi.get_fan_level() 12"),
+            (200, "", "Ipmi.get_fan_level() n6"),
         ],
     )
-    def test_get_fan_level_n1(self, mocker: MockerFixture, zone: int, level: str, error: str) -> None:
+    def test_get_fan_level_n1(self, mocker: MockerFixture, zone: int, level: str, error_str: str) -> None:
         """Negative unit test for Ipmi.get_fan_level() method. It contains the following steps:
         - mock _exec_ipmitool() function with invalid output
         - create an empty Ipmi class
@@ -582,18 +584,18 @@ class TestIpmi:
         my_ipmi.platform = GenericPlatform("test", mock_ipmi_exec)
         with pytest.raises(Exception) as cm:
             my_ipmi.get_fan_level(zone)
-        assert cm.type is ValueError, error
+        assert cm.type is ValueError, error_str
 
     @pytest.mark.parametrize(
-        "exception, error",
+        "exception, error_str",
         [
             # RuntimeError exception
-            (RuntimeError, "Ipmi exceptions 1"),
+            (RuntimeError, "Ipmi exceptions p1"),
             # FileNotFoundError exception
-            (FileNotFoundError, "Ipmi exceptions 2"),
+            (FileNotFoundError, "Ipmi exceptions p2"),
         ],
     )
-    def test_exceptions(self, exception: Any, error: str) -> None:
+    def test_exceptions(self, exception: Any, error_str: str) -> None:
         """Negative unit test for Ipmi.get_fan_mode(), Ipmi.set_fan_mode(), Ipmi.set_fan_level(),
         Ipmi.set_multiple_fan_levels(), Ipmi.get_fan_level() methods. It contains the following steps:
         - create an empty Ipmi class with a raising exec function
@@ -611,23 +613,23 @@ class TestIpmi:
 
         with pytest.raises(Exception) as cm:
             my_ipmi.get_fan_mode()
-        assert cm.type == exception, error
+        assert cm.type == exception, error_str
 
         with pytest.raises(Exception) as cm:
             my_ipmi.set_fan_mode(Ipmi.FULL_MODE)
-        assert cm.type == exception, error
+        assert cm.type == exception, error_str
 
         with pytest.raises(Exception) as cm:
             my_ipmi.set_fan_level(Ipmi.CPU_ZONE, 50)
-        assert cm.type == exception, error
+        assert cm.type == exception, error_str
 
         with pytest.raises(Exception) as cm:
             my_ipmi.set_multiple_fan_levels([0], 50)
-        assert cm.type == exception, error
+        assert cm.type == exception, error_str
 
         with pytest.raises(Exception) as cm:
             my_ipmi.get_fan_level(Ipmi.CPU_ZONE)
-        assert cm.type == exception, error
+        assert cm.type == exception, error_str
 
 
 # End.

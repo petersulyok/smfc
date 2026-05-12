@@ -15,17 +15,17 @@ class TestX10QBi:
     """Unit test class for X10QBi platform."""
 
     @pytest.mark.parametrize(
-        "mode, error",
+        "mode, error_str",
         [
             # STANDARD mode
-            (0, "X10QBi.get_fan_mode() 1"),
+            (0, "X10QBi.get_fan_mode() p1"),
             # FULL mode
-            (1, "X10QBi.get_fan_mode() 2"),
+            (1, "X10QBi.get_fan_mode() p2"),
             # HEAVY_IO mode
-            (4, "X10QBi.get_fan_mode() 3"),
+            (4, "X10QBi.get_fan_mode() p3"),
         ],
     )
-    def test_get_fan_mode_p(self, mode: int, error: str) -> None:
+    def test_get_fan_mode_p(self, mode: int, error_str: str) -> None:
         """Positive unit test for X10QBi.get_fan_mode() method. It contains the following steps:
         - create an X10QBi instance with a mock exec function
         - call get_fan_mode()
@@ -35,23 +35,23 @@ class TestX10QBi:
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {mode:02}")
         platform = X10QBi("X10QBi", mock_exec)
-        assert platform.get_fan_mode() == mode, error
+        assert platform.get_fan_mode() == mode, error_str
         mock_exec.assert_called_with(["raw", "0x30", "0x45", "0x00"])
 
     @pytest.mark.parametrize(
-        "zone, hex_output, expected_level, error",
+        "zone, hex_output, expected_level, error_str",
         [
             # Zone 0, level 0x80
-            (0, " 80", 0x80, "X10QBi.get_fan_level() 1"),
+            (0, " 80", 0x80, "X10QBi.get_fan_level() p1"),
             # Zone 1, level 0xFF
-            (1, " ff", 0xFF, "X10QBi.get_fan_level() 2"),
+            (1, " ff", 0xFF, "X10QBi.get_fan_level() p2"),
             # Zone 2, level 0x00
-            (2, " 00", 0x00, "X10QBi.get_fan_level() 3"),
+            (2, " 00", 0x00, "X10QBi.get_fan_level() p3"),
             # Zone 3, level 0x40
-            (3, " 40", 0x40, "X10QBi.get_fan_level() 4"),
+            (3, " 40", 0x40, "X10QBi.get_fan_level() p4"),
         ],
     )
-    def test_get_fan_level_p(self, zone: int, hex_output: str, expected_level: int, error: str) -> None:
+    def test_get_fan_level_p(self, zone: int, hex_output: str, expected_level: int, error_str: str) -> None:
         """Positive unit test for X10QBi.get_fan_level() method. It contains the following steps:
         - create an X10QBi instance with a mock exec function
         - call get_fan_level() with valid zones (0-3)
@@ -61,20 +61,20 @@ class TestX10QBi:
         mock_exec = MagicMock()
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=hex_output)
         platform = X10QBi("X10QBi", mock_exec)
-        assert platform.get_fan_level(zone) == expected_level, error
+        assert platform.get_fan_level(zone) == expected_level, error_str
         reg = 0x10 + zone
         mock_exec.assert_called_with(["raw", "0x30", "0x90", "0x5c", "0x03", f"0x{reg:x}", "0x01"])
 
     @pytest.mark.parametrize(
-        "zone, error",
+        "zone, error_str",
         [
             # Invalid zone: negative
-            (-1, "X10QBi.get_fan_level() 5"),
+            (-1, "X10QBi.get_fan_level() n1"),
             # Invalid zone: over 3
-            (4, "X10QBi.get_fan_level() 6"),
+            (4, "X10QBi.get_fan_level() n2"),
         ],
     )
-    def test_get_fan_level_n(self, zone: int, error: str) -> None:
+    def test_get_fan_level_n(self, zone: int, error_str: str) -> None:
         """Negative unit test for X10QBi.get_fan_level() method. It contains the following steps:
         - create an X10QBi instance with a mock exec function
         - call get_fan_level() with invalid zones (outside 0-3)
@@ -84,7 +84,7 @@ class TestX10QBi:
         platform = X10QBi("X10QBi", mock_exec)
         with pytest.raises(ValueError) as cm:
             platform.get_fan_level(zone)
-        assert cm.type is ValueError, error
+        assert cm.type is ValueError, error_str
 
     def test_set_fan_manual_mode(self) -> None:
         """Positive unit test for X10QBi.set_fan_manual_mode() method. It contains the following steps:
@@ -114,17 +114,17 @@ class TestX10QBi:
         mock_exec.assert_has_calls(expected_calls)
 
     @pytest.mark.parametrize(
-        "mode, error",
+        "mode, error_str",
         [
             # STANDARD mode
-            (FanMode.STANDARD, "X10QBi.set_fan_mode() 1"),
+            (FanMode.STANDARD, "X10QBi.set_fan_mode() p1"),
             # FULL mode
-            (FanMode.FULL, "X10QBi.set_fan_mode() 2"),
+            (FanMode.FULL, "X10QBi.set_fan_mode() p2"),
             # HEAVY_IO mode
-            (FanMode.HEAVY_IO, "X10QBi.set_fan_mode() 3"),
+            (FanMode.HEAVY_IO, "X10QBi.set_fan_mode() p3"),
         ],
     )
-    def test_set_fan_mode_p(self, mode: int, error: str) -> None:
+    def test_set_fan_mode_p(self, mode: int, error_str: str) -> None:
         """Positive unit test for X10QBi.set_fan_mode() method. It contains the following steps:
         - create an X10QBi instance with a mock exec function
         - call set_fan_mode() with valid modes (STANDARD, FULL, HEAVY_IO)
@@ -136,22 +136,22 @@ class TestX10QBi:
         platform = X10QBi("X10QBi", mock_exec)
         platform.set_fan_mode(mode)
         mock_exec.assert_called_with(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
-        assert mock_exec.call_count == 1, error
+        assert mock_exec.call_count == 1, error_str
 
     @pytest.mark.parametrize(
-        "mode, error",
+        "mode, error_str",
         [
             # Invalid mode: OPTIMAL not supported
-            (FanMode.OPTIMAL, "X10QBi.set_fan_mode() 4"),
+            (FanMode.OPTIMAL, "X10QBi.set_fan_mode() n1"),
             # Invalid mode: PUE not supported
-            (FanMode.PUE, "X10QBi.set_fan_mode() 5"),
+            (FanMode.PUE, "X10QBi.set_fan_mode() n2"),
             # Invalid mode: negative value
-            (-1, "X10QBi.set_fan_mode() 6"),
+            (-1, "X10QBi.set_fan_mode() n3"),
             # Invalid mode: value over valid range
-            (100, "X10QBi.set_fan_mode() 7"),
+            (100, "X10QBi.set_fan_mode() n4"),
         ],
     )
-    def test_set_fan_mode_n(self, mode: int, error: str) -> None:
+    def test_set_fan_mode_n(self, mode: int, error_str: str) -> None:
         """Negative unit test for X10QBi.set_fan_mode() method. It contains the following steps:
         - create an X10QBi instance with a mock exec function
         - call set_fan_mode() with invalid modes (OPTIMAL, PUE not supported)
@@ -161,22 +161,22 @@ class TestX10QBi:
         platform = X10QBi("X10QBi", mock_exec)
         with pytest.raises(ValueError) as cm:
             platform.set_fan_mode(mode)
-        assert cm.type is ValueError, error
+        assert cm.type is ValueError, error_str
 
     @pytest.mark.parametrize(
-        "zone, level, expected_normalised, error",
+        "zone, level, expected_normalised, error_str",
         [
             # Zone 0, level 100 (max) -> normalised 255
-            (0, 100, 255, "X10QBi.set_fan_level() 1"),
+            (0, 100, 255, "X10QBi.set_fan_level() p1"),
             # Zone 1, level 50 -> normalised 127
-            (1, 50, 127, "X10QBi.set_fan_level() 2"),
+            (1, 50, 127, "X10QBi.set_fan_level() p2"),
             # Zone 2, level 0 (min) -> normalised 0
-            (2, 0, 0, "X10QBi.set_fan_level() 3"),
+            (2, 0, 0, "X10QBi.set_fan_level() p3"),
             # Zone 3, level 75 -> normalised 191
-            (3, 75, 191, "X10QBi.set_fan_level() 4"),
+            (3, 75, 191, "X10QBi.set_fan_level() p4"),
         ],
     )
-    def test_set_fan_level_p(self, zone: int, level: int, expected_normalised: int, error: str) -> None:
+    def test_set_fan_level_p(self, zone: int, level: int, expected_normalised: int, error_str: str) -> None:
         """Positive unit test for X10QBi.set_fan_level() method. It contains the following steps:
         - create an X10QBi instance with a mock exec function
         - call set_fan_level() with valid zones and levels
@@ -187,26 +187,26 @@ class TestX10QBi:
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
         platform = X10QBi("X10QBi", mock_exec)
         platform.set_fan_level(zone, level)
-        assert mock_exec.call_count == 12, error  # 11 (manual mode) + 1 (set level)
+        assert mock_exec.call_count == 12, error_str  # 11 (manual mode) + 1 (set level)
         reg = 0x10 + zone
         mock_exec.assert_called_with(
             ["raw", "0x30", "0x91", "0x5c", "0x03", f"0x{reg:02x}", f"0x{expected_normalised:02x}"]
         )
 
     @pytest.mark.parametrize(
-        "zone, level, error",
+        "zone, level, error_str",
         [
             # Invalid zone: negative
-            (-1, 50, "X10QBi.set_fan_level() 5"),
+            (-1, 50, "X10QBi.set_fan_level() n1"),
             # Invalid zone: over 3
-            (4, 50, "X10QBi.set_fan_level() 6"),
+            (4, 50, "X10QBi.set_fan_level() n2"),
             # Invalid level: negative
-            (0, -1, "X10QBi.set_fan_level() 7"),
+            (0, -1, "X10QBi.set_fan_level() n3"),
             # Invalid level: over 100
-            (0, 101, "X10QBi.set_fan_level() 8"),
+            (0, 101, "X10QBi.set_fan_level() n4"),
         ],
     )
-    def test_set_fan_level_n(self, zone: int, level: int, error: str) -> None:
+    def test_set_fan_level_n(self, zone: int, level: int, error_str: str) -> None:
         """Negative unit test for X10QBi.set_fan_level() method. It contains the following steps:
         - create an X10QBi instance with a mock exec function
         - call set_fan_level() with invalid zone or level parameters
@@ -216,21 +216,21 @@ class TestX10QBi:
         platform = X10QBi("X10QBi", mock_exec)
         with pytest.raises(ValueError) as cm:
             platform.set_fan_level(zone, level)
-        assert cm.type is ValueError, error
+        assert cm.type is ValueError, error_str
 
     @pytest.mark.parametrize(
-        "zones, level, expected_normalised, error",
+        "zones, level, expected_normalised, error_str",
         [
             # Two zones, level 100 -> normalised 255
-            ([0, 1], 100, 255, "X10QBi.set_multiple_fan_levels() 1"),
+            ([0, 1], 100, 255, "X10QBi.set_multiple_fan_levels() p1"),
             # Four zones, level 50 -> normalised 127
-            ([0, 1, 2, 3], 50, 127, "X10QBi.set_multiple_fan_levels() 2"),
+            ([0, 1, 2, 3], 50, 127, "X10QBi.set_multiple_fan_levels() p2"),
             # Single zone, level 0 -> normalised 0
-            ([2], 0, 0, "X10QBi.set_multiple_fan_levels() 3"),
+            ([2], 0, 0, "X10QBi.set_multiple_fan_levels() p3"),
         ],
     )
     def test_set_multiple_fan_levels_p(self, zones: List[int], level: int, expected_normalised: int,
-                                       error: str) -> None:
+                                       error_str: str) -> None:
         """Positive unit test for X10QBi.set_multiple_fan_levels() method. It contains the following steps:
         - create an X10QBi instance with a mock exec function
         - call set_multiple_fan_levels() with valid zones and level
@@ -241,25 +241,25 @@ class TestX10QBi:
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0)
         platform = X10QBi("X10QBi", mock_exec)
         platform.set_multiple_fan_levels(zones, level)
-        assert mock_exec.call_count == 11 + len(zones), error  # 11 (manual mode) + N zones
+        assert mock_exec.call_count == 11 + len(zones), error_str  # 11 (manual mode) + N zones
         level_hex = f"0x{expected_normalised:02x}"
         zone_calls = [call(["raw", "0x30", "0x91", "0x5c", "0x03", f"0x{0x10 + z:02x}", level_hex]) for z in zones]
         mock_exec.assert_has_calls(zone_calls)
 
     @pytest.mark.parametrize(
-        "zones, level, error",
+        "zones, level, error_str",
         [
             # Invalid zone: negative in list
-            ([-1, 0], 50, "X10QBi.set_multiple_fan_levels() 4"),
+            ([-1, 0], 50, "X10QBi.set_multiple_fan_levels() n1"),
             # Invalid zone: over 3 in list
-            ([0, 4], 50, "X10QBi.set_multiple_fan_levels() 5"),
+            ([0, 4], 50, "X10QBi.set_multiple_fan_levels() n2"),
             # Invalid level: negative
-            ([0], -1, "X10QBi.set_multiple_fan_levels() 6"),
+            ([0], -1, "X10QBi.set_multiple_fan_levels() n3"),
             # Invalid level: over 100
-            ([0], 101, "X10QBi.set_multiple_fan_levels() 7"),
+            ([0], 101, "X10QBi.set_multiple_fan_levels() n4"),
         ],
     )
-    def test_set_multiple_fan_levels_n(self, zones: List[int], level: int, error: str) -> None:
+    def test_set_multiple_fan_levels_n(self, zones: List[int], level: int, error_str: str) -> None:
         """Negative unit test for X10QBi.set_multiple_fan_levels() method. It contains the following steps:
         - create an X10QBi instance with a mock exec function
         - call set_multiple_fan_levels() with invalid zone or level parameters
@@ -269,7 +269,7 @@ class TestX10QBi:
         platform = X10QBi("X10QBi", mock_exec)
         with pytest.raises(ValueError) as cm:
             platform.set_multiple_fan_levels(zones, level)
-        assert cm.type is ValueError, error
+        assert cm.type is ValueError, error_str
 
 
 # End.

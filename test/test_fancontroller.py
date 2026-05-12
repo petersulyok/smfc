@@ -56,42 +56,42 @@ class TestFanController:
     # pylint: disable=line-too-long
     @pytest.mark.parametrize(
         "ipmi_zone, count, temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, "
-        "smoothing, error",
+        "smoothing, error_str",
         [
             # CPU zone 0, CALC_MIN, 1 device
-            ([0], 1, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 1"),
+            ([0], 1, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() p1"),
             # CPU zone 0, CALC_MIN, 4 devices
-            ([0], 4, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 2"),
+            ([0], 4, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() p2"),
             # CPU zone 0, CALC_AVG, 6 devices
-            ([0], 6, Config.CALC_AVG, 6, 5, 4, 32, 52, 37, 95, 1, "FanController.__init__() 3"),
+            ([0], 6, Config.CALC_AVG, 6, 5, 4, 32, 52, 37, 95, 1, "FanController.__init__() p3"),
             # CPU zone 0, CALC_MAX, 8 devices
-            ([0], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 4"),
+            ([0], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() p4"),
             # HD zone 1, CALC_MIN, 1 device
-            ([1], 1, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 5"),
+            ([1], 1, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() p5"),
             # HD zone 1, CALC_MIN, 4 devices
-            ([1], 4, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() 6"),
+            ([1], 4, Config.CALC_MIN, 5, 4, 2, 30, 50, 35, 100, 1, "FanController.__init__() p6"),
             # HD zone 1, CALC_AVG, 6 devices
-            ([1], 6, Config.CALC_AVG, 6, 5, 4, 32, 52, 37, 95, 1, "FanController.__init__() 7"),
+            ([1], 6, Config.CALC_AVG, 6, 5, 4, 32, 52, 37, 95, 1, "FanController.__init__() p7"),
             # HD zone 1, CALC_MAX, 8 devices
-            ([1], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 8"),
+            ([1], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() p8"),
             # Multiple zones comma-separated
-            ([0, 1], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 9"),
+            ([0, 1], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() p9"),
             # Three zones comma-separated
-            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 10"),
+            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() p10"),
             # Three zones space-separated
-            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 11"),
+            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() p11"),
             # Three zones extra whitespace
-            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 12"),
+            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() p12"),
             # Three zones comma with whitespace
-            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() 13"),
+            ([0, 1, 2], 8, Config.CALC_MAX, 7, 6, 6, 34, 54, 39, 90, 1, "FanController.__init__() p13"),
             # Smoothing enabled (4)
-            ([0], 1, Config.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 4, "FanController.__init__() 14"),
+            ([0], 1, Config.CALC_AVG, 5, 4, 2, 30, 50, 35, 100, 4, "FanController.__init__() p14"),
         ],
     )
     # pylint: enable=line-too-long
     def test_init_p1(self, mocker: MockerFixture, ipmi_zone: List[int], count: int, temp_calc: int, steps: int,
                      sensitivity: float, polling: float, min_temp: float, max_temp: float, min_level: int,
-                     max_level, smoothing: int, error: str,) -> None:
+                     max_level, smoothing: int, error_str: str,) -> None:
         """Positive unit test for FanController.__init__() method. It contains the following steps:
         - mock print(), FanController._get_nth_temp() functions
         - create CPU config using factory function
@@ -112,36 +112,36 @@ class TestFanController:
         my_fc = FanController.__new__(FanController)
         my_fc.config = cfg
         FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, count)
-        assert my_fc.log == my_log, error
-        assert my_fc.ipmi == my_ipmi
-        assert my_fc.config.ipmi_zone == ipmi_zone, error
-        assert my_fc.name == cfg.section, error
-        assert my_fc.count == count, error
-        assert my_fc.config.temp_calc == temp_calc, error
-        assert my_fc.config.steps == steps, error
-        assert my_fc.config.sensitivity == sensitivity, error
-        assert my_fc.config.polling == polling, error
-        assert my_fc.config.min_temp == min_temp, error
-        assert my_fc.config.max_temp == max_temp, error
-        assert my_fc.config.min_level == min_level, error
-        assert my_fc.config.max_level == max_level, error
-        assert my_fc.config.smoothing == smoothing, error
-        assert my_fc.level_step == (max_level - min_level) / steps, error
-        assert my_fc.last_temp == 0, error
-        assert my_fc.last_level == 0, error
-        assert isinstance(my_fc._temp_history, deque), error  # pylint: disable=protected-access
-        assert my_fc._temp_history.maxlen == smoothing, error  # pylint: disable=protected-access
+        assert my_fc.log == my_log, error_str
+        assert my_fc.ipmi == my_ipmi, error_str
+        assert my_fc.config.ipmi_zone == ipmi_zone, error_str
+        assert my_fc.name == cfg.section, error_str
+        assert my_fc.count == count, error_str
+        assert my_fc.config.temp_calc == temp_calc, error_str
+        assert my_fc.config.steps == steps, error_str
+        assert my_fc.config.sensitivity == sensitivity, error_str
+        assert my_fc.config.polling == polling, error_str
+        assert my_fc.config.min_temp == min_temp, error_str
+        assert my_fc.config.max_temp == max_temp, error_str
+        assert my_fc.config.min_level == min_level, error_str
+        assert my_fc.config.max_level == max_level, error_str
+        assert my_fc.config.smoothing == smoothing, error_str
+        assert my_fc.level_step == (max_level - min_level) / steps, error_str
+        assert my_fc.last_temp == 0, error_str
+        assert my_fc.last_level == 0, error_str
+        assert isinstance(my_fc._temp_history, deque), error_str  # pylint: disable=protected-access
+        assert my_fc._temp_history.maxlen == smoothing, error_str  # pylint: disable=protected-access
 
     @pytest.mark.parametrize(
-        "count, error",
+        "count, error_str",
         [
             # Invalid count - negative
-            (-1, "FanController.__init__() 20"),
+            (-1, "FanController.__init__() n1"),
             # Invalid count - zero
-            (0, "FanController.__init__() 21"),
+            (0, "FanController.__init__() n2"),
         ],
     )
-    def test_init_n1(self, mocker: MockerFixture, count: int, error: str) -> None:
+    def test_init_n1(self, mocker: MockerFixture, count: int, error_str: str) -> None:
         """Negative unit test for FanController.__init__() method. It contains the following steps:
         - mock print(), FanController._get_nth_temp() functions
         - create CPU config using factory function with invalid count
@@ -160,20 +160,20 @@ class TestFanController:
             my_fc = FanController.__new__(FanController)
             my_fc.config = cfg
             FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, count)
-        assert cm.type is ValueError, error
+        assert cm.type is ValueError, error_str
 
     @pytest.mark.parametrize(
-        "devices, result, error",
+        "devices, result, error_str",
         [
             # Normal case - 1 device found
-            (["/sys"], "/sys/temp1_input", "FanController.get_hwmon_path() 1"),
+            (["/sys"], "/sys/temp1_input", "FanController.get_hwmon_path() p1"),
             # Error case - multiple devices found
-            (["/sys1", "/sys2"], "", "FanController.get_hwmon_path() 2"),
+            (["/sys1", "/sys2"], "", "FanController.get_hwmon_path() p2"),
             # Error case - no devices found
-            ([], "", "FanController.get_hwmon_path() 3"),
+            ([], "", "FanController.get_hwmon_path() p3"),
         ],
     )
-    def test_get_hwmon_path(self, mocker: MockerFixture, devices: List[str], result: str, error: str) -> None:
+    def test_get_hwmon_path(self, mocker: MockerFixture, devices: List[str], result: str, error_str: str) -> None:
         """Positive unit test for FanController.get_hwmon_path() method. It contains the following steps:
         - mock pyudev.Context and pyudev.Device classes
         - initialize a pyudev.Context() and a pyudev.Device() classes
@@ -197,35 +197,35 @@ class TestFanController:
         mocker.patch.object(pyudev.Device, "__new__", return_value=MockDevice())
         context = pyudev.Context.__new__(pyudev.Context)
         parent = pyudev.Device.__new__(pyudev.Device)
-        assert FanController.get_hwmon_path(context, parent) == result, error
+        assert FanController.get_hwmon_path(context, parent) == result, error_str
 
     @pytest.mark.parametrize(
-        "count, temp_calc, temps, expected, error",
+        "count, temp_calc, temps, expected, error_str",
         [
             # Single device (temp_calc irrelevant)
-            (1, Config.CALC_AVG, [38.5], 38.5, "FanController.get_temp() 1"),
+            (1, Config.CALC_AVG, [38.5], 38.5, "FanController.get_temp() p1"),
             # CALC_MIN - all same
-            (3, Config.CALC_MIN, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() 2"),
+            (3, Config.CALC_MIN, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() p2"),
             # CALC_MIN - different values
-            (3, Config.CALC_MIN, [38.5, 40.5, 42.5], 38.5, "FanController.get_temp() 3"),
+            (3, Config.CALC_MIN, [38.5, 40.5, 42.5], 38.5, "FanController.get_temp() p3"),
             # CALC_AVG - all same
-            (3, Config.CALC_AVG, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() 4"),
+            (3, Config.CALC_AVG, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() p4"),
             # CALC_AVG - different values
-            (3, Config.CALC_AVG, [38.5, 40.5, 42.5], 40.5, "FanController.get_temp() 5"),
+            (3, Config.CALC_AVG, [38.5, 40.5, 42.5], 40.5, "FanController.get_temp() p5"),
             # CALC_AVG - 8 devices
             (8, Config.CALC_AVG, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 45.0,
-             "FanController.get_temp() 6"),
+             "FanController.get_temp() p6"),
             # CALC_MAX - all same
-            (3, Config.CALC_MAX, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() 7"),
+            (3, Config.CALC_MAX, [38.5, 38.5, 38.5], 38.5, "FanController.get_temp() p7"),
             # CALC_MAX - different values
-            (3, Config.CALC_MAX, [38.5, 40.5, 42.5], 42.5, "FanController.get_temp() 8"),
+            (3, Config.CALC_MAX, [38.5, 40.5, 42.5], 42.5, "FanController.get_temp() p8"),
             # CALC_MAX - 8 devices
             (8, Config.CALC_MAX, [38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0], 52.0,
-             "FanController.get_temp() 9"),
+             "FanController.get_temp() p9"),
         ],
     )
     def test_get_temp(self, mocker: MockerFixture, count: int, temp_calc: int, temps: List[float], expected: float,
-                      error: str):
+                      error_str: str):
         """Positive unit test for FanController.get_temp() method. It contains the following steps:
         - mock FanController._get_nth_temp() function
         - create CPU config using factory function
@@ -239,22 +239,22 @@ class TestFanController:
         mock_temp = MagicMock()
         mock_temp.side_effect = temps
         mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
-        assert my_fc.get_temp() == expected, error
+        assert my_fc.get_temp() == expected, error_str
 
     @pytest.mark.parametrize(
-        "zones, level, error",
+        "zones, level, error_str",
         [
             # Single zone 0
-            ([0], 45, "FanController.set_fan_level() 1"),
+            ([0], 45, "FanController.set_fan_level() p1"),
             # Single zone 1
-            ([1], 55, "FanController.set_fan_level() 2"),
+            ([1], 55, "FanController.set_fan_level() p2"),
             # Two zones
-            ([0, 1], 65, "FanController.set_fan_level() 3"),
+            ([0, 1], 65, "FanController.set_fan_level() p3"),
             # Three zones
-            ([0, 1, 2], 75, "FanController.set_fan_level() 4"),
+            ([0, 1, 2], 75, "FanController.set_fan_level() p4"),
         ],
     )
-    def test_set_fan_level(self, mocker: MockerFixture, zones: List[int], level: int, error: str):
+    def test_set_fan_level(self, mocker: MockerFixture, zones: List[int], level: int, error_str: str):
         """Positive unit test for FanController.set_fan_level() method. It contains the following steps:
         - mock Ipmi.set_fan_level() functions
         - create CPU config using factory function
@@ -274,23 +274,23 @@ class TestFanController:
         for z in cfg.ipmi_zone:
             calls.append(call(z, level))
         mock_set_multiple_fan_levels.assert_called_with(zones, level)
-        assert mock_set_multiple_fan_levels.call_count == 1, error
+        assert mock_set_multiple_fan_levels.call_count == 1, error_str
 
     @pytest.mark.parametrize(
-        "steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, temp, level, error",
+        "steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, temp, level, error_str",
         [
             # Test with data set 1 (dynamic mapping)
-            (5, 1, 1, 30, 50, 35, 100, None, None, "FanController.run() 1"),
+            (5, 1, 1, 30, 50, 35, 100, None, None, "FanController.run() p1"),
             # Test with data set 2 (constant mapping)
-            (5, 1, 1, 40, 40, 45, 45, None, None, "FanController.run() 2"),
+            (5, 1, 1, 40, 40, 45, 45, None, None, "FanController.run() p2"),
             # Temperature under minimum
-            (5, 1, 1, 30, 50, 35, 100, 25.0, 35, "FanController.run() 3"),
+            (5, 1, 1, 30, 50, 35, 100, 25.0, 35, "FanController.run() p3"),
             # Temperature above maximum
-            (5, 1, 1, 30, 50, 35, 100, 55.0, 100, "FanController.run() 4"),
+            (5, 1, 1, 30, 50, 35, 100, 55.0, 100, "FanController.run() p4"),
         ],
     )
     def test_run(self, mocker: MockerFixture, steps: int, sensitivity: float, polling: float, min_temp: float,
-                 max_temp: float, min_level: int, max_level, temp: float, level: int, error: str,) -> None:
+                 max_temp: float, min_level: int, max_level, temp: float, level: int, error_str: str,) -> None:
         """Positive unit test for FanController.run() method. It contains the following steps:
         - mock print() and FanController._get_nth_temp() functions
         - create CPU config using factory function
@@ -338,8 +338,8 @@ class TestFanController:
                     my_fc.last_level = 0
                     my_fc.last_time = time.monotonic() - (polling + 1)
                     my_fc.run()
-                    assert my_fc.last_temp == i[0], error
-                    assert my_fc.last_level == i[1], error
+                    assert my_fc.last_temp == i[0], error_str
+                    assert my_fc.last_level == i[1], error_str
                     if mock_ipmi_set_fan_level.call_count > 0:
                         mock_ipmi_set_fan_level.assert_called_with(i[1])
             # Test 2 with constant mapping.
@@ -349,8 +349,8 @@ class TestFanController:
                     my_fc.last_level = 0
                     my_fc.last_time = time.monotonic() - (polling + 1)
                     my_fc.run()
-                    assert my_fc.last_temp == i[0], error
-                    assert my_fc.last_level == i[1], error
+                    assert my_fc.last_temp == i[0], error_str
+                    assert my_fc.last_level == i[1], error_str
                     if mock_ipmi_set_fan_level.call_count > 0:
                         mock_ipmi_set_fan_level.assert_called_with(i[1])
         # Test 3 - special cases with specific temp/level values.
@@ -359,8 +359,8 @@ class TestFanController:
             my_fc.last_level = 0
             my_fc.last_time = time.monotonic() - (polling + 1)
             my_fc.run()
-            assert my_fc.last_temp == temp, error
-            assert my_fc.last_level == level, error
+            assert my_fc.last_temp == temp, error_str
+            assert my_fc.last_level == level, error_str
             if mock_ipmi_set_fan_level.call_count > 0:
                 mock_ipmi_set_fan_level.assert_called_with(level)
 
@@ -582,18 +582,18 @@ class TestFanController:
         assert my_fc.last_level == 100, "level at max_temp should be max_level"
 
     @pytest.mark.parametrize(
-        "ipmi_zone, expected_zones, error",
+        "ipmi_zone, expected_zones, error_str",
         [
             # Duplicate zones preserved
-            ([0, 1, 0], [0, 1, 0], "FanController.__init__() 33"),
+            ([0, 1, 0], [0, 1, 0], "FanController.__init__() p15"),
             # All same zones preserved
-            ([1, 1, 1], [1, 1, 1], "FanController.__init__() 34"),
+            ([1, 1, 1], [1, 1, 1], "FanController.__init__() p16"),
             # Multiple duplicates preserved
-            ([0, 1, 2, 1, 0], [0, 1, 2, 1, 0], "FanController.__init__() 35"),
+            ([0, 1, 2, 1, 0], [0, 1, 2, 1, 0], "FanController.__init__() p17"),
         ],
     )
     def test_init_duplicate_zones(self, mocker: MockerFixture, ipmi_zone: List[int], expected_zones: List[int],
-                                  error: str) -> None:
+                                  error_str: str) -> None:
         """Positive unit test for FanController.__init__() method with duplicate zones. It contains the following steps:
         - mock print(), FanController._get_nth_temp() functions
         - create CPU config using factory function with duplicate zone IDs
@@ -612,7 +612,7 @@ class TestFanController:
         my_fc = FanController.__new__(FanController)
         my_fc.config = cfg
         FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, 1)
-        assert my_fc.config.ipmi_zone == expected_zones, error
+        assert my_fc.config.ipmi_zone == expected_zones, error_str
 
     def test_set_fan_level_deferred_multi_zone(self, mocker: MockerFixture):
         """Positive unit test for FanController.set_fan_level() method with deferred multi-zone. It contains the following steps:
