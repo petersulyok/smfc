@@ -5,8 +5,8 @@
 #
 import re
 from configparser import ConfigParser
-from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass, field
+from typing import List, Tuple
 
 
 @dataclass
@@ -34,6 +34,7 @@ class CpuConfig:
     min_level: int          # Minimum fan level (0..100%)
     max_level: int          # Maximum fan level (0..100%)
     smoothing: int          # Moving average window size for temperature readings (1=disabled)
+    control_function: List[Tuple[int, int]] = field(default_factory=list)  # User-defined (T,L) breakpoints; empty = legacy
 
 
 @dataclass
@@ -55,6 +56,7 @@ class HdConfig:
     smartctl_path: str          # Path for 'smartctl' command
     standby_guard_enabled: bool # Standby guard feature enabled
     standby_hd_limit: int       # Number of HDs in STANDBY state before the full array goes STANDBY
+    control_function: List[Tuple[int, int]] = field(default_factory=list)  # User-defined (T,L) breakpoints; empty = legacy
 
 
 @dataclass
@@ -73,6 +75,7 @@ class NvmeConfig:
     max_level: int          # Maximum fan level (0..100%)
     smoothing: int          # Moving average window size for temperature readings (1=disabled)
     nvme_names: List[str]   # Device names of the NVMe drives (e.g. '/dev/disk/by-id/...')
+    control_function: List[Tuple[int, int]] = field(default_factory=list)  # User-defined (T,L) breakpoints; empty = legacy
 
 
 @dataclass
@@ -95,6 +98,7 @@ class GpuConfig:
     nvidia_smi_path: str        # Path for 'nvidia-smi' command
     rocm_smi_path: str          # Path for 'rocm-smi' command
     amd_temp_sensor: int        # AMD temperature sensor (0-junction, 1-edge, 2-memory)
+    control_function: List[Tuple[int, int]] = field(default_factory=list)  # User-defined (T,L) breakpoints; empty = legacy
 
 
 @dataclass
@@ -130,6 +134,7 @@ class Config:
     CV_MIN_LEVEL: str = "min_level"         # Minimum fan level
     CV_MAX_LEVEL: str = "max_level"         # Maximum fan level
     CV_SMOOTHING: str = "smoothing"         # Moving average window size
+    CV_CONTROL_FUNCTION: str = "control_function"  # User-defined T-L breakpoints (overrides min/max keys)
 
     # [Ipmi] section variable names
     CV_IPMI_COMMAND: str = "command"                        # Full path for ipmitool command
@@ -310,6 +315,39 @@ class Config:
             return names_str.splitlines()
         return names_str.split()
 
+    @classmethod
+    def parse_control_function(cls, cf_str: str) -> List[Tuple[int, int]]:
+        """Parse 'T1-L1, T2-L2, ...' into a validated list of (T, L) integer pairs.
+        Args:
+            cf_str (str): control_function string
+        Returns:
+            List[Tuple[int, int]]: validated breakpoints, strictly ascending in T
+        Raises:
+            ValueError: malformed input, out-of-range value, or non-ascending temperatures
+        """
+        s = re.sub(" +", " ", cf_str.strip())
+        parts = [p.strip() for p in s.split("," if "," in s else " ") if p.strip()]
+        if len(parts) < 2:
+            raise ValueError(f"invalid value: {cls.CV_CONTROL_FUNCTION} needs >=2 points ({cf_str})")
+        pairs: List[Tuple[int, int]] = []
+        for p in parts:
+            tl = p.split("-")
+            if len(tl) != 2:
+                raise ValueError(f"invalid value: malformed pair '{p}' in {cls.CV_CONTROL_FUNCTION}")
+            try:
+                t, lvl = int(tl[0].strip()), int(tl[1].strip())
+            except ValueError as e:
+                raise ValueError(f"invalid value: non-integer pair '{p}' in {cls.CV_CONTROL_FUNCTION}") from e
+            if not 0 <= t <= 100:
+                raise ValueError(f"invalid value: temperature {t} out of [0..100] in {cls.CV_CONTROL_FUNCTION}")
+            if not 0 <= lvl <= 100:
+                raise ValueError(f"invalid value: level {lvl} out of [0..100] in {cls.CV_CONTROL_FUNCTION}")
+            pairs.append((t, lvl))
+        for i in range(1, len(pairs)):
+            if pairs[i][0] <= pairs[i - 1][0]:
+                raise ValueError(f"invalid value: temperatures must be strictly ascending in {cls.CV_CONTROL_FUNCTION}")
+        return pairs
+
     @staticmethod
     def parse_gpu_ids(gpu_id_str: str) -> List[int]:
         """Parse a comma- or space-separated string of GPU device IDs.
@@ -353,6 +391,32 @@ class Config:
             platform_name=parser[s].get(self.CV_IPMI_PLATFORM_NAME, fallback=self.DV_IPMI_PLATFORM_NAME),
         )
 
+    def _read_control_function(self, parser: ConfigParser, section: str, steps: int) -> List[Tuple[int, int]]:
+        """Read control_function from a section, enforcing mutual exclusion with legacy min/max keys
+        and the cross-field constraint with `steps` (interior digitalization requires t_n - t_1 - 1 >= steps).
+        Args:
+            parser (ConfigParser): configuration parser
+            section (str): section name
+            steps (int): already-parsed steps value for the section
+        Returns:
+            List[Tuple[int, int]]: parsed breakpoints, or [] when control_function is absent
+        Raises:
+            ValueError: mutual-exclusion violation, parse error, or cross-field violation
+        """
+        raw = parser[section].get(self.CV_CONTROL_FUNCTION, fallback="").strip()
+        if not raw:
+            return []
+        legacy_keys = (self.CV_MIN_TEMP, self.CV_MAX_TEMP, self.CV_MIN_LEVEL, self.CV_MAX_LEVEL)
+        if any(parser.has_option(section, k) for k in legacy_keys):
+            raise ValueError(f"[{section}] {self.CV_CONTROL_FUNCTION} is mutually exclusive with "
+                             f"{'/'.join(legacy_keys)}")
+        pairs = self.parse_control_function(raw)
+        interior = pairs[-1][0] - pairs[0][0] - 1
+        if interior < steps:
+            raise ValueError(f"[{section}] invalid value: {self.CV_CONTROL_FUNCTION} interior width "
+                             f"({interior}) < {self.CV_STEPS} ({steps})")
+        return pairs
+
     def _parse_cpu_sections(self, parser: ConfigParser) -> List[CpuConfig]:
         """Parse [CPU], [CPU:0], [CPU:1] ... sections.
         Args:
@@ -364,12 +428,13 @@ class Config:
         """
         result = []
         for s in self._get_sections(parser, self.CS_CPU):
+            steps = parser[s].getint(self.CV_STEPS, fallback=self.DV_CPU_STEPS)
             cfg = CpuConfig(
                 section=s,
                 enabled=parser[s].getboolean(self.CV_ENABLED, fallback=False),
                 ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.CPU_ZONE))),
                 temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
-                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_CPU_STEPS),
+                steps=steps,
                 sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_CPU_SENSITIVITY),
                 polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_CPU_POLLING),
                 min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_CPU_MIN_TEMP),
@@ -377,6 +442,7 @@ class Config:
                 min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_CPU_MIN_LEVEL),
                 max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_CPU_MAX_LEVEL),
                 smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_CPU_SMOOTHING),
+                control_function=self._read_control_function(parser, s, steps),
             )
             self._validate_fan_controller_config(cfg, s)
             result.append(cfg)
@@ -409,12 +475,13 @@ class Config:
             standby_hd_limit = parser[s].getint(self.CV_HD_STANDBY_HD_LIMIT, fallback=self.DV_HD_STANDBY_HD_LIMIT)
             if standby_guard_enabled and standby_hd_limit < 0:
                 raise ValueError(f"[{s}] {self.CV_HD_STANDBY_HD_LIMIT} < 0")
+            steps = parser[s].getint(self.CV_STEPS, fallback=self.DV_HD_STEPS)
             cfg = HdConfig(
                 section=s,
                 enabled=enabled,
                 ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
                 temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
-                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_HD_STEPS),
+                steps=steps,
                 sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_HD_SENSITIVITY),
                 polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_HD_POLLING),
                 min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_HD_MIN_TEMP),
@@ -426,6 +493,7 @@ class Config:
                 smartctl_path=smartctl_path,
                 standby_guard_enabled=standby_guard_enabled,
                 standby_hd_limit=standby_hd_limit,
+                control_function=self._read_control_function(parser, s, steps),
             )
             self._validate_fan_controller_config(cfg, s)
             result.append(cfg)
@@ -448,12 +516,13 @@ class Config:
             # Validate nvme_names is specified when enabled
             if enabled and not nvme_names:
                 raise ValueError(f"[{s}] {self.CV_NVME_NAMES} is not specified")
+            steps = parser[s].getint(self.CV_STEPS, fallback=self.DV_NVME_STEPS)
             cfg = NvmeConfig(
                 section=s,
                 enabled=enabled,
                 ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
                 temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
-                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_NVME_STEPS),
+                steps=steps,
                 sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_NVME_SENSITIVITY),
                 polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_NVME_POLLING),
                 min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_NVME_MIN_TEMP),
@@ -462,6 +531,7 @@ class Config:
                 max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_NVME_MAX_LEVEL),
                 smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_NVME_SMOOTHING),
                 nvme_names=nvme_names,
+                control_function=self._read_control_function(parser, s, steps),
             )
             self._validate_fan_controller_config(cfg, s)
             result.append(cfg)
@@ -492,12 +562,13 @@ class Config:
             rocm_smi_path = parser[s].get(self.CV_GPU_ROCM_SMI_PATH, self.DV_GPU_ROCM_SMI_PATH)
             if enabled and gpu_type == "amd" and not rocm_smi_path.strip():
                 raise ValueError(f"[{s}] {self.CV_GPU_ROCM_SMI_PATH} is empty")
+            steps = parser[s].getint(self.CV_STEPS, fallback=self.DV_GPU_STEPS)
             cfg = GpuConfig(
                 section=s,
                 enabled=enabled,
                 ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
                 temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
-                steps=parser[s].getint(self.CV_STEPS, fallback=self.DV_GPU_STEPS),
+                steps=steps,
                 sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_GPU_SENSITIVITY),
                 polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_GPU_POLLING),
                 min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_GPU_MIN_TEMP),
@@ -510,6 +581,7 @@ class Config:
                 nvidia_smi_path=nvidia_smi_path,
                 rocm_smi_path=rocm_smi_path,
                 amd_temp_sensor=amd_temp_sensor,
+                control_function=self._read_control_function(parser, s, steps),
             )
             self._validate_fan_controller_config(cfg, s)
             result.append(cfg)

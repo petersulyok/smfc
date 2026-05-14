@@ -137,6 +137,130 @@ class TestConfigStaticMethods:
         with pytest.raises(ValueError):
             Config.parse_gpu_ids(input_str)
 
+    @pytest.mark.parametrize(
+        "input_str, expected, error_str",
+        [
+            # Minimal 2-point, comma separator
+            ("30-35, 65-100", [(30, 35), (65, 100)], "Config.parse_control_function() p1"),
+            # 4-point, comma separator with spaces
+            ("30-35, 50-40, 60-90, 65-100", [(30, 35), (50, 40), (60, 90), (65, 100)],
+             "Config.parse_control_function() p2"),
+            # Space separator (no comma)
+            ("30-35 65-100", [(30, 35), (65, 100)], "Config.parse_control_function() p3"),
+            # Endpoint at 0 and 100
+            ("0-0, 100-100", [(0, 0), (100, 100)], "Config.parse_control_function() p4"),
+            # Extra whitespace
+            ("  30-35 ,   65-100  ", [(30, 35), (65, 100)], "Config.parse_control_function() p5"),
+        ],
+    )
+    def test_parse_control_function_valid(self, input_str: str, expected, error_str: str):
+        """Positive unit test for Config.parse_control_function() method."""
+        assert Config.parse_control_function(input_str) == expected, error_str
+
+    @pytest.mark.parametrize(
+        "input_str, error_str",
+        [
+            # Single pair (need >=2)
+            ("30-35", "Config.parse_control_function() n1"),
+            # Empty string
+            ("", "Config.parse_control_function() n2"),
+            # Malformed pair: wrong separator
+            ("30:35, 65:100", "Config.parse_control_function() n3"),
+            # Malformed pair: too many hyphens
+            ("30-35-extra, 65-100", "Config.parse_control_function() n4"),
+            # Non-integer temperature
+            ("30.5-35, 65-100", "Config.parse_control_function() n5"),
+            # Non-integer level
+            ("30-35, 65-abc", "Config.parse_control_function() n6"),
+            # Temperature out of range (negative)
+            ("-1-35, 65-100", "Config.parse_control_function() n7"),
+            # Temperature out of range (>100)
+            ("30-35, 101-100", "Config.parse_control_function() n8"),
+            # Level out of range (>100)
+            ("30-35, 65-150", "Config.parse_control_function() n9"),
+            # Level out of range (negative)
+            ("30--5, 65-100", "Config.parse_control_function() n10"),
+            # Non-ascending temperatures
+            ("60-35, 30-100", "Config.parse_control_function() n11"),
+            # Duplicate temperatures
+            ("30-35, 30-100", "Config.parse_control_function() n12"),
+        ],
+    )
+    def test_parse_control_function_invalid(self, input_str: str, error_str: str):
+        """Negative unit test for Config.parse_control_function() method."""
+        with pytest.raises(ValueError):
+            Config.parse_control_function(input_str)
+
+
+class TestControlFunctionSectionWiring:
+    """Section-level tests for control_function parsing (mutual exclusion, cross-field, defaults)."""
+
+    @pytest.mark.parametrize(
+        "section",
+        ["CPU", "HD", "NVME", "GPU"],
+    )
+    def test_section_without_control_function_defaults_to_empty(self, create_config, section: str):
+        """Positive test: when control_function is not set, the dataclass field is an empty list (legacy mode)."""
+        f = f"TestControlFunctionSectionWiring.test_section_without_control_function_defaults_to_empty[{section}]"
+        body = "[Ipmi]\n[" + section + "]\nenabled = 0\n"
+        cfg = create_config(body)
+        sec_list = {"CPU": cfg.cpu, "HD": cfg.hd, "NVME": cfg.nvme, "GPU": cfg.gpu}[section]
+        assert sec_list[0].control_function == [], f"{f}: empty list when absent"
+
+    @pytest.mark.parametrize(
+        "section",
+        ["CPU", "HD", "NVME", "GPU"],
+    )
+    def test_section_with_control_function_parsed(self, create_config, section: str):
+        """Positive test: when control_function is set, the parsed pairs land on the dataclass field."""
+        f = f"TestControlFunctionSectionWiring.test_section_with_control_function_parsed[{section}]"
+        body = ("[Ipmi]\n[" + section + "]\nenabled = 0\nsteps = 4\n"
+                "control_function = 30-35, 50-40, 60-90, 65-100\n")
+        cfg = create_config(body)
+        sec_list = {"CPU": cfg.cpu, "HD": cfg.hd, "NVME": cfg.nvme, "GPU": cfg.gpu}[section]
+        expected = [(30, 35), (50, 40), (60, 90), (65, 100)]
+        assert sec_list[0].control_function == expected, f"{f}: parsed pairs match"
+
+    @pytest.mark.parametrize(
+        "section, legacy_key, legacy_val",
+        [
+            ("CPU", "min_temp", "30"),
+            ("CPU", "max_temp", "60"),
+            ("CPU", "min_level", "35"),
+            ("CPU", "max_level", "100"),
+            ("HD", "min_temp", "32"),
+            ("NVME", "max_level", "100"),
+            ("GPU", "min_level", "35"),
+        ],
+    )
+    def test_mutual_exclusion_with_legacy_keys(self, create_config_file, section: str, legacy_key: str,
+                                               legacy_val: str):
+        """Negative test: setting both control_function and any legacy min/max key in the same section
+        raises ValueError."""
+        body = ("[Ipmi]\n[" + section + "]\nenabled = 0\nsteps = 4\n"
+                "control_function = 30-35, 65-100\n"
+                f"{legacy_key} = {legacy_val}\n")
+        path = create_config_file(body)
+        with pytest.raises(ValueError) as exc_info:
+            Config(path)
+        assert "mutually exclusive" in str(exc_info.value), \
+            f"expected mutual-exclusion error, got: {exc_info.value}"
+
+    def test_cross_field_interior_too_small_for_steps(self, create_config_file):
+        """Negative test: interior width (t_last - t_first - 1) < steps raises ValueError."""
+        # (65-30-1) = 34, steps=35 -> too few interior degrees
+        body = ("[Ipmi]\n[CPU]\nenabled = 0\nsteps = 35\n"
+                "control_function = 30-35, 65-100\n")
+        path = create_config_file(body)
+        with pytest.raises(ValueError) as exc_info:
+            Config(path)
+        assert "interior width" in str(exc_info.value), \
+            f"expected interior-width error, got: {exc_info.value}"
+
+    def test_cv_control_function_constant(self):
+        """Verify the CV_CONTROL_FUNCTION constant value."""
+        assert Config.CV_CONTROL_FUNCTION == "control_function"
+
 
 class TestConfigFileLoading:
     """Unit tests for Config file loading."""

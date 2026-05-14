@@ -643,6 +643,141 @@ class TestFanController:
         f = "TestFanController.test_set_fan_level_deferred_multi_zone"
         assert mock_set_multiple_fan_levels.call_count == 0, f"{f}: deferred multi-zone should skip all IPMI calls"
 
+    @pytest.mark.parametrize(
+        "min_temp, max_temp, min_level, max_level, steps, error_str",
+        [
+            (30.0, 50.0, 35, 100, 5, "create_legacy_lut p1"),
+            (30.0, 60.0, 35, 100, 6, "create_legacy_lut p2"),
+            (32.0, 46.0, 35, 100, 4, "create_legacy_lut p3"),
+            # Degenerate: min_temp == max_temp (constant mapping)
+            (40.0, 40.0, 45, 45, 5, "create_legacy_lut p4"),
+        ],
+    )
+    def test_create_legacy_lut_basic_shape(self, min_temp: float, max_temp: float, min_level: int,
+                                           max_level: int, steps: int, error_str: str):
+        """Positive unit test for FanController.create_legacy_lut(): length, endpoints, monotonicity."""
+        lut = FanController.create_legacy_lut(min_temp, max_temp, min_level, max_level, steps)
+        assert len(lut) == 101, f"{error_str}: LUT length"
+        assert lut[int(min_temp)] == min_level, f"{error_str}: LUT[min_temp]=min_level"
+        assert lut[int(max_temp)] == max_level, f"{error_str}: LUT[max_temp]=max_level"
+        assert lut[0] == min_level, f"{error_str}: head padded with min_level"
+        assert lut[100] == max_level, f"{error_str}: tail padded with max_level"
+        # Non-decreasing.
+        for t in range(1, 101):
+            assert lut[t] >= lut[t - 1], f"{error_str}: non-decreasing at T={t}"
+
+    def test_create_legacy_lut_reproduces_run_formula(self):
+        """Positive test: legacy LUT at integer temps matches the original run() staircase output
+        for the canonical (30..50, 35..100, steps=5) curve documented in test_run."""
+        lut = FanController.create_legacy_lut(30.0, 50.0, 35, 100, 5)
+        expected = {30: 35, 31: 35, 32: 35, 33: 48, 34: 48, 35: 48, 36: 61, 37: 61, 38: 61, 39: 61,
+                    40: 61, 41: 74, 42: 74, 43: 74, 44: 87, 45: 87, 46: 87, 47: 87, 48: 87, 49: 100,
+                    50: 100}
+        for t, level in expected.items():
+            assert lut[t] == level, f"legacy LUT mismatch at T={t}: got {lut[t]}, expected {level}"
+
+    @pytest.mark.parametrize(
+        "pairs, steps, error_str",
+        [
+            # 2-point
+            ([(30, 35), (65, 100)], 5, "create_control_function p1"),
+            # 3-point
+            ([(30, 35), (50, 40), (65, 100)], 5, "create_control_function p2"),
+            # 4-point (matches CONTROL_FUNCTION.md §7 example)
+            ([(30, 35), (50, 40), (60, 90), (65, 100)], 5, "create_control_function p3"),
+            # Higher steps
+            ([(30, 35), (60, 100)], 10, "create_control_function p4"),
+        ],
+    )
+    def test_create_control_function_shape(self, pairs, steps: int, error_str: str):
+        """Positive unit test for FanController.create_control_function(): length, endpoints pinned,
+        head/tail padding, plateau count = steps + 2."""
+        lut = FanController.create_control_function(pairs, steps)
+        t_first, l_first = pairs[0]
+        t_last, l_last = pairs[-1]
+        assert len(lut) == 101, f"{error_str}: LUT length"
+        assert lut[t_first] == l_first, f"{error_str}: LUT[t_first]=l_first"
+        assert lut[t_last] == l_last, f"{error_str}: LUT[t_last]=l_last"
+        assert all(v == l_first for v in lut[:t_first]), f"{error_str}: head padded with l_first"
+        assert all(v == l_last for v in lut[t_last + 1:]), f"{error_str}: tail padded with l_last"
+        # Plateau count over the full LUT = steps + 2 (1 at t_first, `steps` interior, 1 at t_last);
+        # the constant head and tail merge with their neighbouring endpoints, so the run-length
+        # encoding of the LUT yields the same count.
+        plateau_count = 1
+        for t in range(1, 101):
+            if lut[t] != lut[t - 1]:
+                plateau_count += 1
+        assert plateau_count == steps + 2, f"{error_str}: plateau count {plateau_count} != steps+2"
+
+    def test_create_control_function_known_lut(self):
+        """Positive test: the 4-point example (30-35, 50-40, 60-90, 65-100) at steps=5 matches the
+        plateau dump rendered in /tmp/control_function_steps.png (7 plateaus)."""
+        pairs = [(30, 35), (50, 40), (60, 90), (65, 100)]
+        lut = FanController.create_control_function(pairs, 5)
+        expected = {30: 35, 31: 36, 37: 36, 38: 38, 44: 38, 45: 40, 51: 40, 52: 65, 58: 65,
+                    59: 92, 64: 92, 65: 100}
+        for t, level in expected.items():
+            assert lut[t] == level, f"LUT[{t}]={lut[t]} expected {level}"
+
+    @pytest.mark.parametrize(
+        "control_function, expect_new_path, error_str",
+        [
+            # Empty list -> legacy path
+            ([], False, "build_lut dispatch p1"),
+            # Non-empty list -> new path
+            ([(30, 35), (65, 100)], True, "build_lut dispatch p2"),
+        ],
+    )
+    def test_build_lut_dispatch(self, control_function, expect_new_path: bool, error_str: str):
+        """Positive unit test for FanController.build_lut(): dispatches between legacy and
+        control_function builders based on the config field."""
+        # Use steps=5 so the cross-field constraint is satisfied for the 2-point new-path case.
+        from .test_data import create_cpu_config  # local import to avoid a name clash up top
+        cfg = create_cpu_config(steps=5, min_temp=30, max_temp=65, min_level=35, max_level=100,
+                                control_function=control_function)
+        lut = FanController.build_lut(cfg)
+        assert len(lut) == 101, f"{error_str}: 101-element LUT"
+        if expect_new_path:
+            # Endpoint pinning: LUT[30]=35 and LUT[65]=100 exactly.
+            assert lut[30] == 35 and lut[65] == 100, f"{error_str}: new-path endpoints pinned"
+        else:
+            # Legacy staircase has same endpoints.
+            assert lut[30] == 35 and lut[65] == 100, f"{error_str}: legacy-path endpoints"
+        assert lut[0] == 35, f"{error_str}: head"
+        assert lut[100] == 100, f"{error_str}: tail"
+
+    def test_run_with_control_function_drives_level_via_lut(self, mocker: MockerFixture):
+        """Integration test: a section configured with control_function makes run() pick up the LUT
+        values rather than the legacy formula."""
+        from .test_data import create_cpu_config  # local import to keep top imports clean
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mocker.patch("smfc.FanController.set_fan_level", MagicMock())
+        mock_temp = MagicMock()
+        mock_temp.return_value = 0
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        # 4-point curve as in CONTROL_FUNCTION.md §7; steps=5 -> 7 plateaus.
+        # NOTE: min_temp/max_temp/min_level/max_level are mutually exclusive with control_function in
+        # Config-driven parsing, but the factory bypasses Config so we just set control_function.
+        cfg = create_cpu_config(steps=5, sensitivity=1, polling=1,
+                                control_function=[(30, 35), (50, 40), (60, 90), (65, 100)])
+        my_fc = FanController.__new__(FanController)
+        my_fc.config = cfg
+        FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, 1)
+        # Spot-check against the published plateau dump for steps=5 on this curve:
+        #   [(30,30,35), (31,37,36), (38,44,38), (45,51,40), (52,58,65), (59,64,92), (65,65,100)]
+        # Only t_first=30 and t_last=65 are pinned; the intermediate user breakpoints (T=50, T=60)
+        # are absorbed by the interior plateau averaging — that is the documented design.
+        for temp, expected_level in [(30.0, 35), (50.0, 40), (55.0, 65), (60.0, 92), (65.0, 100)]:
+            mock_temp.return_value = temp
+            my_fc.last_level = 0
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+            assert my_fc.last_level == expected_level, \
+                f"control_function run(): T={temp} -> level={my_fc.last_level}, expected {expected_level}"
+
     def test_run_polling_skipped(self, mocker: MockerFixture):
         """Positive unit test for FanController.run() method when polling interval has not elapsed. It contains the
         following steps:

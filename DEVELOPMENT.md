@@ -103,12 +103,14 @@ $ ./test/run_test_cpu_1.sh
    | `run_test_gpu_8_amd.sh`      | 1 x CPU                     | disabled  | disabled  | 8 AMD GPUs    | enabled    | disabled      |
    | `run_test_nvme_4.sh`         | 2 x CPU                     | disabled  | 4 x NVME  | disabled      | enabled    | disabled      |
    | `run_test_shared_zones.sh`   | 1 x CPU                     | disabled  | 2 x NVMEs | disabled      | disabled   | disabled      |
-   | `run_test_shared_zones_2.sh` | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
+   | `run_test_shared_zones_2.sh`    | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
+   | `run_test_control_function.sh`  | 2 x CPUs                    | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
 
    Notes:
    - `run_test_shared_zones.sh` tests the shared IPMI zone arbitration where CPU and NVME fan controllers both use IPMI zone 0.
    - `run_test_shared_zones_2.sh` tests the multi-curve CPU feature combined with shared-zone arbitration: `CPU:0` controls zone 0, while `CPU:1` and `HD` share zone 1.
    - `run_test_gpu_8_nvidia.sh` and `run_test_gpu_8_amd.sh` test GPU fan controller with Nvidia and AMD GPUs respectively.
+   - `run_test_control_function.sh` tests the new `control_function=` parameter: the CPU section uses a 4-point curve (`30-35, 50-40, 60-90, 65-100`) and the HD section uses a 3-point curve (`32-35, 38-45, 46-100`), both with `min_temp`/`max_temp`/`min_level`/`max_level` omitted.
    - During smoke tests, temperature values change gradually over time to simulate realistic thermal behavior. A background thread updates hwmon temperature files (for CPU, HD, NVMe) every second, applying random changes of +/- 0-3 degrees within the configured min/max range. GPU temperatures (both Nvidia and AMD) also change gradually between script invocations using a state file to track previous values.
 
 ## Unit tests
