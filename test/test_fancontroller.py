@@ -719,6 +719,36 @@ class TestFanController:
         for t, level in expected.items():
             assert lut[t] == level, f"LUT[{t}]={lut[t]} expected {level}"
 
+    def test_create_control_function_steps_exceed_interior(self):
+        """Positive unit test for FanController.create_control_function() when steps exceeds interior_len.
+        Covers the size==0 continue branch: interior_len=1, steps=5 → 4 of 5 iterations hit continue."""
+        # t_last - t_first - 1 = 32 - 30 - 1 = 1 interior slot; steps=5 > 1
+        lut = FanController.create_control_function([(30, 35), (32, 100)], 5)
+        f = "TestFanController.test_create_control_function_steps_exceed_interior"
+        assert len(lut) == 101, f"{f}: LUT length"
+        assert lut[30] == 35, f"{f}: t_first endpoint pinned"
+        assert lut[31] == 68, f"{f}: interior point linearly interpolated"
+        assert lut[32] == 100, f"{f}: t_last endpoint pinned"
+        assert all(v == 35 for v in lut[:30]), f"{f}: head padded with l_first"
+        assert all(v == 100 for v in lut[33:]), f"{f}: tail padded with l_last"
+
+    def test_print_temp_level_mapping_single_temp_plateau(self, mocker: MockerFixture):
+        """Positive unit test for FanController.print_temp_level_mapping() with a single-temperature plateau.
+        Covers the plateau_start==end branch: lut[31]=68 is a 1-element plateau between lut[30]=35 and lut[32]=100."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mocker.patch("smfc.FanController.set_fan_level", MagicMock())
+        mocker.patch("smfc.FanController._get_nth_temp", MagicMock(return_value=30.0))
+        my_log = Log(Log.LOG_CONFIG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        cfg = create_cpu_config(steps=5, sensitivity=1, polling=1, control_function=[(30, 35), (32, 100)])
+        my_fc = FanController.__new__(FanController)
+        my_fc.config = cfg
+        FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, 1)
+        f = "TestFanController.test_print_temp_level_mapping_single_temp_plateau"
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        assert "T=31C -> L=68%" in printed, f"{f}: single-temp plateau should emit T=NNC format"
+
     @pytest.mark.parametrize(
         "control_function, expect_new_path, error_str",
         [
