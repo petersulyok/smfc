@@ -34,7 +34,7 @@ class CpuConfig:
     min_level: int          # Minimum fan level (0..100%)
     max_level: int          # Maximum fan level (0..100%)
     smoothing: int          # Moving average window size for temperature readings (1=disabled)
-    control_function: List[Tuple[int, int]] = field(default_factory=list)  # User-defined (T,L) breakpoints; empty = legacy
+    control_function: List[Tuple[int, int]] = field(default_factory=list)  # (T,L) breakpoints, empty = legacy
 
 
 @dataclass
@@ -56,7 +56,7 @@ class HdConfig:
     smartctl_path: str          # Path for 'smartctl' command
     standby_guard_enabled: bool # Standby guard feature enabled
     standby_hd_limit: int       # Number of HDs in STANDBY state before the full array goes STANDBY
-    control_function: List[Tuple[int, int]] = field(default_factory=list)  # User-defined (T,L) breakpoints; empty = legacy
+    control_function: List[Tuple[int, int]] = field(default_factory=list)  # (T,L) breakpoints, empty = legacy
 
 
 @dataclass
@@ -75,7 +75,7 @@ class NvmeConfig:
     max_level: int          # Maximum fan level (0..100%)
     smoothing: int          # Moving average window size for temperature readings (1=disabled)
     nvme_names: List[str]   # Device names of the NVMe drives (e.g. '/dev/disk/by-id/...')
-    control_function: List[Tuple[int, int]] = field(default_factory=list)  # User-defined (T,L) breakpoints; empty = legacy
+    control_function: List[Tuple[int, int]] = field(default_factory=list)  # (T,L) breakpoints, empty = legacy
 
 
 @dataclass
@@ -98,7 +98,7 @@ class GpuConfig:
     nvidia_smi_path: str        # Path for 'nvidia-smi' command
     rocm_smi_path: str          # Path for 'rocm-smi' command
     amd_temp_sensor: int        # AMD temperature sensor (0-junction, 1-edge, 2-memory)
-    control_function: List[Tuple[int, int]] = field(default_factory=list)  # User-defined (T,L) breakpoints; empty = legacy
+    control_function: List[Tuple[int, int]] = field(default_factory=list)  # (T,L) breakpoints, empty = legacy
 
 
 @dataclass

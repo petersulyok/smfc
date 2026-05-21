@@ -762,7 +762,6 @@ class TestFanController:
         """Positive unit test for FanController.build_lut(): dispatches between legacy and
         control_function builders based on the config field."""
         # Use steps=5 so the cross-field constraint is satisfied for the 2-point new-path case.
-        from .test_data import create_cpu_config  # local import to avoid a name clash up top
         cfg = create_cpu_config(steps=5, min_temp=30, max_temp=65, min_level=35, max_level=100,
                                 control_function=control_function)
         lut = FanController.build_lut(cfg)
@@ -779,7 +778,6 @@ class TestFanController:
     def test_run_with_control_function_drives_level_via_lut(self, mocker: MockerFixture):
         """Integration test: a section configured with control_function makes run() pick up the LUT
         values rather than the legacy formula."""
-        from .test_data import create_cpu_config  # local import to keep top imports clean
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mocker.patch("smfc.FanController.set_fan_level", MagicMock())
