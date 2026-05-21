@@ -457,7 +457,8 @@ def create_cpu_config(section="CPU", enabled=False, ipmi_zone=None, temp_calc=Co
                       steps=Config.DV_CPU_STEPS, sensitivity=Config.DV_CPU_SENSITIVITY,
                       polling=Config.DV_CPU_POLLING, min_temp=Config.DV_CPU_MIN_TEMP,
                       max_temp=Config.DV_CPU_MAX_TEMP, min_level=Config.DV_CPU_MIN_LEVEL,
-                      max_level=Config.DV_CPU_MAX_LEVEL, smoothing=Config.DV_CPU_SMOOTHING):
+                      max_level=Config.DV_CPU_MAX_LEVEL, smoothing=Config.DV_CPU_SMOOTHING,
+                      control_function=None):
     """Factory function to create CpuConfig instances for testing without needing a config file.
 
     Args:
@@ -480,7 +481,8 @@ def create_cpu_config(section="CPU", enabled=False, ipmi_zone=None, temp_calc=Co
     zones = ipmi_zone if ipmi_zone is not None else [Config.CPU_ZONE]
     return CpuConfig(section=section, enabled=enabled, ipmi_zone=zones,
                      temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
-                     max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing)
+                     max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
+                     control_function=control_function if control_function is not None else [])
 
 
 def create_hd_config(section="HD", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,
@@ -489,7 +491,7 @@ def create_hd_config(section="HD", enabled=False, ipmi_zone=None, temp_calc=Conf
                      max_temp=Config.DV_HD_MAX_TEMP, min_level=Config.DV_HD_MIN_LEVEL,
                      max_level=Config.DV_HD_MAX_LEVEL, smoothing=Config.DV_HD_SMOOTHING, hd_names=None,
                      smartctl_path=Config.DV_HD_SMARTCTL_PATH, standby_guard_enabled=False,
-                     standby_hd_limit=Config.DV_HD_STANDBY_HD_LIMIT):
+                     standby_hd_limit=Config.DV_HD_STANDBY_HD_LIMIT, control_function=None):
     """Factory function to create HdConfig instances for testing without needing a config file.
 
     Args:
@@ -518,7 +520,8 @@ def create_hd_config(section="HD", enabled=False, ipmi_zone=None, temp_calc=Conf
                     temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                     max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
                     hd_names=hd_names if hd_names is not None else [], smartctl_path=smartctl_path,
-                    standby_guard_enabled=standby_guard_enabled, standby_hd_limit=standby_hd_limit)
+                    standby_guard_enabled=standby_guard_enabled, standby_hd_limit=standby_hd_limit,
+                    control_function=control_function if control_function is not None else [])
 
 
 def create_nvme_config(section="NVME", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,
@@ -526,7 +529,7 @@ def create_nvme_config(section="NVME", enabled=False, ipmi_zone=None, temp_calc=
                        polling=Config.DV_NVME_POLLING, min_temp=Config.DV_NVME_MIN_TEMP,
                        max_temp=Config.DV_NVME_MAX_TEMP, min_level=Config.DV_NVME_MIN_LEVEL,
                        max_level=Config.DV_NVME_MAX_LEVEL, smoothing=Config.DV_NVME_SMOOTHING,
-                       nvme_names=None):
+                       nvme_names=None, control_function=None):
     """Factory function to create NvmeConfig instances for testing without needing a config file.
 
     Args:
@@ -551,7 +554,8 @@ def create_nvme_config(section="NVME", enabled=False, ipmi_zone=None, temp_calc=
     return NvmeConfig(section=section, enabled=enabled, ipmi_zone=zones,
                       temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                       max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
-                      nvme_names=nvme_names if nvme_names is not None else [])
+                      nvme_names=nvme_names if nvme_names is not None else [],
+                      control_function=control_function if control_function is not None else [])
 
 
 def create_gpu_config(section="GPU", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,
@@ -561,7 +565,7 @@ def create_gpu_config(section="GPU", enabled=False, ipmi_zone=None, temp_calc=Co
                       max_level=Config.DV_GPU_MAX_LEVEL, smoothing=Config.DV_GPU_SMOOTHING,
                       gpu_type=Config.DV_GPU_TYPE, gpu_device_ids=None,
                       nvidia_smi_path=Config.DV_GPU_NVIDIA_SMI_PATH, rocm_smi_path=Config.DV_GPU_ROCM_SMI_PATH,
-                      amd_temp_sensor=Config.DV_GPU_AMD_TEMP_SENSOR):
+                      amd_temp_sensor=Config.DV_GPU_AMD_TEMP_SENSOR, control_function=None):
     """Factory function to create GpuConfig instances for testing without needing a config file.
 
     Args:
@@ -592,7 +596,8 @@ def create_gpu_config(section="GPU", enabled=False, ipmi_zone=None, temp_calc=Co
                      temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                      max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
                      gpu_type=gpu_type, gpu_device_ids=device_ids,
-                     nvidia_smi_path=nvidia_smi_path, rocm_smi_path=rocm_smi_path, amd_temp_sensor=amd_temp_sensor)
+                     nvidia_smi_path=nvidia_smi_path, rocm_smi_path=rocm_smi_path, amd_temp_sensor=amd_temp_sensor,
+                     control_function=control_function if control_function is not None else [])
 
 
 def create_const_config(section="CONST", enabled=False, ipmi_zone=None, polling=Config.DV_CONST_POLLING,

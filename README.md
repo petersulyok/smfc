@@ -191,6 +191,21 @@ The fan controllers implement the following strategies to avoid/minimize the unn
  3. The configuration parameter `polling=` defines the frequency of the temperature reading. The bigger polling time, the lower frequency of the fan speed change.
  4. The `smoothing=` parameter enables a moving average window for temperature readings. When set to a value greater than 1, the fan controller averages the last N temperature readings before making fan level decisions. This reduces fan speed oscillation caused by brief temperature spikes. For example, `smoothing=4` averages the last 4 readings. Set to 1 (default) to disable smoothing.
 
+#### Advanced: multi-segment control function
+For more precise control, the `control_function=` parameter lets you define a piecewise-linear fan curve directly as a list of `temperature-level` pairs:
+
+```ini
+control_function = 30-35, 50-40, 60-90, 65-100
+```
+
+Each pair is written as `T-L` where `T` is a temperature in °C and `L` is a fan level in %. At least two pairs are required, temperatures must be strictly ascending, and all values must be in the range `[0..100]`. When `control_function=` is present in a section it overrides `min_temp=`, `max_temp=`, `min_level=`, and `max_level=` — the two forms are mutually exclusive.
+
+The `steps=` parameter still applies: it controls how many discrete plateaus the interior of the curve is divided into before being sent to the fan. The two endpoint temperatures are always pinned exactly to their specified levels; the `steps` interior plateaus together with the 2 pinned endpoints produce `steps + 2` plateaus in total.
+
+ <img src="https://github.com/petersulyok/smfc/raw/main/doc/new_userdefined_control_function.png" align="center" width="600">
+
+The dashed blue line shows the continuous piecewise-linear ideal described by `control_function=`; the solid red staircase is the digitalized output actually applied to the fan (here with `steps=5`, producing 7 plateaus: one pinned at each endpoint plus five in the interior).
+
 ### 3. Standby guard
 For the HD fan controller, an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
 	

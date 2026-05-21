@@ -6,7 +6,7 @@
 import os
 import time
 from collections import deque
-from typing import List, Protocol
+from typing import List, Protocol, Tuple
 from pyudev import Context, Device
 from smfc.ipmi import Ipmi
 from smfc.log import Log
@@ -15,16 +15,17 @@ from smfc.config import Config
 
 class FanControllerConfig(Protocol):  # pylint: disable=too-few-public-methods
     """Protocol for fan controller configuration (shared fields across CPU, HD, NVME, GPU configs)."""
-    ipmi_zone: List[int]    # IPMI zone(s) assigned to the controller
-    temp_calc: int          # Temperature calculation method (0-min, 1-avg, 2-max)
-    steps: int              # Discrete steps in temperatures and fan levels
-    sensitivity: float      # Temperature change to activate fan controller (C)
-    polling: float          # Polling interval to read temperature (sec)
-    min_temp: float         # Minimum temperature value (C)
-    max_temp: float         # Maximum temperature value (C)
-    min_level: int          # Minimum fan level (0..100%)
-    max_level: int          # Maximum fan level (0..100%)
-    smoothing: int          # Moving average window size for temperature readings (1=disabled)
+    ipmi_zone: List[int]                    # IPMI zone(s) assigned to the controller
+    temp_calc: int                          # Temperature calculation method (0-min, 1-avg, 2-max)
+    steps: int                              # Discrete steps in temperatures and fan levels
+    sensitivity: float                      # Temperature change to activate fan controller (C)
+    polling: float                          # Polling interval to read temperature (sec)
+    min_temp: float                         # Minimum temperature value (C)
+    max_temp: float                         # Maximum temperature value (C)
+    min_level: int                          # Minimum fan level (0..100%)
+    max_level: int                          # Maximum fan level (0..100%)
+    smoothing: int                          # Moving average window size (1=disabled)
+    control_function: List[Tuple[int, int]] # User-defined (T,L) breakpoints; empty = legacy mode
 
 
 class FanController:
@@ -41,8 +42,9 @@ class FanController:
     hwmon_path: List[str]   # List of paths for HWMON devices
 
     # Measured or calculated attributes
-    temp_step: float        # A temperature steps value (C)
-    level_step: float       # A fan level step value (0..100%)
+    temp_step: float        # A temperature steps value (C) — legacy mode only, used for logging
+    level_step: float       # A fan level step value (0..100%) — legacy mode only, used for logging
+    levels_lut: List[int]   # 101-element temperature->level lookup table (index = T in C)
     last_time: float        # Last system time we polled temperature (timestamp)
     last_temp: float        # Last measured temperature value (C)
     last_level: int         # Last configured fan level (0..100%)
@@ -76,6 +78,7 @@ class FanController:
         # Initialize calculated values using config values.
         self.temp_step = (self.config.max_temp - self.config.min_temp) / self.config.steps
         self.level_step = (self.config.max_level - self.config.min_level) / self.config.steps
+        self.levels_lut = FanController.build_lut(self.config)
         self.last_temp = 0
         self.last_level = 0
         self.last_time = time.monotonic() - (self.config.polling + 1)
@@ -163,6 +166,99 @@ class FanController:
     def callback_func(self) -> None:
         """Call-back function for a child class."""
 
+    @staticmethod
+    def create_legacy_lut(min_temp: float, max_temp: float, min_level: int, max_level: int, steps: int) -> List[int]:
+        """Build a 101-element LUT from the legacy min/max temp+level keys using the original staircase formula.
+
+        Each integer temperature T in [0..100] gets mapped to its fan level the same way the previous
+        run() did at runtime:
+            T <= min_temp        -> min_level
+            T >= max_temp        -> max_level
+            otherwise            -> round((T - min_temp) / temp_step) * level_step + min_level
+        Args:
+            min_temp (float): minimum temperature (C)
+            max_temp (float): maximum temperature (C)
+            min_level (int): minimum fan level (%)
+            max_level (int): maximum fan level (%)
+            steps (int): discrete staircase steps
+        Returns:
+            List[int]: 101-element LUT (index = temperature in C, value = fan level in %)
+        """
+        temp_step = (max_temp - min_temp) / steps
+        level_step = (max_level - min_level) / steps
+        lut: List[int] = [0] * 101
+        for t in range(101):
+            if t <= min_temp:
+                lut[t] = min_level
+            elif t >= max_temp:
+                lut[t] = max_level
+            else:
+                gain = int(round((t - min_temp) / temp_step))
+                lut[t] = int(round(gain * level_step)) + min_level
+        return lut
+
+    @staticmethod
+    def create_control_function(pairs: List[Tuple[int, int]], steps: int) -> List[int]:
+        """Build a 101-element LUT from validated (T, L) breakpoints using interior-only digitalization
+        with endpoint pinning. Produces `steps + 2` plateaus: 1 at t_first, `steps` in the interior,
+        1 at t_last.
+        Args:
+            pairs (List[Tuple[int, int]]): validated breakpoints (already range-checked and strictly
+                ascending in T; see Config.parse_control_function)
+            steps (int): number of interior plateaus
+        Returns:
+            List[int]: 101-element LUT (index = temperature in C, value = fan level in %)
+        """
+        t_first, l_first = pairs[0]
+        t_last, l_last = pairs[-1]
+
+        # Step 1: per-degree piecewise-linear LUT, with the head and tail padded to their endpoint levels.
+        levels: List[int] = [l_first] * t_first
+        for i in range(len(pairs) - 1):
+            t1, l1 = pairs[i]
+            t2, l2 = pairs[i + 1]
+            dt = t2 - t1
+            levels.extend([round(l1 + (di * (l2 - l1) / dt)) for di in range(dt)])
+        levels.extend([l_last] * (100 - t_last + 1))
+
+        # Step 2: digitalize the interior [t_first+1 .. t_last-1] into `steps` equal-width plateaus.
+        interior_len = t_last - t_first - 1
+        if interior_len > 0 and steps >= 1:
+            base = interior_len // steps
+            remainder = interior_len % steps
+            start = t_first + 1
+            for i in range(steps):
+                size = base + (1 if i < remainder else 0)
+                if size == 0:
+                    continue
+                end = start + size - 1
+                avg = round(sum(levels[start:end + 1]) / size)
+                for t in range(start, end + 1):
+                    levels[t] = avg
+                start = end + 1
+
+        # Step 3: pin the user-defined endpoints (Step 2 leaves these untouched; explicit writes
+        # make the endpoint contract obvious to future readers).
+        levels[t_first] = l_first
+        levels[t_last] = l_last
+        return levels
+
+    @classmethod
+    def build_lut(cls, config: FanControllerConfig) -> List[int]:
+        """Build the 101-element temperature->level LUT for a fan controller config.
+
+        Dispatches between the legacy staircase formula and the new piecewise-linear control function
+        based on whether `control_function` was specified in the config.
+        Args:
+            config (FanControllerConfig): controller config (CPU/HD/NVME/GPU)
+        Returns:
+            List[int]: 101-element LUT (index = temperature in C, value = fan level in %)
+        """
+        if config.control_function:
+            return cls.create_control_function(config.control_function, config.steps)
+        return cls.create_legacy_lut(config.min_temp, config.max_temp,
+                                     config.min_level, config.max_level, config.steps)
+
     def run(self) -> None:
         """Run IPMI zone controller function with the following steps:
 
@@ -175,8 +271,7 @@ class FanController:
         """
         current_time: float  # Current system timestamp (measured)
         current_temp: float  # Current temperature (measured)
-        current_level: int   # Current fan level (calculated)
-        current_gain: int    # Current gain (calculated)
+        current_level: int   # Current fan level (looked up from LUT)
 
         # Step 1: check the elapsed time.
         current_time = time.monotonic()
@@ -197,14 +292,9 @@ class FanController:
             if abs(current_temp - self.last_temp) >= self.config.sensitivity:
                 self.last_temp = current_temp
 
-                # Step 3: calculate gain and fan level.
-                if current_temp <= self.config.min_temp:
-                    current_level = self.config.min_level
-                elif current_temp >= self.config.max_temp:
-                    current_level = self.config.max_level
-                else:
-                    current_gain = int(round((current_temp - self.config.min_temp) / self.temp_step))
-                    current_level = (int(round(float(current_gain) * self.level_step)) + self.config.min_level)
+                # Step 3: look up the fan level for the (clamped, integer-rounded) temperature.
+                idx = max(0, min(100, int(round(current_temp))))
+                current_level = self.levels_lut[idx]
                 if self.log.log_level >= Log.LOG_DEBUG:
                     self.log.msg(Log.LOG_DEBUG, f"{self.name}: calculated level={current_level}% "
                                  f"for temp={current_temp:.1f}C")
@@ -227,11 +317,22 @@ class FanController:
                          f"(remaining={self.config.polling - (current_time - self.last_time):.1f}s)")
 
     def print_temp_level_mapping(self) -> None:
-        """Print out the user-defined temperature to level mapping value in log DEBUG level."""
-        self.log.msg(Log.LOG_CONFIG, "   User-defined control function:")
-        for i in range(self.config.steps + 1):
-            self.log.msg(Log.LOG_CONFIG, f"   {i}. [T:{self.config.min_temp + (i * self.temp_step):.1f}C - "
-                         f"L:{int(self.config.min_level + (i * self.level_step))}%]")
+        """Print the temperature->level mapping at LOG_CONFIG level by walking the LUT and emitting
+        one line per plateau (consecutive temperatures sharing the same level)."""
+        if self.config.control_function:
+            self.log.msg(Log.LOG_CONFIG, f"   control_function = {self.config.control_function}")
+        else:
+            self.log.msg(Log.LOG_CONFIG, "   Temperature to level mapping (from legacy min/max keys):")
+        plateau_start = 0
+        for t in range(1, 102):
+            if t == 101 or self.levels_lut[t] != self.levels_lut[plateau_start]:
+                end = t - 1
+                lvl = self.levels_lut[plateau_start]
+                if plateau_start == end:
+                    self.log.msg(Log.LOG_CONFIG, f"   T={plateau_start}C -> L={lvl}%")
+                else:
+                    self.log.msg(Log.LOG_CONFIG, f"   T=[{plateau_start}..{end}]C -> L={lvl}%")
+                plateau_start = t
 
 
 # End.

@@ -195,6 +195,13 @@ Validation policy:
   controller's constructor — i.e. after config parsing but before the main
   loop starts.
 
+`parse_control_function()` handles the advanced `control_function=` syntax
+(see §10.5). When the key is absent the section parser synthesizes an
+equivalent 2-point list from the four legacy keys and stores it in
+`config.control_function`, so `FanController.build_lut()` always consumes
+`config.control_function` — it never reads `min_temp` / `max_temp` /
+`min_level` / `max_level` directly.
+
 ---
 
 ## 5. Logging (`log.py`)
@@ -288,8 +295,9 @@ State on a `FanController`:
 | `name`           | Section name (e.g. `"CPU"`, `"HD:1"`) — used in log messages           |
 | `count`          | Number of monitored devices                                            |
 | `hwmon_path[]`   | One HWMON path per device, or `""` for fallback (smartctl)             |
-| `temp_step`      | `(max_temp - min_temp) / steps` — width of one staircase tread (C)     |
-| `level_step`     | `(max_level - min_level) / steps` — height of one tread (%)            |
+| `temp_step`      | `(max_temp - min_temp) / steps` — legacy staircase tread width (C); kept for log output |
+| `level_step`     | `(max_level - min_level) / steps` — legacy staircase tread height (%); kept for log output |
+| `levels_lut`     | 101-element `List[int]` built by `build_lut()` at init; `levels_lut[T]` = fan level for temperature T°C |
 | `last_time`      | Last poll timestamp (`time.monotonic`)                                 |
 | `last_temp`      | Last smoothed temperature                                              |
 | `last_level`     | Last applied fan level (0 = "no level set yet")                        |
@@ -310,8 +318,22 @@ Each subclass only builds `self.hwmon_path[]` and (optionally) overrides
 
 #### 7.1.2 Control function
 
-The mapping temperature → fan level is a discrete staircase with `steps`
-treads:
+The mapping temperature → fan level is represented at runtime as a
+101-element lookup table `levels_lut`, built once during `__init__` by
+`FanController.build_lut(config)`. The index is the integer temperature in °C
+(0–100); the value is the fan level in % (0–100).
+
+Two configuration styles feed into the same LUT (see §10.5 for the full
+algorithm):
+
+- **Legacy** (`min_temp` / `max_temp` / `min_level` / `max_level`): produces a
+  staircase of `steps` equal-width treads via `create_legacy_lut()`.
+- **Advanced** (`control_function = T1-L1, T2-L2, …`): produces a
+  piecewise-linear curve digitalized into `steps + 2` plateaus via
+  `create_control_function()`.
+
+The shape of the resulting output — a staircase that rises from the minimum to
+the maximum fan level — is the same in both cases:
 
 ```
        level (%)
@@ -325,8 +347,8 @@ treads:
                   ┌───┘
         min_level ┘
                   ┌───────┬───────┬───────┬───────┬──────▶ temperature (C)
-              min_temp                            max_temp
-                  ◀────── steps treads of width temp_step ─▶
+              t_first                            t_last
+                  ◀────────── plateaus (steps or steps+2) ─▶
 ```
 
 `run()` semantics, every iteration of the service main loop:
@@ -339,7 +361,7 @@ flowchart TD
     B --> C["raw = get_temp()<br/>_temp_history.append(raw)<br/>current = mean(_temp_history)"]
     C --> D{"|current − last_temp| ≥ sensitivity?"}
     D -- no --> E2([return: no change])
-    D -- yes --> F[map current → current_level<br/>via temp_step / level_step]
+    D -- yes --> F["idx = clamp(round(current), 0, 100)<br/>current_level = levels_lut[idx]"]
     F --> G{current_level != last_level?}
     G -- no --> E3([return: level unchanged])
     G -- yes --> H[last_level = current_level]
@@ -574,6 +596,63 @@ treats an empty path as a signal to invoke `smartctl -a <dev>` and parse the
 output — supporting both SCSI ("Current Drive Temperature:") and ATA
 ("Temperature_Celsius" SMART attribute) reporting styles. This means a
 single `[HD]` section can mix SATA and SAS disks transparently.
+
+### 10.5 Piecewise-linear control function (`control_function=`)
+
+`FanController.build_lut(config)` is the single dispatch point that produces
+the 101-element `levels_lut` for any controller at startup:
+
+```python
+if config.control_function:
+    return create_control_function(config.control_function, config.steps)
+return create_legacy_lut(config.min_temp, config.max_temp,
+                         config.min_level, config.max_level, config.steps)
+```
+
+Because the section parser always populates `config.control_function` — either
+from an explicit `control_function=` key or synthesized from the four legacy
+keys — `build_lut` always takes the first branch in practice.
+
+#### Algorithm: `create_control_function(pairs, steps)`
+
+Input: a validated list of `(T, L)` breakpoints (≥ 2, strictly ascending T,
+all values in 0–100) and a `steps` count.
+
+**Step 1 — per-degree linear interpolation.**
+Walk each segment `(T_i, L_i) → (T_{i+1}, L_{i+1})`, filling `levels[T_i ..
+T_{i+1}−1]` with `round(L_i + offset × (L_{i+1} − L_i) / dt)`. Pad the head
+(`[0..t_first−1]`) with `l_first` and the tail (`[t_last..100]`) with
+`l_last`.
+
+**Step 2 — interior digitalization.**
+Divide the interior `[t_first+1 .. t_last−1]` into `steps` equal-width
+sub-intervals (the last `interior_len % steps` intervals get one extra degree
+to absorb the remainder). Replace each sub-interval with its rounded average,
+producing `steps` flat plateaus.
+
+**Step 3 — endpoint pinning.**
+Write `levels[t_first] = l_first` and `levels[t_last] = l_last` exactly.
+Step 2 does not touch the endpoints (the interior range is exclusive of both);
+these writes are a clarity guarantee, not a correction.
+
+Result: `steps + 2` plateaus total — 1 pinned at `t_first`, `steps` in the
+interior, 1 pinned at `t_last`. Only the two endpoints are guaranteed exact;
+interior plateau values are averages of the underlying linear curve.
+
+#### Validation chain
+
+| Check | Location |
+|---|---|
+| Syntactic: ≥ 2 pairs, each `T-L`, both integers | `Config.parse_control_function()` |
+| Range: T ∈ [0..100], L ∈ [0..100] | `Config.parse_control_function()` |
+| Monotonicity: temperatures strictly ascending | `Config.parse_control_function()` |
+| Interior range: `(t_last − t_first − 1) ≥ steps` | `Config._validate_fan_controller_config()` |
+| Mutual exclusion with legacy keys | Section parser (`_parse_*_sections`) |
+| Legacy → canonical synthesis when absent | Section parser (`_parse_*_sections`) |
+
+`control_function=` and any of `min_temp=` / `max_temp=` / `min_level=` /
+`max_level=` in the same section raises `ValueError` at parse time — the two
+forms are mutually exclusive by design.
 
 ---
 
