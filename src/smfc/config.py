@@ -209,7 +209,7 @@ class Config:
     # Default values — [NVME] section
     DV_NVME_STEPS: int = 4
     DV_NVME_SENSITIVITY: float = 2.0
-    DV_NVME_POLLING: float = 10.0
+    DV_NVME_POLLING: float = 2.0
     DV_NVME_MIN_TEMP: float = 35.0
     DV_NVME_MAX_TEMP: float = 70.0
     DV_NVME_MIN_LEVEL: int = 35
