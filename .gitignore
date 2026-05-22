@@ -26,6 +26,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+tmp/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -153,6 +154,3 @@ deb-output/
 
 # Mac
 .DS_Store
-
-# Project
-./tmp/

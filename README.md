@@ -172,13 +172,16 @@ The simple form maps a single temperature interval `[min_temp..max_temp]` linear
 
 ```ini
      min_temp=30
-     max_temp=60
+     max_temp=65
      min_level=35
      max_level=100
      steps=5
 ```
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/linear_control_function.png" align="center" width="500">
+
+
+The dashed blue line shows the continuous linear ideal between `(min_temp, min_level)` and `(max_temp, max_level)`; the solid red staircase is the digitalized output actually applied to the fan (here with `steps=5`, producing 6 plateaus: one pinned at each endpoint plus four in the interior).
 
 > Sample configurations using the linear form are available in [`config/samples/`](https://github.com/petersulyok/smfc/tree/main/config/samples) — for example [`smfc-sample1.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample1.conf) (CPU only), [`smfc-sample2.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample2.conf) (HD with standby guard), [`smfc-sample4.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample4.conf) (CPU + HD hybrid), and [`smfc-sample8.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample8.conf) (multiple fan curves per zone).
 
