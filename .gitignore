@@ -153,3 +153,6 @@ deb-output/
 
 # Mac
 .DS_Store
+
+# Project
+./tmp/
