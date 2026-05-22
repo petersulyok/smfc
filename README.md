@@ -203,7 +203,7 @@ The dashed blue line shows the continuous piecewise-linear ideal described by `c
 
 > See [`smfc-sample9.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample9.conf) for a complete hybrid configuration using `control_function=` for both the CPU and HD fan controllers.
 
-#### 2.3 Strategies for changing fans' rotational speed
+#### 2.3 Reducing unnecessary fan speed changes
 Changing fan rotational speed is a slow physical process — depending on the fan type and the magnitude of the change it can take several seconds. Frequent or unnecessary changes also cause audible oscillation. To keep the fans steady, each temperature-driven controller combines five mechanisms that act at different stages of the control loop:
 
 | Stage | Mechanism | Parameter | Effect |
