@@ -196,11 +196,11 @@ Validation policy:
   loop starts.
 
 `parse_control_function()` handles the advanced `control_function=` syntax
-(see §10.5). When the key is absent the section parser synthesizes an
-equivalent 2-point list from the four legacy keys and stores it in
-`config.control_function`, so `FanController.build_lut()` always consumes
-`config.control_function` — it never reads `min_temp` / `max_temp` /
-`min_level` / `max_level` directly.
+(see §10.5). When the key is absent `_read_control_function()` returns an
+empty list and `config.control_function` stays empty; `FanController.build_lut()`
+then falls back to `create_legacy_lut()` and reads `min_temp` / `max_temp` /
+`min_level` / `max_level` directly. The two forms are mutually exclusive within
+a single section — specifying both raises `ValueError` at parse time.
 
 ---
 
@@ -327,29 +327,21 @@ Two configuration styles feed into the same LUT (see §10.5 for the full
 algorithm):
 
 - **Legacy** (`min_temp` / `max_temp` / `min_level` / `max_level`): produces a
-  staircase of `steps` equal-width treads via `create_legacy_lut()`.
+  staircase of `steps + 1` equal-width treads via `create_legacy_lut()`.
+
+  <img src="https://github.com/petersulyok/smfc/raw/main/doc/linear_control_function.png" align="center" width="500">
+
 - **Advanced** (`control_function = T1-L1, T2-L2, …`): produces a
   piecewise-linear curve digitalized into `steps + 2` plateaus via
   `create_control_function()`.
 
-The shape of the resulting output — a staircase that rises from the minimum to
-the maximum fan level — is the same in both cases:
+  <img src="https://github.com/petersulyok/smfc/raw/main/doc/advanced_control_function.png" align="center" width="600">
 
-```
-       level (%)
-         max_level ─────────────────────────────┐ ┌──────
-                                                │ │
-                                  ┌─────────────┘ │
-                                  │
-                              ┌───┘
-                          ┌───┘
-                      ┌───┘
-                  ┌───┘
-        min_level ┘
-                  ┌───────┬───────┬───────┬───────┬──────▶ temperature (C)
-              t_first                            t_last
-                  ◀────────── plateaus (steps or steps+2) ─▶
-```
+In both plots, the dashed blue line is the continuous ideal that the user
+configured and the solid red staircase is the digitalized output actually
+written to the fan. The shape is the same in both cases — a staircase rising
+from the minimum to the maximum fan level — only the underlying ideal differs
+(single linear segment vs. arbitrary piecewise-linear curve).
 
 `run()` semantics, every iteration of the service main loop:
 
@@ -609,9 +601,9 @@ return create_legacy_lut(config.min_temp, config.max_temp,
                          config.min_level, config.max_level, config.steps)
 ```
 
-Because the section parser always populates `config.control_function` — either
-from an explicit `control_function=` key or synthesized from the four legacy
-keys — `build_lut` always takes the first branch in practice.
+`config.control_function` is populated only when the user provides an explicit
+`control_function=` key; otherwise it stays an empty list and `build_lut`
+takes the second branch (legacy staircase).
 
 #### Algorithm: `create_control_function(pairs, steps)`
 
