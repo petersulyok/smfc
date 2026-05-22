@@ -150,3 +150,6 @@ debian/smfc.prerm.debhelper
 deb-output/
 *.buildinfo
 *.changes
+
+# Mac
+.DS_Store
