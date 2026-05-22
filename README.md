@@ -206,6 +206,8 @@ The `steps=` parameter still applies: it controls how many discrete plateaus the
 
 The dashed blue line shows the continuous piecewise-linear ideal described by `control_function=`; the solid red staircase is the digitalized output actually applied to the fan (here with `steps=5`, producing 7 plateaus: one pinned at each endpoint plus five in the interior).
 
+> See [`smfc-sample9.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample9.conf) for a complete hybrid configuration using `control_function=` for both the CPU and HD fan controllers.
+
 ### 3. Standby guard
 For the HD fan controller, an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
 	
