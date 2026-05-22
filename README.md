@@ -47,7 +47,8 @@ can be adjusted with IPMI raw commands (read [more details here](https://forums.
 Key features:
 
  - Five independent fan controllers (CPU, HD, NVME, GPU, CONST) that can be enabled/disabled and combined freely
- - User-defined control function mapping temperature intervals to fan level intervals with configurable discrete steps
+ - Linear user-defined control function mapping a temperature interval to a fan level interval with configurable discrete steps
+ - Advanced multi-segment user-defined control function (via `control_function=`) for arbitrary piecewise-linear fan curves
  - Support for multiple IPMI zones with automatic shared zone arbitration (highest fan level wins)
  - Multiple fan curve instances per controller type for per-zone tuning (e.g. `[CPU]` + `[CPU:1]`)
  - Temperature calculation methods: minimum, average, or maximum across multiple devices
@@ -56,8 +57,9 @@ Key features:
  - Standby guard feature for SATA hard disk arrays organized in RAID
  - Support for SATA, SAS/SCSI, and NVMe disks with automatic HWMON/smartctl fallback
  - Nvidia or AMD GPU temperature monitoring via `nvidia-smi` or `rocm-smi`
- - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13) and egde cases (X10QBi)
- - Runs as a `systemd` service or in Docker
+ - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13) and edge cases (X10QBi)
+ - Remote IPMI access via `remote_parameters=` for VM setups (e.g. TrueNAS on Proxmox with PCI passthrough)
+ - Distributed as a `systemd` service, Docker image, DEB/RPM package, or PyPI package
  - Safe shutdown: all fans are set back to 100% speed at service termination
 
 #### 1.1 IPMI zones
