@@ -558,7 +558,7 @@ Edit `/etc/smfc/smfc.conf` and specify your configuration parameters here:
 ```ini
 #
 #   smfc.conf (C) 2020-2026, Peter Sulyok
-#   smfc 5.x service configuration parameters
+#   smfc 6.x service configuration parameters
 #
 #   Please read the documentation here: https://github.com/petersulyok/smfc
 #
@@ -604,6 +604,11 @@ max_temp=60.0
 min_level=35
 # Maximum CPU fan level (int, %, default=100)
 max_level=100
+# User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
+# Temp in °C, level in %; at least 2 pairs, temps strictly ascending
+# If this parameter specified then min_temp/max_temp/min_level/max_level parameters are skipped
+# Example: control_function=30-35, 50-55, 60-90, 65-100
+control_function=
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
 
@@ -630,6 +635,11 @@ max_temp=46.0
 min_level=35
 # Maximum HD fan level (int, %, default=100)
 max_level=100
+# User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
+# Temp in °C, level in %; at least 2 pairs, temps strictly ascending
+# If this parameter specified then min_temp/max_temp/min_level/max_level parameters are skipped
+# Example: control_function=30-35, 50-55, 60-90, 65-100
+control_function=
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
 # Names of the HDs (str multi-line list, default=)
@@ -658,8 +668,8 @@ temp_calc=1
 steps=4
 # Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
 sensitivity=2.0
-# Polling interval for reading temperature (int, sec, default=10)
-polling=10
+# Polling interval for reading temperature (int, sec, default=2)
+polling=2
 # Minimum NVMe temperature (float, C, default=35.0)
 min_temp=35.0
 # Maximum NVMe temperature (float, C, default=70.0)
@@ -668,6 +678,11 @@ max_temp=70.0
 min_level=35
 # Maximum NVMe fan level (int, %, default=100)
 max_level=100
+# User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
+# Temp in °C, level in %; at least 2 pairs, temps strictly ascending
+# If this parameter specified then min_temp/max_temp/min_level/max_level parameters are skipped
+# Example: control_function=30-35, 50-55, 60-90, 65-100
+control_function=
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
 # Names of the NVMe devices (str multi-line list, default=)
@@ -686,14 +701,14 @@ ipmi_zone=1
 # GPU type (str, ['nvidia', 'amd'], default=nvidia)
 gpu_type=nvidia
 # AMD GPU temperature sensor (int, 0-junction, 1-edge, 2-memory, default=0)
-#amd_temp_sensor=0
+amd_temp_sensor=0
 # Calculation of GPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
 # Discrete steps in mapping of temperatures to fan level (int, default=5)
 steps=5
 # Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
 sensitivity=2.0
-# Polling interval for reading temperature (int, sec, default=10)
+# Polling interval for reading temperature (int, sec, default=2)
 polling=2
 # Minimum GPU temperature (float, C, default=40.0)
 min_temp=40.0
@@ -703,14 +718,20 @@ max_temp=70.0
 min_level=35
 # Maximum GPU fan level (int, %, default=100)
 max_level=100
+# User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
+# Temp in °C, level in %; at least 2 pairs, temps strictly ascending
+# If this parameter specified then min_temp/max_temp/min_level/max_level parameters are skipped
+# Example: control_function=30-35, 50-55, 60-90, 65-100
+control_function=
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
 # GPU device IDs (comma- or space-separated list of int, default=0)
+# These are indices in nvidia-smi temperature report.
 gpu_device_ids=0
-# Path for 'nvidia-smi' command (str, default=/usr/bin/nvidia-smi)
+# Path for 'nvidia-smi' command (str, default=/usr/bin/nvidia-smi).
 nvidia_smi_path=/usr/bin/nvidia-smi
 # Path for 'rocm-smi' command (str, default=/usr/bin/rocm-smi)
-#rocm_smi_path=/usr/bin/rocm-smi
+rocm_smi_path=/usr/bin/rocm-smi
 
 
 # CONST fan controller: sets constant fan level (without any heat source) for IPMI zones(s).
@@ -730,9 +751,10 @@ Important notes:
 2. `[HD] hd_names=` is a compulsory parameter for HD fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent and could change after a reboot!
 3. `[NVME] nvme_names=` is a compulsory parameter for NVME fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/nvme0n1` form is not persistent and could change after a reboot!
 4. `[CPU] / [HD] / [NVME] min_level= / max_level=` should be configured in alignment with threshold configuration (see more details in [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)). Be patient, several refinement cycles could happen.
-5. Multiple instances of the same fan controller can be created using numbered section names (e.g. `[CPU:0]`, `[CPU:1]`). Each instance has its own full set of parameters and can be assigned to a different IPMI zone with a different fan curve. Two enabled instances of the same type must not share the same IPMI zone. See [chapter 1.4](#14-multiple-fan-curves-per-ipmi-zone) for details.
-6. Several sample configuration files are provided in `./config/samples` folder.
-7. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
+5. `[CPU] / [HD] / [NVME] / [GPU] control_function=` defines an advanced multi-segment user-defined control function as a list of `temp-level` value pairs (at least 2 pairs, temperatures strictly ascending). When specified, it overrides the linear `min_temp/max_temp/min_level/max_level` form. See [chapter 2.2](#22-advanced-multi-segment-user-defined-control-function) for details.
+6. Multiple instances of the same fan controller can be created using numbered section names (e.g. `[CPU:0]`, `[CPU:1]`). Each instance has its own full set of parameters and can be assigned to a different IPMI zone with a different fan curve. Two enabled instances of the same type must not share the same IPMI zone. See [chapter 1.4](#14-multiple-fan-curves-per-ipmi-zone) for details.
+7. Several sample configuration files are provided in `./config/samples` folder.
+8. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
 
 
 ### 11. How to run `smfc`?
