@@ -196,7 +196,7 @@ Validation policy:
   loop starts.
 
 `parse_control_function()` handles the advanced `control_function=` syntax
-(see §10.5). When the key is absent `_read_control_function()` returns an
+(see §10.2). When the key is absent `_read_control_function()` returns an
 empty list and `config.control_function` stays empty; `FanController.build_lut()`
 then falls back to `create_legacy_lut()` and reads `min_temp` / `max_temp` /
 `min_level` / `max_level` directly. The two forms are mutually exclusive within
@@ -316,6 +316,13 @@ Each subclass only builds `self.hwmon_path[]` and (optionally) overrides
 | `NvmeFc` | Per-device HWMON (NVMe driver)                                | Empty hwmon path is treated as a hard error            |
 | `GpuFc`  | `nvidia-smi --query-gpu=temperature.gpu` or `rocm-smi -t`     | Caches result for `polling` seconds across N indices    |
 
+`HdFc` is the only subclass with a per-device fallback: SAS/SCSI disks have no
+`drivetemp` entry, so their udev-discovered HWMON path comes back as `""`.
+`HdFc._get_nth_temp` treats an empty path as a signal to invoke
+`smartctl -a <dev>` and parses both SCSI (`Current Drive Temperature:`) and
+ATA (`Temperature_Celsius` SMART attribute) output styles. A single `[HD]`
+section can therefore mix SATA and SAS disks transparently.
+
 #### 7.1.2 Control function
 
 The mapping temperature → fan level is represented at runtime as a
@@ -323,7 +330,7 @@ The mapping temperature → fan level is represented at runtime as a
 `FanController.build_lut(config)`. The index is the integer temperature in °C
 (0–100); the value is the fan level in % (0–100).
 
-Two configuration styles feed into the same LUT (see §10.5 for the full
+Two configuration styles feed into the same LUT (see §10.2 for the full
 algorithm):
 
 - **Legacy** (`min_temp` / `max_temp` / `min_level` / `max_level`): produces a
@@ -363,11 +370,31 @@ flowchart TD
     J --> E5([return])
 ```
 
-The **sensitivity gate** is critical: it prevents the controller from
-chattering on sub-degree fluctuations. The **smoothing window** further
-dampens noisy sensors (e.g. brief load spikes on a CPU).
+#### 7.1.3 Reducing unnecessary fan-level changes
 
-#### 7.1.3 Aggregation across multiple devices
+Two independent mechanisms in `run()` keep the fan steady against noisy
+sensors. They act at different stages of the loop, so configuring both is
+useful:
+
+- **Smoothing** (`config.smoothing`). Each controller keeps a
+  `deque(maxlen=smoothing)` of raw readings and feeds the deque's mean (not
+  the latest sample) into the sensitivity check and the LUT lookup.
+  `smoothing=1` (default) disables it; values of 3..5 are appropriate when a
+  sensor briefly spikes (e.g. CPU load transients). Higher values trade
+  responsiveness for stability.
+- **Sensitivity threshold** (`config.sensitivity`). After smoothing, a level
+  change is only considered when
+  `|new_smoothed_temp - last_temp| ≥ sensitivity`. This is a symmetric
+  deadband, not a hysteresis — the same threshold gates both heating and
+  cooling transitions. Without it the staircase LUT would still trigger a
+  fan-level change on every tread boundary crossing, even for thermally
+  irrelevant fluctuations.
+
+The combination of smoothing (input side) and sensitivity (decision side) is
+what makes the digitalized staircase output (§7.1.2) actually steady in
+practice.
+
+#### 7.1.4 Aggregation across multiple devices
 
 When `count > 1` (multiple CPUs, multiple disks, multiple GPUs), `get_temp()`
 collects all per-device temperatures and reduces them with one of:
@@ -565,31 +592,7 @@ poll. It:
 
 Disabled automatically when `count == 1`.
 
-### 10.2 Temperature smoothing
-
-Each controller keeps a `deque(maxlen=smoothing)` of raw readings; `run()`
-uses the deque's mean instead of the latest reading. `smoothing=1` (default)
-means no smoothing. Higher values trade responsiveness for stability — set
-this to 3..5 if you see fan oscillation on a noisy sensor.
-
-### 10.3 Sensitivity threshold
-
-A change is only acted on when
-`|new_smoothed_temp - last_temp| ≥ config.sensitivity`. This is a deadband,
-not a hysteresis: the threshold is symmetric and applies both ways. Without
-it, the staircase mapping would still cause a fan-level change on every
-crossing of a tread boundary, even for thermally-irrelevant fluctuations.
-
-### 10.4 HWMON → smartctl fallback (HD only)
-
-`HdFc` collects an HWMON path per disk via udev. SAS/SCSI disks have no
-`drivetemp` entry, so their path comes back as `""`. `HdFc._get_nth_temp`
-treats an empty path as a signal to invoke `smartctl -a <dev>` and parse the
-output — supporting both SCSI ("Current Drive Temperature:") and ATA
-("Temperature_Celsius" SMART attribute) reporting styles. This means a
-single `[HD]` section can mix SATA and SAS disks transparently.
-
-### 10.5 Piecewise-linear control function (`control_function=`)
+### 10.2 Piecewise-linear control function (`control_function=`)
 
 `FanController.build_lut(config)` is the single dispatch point that produces
 the 101-element `levels_lut` for any controller at startup:
@@ -640,7 +643,6 @@ interior plateau values are averages of the underlying linear curve.
 | Monotonicity: temperatures strictly ascending | `Config.parse_control_function()` |
 | Interior range: `(t_last − t_first − 1) ≥ steps` | `Config._validate_fan_controller_config()` |
 | Mutual exclusion with legacy keys | Section parser (`_parse_*_sections`) |
-| Legacy → canonical synthesis when absent | Section parser (`_parse_*_sections`) |
 
 `control_function=` and any of `min_temp=` / `max_temp=` / `min_level=` /
 `max_level=` in the same section raises `ValueError` at parse time — the two
@@ -721,53 +723,17 @@ sequenceDiagram
 
 ## 13. Special architectural considerations
 
-Non-obvious behaviors and design choices that have caused (or could cause)
-confusion when reading the code.
+Non-obvious behaviors and design choices not covered elsewhere in this
+document.
 
-### 13.1 `deferred_apply` is decided once at startup
-
-It is set during `Service.run()` after all controllers exist, based on
-config-time zone assignment. There is no mechanism to add/remove
-controllers at runtime; SIGHUP-style config reload is not implemented.
-Changing the config requires a service restart.
-
-### 13.2 BMC initialization timeout is 120 s
-
-If the BMC needs longer than 2 minutes to become responsive (cold boot of
-some boards), `Ipmi.__init__` gives up and the service exits with code 8.
-`systemd` will normally restart it — the next attempt usually succeeds.
-
-### 13.3 X10QBi re-applies manual mode on every fan write
-
-The Nuvoton NCT7904D on X10QBi tends to drift back into SmartFan mode, so
-both `set_fan_level()` and `set_multiple_fan_levels()` call
-`set_fan_manual_mode()` first. This is a deliberate but expensive choice:
-each level write incurs 11 extra `ipmitool raw` calls.
-
-### 13.4 Polling intervals and the outer loop
-
-`wait = min(polling) / 2` means a `[CONST]` with the default `polling=30`
-combined with a `[CPU]` with `polling=2` results in a 1-second main loop,
-which is fine. But misconfiguring all controllers to `polling=0.1` would
-cause near-busy-spin and high ipmitool traffic. There is no minimum-bound
-enforcement.
-
-### 13.5 No locking around BMC access
+### 13.1 No locking around BMC access
 
 There is only one thread, so this is safe today. If anyone introduces
 concurrency in the future, *every* `Ipmi` method assumes it is the sole
 caller — the `time.sleep(fan_level_delay)` after each write is the only
 synchronization with the BMC and is not thread-safe.
 
-### 13.6 Fan-mode fall-back at exit
-
-`exit_func` calls `ipmi.set_fan_mode(FULL_MODE)`, which (1) puts the BMC
-back into FULL mode and (2) brings fans to 100% on most boards. On a board
-that doesn't auto-100% in FULL mode, fans may stay at whatever the last
-written duty cycle was. This is rare but worth knowing when investigating
-"my fans didn't spin up after smfc crashed".
-
-### 13.7 GPU SMI calls are batched across indices
+### 13.2 GPU SMI calls are batched across indices
 
 `GpuFc._get_nth_temp(i)` runs `nvidia-smi`/`rocm-smi` once per `polling`
 interval and caches the *full* per-GPU temperature list. The `i` argument
@@ -775,7 +741,7 @@ just indexes into that cache. This is why GPU polling is per-controller,
 not per-device — and why the SMI tool is invoked only once even when
 monitoring multiple GPUs.
 
-### 13.8 First-poll behavior
+### 13.3 First-poll behavior
 
 `last_time = monotonic() - (polling + 1)` in the base controller
 constructor: this forces the first `run()` call to actually poll, regardless
@@ -783,7 +749,7 @@ of how soon after startup it happens. Without this, the first iteration
 would be a no-op and the fans would sit at the BMC's default level until
 the first elapsed polling interval.
 
-### 13.9 `last_level == 0` is treated as "not initialized"
+### 13.4 `last_level == 0` is treated as "not initialized"
 
 `Service._collect_desired_levels` filters out controllers with
 `last_level <= 0`, meaning a brand-new controller that hasn't completed a
