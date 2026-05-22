@@ -8,9 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [6.0.0] - TBD
 
 ### New
+- Advanced multi-segment user-defined control function: temperature-based fan controllers now accept a `control_function=` parameter consisting of a sequence of `temp-level` points, defining an arbitrary piecewise-linear curve (replacing the implicit single linear segment between `min_temp/max_temp` and `min_level/max_level`). The two forms are mutually exclusive per controller section.
 - Multiple fan curve instances per controller type: a single controller family can now define more than one section (`[CPU]` + `[CPU:1]`, `[HD]` + `[HD:1]`, …) with independent fan curves applied to different IPMI zones. Parse-time validation rejects same-family sections that share an IPMI zone.
 - New smoke test [`run_test_shared_zones_2.sh`](https://github.com/petersulyok/smfc/blob/main/test/run_test_shared_zones_2.sh) exercises multi-curve CPU (`CPU:0` + `CPU:1`) combined with cross-family shared-zone arbitration (`CPU:1` + `HD` on zone 1).
 - New sample configuration file [`smfc-sample8.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample8.conf) demonstrating the multi-curve feature.
+- New sample configuration file [`smfc-sample9.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample9.conf) demonstrating the advanced multi-segment user-defined `control_function=` parameter.
+- New documentation images: [`doc/linear_control_function.png`](https://github.com/petersulyok/smfc/blob/main/doc/linear_control_function.png) and [`doc/advanced_control_function.png`](https://github.com/petersulyok/smfc/blob/main/doc/advanced_control_function.png) illustrating the linear and advanced multi-segment control functions.
 - [`ARCHITECTURE.md`](https://github.com/petersulyok/smfc/blob/main/ARCHITECTURE.md) added: contributor-facing document describing the internal structure, classes, execution order, IPMI zone arbitration, and edge cases, with Mermaid diagrams.
 
 ### Changed
@@ -22,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unit-test suite refactored around the new `Config` class; smoke-test runner reworked accordingly.
 - `DEVELOPMENT.md` updated: pointer to `ARCHITECTURE.md` added at the top, new smoke test listed in the table.
 - README updated: feature list, IPMI zone description, and multi-curve documentation.
+- README chapter 2 (User-defined control function) restructured into sub-chapters: 2.1 Linear user-defined control function, 2.2 Advanced multi-segment user-defined control function, 2.3 Reducing unnecessary fan speed changes (with a 5-row table mapping mechanisms to control-loop stages). New images and sample-config references added.
+- Removed the obsolete `count=` parameter (no longer used in config parsing) from sample configurations [`smfc-sample1.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample1.conf), [`smfc-sample5.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample5.conf) and [`smfc-sample6.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample6.conf).
 - Pylint warnings corrected.
 
 ## [5.4.0] - 2026.04.30
