@@ -188,7 +188,7 @@ The dashed blue line shows the continuous linear ideal between `(min_temp, min_l
 > Sample configurations using the linear form are available in [`config/samples/`](https://github.com/petersulyok/smfc/tree/main/config/samples) — for example [`smfc-sample1.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample1.conf) (CPU only), [`smfc-sample2.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample2.conf) (HD with standby guard), [`smfc-sample4.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample4.conf) (CPU + HD hybrid), and [`smfc-sample8.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample8.conf) (multiple fan curves per zone).
 
 #### 2.2 Advanced multi-segment user-defined function
-For more precise control, the `control_function=` parameter lets you define a piecewise-linear fan curve directly as a list of `temperature-level` pairs:
+For more precise control, the `control_function=` parameter (available since `smfc v6.0.0`) lets you define a piecewise-linear fan curve directly as a list of `temperature-level` pairs:
 
 ```ini
 steps=5
