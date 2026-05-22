@@ -165,36 +165,28 @@ The suffix number after `:` is used only for ordering and logging — it has no 
 Multiple instances on the same IPMI zone participate in the shared zone arbitration described in [chapter 1.3](#13-shared-ipmi-zone-arbitration).
 
 ### 2. User-defined control function
-Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval.
+Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval. Two forms are supported in each temperature-driven section: a **simple linear** mapping (chapter 2.1) or an **advanced multi-segment** piecewise-linear curve (chapter 2.2). The two forms are mutually exclusive within the same section.
 
- <img src="https://github.com/petersulyok/smfc/raw/main/doc/userdefined_control_function.png" align="center" width="500">
-
-The following five parameters will define such a function:
+#### 2.1 Linear user-defined function
+The simple form maps a single temperature interval `[min_temp..max_temp]` linearly to a single fan-level interval `[min_level..max_level]`, divided into discrete plateaus by the `steps=` parameter:
 
 ```ini
-     min_temp=
-     max_temp=
-     min_level=
-     max_level=
-     steps=
+     min_temp=30
+     max_temp=60
+     min_level=35
+     max_level=100
+     steps=5
 ```
 
-In this way, a fan controller can map any new temperature value to a fan level (from Celsius degrees to % value).   
-Changing the fan rotational speed is a very slow process (it could take several seconds depending on the fan type and the requested amount of change), so we try to minimize these kinds of actions. Instead of setting fan rotational speed continuously, we define discrete fan levels based on `steps=` parameter.
+ <img src="https://github.com/petersulyok/smfc/raw/main/doc/linear_control_function.png" align="center" width="500">
 
- <img src="https://github.com/petersulyok/smfc/raw/main/doc/fan_output_levels.png" align="center" width="500">
+> Sample configurations using the linear form are available in [`config/samples/`](https://github.com/petersulyok/smfc/tree/main/config/samples) — for example [`smfc-sample1.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample1.conf) (CPU only), [`smfc-sample2.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample2.conf) (HD with standby guard), [`smfc-sample4.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample4.conf) (CPU + HD hybrid), and [`smfc-sample8.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample8.conf) (multiple fan curves per zone).
 
-The fan controllers implement the following strategies to avoid/minimize the unnecessary change of fan rotation speed:
-
- 1. When the fan rotational speed is changed, it always applies a delay time (defined in `[IPMI] fan_level_delay=` configuration parameter) to let the fan implement the physical change.
- 2. There is a sensitivity threshold parameter (`sensitivity=`) in the fan controller configuration. While the temperature change is below this value, the fan controller does not react.
- 3. The configuration parameter `polling=` defines the frequency of the temperature reading. The bigger polling time, the lower frequency of the fan speed change.
- 4. The `smoothing=` parameter enables a moving average window for temperature readings. When set to a value greater than 1, the fan controller averages the last N temperature readings before making fan level decisions. This reduces fan speed oscillation caused by brief temperature spikes. For example, `smoothing=4` averages the last 4 readings. Set to 1 (default) to disable smoothing.
-
-#### Advanced: multi-segment control function
+#### 2.2 Advanced multi-segment user-defined function
 For more precise control, the `control_function=` parameter lets you define a piecewise-linear fan curve directly as a list of `temperature-level` pairs:
 
 ```ini
+steps=5
 control_function = 30-35, 50-40, 60-90, 65-100
 ```
 
@@ -202,11 +194,25 @@ Each pair is written as `T-L` where `T` is a temperature in °C and `L` is a fan
 
 The `steps=` parameter still applies: it controls how many discrete plateaus the interior of the curve is divided into before being sent to the fan. The two endpoint temperatures are always pinned exactly to their specified levels; the `steps` interior plateaus together with the 2 pinned endpoints produce `steps + 2` plateaus in total.
 
- <img src="https://github.com/petersulyok/smfc/raw/main/doc/new_userdefined_control_function.png" align="center" width="600">
+ <img src="https://github.com/petersulyok/smfc/raw/main/doc/advanced_control_function.png" align="center" width="600">
 
 The dashed blue line shows the continuous piecewise-linear ideal described by `control_function=`; the solid red staircase is the digitalized output actually applied to the fan (here with `steps=5`, producing 7 plateaus: one pinned at each endpoint plus five in the interior).
 
 > See [`smfc-sample9.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample9.conf) for a complete hybrid configuration using `control_function=` for both the CPU and HD fan controllers.
+
+#### 2.3 Strategies for changing fans' rotational speed
+Changing fan rotational speed is a slow physical process — depending on the fan type and the magnitude of the change it can take several seconds. Frequent or unnecessary changes also cause audible oscillation. To keep the fans steady, each temperature-driven controller combines five mechanisms that act at different stages of the control loop:
+
+| Stage | Mechanism | Parameter | Effect |
+|---|---|---|---|
+| Sample  | Polling interval | `polling=` | Sets how often the controller reads the temperature. Larger values reduce the maximum rate of fan-level updates. |
+| Smooth  | Moving-average smoothing | `smoothing=` | Averages the last N temperature readings before they enter the control function. Suppresses brief spikes; `1` (default) disables smoothing. |
+| Filter  | Sensitivity threshold | `sensitivity=` | The controller does not react until the smoothed temperature has moved by at least this many °C since the last action. |
+| Quantize | Discrete fan levels | `steps=` | The control function produces a fixed number of plateaus (linear: `steps + 1`, multi-segment: `steps + 2`) instead of a continuous curve, so small temperature drift inside a plateau yields the same fan level. |
+| Apply   | Post-change delay | `[Ipmi] fan_level_delay=` | After every fan-level change, the controller waits this many seconds before issuing another command, giving the fan time to reach the new speed physically. |
+
+The mechanisms are independent and complementary: `polling=` and `smoothing=` work on the *input* side (how the temperature is measured), `sensitivity=` and `steps=` work on the *decision* side (whether and how a temperature maps to a fan level), and `fan_level_delay=` works on the *output* side (pacing the IPMI commands themselves).
+
 
 ### 3. Standby guard
 For the HD fan controller, an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
