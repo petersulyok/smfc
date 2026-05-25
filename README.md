@@ -29,7 +29,7 @@ This is a `systemd service` running on Linux that can control fans with the help
  1. Set up the IPMI threshold values for your fans (see [chapter 6.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#6-ipmi-fan-control-and-sensor-thresholds) for more details) 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`)
- 4. Install `smfc` service or run `smfc` in docker (see [chapter 9.](https://github.com/petersulyok/smfc?tab=readme-ov-file#9-installation-and-uninstallation) for more details)
+ 4. Install `smfc` service or run it in docker (see [chapter 9.](https://github.com/petersulyok/smfc?tab=readme-ov-file#9-installation-and-uninstallation) for more details)
  5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapter 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration-file) for more details).
  6. Start `smfc` service (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc) for more details)
  7. Check results in system log
