@@ -82,4 +82,10 @@ jobs:
             -f event_type=package-published \
             -f "client_payload[release_tag]=${{ github.event.release.tag_name }}"
 
-      # TODO: add `Dispatch to smfc-rpm` step once smfc-rpm repository exists
+      - name: Dispatch to smfc-rpm
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPO_DISPATCH_TOKEN }}
+        run: |
+          gh api repos/petersulyok/smfc-rpm/dispatches \
+            -f event_type=package-published \
+            -f "client_payload[release_tag]=${{ github.event.release.tag_name }}"
