@@ -514,18 +514,18 @@ The default location of the installed files:
 | `smfc service` | `/usr/local/lib/python3.xx` or </br> `/usr/lib/python3.xx` | smfc python package             |
 
 Notes for the script:
-- Different Linux distros install python package to different folders (it was tested on Ubuntu 24.04, Debian 13,
-Suse Leap 15, Proxmox 9, and Arch Linux)
-- Installation process will stop for any error
-- The default installation method is the remote installation
-- Using `--local` parameter will do installation locally, from the current folder (i.e. GitHub repository needs to be cloned)
+- Different Linux distros install the Python package to different folders (tested on Ubuntu 24.04, Debian 13,
+SUSE Leap 15, Proxmox 9, and Arch Linux)
+- The installation process stops on any error
+- Remote installation is the default method
+- The `--local` parameter installs from the current folder (the GitHub repository must be cloned first)
 - The default action is the following:
-  - the existing previous configuration file will be renamed
-  - a new configuration file will be installed
-  - `hd_names=` configuration parameter will be pre-filled with the list of existing hard disks for user's convenience
+  - the existing configuration file is renamed
+  - a new configuration file is installed
+  - the `hd_names=` configuration parameter is pre-filled with the list of existing hard disks for the user's convenience
     (please check/edit this parameter!)
-- Using `--keep-config` parameter, the original configuration file will be preserved
-- Using `--verbose` parameter, the phases of the installation will be displayed 
+- With the `--keep-config` parameter, the original configuration file is preserved
+- With the `--verbose` parameter, the installation phases are displayed
 
 For remote installation the script can be executed (as root user) this way:
 
@@ -539,7 +539,7 @@ or if you want to preserve your existing configuration file:
 curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh|bash /dev/stdin --verbose --keep-config
 ```
 
-For local installation follow these steps (here [`uv` command](https://docs.astral.sh/uv/getting-started/installation/) is also required):
+For local installation, follow these steps (the [`uv` command](https://docs.astral.sh/uv/getting-started/installation/) is also required):
 
 ```
 git clone https://github.com/petersulyok/smfc.git
@@ -549,10 +549,10 @@ uv build
 ./bin/install.sh --local --verbose --keep-config
 ```
 
-Here we clone the GitHub repository and make the `smfc` package locally before installation.
+This clones the GitHub repository and builds the `smfc` package locally before installation.
 
-On the other hand, there is an uninstallation script ([`bin/uninstall.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/uninstall.sh)) which can uninstall `smfc`.
-This script has the following command line parameters:
+There is also an uninstallation script ([`bin/uninstall.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/uninstall.sh)) for removing `smfc`.
+It has the following command line parameters:
 
 ```
 user@host:~$ ./uninstall.sh --help
@@ -562,13 +562,13 @@ usage: uninstall.sh [-h|--help] [-k|--keep-config] [-v|--verbose]
            -v, --verbose      verbose output
 ```
 
-This script can be executed locally and remotely as described for installation above. Here is an example for remote execution: 
+It can be executed locally or remotely, just like the installation script. Example of remote execution:
 
 ```
 curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/uninstall.sh|bash /dev/stdin --verbose
 ```
 
-The script will remove the installed `smfc` files and the python package.
+The script removes the installed `smfc` files and the Python package.
 
 ### 10. Configuration file
 After successful installation, create/edit your new configuration file. If you just upgraded to a new `smfc` version, you can preserve the existing one. 
