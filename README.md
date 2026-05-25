@@ -29,8 +29,7 @@ This is a `systemd service` running on Linux that can control fans with the help
  1. Set up the IPMI threshold values for your fans (see [chapter 6.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#6-ipmi-fan-control-and-sensor-thresholds) for more details) 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`)
- 4. Install `smfc` service (see [chapter 9.](https://github.com/petersulyok/smfc?tab=readme-ov-file#9-installation-and-uninstallation) for more details)
-    or run `smfc` in docker (see more details in [Docker.md](docker/Docker.md))
+ 4. Install `smfc` service or run `smfc` in docker (see [chapter 9.](https://github.com/petersulyok/smfc?tab=readme-ov-file#9-installation-and-uninstallation) for more details)
  5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapter 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration-file) for more details).
  6. Start `smfc` service (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc) for more details)
  7. Check results in system log
@@ -436,7 +435,57 @@ Notes:
 ### 9. Installation and uninstallation
 For the installation and uninstallation, you need root privileges. There are several ways to install and uninstall `smfc`, this chapter will show them.
 
-#### 9.1. Manual installation and uninstallation
+#### 9.1. DEB package installation
+Pre-built `.deb` packages are available from the [smfc-deb APT repository](https://github.com/petersulyok/smfc-deb), hosted on GitHub Pages and signed with a dedicated GPG key.
+
+Add the repository and install:
+
+```bash
+curl -fsSL https://petersulyok.github.io/smfc-deb/smfc-repo.gpg \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/smfc-repo.gpg
+echo "deb [signed-by=/etc/apt/keyrings/smfc-repo.gpg] https://petersulyok.github.io/smfc-deb stable main" \
+  | sudo tee /etc/apt/sources.list.d/smfc.list
+sudo apt update && sudo apt install smfc
+```
+
+To update: `sudo apt update && sudo apt upgrade smfc`.
+
+To remove:
+
+```bash
+sudo apt remove smfc
+sudo rm /etc/apt/sources.list.d/smfc.list /etc/apt/keyrings/smfc-repo.gpg
+```
+
+Compatible with Debian 12+, Ubuntu 22.04+. See the [smfc-deb README](https://github.com/petersulyok/smfc-deb) for the full distribution list. The package installs the same files as the manual installation (service unit, configuration, man page, sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](PACKAGES.md) for build-from-source instructions.
+
+#### 9.2. RPM package installation
+Pre-built `.rpm` packages are available from the [smfc-rpm DNF repository](https://github.com/petersulyok/smfc-rpm), hosted on GitHub Pages and signed with a dedicated GPG key.
+
+Add the repository and install:
+
+```bash
+sudo dnf config-manager addrepo --from-repofile=https://petersulyok.github.io/smfc-rpm/smfc.repo
+sudo dnf install smfc
+```
+
+(On older `dnf` versions: `sudo dnf config-manager --add-repo=https://petersulyok.github.io/smfc-rpm/smfc.repo`.)
+
+To update: `sudo dnf upgrade smfc`.
+
+To remove:
+
+```bash
+sudo dnf remove smfc
+sudo rm /etc/yum.repos.d/smfc.repo
+```
+
+Compatible with Fedora 39+, RHEL/Rocky/AlmaLinux 9+ (with EPEL), CentOS Stream 9+, openSUSE Leap 15.5+. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for the full distribution list. The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](PACKAGES.md) for build-from-source instructions.
+
+#### 9.3. Docker installation
+`smfc` is also available as a docker image, see more details in [Docker.md](docker/Docker.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting.
+
+#### 9.4. Manual installation and uninstallation
 There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` in two different ways:
 - remotely from the GitHub repository (no cloning required)
 - locally from a git repository (GitHub repository needs to be cloned)
@@ -520,26 +569,6 @@ curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main
 ```
 
 The script will remove the installed `smfc` files and the python package.
-
-#### 9.2. DEB and RPM package installation
-Pre-built DEB and RPM packages are available as build artifacts from the [GitHub packages workflow](https://github.com/petersulyok/smfc/actions/workflows/packages.yml) on each release. You can also build them locally from the repository.
-
-For Debian/Ubuntu systems:
-
-```
-sudo dpkg -i smfc_*.deb
-```
-
-For Fedora/RHEL systems:
-
-```
-sudo dnf install smfc-*.rpm
-```
-
-The packages install the same files as the manual installation (service unit, configuration, man page, and sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](PACKAGES.md) for build instructions and compatible distributions.
-
-#### 9.3. Docker installation
-`smfc` is also available as a docker image, see more details in [Docker.md](docker/Docker.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting. 
 
 ### 10. Configuration file
 After successful installation, create/edit your new configuration file. If you just upgraded to a new `smfc` version, you can preserve the existing one. 
