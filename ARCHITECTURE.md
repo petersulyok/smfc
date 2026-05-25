@@ -828,8 +828,6 @@ A single dedicated GPG key (RSA 4096, 5-year expiry) signs both repositories. Th
 
 The signing key never lives in the `smfc` source repository or in `smfc/packages.yml`. A compromise of `smfc` source alone cannot produce signed packages — the trust boundary is the downstream publishing repositories.
 
-For the operational plan that produced this layout, see [`doc/REPOSITORIES.md`](doc/REPOSITORIES.md).
-
 ---
 
 ## 15. Where to look next

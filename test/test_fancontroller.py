@@ -683,7 +683,7 @@ class TestFanController:
             ([(30, 35), (65, 100)], 5, "create_control_function p1"),
             # 3-point
             ([(30, 35), (50, 40), (65, 100)], 5, "create_control_function p2"),
-            # 4-point (matches CONTROL_FUNCTION.md §7 example)
+            # 4-point
             ([(30, 35), (50, 40), (60, 90), (65, 100)], 5, "create_control_function p3"),
             # Higher steps
             ([(30, 35), (60, 100)], 10, "create_control_function p4"),
@@ -786,7 +786,7 @@ class TestFanController:
         mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
-        # 4-point curve as in CONTROL_FUNCTION.md §7; steps=5 -> 7 plateaus.
+        # 4-point curve; steps=5 -> 7 plateaus.
         # NOTE: min_temp/max_temp/min_level/max_level are mutually exclusive with control_function in
         # Config-driven parsing, but the factory bypasses Config so we just set control_function.
         cfg = create_cpu_config(steps=5, sensitivity=1, polling=1,
