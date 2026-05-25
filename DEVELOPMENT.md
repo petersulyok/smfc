@@ -250,10 +250,11 @@ The project implemented the following GitHub workflows:
    * build distribution package on Python `3.14`
    * upload the new package to PyPI
 
-3. Build DEB and RPM packages (`packages.yml`). A published release triggers this action:
+3. Build and publish DEB / RPM packages (`packages.yml`). A published release triggers this action:
    * build DEB package on `debian:trixie`
    * build RPM package on `fedora:latest`
-   * upload both packages as release artifacts
+   * upload both packages as CI artifacts (90-day retention) and attach them to the GitHub release as assets
+   * dispatch a `package-published` event to [`smfc-deb`](https://github.com/petersulyok/smfc-deb) and [`smfc-rpm`](https://github.com/petersulyok/smfc-rpm), which then republish the packages into their signed APT and DNF repositories on GitHub Pages (see [`ARCHITECTURE.md` chapter 14](ARCHITECTURE.md#14-release-and-distribution))
 
 
 # Release process
