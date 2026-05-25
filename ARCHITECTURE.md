@@ -759,7 +759,80 @@ the first iteration.
 
 ---
 
-## 14. Where to look next
+## 14. Release and distribution
+
+`smfc` ships across three coordinated GitHub repositories. Source lives in the main repo; signed APT and DNF repositories are hosted as separate repos so that build state, GPG signing material, and accumulated package metadata stay out of the source tree.
+
+### 14.1 Three-repository architecture
+
+| Repository | Role | Branch layout |
+|---|---|---|
+| [`petersulyok/smfc`](https://github.com/petersulyok/smfc) | Source, tests, build workflows | `main` |
+| [`petersulyok/smfc-deb`](https://github.com/petersulyok/smfc-deb) | Signed APT repository (Debian/Ubuntu family) | `main` (workflow + config), `gh-pages` (served reprepro output) |
+| [`petersulyok/smfc-rpm`](https://github.com/petersulyok/smfc-rpm) | Signed DNF repository (Fedora/RHEL family) | `main` (workflow + config), `gh-pages` (served createrepo_c output) |
+
+Both `smfc-deb` and `smfc-rpm` use the `gh-pages` branch as the GitHub Pages source, exposing the repository at `https://petersulyok.github.io/smfc-deb/` and `https://petersulyok.github.io/smfc-rpm/` respectively.
+
+### 14.2 Release trigger flow
+
+```mermaid
+flowchart LR
+    REL([release: published<br/>vX.Y.Z]) --> PKG[packages.yml]
+    subgraph smfc[petersulyok/smfc]
+        PKG --> BD[build-deb]
+        PKG --> BR[build-rpm]
+        BD --> PUB[publish job]
+        BR --> PUB
+        PUB -- attach assets --> REL
+    end
+    PUB -- repository_dispatch<br/>package-published --> DEB[smfc-deb<br/>publish-deb.yml]
+    PUB -- repository_dispatch<br/>package-published --> RPM[smfc-rpm<br/>publish-rpm.yml]
+    DEB -- push --> GHP1[(gh-pages<br/>reprepro)]
+    RPM -- push --> GHP2[(gh-pages<br/>createrepo_c)]
+    GHP1 --> AU([apt users])
+    GHP2 --> DU([dnf users])
+```
+
+Sequence on release:
+
+1. `release: published` event fires `packages.yml` in `smfc`.
+2. `build-deb` and `build-rpm` jobs run in parallel, producing `smfc_X.Y.Z_all.deb` and `smfc-X.Y.Z-1.noarch.rpm`.
+3. The `publish` job (after both builds succeed) downloads both artifacts, attaches them as **release assets** (public, version-pinned downloads), and fires a `repository_dispatch` event of type `package-published` with `client_payload.release_tag` set, to both downstream repos.
+4. Each downstream workflow downloads its package from the release page, refreshes the repository metadata, and pushes to `gh-pages`. GitHub Pages auto-deploys.
+
+Cross-repo dispatch requires the `PACKAGE_REPO_DISPATCH_TOKEN` secret in `smfc` — a fine-grained PAT with `Contents: Read and write` on both `smfc-deb` and `smfc-rpm`. The default `GITHUB_TOKEN` cannot dispatch across repositories.
+
+### 14.3 Package repository workflows
+
+| Aspect | `smfc-deb/publish-deb.yml` | `smfc-rpm/publish-rpm.yml` |
+|---|---|---|
+| Tool | `reprepro` | `createrepo_c` + `rpm-sign` |
+| Runner | `ubuntu-latest` | `ubuntu-latest` in `fedora:latest` container |
+| Output structure | `dists/stable/…`, `pool/main/s/smfc/*.deb` | `repodata/…`, `packages/*.rpm` |
+| Version retention | **Latest only** (reprepro replaces previous versions in a suite) | **All versions retained** (createrepo_c accumulates) |
+| Signing | `Release` + `InRelease` metadata signed with `SignWith: <KEYID>` | each `.rpm` signed with `rpm --addsign`; `repomd.xml.asc` detached signature |
+| Manual trigger | `workflow_dispatch` with `release_tag` input | same |
+| Idempotency | re-export metadata if the same version is already present | `createrepo_c --update` is naturally idempotent |
+
+For users who need a specific historical version, the corresponding `.deb` / `.rpm` remains downloadable from the GitHub release page even after the APT repo has moved on to a newer release.
+
+### 14.4 Signing and trust model
+
+A single dedicated GPG key (RSA 4096, 5-year expiry) signs both repositories. The key is **independent of the project maintainer's personal key**, generated specifically for package signing.
+
+| Material | Stored where | Visibility |
+|---|---|---|
+| Private key (`smfc-repo-private.asc`) | `REPO_SIGNING_GPG_KEY` secret on `smfc-deb` **and** `smfc-rpm` | Workflow-only |
+| Public key (`smfc-repo.gpg`) | Committed on `main` and served from `gh-pages` in both repos | Public (users import to verify) |
+| Key ID | Embedded in `conf/distributions` (DEB) and `_gpg_name` macro (RPM) | Public |
+
+The signing key never lives in the `smfc` source repository or in `smfc/packages.yml`. A compromise of `smfc` source alone cannot produce signed packages — the trust boundary is the downstream publishing repositories.
+
+For the operational plan that produced this layout, see [`doc/REPOSITORIES.md`](doc/REPOSITORIES.md).
+
+---
+
+## 15. Where to look next
 
 - `test/test_*.py` — unit tests structured per source file; the
   `MockDevices` / `factory_mockdevice` helpers in `test/test_data.py`
