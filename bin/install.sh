@@ -159,7 +159,7 @@ verbose_echo "smfc files have been installed."
 
 # Collect all disk names for `hd_names=` parameter in 'smfc.conf' file.
 if [ -z "${KEEP_CONFIG}" ]; then
-  hd_list=$(ls /dev/disk/by-id/|grep -v -E ".*-part|wwn-|-eui|-nvme|dm-|lvm-|_1+$")
+  hd_list=$(ls /dev/disk/by-id/|grep -v -E '\-part|^wwn-|\-eui|nvme|^dm-|^lvm-|^md-|^zd-|_1+$' || true)
   if [ -n "$hd_list" ]; then
     hd_names=""
     for hl in $hd_list; do
@@ -167,6 +167,19 @@ if [ -z "${KEEP_CONFIG}" ]; then
     done
     sed -i "s|^hd_names=|hd_names=$hd_names|g" /etc/smfc/smfc.conf
     verbose_echo "HDD names are listed in the new configuration file (please edit!)."
+  fi
+fi
+
+# Collect all NVMe names for `nvme_names=` parameter in 'smfc.conf' file.
+if [ -z "${KEEP_CONFIG}" ]; then
+  nvme_list=$(ls /dev/disk/by-id/|grep -E '^nvme-'|grep -v -E '\-part|\-eui|_1+$' || true)
+  if [ -n "$nvme_list" ]; then
+    nvme_names=""
+    for nl in $nvme_list; do
+      nvme_names+="/dev/disk/by-id/$nl\n\t"
+    done
+    sed -i "s|^nvme_names=|nvme_names=$nvme_names|g" /etc/smfc/smfc.conf
+    verbose_echo "NVMe names are listed in the new configuration file (please edit!)."
   fi
 fi
 
