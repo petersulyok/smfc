@@ -1,0 +1,413 @@
+#
+#   client.py (C) 2020-2026, Peter Sulyok
+#   smfc package: Supermicro fan control for Linux (home) servers.
+#   smfc-client: read-only one-shot snapshot of smfc-managed state.
+#
+import argparse
+import sys
+from importlib.metadata import version
+from typing import List, Optional, Tuple, Union
+from pyudev import Context
+from smfc.config import Config
+from smfc.constfc import ConstFc
+from smfc.cpufc import CpuFc
+from smfc.fancontroller import FanController
+from smfc.gpufc import GpuFc
+from smfc.hdfc import HdFc
+from smfc.ipmi import Ipmi
+from smfc.log import Log
+from smfc.nvmefc import NvmeFc
+
+
+# Exit codes (aligned with the service: 6=config, 8=ipmi, 9=udev).
+EXIT_OK: int = 0
+EXIT_CONFIG_ERROR: int = 6
+EXIT_IPMI_ERROR: int = 8
+EXIT_UDEV_ERROR: int = 9
+
+# BMC init timeout for the client (default service uses 120 s).
+CLIENT_BMC_INIT_TIMEOUT: float = 5.0
+
+# Default configuration file path (matches systemd unit).
+DEFAULT_CONFIG_PATH: str = "/etc/smfc/smfc.conf"
+
+# ANSI escape sequences.
+BOLD: str = "\x1b[1m"
+DIM: str = "\x1b[2m"
+GREEN: str = "\x1b[32m"
+RED: str = "\x1b[31m"
+RESET: str = "\x1b[0m"
+
+# Type alias for a controller entry: (section_name, type_label, controller_or_None, error_or_None).
+ControllerEntry = Tuple[str, str, Optional[Union[FanController, ConstFc]], Optional[str]]
+
+
+def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    """Parse command-line arguments for smfc-client.
+    Args:
+        argv (Optional[List[str]]): argument list (None = sys.argv[1:])
+    Returns:
+        argparse.Namespace: parsed arguments
+    """
+    parser = argparse.ArgumentParser(
+        prog="smfc-client",
+        description="Print a one-shot snapshot of smfc-managed fans and temperatures.",
+        epilog="Exit codes: 0=ok  6=config error  8=ipmi error  9=udev error",
+    )
+    parser.add_argument("-c", "--config", action="store", dest="config_file", default=DEFAULT_CONFIG_PATH,
+                        metavar="FILE", help=f"configuration file (default: {DEFAULT_CONFIG_PATH})")
+    parser.add_argument("-s", "--sudo", action="store_true", default=False,
+                        help="run ipmitool and smartctl with sudo")
+    parser.add_argument("-nc", "--no-color", action="store_true", default=False,
+                        dest="no_color", help="disable ANSI colors in output")
+    parser.add_argument("-v", "--version", action="version", version="%(prog)s " + version("smfc"))
+    return parser.parse_args(argv)
+
+
+def _build_silent_log() -> Log:
+    """Build a Log instance that suppresses all output (used to silence Ipmi/controller __init__ chatter).
+    Returns:
+        Log: a silent Log instance routed to stderr
+    """
+    return Log(Log.LOG_NONE, Log.LOG_STDERR)
+
+
+def _use_color(no_color_flag: bool) -> bool:
+    """Decide whether ANSI colors should be emitted.
+    Args:
+        no_color_flag (bool): user-supplied --no-color flag
+    Returns:
+        bool: True when colors should be emitted
+    """
+    if no_color_flag:
+        return False
+    try:
+        return bool(sys.stdout.isatty())
+    except (AttributeError, ValueError):
+        return False
+
+
+def _wrap(text: str, color: str, enabled: bool) -> str:
+    """Wrap text with an ANSI color sequence when enabled.
+    Args:
+        text (str): text to wrap
+        color (str): ANSI color escape sequence
+        enabled (bool): whether colors are enabled
+    Returns:
+        str: optionally wrapped text
+    """
+    if not enabled or not color:
+        return text
+    return f"{color}{text}{RESET}"
+
+
+def _construct_controllers(log: Log, cfg: Config, ipmi: Ipmi, udevc: Optional[Context],
+                           sudo: bool) -> List[ControllerEntry]:
+    """Iterate enabled fan controller configs and instantiate each in a passive way.
+    Each controller construction is wrapped in try/except so a failure on one controller
+    (e.g. missing device) does not abort the whole report.
+    Args:
+        log (Log): a (silent) Log instance
+        cfg (Config): parsed configuration
+        ipmi (Ipmi): an Ipmi instance (read-only)
+        udevc (Optional[Context]): pyudev Context, shared across controllers that need it
+        sudo (bool): sudo flag (passed to HdFc)
+    Returns:
+        List[ControllerEntry]: list of (section, type_label, controller, error) tuples
+    """
+    entries: List[ControllerEntry] = []
+
+    for cpu_cfg in cfg.cpu:
+        if not cpu_cfg.enabled:
+            continue
+        try:
+            controller = CpuFc(log, udevc, ipmi, cpu_cfg)
+            entries.append((cpu_cfg.section, "cpu", controller, None))
+        except Exception as e:  # pylint: disable=broad-except
+            entries.append((cpu_cfg.section, "cpu", None, str(e)))
+
+    for hd_cfg in cfg.hd:
+        if not hd_cfg.enabled:
+            continue
+        try:
+            controller = HdFc(log, udevc, ipmi, hd_cfg, sudo)
+            entries.append((hd_cfg.section, "hd", controller, None))
+        except Exception as e:  # pylint: disable=broad-except
+            entries.append((hd_cfg.section, "hd", None, str(e)))
+
+    for nvme_cfg in cfg.nvme:
+        if not nvme_cfg.enabled:
+            continue
+        try:
+            controller = NvmeFc(log, udevc, ipmi, nvme_cfg)
+            entries.append((nvme_cfg.section, "nvme", controller, None))
+        except Exception as e:  # pylint: disable=broad-except
+            entries.append((nvme_cfg.section, "nvme", None, str(e)))
+
+    for gpu_cfg in cfg.gpu:
+        if not gpu_cfg.enabled:
+            continue
+        try:
+            controller = GpuFc(log, ipmi, gpu_cfg)
+            entries.append((gpu_cfg.section, "gpu", controller, None))
+        except Exception as e:  # pylint: disable=broad-except
+            entries.append((gpu_cfg.section, "gpu", None, str(e)))
+
+    for const_cfg in cfg.const:
+        if not const_cfg.enabled:
+            continue
+        try:
+            controller = ConstFc(log, ipmi, const_cfg)
+            entries.append((const_cfg.section, "const", controller, None))
+        except Exception as e:  # pylint: disable=broad-except
+            entries.append((const_cfg.section, "const", None, str(e)))
+
+    return entries
+
+
+def _safe_temp_str(controller: Union[FanController, ConstFc, None], type_label: str) -> str:
+    """Read fresh temperature from a controller, gracefully handling errors.
+    Args:
+        controller: controller instance (or None)
+        type_label (str): controller type label
+    Returns:
+        str: formatted temperature string (e.g. "42.3 C", "ERROR", "-")
+    """
+    if controller is None:
+        return "-"
+    if type_label == "const":
+        return "-"
+    try:
+        temp = controller.get_temp()
+        return f"{temp:.1f} C"
+    except Exception:  # pylint: disable=broad-except
+        return "ERROR"
+
+
+def _safe_zone_level(ipmi: Ipmi, zone: int) -> str:
+    """Read the current fan level for an IPMI zone, returning a friendly string on failure.
+    Args:
+        ipmi (Ipmi): Ipmi instance
+        zone (int): IPMI zone id
+    Returns:
+        str: formatted level string (e.g. "55 %", "ERROR")
+    """
+    try:
+        return f"{ipmi.get_fan_level(zone):3d} %"
+    except Exception:  # pylint: disable=broad-except
+        return "ERROR"
+
+
+def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: bool) -> List[str]:
+    """Format the Controllers table.
+    Args:
+        entries (List[ControllerEntry]): controllers
+        ipmi (Ipmi): Ipmi instance
+        use_color (bool): whether to emit ANSI colors
+    Returns:
+        List[str]: list of output lines
+    """
+    lines: List[str] = []
+    lines.append(_wrap("Controllers", BOLD, use_color))
+    header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}{'Level':<8}Status"
+    sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6:<8}{'-' * 10}"
+    lines.append(header)
+    lines.append(sep)
+    for section, type_label, controller, error in entries:
+        zones_str = str(getattr(controller, "config", None).ipmi_zone) if controller else "-"
+        if controller is None:
+            devices_str = "-"
+            temp_str = "-"
+            level_str = "-"
+            status = _wrap(f"ERROR: {error}", RED, use_color)
+        else:
+            count = getattr(controller, "count", None)
+            if type_label == "const":
+                devices_str = "-"
+                temp_str = "-"
+                level_str = f"{controller.config.level:3d} %"
+                status = _wrap("ok (target)", DIM, use_color)
+            else:
+                devices_str = str(count) if count is not None else "-"
+                temp_str = _safe_temp_str(controller, type_label)
+                # Level: use the first zone (controllers usually own a single zone or share).
+                first_zone = controller.config.ipmi_zone[0] if controller.config.ipmi_zone else None
+                level_str = _safe_zone_level(ipmi, first_zone) if first_zone is not None else "-"
+                if temp_str == "ERROR" or level_str == "ERROR":
+                    status = _wrap("error", RED, use_color)
+                else:
+                    status = _wrap("ok", GREEN, use_color)
+        # Build row with consistent column widths (pad first, then color-wrap status).
+        row = f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_str:<10}{level_str:<8}{status}"
+        lines.append(row)
+    return lines
+
+
+def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: bool) -> List[str]:
+    """Format the live IPMI zone level table (union of zones across enabled controllers).
+    Args:
+        entries (List[ControllerEntry]): controllers
+        ipmi (Ipmi): Ipmi instance
+        use_color (bool): whether to emit ANSI colors
+    Returns:
+        List[str]: list of output lines
+    """
+    lines: List[str] = []
+    zones: List[int] = []
+    for _section, _type_label, controller, _error in entries:
+        if controller is None:
+            continue
+        for z in controller.config.ipmi_zone:
+            if z not in zones:
+                zones.append(z)
+    if not zones:
+        return lines
+    zones.sort()
+    lines.append(_wrap("IPMI zones (live)", BOLD, use_color))
+    lines.append(f"  {'Zone':<8}Level")
+    lines.append(f"  {'-' * 6:<8}-----")
+    for z in zones:
+        lines.append(f"  {z:<8}{_safe_zone_level(ipmi, z)}")
+    return lines
+
+
+def _format_standby_section(entries: List[ControllerEntry], use_color: bool) -> List[str]:
+    """Format the Standby Guard section, when at least one HD controller has it enabled.
+    Args:
+        entries (List[ControllerEntry]): controllers
+        use_color (bool): whether to emit ANSI colors
+    Returns:
+        List[str]: list of output lines (empty when no eligible HD controller)
+    """
+    lines: List[str] = []
+    for section, type_label, controller, _error in entries:
+        if type_label != "hd" or controller is None:
+            continue
+        cfg = controller.config
+        if not (cfg.standby_guard_enabled and getattr(controller, "count", 0) > 1):
+            continue
+        states = getattr(controller, "standby_array_states", None)
+        if states is None:
+            continue
+        title = f"Standby Guard ([{section}], standby_hd_limit={cfg.standby_hd_limit})"
+        lines.append(_wrap(title, BOLD, use_color))
+        for i, name in enumerate(controller.hd_device_names):
+            if i >= len(states):
+                break
+            if states[i]:
+                state_str = _wrap("STANDBY", DIM, use_color)
+            else:
+                state_str = _wrap("ACTIVE", GREEN, use_color)
+            lines.append(f"  {name}  {state_str}")
+        try:
+            arr_str = controller.get_standby_state_str()
+            standby_count = states.count(True)
+            lines.append(f"  Array state: {arr_str}  ({standby_count}/{controller.count} standby)")
+        except Exception:  # pylint: disable=broad-except
+            pass
+    return lines
+
+
+def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str, use_color: bool) -> str:
+    """Build the full snapshot report.
+    Args:
+        ipmi (Ipmi): Ipmi instance
+        entries (List[ControllerEntry]): controllers
+        config_path (str): path to the loaded configuration file
+        use_color (bool): whether to emit ANSI colors
+    Returns:
+        str: full report text
+    """
+    pkg_version = version("smfc")
+    lines: List[str] = []
+    banner = _wrap(f"smfc-client {pkg_version}", BOLD, use_color)
+    cfg_hint = _wrap(f"(config: {config_path})", DIM, use_color)
+    lines.append(f"{banner}  {cfg_hint}")
+    lines.append("")
+
+    # BMC section
+    lines.append(_wrap("BMC", BOLD, use_color))
+    lines.append(f"  Manufacturer  : {ipmi.bmc_manufacturer_name} ({ipmi.bmc_manufacturer_id})")
+    lines.append(f"  Product       : {ipmi.bmc_product_name} ({ipmi.bmc_product_id})")
+    lines.append(f"  Firmware      : {ipmi.bmc_firmware_rev}")
+    lines.append(f"  IPMI version  : {ipmi.bmc_ipmi_version}")
+    lines.append(f"  Platform      : {ipmi.platform.name} ({type(ipmi.platform).__name__})")
+    lines.append("")
+
+    # IPMI fan mode
+    try:
+        mode = ipmi.get_fan_mode()
+        mode_name = Ipmi.get_fan_mode_name(mode)
+        mode_str = _wrap(mode_name, GREEN, use_color)
+        lines.append(f"IPMI fan mode   : {mode_str} ({mode})")
+    except Exception as e:  # pylint: disable=broad-except
+        err_str = _wrap(f"ERROR: {e}", RED, use_color)
+        lines.append(f"IPMI fan mode   : {err_str}")
+    lines.append("")
+
+    # Controllers table
+    lines.extend(_format_controllers_table(entries, ipmi, use_color))
+    lines.append("")
+
+    # Live IPMI zones
+    zone_lines = _format_zones_table(entries, ipmi, use_color)
+    if zone_lines:
+        lines.extend(zone_lines)
+        lines.append("")
+
+    # Standby Guard
+    standby_lines = _format_standby_section(entries, use_color)
+    if standby_lines:
+        lines.extend(standby_lines)
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Entry point for the smfc-client console script.
+    Args:
+        argv (Optional[List[str]]): argument list (None = sys.argv[1:])
+    Returns:
+        int: process exit code
+    """
+    args = _parse_args(argv)
+
+    # Load configuration.
+    try:
+        cfg = Config(args.config_file)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"ERROR: config: {e}", file=sys.stderr, flush=True)
+        return EXIT_CONFIG_ERROR
+
+    log = _build_silent_log()
+
+    # Connect to IPMI in read-only mode with a short BMC timeout.
+    try:
+        ipmi = Ipmi(log, cfg.ipmi, args.sudo, in_client=True, bmc_init_timeout=CLIENT_BMC_INIT_TIMEOUT)
+    except (ValueError, FileNotFoundError, RuntimeError) as e:
+        print(f"ERROR: ipmi: {e}", file=sys.stderr, flush=True)
+        print("hint: ipmitool typically requires root; try `sudo smfc-client -s`.",
+              file=sys.stderr, flush=True)
+        return EXIT_IPMI_ERROR
+
+    # Initialize udev (required by CPU/HD/NVME controllers; GPU and CONST do not need it).
+    udevc: Optional[Context]
+    try:
+        udevc = Context()
+    except (ImportError, OSError) as e:
+        print(f"ERROR: udev: {e}", file=sys.stderr, flush=True)
+        return EXIT_UDEV_ERROR
+
+    entries = _construct_controllers(log, cfg, ipmi, udevc, args.sudo)
+    use_color = _use_color(args.no_color)
+    report = _format_report(ipmi, entries, args.config_file, use_color)
+    sys.stdout.write(report)
+    sys.stdout.flush()
+    return EXIT_OK
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+
+# End.

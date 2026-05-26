@@ -46,12 +46,17 @@ class Ipmi:
     # Timeout value for BMC initialization (seconds).
     BMC_INIT_TIMEOUT: float = 120.0
 
-    def __init__(self, log: Log, cfg: IpmiConfig, sudo: bool) -> None:
+    def __init__(self, log: Log, cfg: IpmiConfig, sudo: bool, *,
+                 in_client: bool = False, bmc_init_timeout: float = BMC_INIT_TIMEOUT) -> None:
         """Initialize the Ipmi class with a log class and with a configuration.
         Args:
             log (Log): a Log class instance
             cfg (IpmiConfig): IPMI configuration
             sudo (bool): sudo flag
+            in_client (bool): if True, do not switch the BMC into manual fan mode (read-only consumers
+                              like smfc-client should set this to avoid mutating BMC state)
+            bmc_init_timeout (float): override for the BMC-not-ready retry timeout (seconds);
+                                      defaults to Ipmi.BMC_INIT_TIMEOUT (120 s); pass 0 to disable retries
         Raises:
             ValueError: invalid input parameters
             FileNotFoundError: ipmitool not found
@@ -83,7 +88,7 @@ class Ipmi:
                     self.log.msg(Log.LOG_INFO, "BMC is not ready, waiting 5 seconds.")
                     time.sleep(5)
                     bmc_timeout += 5
-                    if bmc_timeout < Ipmi.BMC_INIT_TIMEOUT:
+                    if bmc_timeout < bmc_init_timeout:
                         continue
                 raise
 
@@ -111,7 +116,8 @@ class Ipmi:
         if platform_name == PlatformName.AUTO:
             platform_name = self.bmc_product_name
         self.platform = create_platform(platform_name, self._exec_ipmitool)
-        self.platform.set_fan_manual_mode()
+        if not in_client:
+            self.platform.set_fan_manual_mode()
 
         # Print the configuration out at CONFIG log level.
         if self.log.log_level >= Log.LOG_CONFIG:

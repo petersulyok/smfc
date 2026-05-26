@@ -130,6 +130,47 @@ Two regression tests:
 - `bmc_init_timeout=0.1` → BMC-not-ready loop exits within ~0.1 s rather than
   120 s (use a mock `_exec_ipmitool` that always raises `RuntimeError("ipmitool ...")`).
 
+## Command-line interface
+
+Flags follow the existing `smfc` service ([cmd.py](src/smfc/cmd.py)) so users
+who already know the service can use the client without re-learning. `-c` and
+`-s` reuse the service's semantics.
+
+| Flag      | Long form       | Argument | Default               | Description                                                                       |
+| --------- | --------------- | -------- | --------------------- | --------------------------------------------------------------------------------- |
+| `-c FILE` | `--config FILE` | path     | `/etc/smfc/smfc.conf` | smfc configuration file. Same format the service uses.                            |
+| `-s`      | `--sudo`        | —        | off                   | Run `ipmitool` and `smartctl` via `sudo`. Required when invoking as a non-root user. |
+| `-nc`     | `--no-color`    | —        | auto (off when piped) | Disable ANSI colors. Colors auto-disable when stdout is not a TTY anyway.         |
+| `-h`      | `--help`        | —        | —                     | Show help and exit.                                                               |
+| `-v`      | `--version`     | —        | —                     | Print `smfc-client X.Y.Z` and exit.                                               |
+
+### Exit codes
+
+| Code | Meaning                                                              |
+| ---- | -------------------------------------------------------------------- |
+| 0    | Snapshot printed successfully (per-controller errors are non-fatal). |
+| 6    | Configuration file missing or invalid.                               |
+| 8    | IPMI/BMC error (e.g., `ipmitool` not found, permission denied).      |
+| 9    | udev / pyudev unavailable.                                           |
+
+### Help text
+
+```
+usage: smfc-client [-h] [-c FILE] [-s] [-nc] [-v]
+
+Print a one-shot snapshot of smfc-managed fans and temperatures.
+
+options:
+  -h, --help            show this help message and exit
+  -c FILE, --config FILE
+                        configuration file (default: /etc/smfc/smfc.conf)
+  -s, --sudo            run ipmitool and smartctl with sudo
+  -nc, --no-color       disable ANSI colors in output
+  -v, --version         show program version and exit
+
+Exit codes: 0=ok  6=config error  8=ipmi error  9=udev error
+```
+
 ## Output format (≤80 cols)
 
 ```
@@ -176,8 +217,52 @@ Notes:
   `standby_guard_enabled=True and count>1`. Always guard the read with
   `getattr(hdfc, "standby_array_states", None)` — the attribute is only set
   when standby is enabled (see [hdfc.py:75](src/smfc/hdfc.py#L75)).
-- ANSI colors: green for `ok`, red for `ERROR`, dim for placeholders.
-  Auto-disabled when stdout is not a TTY or `--no-color` is passed.
+- ANSI colors: green for `ok` and `ACTIVE`, red for `ERROR`, dim for
+  placeholders, `STANDBY`, and the `(target)` annotation, bold for section
+  headers and the program banner. Auto-disabled when stdout is not a TTY or
+  `--no-color` is passed.
+
+### Colorized rendering (illustrative)
+
+The `[bold]`, `[green]`, `[red]`, `[dim]` markers below are **documentation
+placeholders only** — they are not part of the implementation. The actual
+client emits raw ANSI escape sequences directly (no `rich`, no `textual`
+dependency):
+
+| Effect    | ANSI sequence | Reset      |
+| --------- | ------------- | ---------- |
+| Bold      | `\x1b[1m`     | `\x1b[0m`  |
+| Dim       | `\x1b[2m`     | `\x1b[0m`  |
+| Green     | `\x1b[32m`    | `\x1b[0m`  |
+| Red       | `\x1b[31m`    | `\x1b[0m`  |
+| Reset all | `\x1b[0m`     | —          |
+
+So `[green]ok[/green]` in the sample below maps to `\x1b[32mok\x1b[0m` in
+real output. Roughly six string constants in `client.py`.
+
+```
+[bold]smfc-client 5.4.0[/bold]  [dim](config: /etc/smfc/smfc.conf)[/dim]
+
+[bold]BMC[/bold]
+  Manufacturer  : Super Micro Computer Inc. (10876)
+  Product       : X11SCH-LN4F (6929)
+  ...
+
+IPMI fan mode   : [green]FULL[/green] (1)
+
+[bold]Controllers[/bold]
+  Section   Type    Zones   Devices  Temp     Level   Status
+  --------  ------  ------  -------  -------  ------  ----------
+  CPU       cpu     [0]     1         42.3 C   45 %   [green]ok[/green]
+  HD        hd      [1]     4         34.1 C   55 %   [green]ok[/green]
+  CONST:0   const   [2]     -         -        50 %   [dim]ok (target)[/dim]
+  GPU       gpu     [3]     -        [red]ERROR: nvidia-smi not found[/red]
+
+[bold]Standby Guard[/bold] ([HD], standby_hd_limit=1)
+  /dev/sda  [green]ACTIVE[/green]
+  /dev/sdc  [dim]STANDBY[/dim]
+  Array state: AASS  (2/4 standby)
+```
 
 ## Files / line references
 
