@@ -1,5 +1,14 @@
 # Plan: smfc-client — read-only state snapshot CLI
 
+> **Status: implemented** on `feature/smfc-client`. See
+> [src/smfc/client.py](src/smfc/client.py),
+> [test/test_client.py](test/test_client.py), and the `[project.scripts]`
+> entry in [pyproject.toml](pyproject.toml). The IPC integration with a
+> running smfc service (the `Source: online` / `Source: offline` header)
+> lands as part of [CLIENT_SERVER.md](CLIENT_SERVER.md) — until that plan
+> is implemented, smfc-client always uses the standalone path and does
+> not print a `Source:` line.
+
 ## Context
 
 `smfc` runs as a systemd service that controls Supermicro server fans via IPMI.
@@ -32,9 +41,9 @@ them in a passive way:
    - It calls `self.platform.set_fan_manual_mode()` on init, which mutates
      fan mode if the service isn't running.
    Add two keyword-only args to `Ipmi.__init__`:
-   - `read_only: bool = False` — when `True`, skip `set_fan_manual_mode()`.
-   - `bmc_init_timeout: float | None = None` — override the 120 s constant
-     (client uses 5 s).
+   - `in_client: bool = False` — when `True`, skip `set_fan_manual_mode()`.
+   - `bmc_init_timeout: float = BMC_INIT_TIMEOUT` — override the 120 s default
+     (client passes 5 s; pass 0 to disable retries).
    Default behavior is unchanged; existing callers and tests are not affected.
 3. Fan-controller classes (`CpuFc`, `HdFc`, `NvmeFc`, `GpuFc`, `ConstFc`) —
    their `__init__` only reads temperatures, never sets fan levels. Safe to
@@ -52,7 +61,7 @@ on `last_temp` (which is `0` right after `__init__`).
 ### Why not factor out an `IpmiReader` class?
 
 Considered and rejected. It would touch every `Ipmi` consumer and require
-updating ~14 ipmi tests. The keyword-only `read_only` param keeps the change
+updating ~14 ipmi tests. The keyword-only `in_client` param keeps the change
 surgical: one branch, one new test, zero risk to the service path.
 
 ## Files to change
@@ -83,14 +92,14 @@ Add two keyword-only params to `Ipmi.__init__`:
 
 ```python
 def __init__(self, log: Log, cfg: IpmiConfig, sudo: bool, *,
-             read_only: bool = False,
-             bmc_init_timeout: float | None = None) -> None:
+             in_client: bool = False,
+             bmc_init_timeout: float = BMC_INIT_TIMEOUT) -> None:
 ```
 
-- Replace `Ipmi.BMC_INIT_TIMEOUT` reference at [ipmi.py:86](src/smfc/ipmi.py#L86)
-  with `timeout = bmc_init_timeout if bmc_init_timeout is not None else Ipmi.BMC_INIT_TIMEOUT`.
-- Wrap [ipmi.py:114](src/smfc/ipmi.py#L114)
-  (`self.platform.set_fan_manual_mode()`) in `if not read_only:`.
+- The retry loop uses `bmc_init_timeout` directly (the default
+  `BMC_INIT_TIMEOUT` preserves the previous 120 s behavior; client passes 5 s,
+  `0` disables retries).
+- Wrap `self.platform.set_fan_manual_mode()` in `if not in_client:`.
 
 No other behavior change. All existing callers (`Service.run` and tests)
 keep using positional args and the defaults.
@@ -126,7 +135,7 @@ Tests, mirroring patterns in `test/test_cmd.py` and `test/test_service.py`:
 
 Two regression tests:
 
-- `read_only=True` → `set_fan_manual_mode` not called.
+- `in_client=True` → `set_fan_manual_mode` not called.
 - `bmc_init_timeout=0.1` → BMC-not-ready loop exits within ~0.1 s rather than
   120 s (use a mock `_exec_ipmitool` that always raises `RuntimeError("ipmitool ...")`).
 
@@ -174,6 +183,7 @@ Exit codes: 0=ok  6=config error  8=ipmi error  9=udev error
 ## Output format (≤80 cols)
 
 ```
+Source: offline (smfc service not running)
 smfc-client 5.4.0  (config: /etc/smfc/smfc.conf)
 
 BMC
@@ -210,6 +220,11 @@ Standby Guard ([HD], standby_hd_limit=1)
 ```
 
 Notes:
+- The first line declares the data source: `Source: offline (smfc service not
+  running)` for the standalone path implemented here, or `Source: online (via
+  smfc service)` for the IPC path added by [CLIENT_SERVER.md](CLIENT_SERVER.md).
+  Easy to grep, easy to scan; printed before the banner so it's the first
+  thing the user reads.
 - The "IPMI zones (live)" table queries the **union of zones** across all
   successfully-constructed controllers (avoids probing zones the platform
   doesn't have).
@@ -241,6 +256,7 @@ So `[green]ok[/green]` in the sample below maps to `\x1b[32mok\x1b[0m` in
 real output. Roughly six string constants in `client.py`.
 
 ```
+[dim]Source: offline (smfc service not running)[/dim]
 [bold]smfc-client 5.4.0[/bold]  [dim](config: /etc/smfc/smfc.conf)[/dim]
 
 [bold]BMC[/bold]
