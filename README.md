@@ -307,6 +307,8 @@ Like many other utilities (created by NAS and home server community), `smfc` als
    2. then their speed can be safely configured in `[Lower Critical, Upper Critical]` interval
    3. if any fan speed oversteps either `Lower Critical` or `Upper Critical` threshold then IPMI will generate an _assertion event_ and will set all fan speeds back to 100% in the zone
 
+If something else flips the BMC out of FULL mode while `smfc` is running (the BMC web UI, an external `ipmitool` invocation, a firmware quirk), `smfc` keeps issuing per-zone level commands but the BMC may apply its own profile instead — fans run at unintended speeds without any visible error in the log. To detect and react to this, `smfc` checks the BMC fan mode every loop iteration. The default `[Ipmi] enforce_fan_mode=true` logs the drift and re-asserts FULL plus all per-zone levels (some BMC firmwares reset zone levels when the mode changes); set it to `false` to make the service exit with code 11 instead, letting systemd restart the unit.
+
 Please also consider the fact that **fans are mechanical devices, their rotational speed is not stable** (it could be fluctuating). To avoid IPMI's assertion mechanism described here please follow the next steps: 
 
   1. Per fan: check the minimum and maximum rotational speeds of your fan on its vendor website
@@ -611,6 +613,10 @@ fan_level_delay=2
 #  genericx9  - Generic Supermicro X9 platform
 #  X10QBi     - Supermicro X10QBi platform
 platform_name=auto
+# Re-assert FULL fan mode if the BMC drifts away from it (bool, default=true)
+# When true, the service logs the drift and restores FULL plus all per-zone levels.
+# When false, the service exits with code 11 on drift.
+enforce_fan_mode=true
 
 
 # CPU fan controller: works based on CPU(s) temperature.

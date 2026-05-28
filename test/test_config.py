@@ -333,6 +333,7 @@ class TestIpmiConfigParsing:
         assert cfg.ipmi.fan_level_delay == Config.DV_IPMI_FAN_LEVEL_DELAY, f"{f}: fan_level_delay default"
         assert cfg.ipmi.remote_parameters == Config.DV_IPMI_REMOTE_PARAMETERS, f"{f}: remote_parameters default"
         assert cfg.ipmi.platform_name == Config.DV_IPMI_PLATFORM_NAME, f"{f}: platform_name default"
+        assert cfg.ipmi.enforce_fan_mode == Config.DV_IPMI_ENFORCE_FAN_MODE, f"{f}: enforce_fan_mode default"
 
     def test_ipmi_custom_values(self, create_config):
         """Positive test: IpmiConfig parses custom values."""
@@ -344,12 +345,30 @@ fan_mode_delay = 5
 fan_level_delay = 1
 remote_parameters = -I lanplus -U admin -P secret -H 192.168.1.100
 platform_name = X11DPH-T
+enforce_fan_mode = false
 """)
         assert cfg.ipmi.command == "/opt/ipmitool", f"{f}: command"
         assert cfg.ipmi.fan_mode_delay == 5, f"{f}: fan_mode_delay"
         assert cfg.ipmi.fan_level_delay == 1, f"{f}: fan_level_delay"
         assert cfg.ipmi.remote_parameters == "-I lanplus -U admin -P secret -H 192.168.1.100", f"{f}: remote_parameters"
         assert cfg.ipmi.platform_name == "X11DPH-T", f"{f}: platform_name"
+        assert cfg.ipmi.enforce_fan_mode is False, f"{f}: enforce_fan_mode"
+
+    @pytest.mark.parametrize(
+        "value, expected, error_str",
+        [
+            ("true", True, "enforce_fan_mode=true p1"),
+            ("True", True, "enforce_fan_mode=True p2"),
+            ("false", False, "enforce_fan_mode=false p3"),
+            ("False", False, "enforce_fan_mode=False p4"),
+            ("yes", True, "enforce_fan_mode=yes p5"),
+            ("no", False, "enforce_fan_mode=no p6"),
+        ],
+    )
+    def test_ipmi_enforce_fan_mode_parsing(self, create_config, value: str, expected: bool, error_str: str):
+        """Positive test: enforce_fan_mode accepts the standard configparser boolean spellings."""
+        cfg = create_config(f"[Ipmi]\nenforce_fan_mode = {value}\n")
+        assert cfg.ipmi.enforce_fan_mode is expected, error_str
 
     @pytest.mark.parametrize(
         "param, value, error_str",

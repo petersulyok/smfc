@@ -17,6 +17,7 @@ class IpmiConfig:
     fan_level_delay: int    # Delay time after execution of IPMI set fan level function (sec)
     remote_parameters: str  # Remote IPMI parameters (e.g. "-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1")
     platform_name: str      # Platform name (from config or "auto" for auto-detection)
+    enforce_fan_mode: bool  # Re-assert FULL fan mode if BMC drifts (default: True; False = exit on drift)
 
 
 @dataclass
@@ -142,6 +143,7 @@ class Config:
     CV_IPMI_FAN_LEVEL_DELAY: str = "fan_level_delay"        # Delay after set fan level
     CV_IPMI_REMOTE_PARAMETERS: str = "remote_parameters"    # Remote IPMI parameters
     CV_IPMI_PLATFORM_NAME: str = "platform_name"            # Platform name or "auto"
+    CV_IPMI_ENFORCE_FAN_MODE: str = "enforce_fan_mode"      # Re-assert FULL on BMC drift
 
     # [HD] section variable names
     CV_HD_NAMES: str = "hd_names"                            # HD device names
@@ -183,6 +185,7 @@ class Config:
     DV_IPMI_FAN_LEVEL_DELAY: int = 2
     DV_IPMI_REMOTE_PARAMETERS: str = ""
     DV_IPMI_PLATFORM_NAME: str = "auto"
+    DV_IPMI_ENFORCE_FAN_MODE: bool = True
 
     # Default values — [CPU] section
     DV_CPU_STEPS: int = 6
@@ -389,6 +392,8 @@ class Config:
             fan_level_delay=fan_level_delay,
             remote_parameters=parser[s].get(self.CV_IPMI_REMOTE_PARAMETERS, fallback=self.DV_IPMI_REMOTE_PARAMETERS),
             platform_name=parser[s].get(self.CV_IPMI_PLATFORM_NAME, fallback=self.DV_IPMI_PLATFORM_NAME),
+            enforce_fan_mode=parser[s].getboolean(self.CV_IPMI_ENFORCE_FAN_MODE,
+                                                  fallback=self.DV_IPMI_ENFORCE_FAN_MODE),
         )
 
     def _read_control_function(self, parser: ConfigParser, section: str, steps: int) -> List[Tuple[int, int]]:

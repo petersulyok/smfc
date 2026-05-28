@@ -35,6 +35,8 @@ class Service:
     applied_levels: Dict[int, int]                             # Cache of last applied fan levels per IPMI zone
     shared_zones: Set[int]                                     # Set of IPMI zone IDs shared between controllers
     last_desired: List[Tuple[str, List[int], int, float]]      # Cache of last desired levels for change detection
+    last_fan_mode: int                                         # Last observed BMC fan mode (from _check_fan_mode)
+    last_fan_mode_at: float                                    # monotonic() timestamp of last_fan_mode
 
     def exit_func(self) -> None:
         """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
@@ -179,6 +181,46 @@ class Service:
                 shared.add(zone)
         return shared
 
+    def _check_fan_mode(self) -> None:
+        """Read the current BMC fan mode, cache it, and react to drift away from FULL.
+
+        When `enforce_fan_mode` is enabled (default), drift away from FULL is auto-corrected:
+        re-assert FULL and re-apply all cached per-zone levels (some BMC firmwares reset zone
+        levels when the mode changes). When disabled, drift triggers a clean exit with code 11.
+        """
+        try:
+            mode = self.ipmi.get_fan_mode()
+        except (RuntimeError, ValueError) as e:
+            # Transient BMC error: log and skip this cycle. Don't exit — the
+            # control loop is the recovery mechanism for transient errors.
+            self.log.msg(Log.LOG_ERROR, f"Fan mode read failed: {e}")
+            return
+
+        self.last_fan_mode = mode
+        self.last_fan_mode_at = time.monotonic()
+
+        if mode == Ipmi.FULL_MODE:
+            return
+
+        mode_name = Ipmi.get_fan_mode_name(mode)
+        if not self.config.ipmi.enforce_fan_mode:
+            self.log.msg(Log.LOG_ERROR,
+                         f"BMC fan mode drifted from FULL to {mode_name}; "
+                         f"enforce_fan_mode is disabled, smfc exiting.")
+            sys.exit(11)
+
+        self.log.msg(Log.LOG_INFO,
+                     f"BMC fan mode drifted from FULL to {mode_name}; restoring FULL.")
+        try:
+            self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
+            self.last_fan_mode = Ipmi.FULL_MODE
+            self.last_fan_mode_at = time.monotonic()
+            for zone, level in self.applied_levels.items():
+                self.ipmi.set_fan_level(zone, level)
+        except (RuntimeError, ValueError) as e:
+            # Recovery itself failed transiently; the next loop iteration will try again.
+            self.log.msg(Log.LOG_ERROR, f"Fan mode recovery failed: {e}")
+
     @staticmethod
     def _parse_args() -> Namespace:
         """Parse command-line arguments.
@@ -211,8 +253,8 @@ class Service:
         8 - IPMI initialization error
         9 - udev initialization error
         10 - none of the fan controllers is enabled
+        11 - fan mode changed from FULL
         """
-        old_mode: int               # Old IPMI fan mode
 
         # Parse command line arguments.
         parsed_results = self._parse_args()
@@ -259,18 +301,28 @@ class Service:
         # Create an Ipmi class instance.
         try:
             self.ipmi = Ipmi(self.log, self.config.ipmi, self.sudo)
-            old_mode = self.ipmi.get_fan_mode()
+            self.last_fan_mode = self.ipmi.get_fan_mode()
+            self.last_fan_mode_at = time.monotonic()
         except (ValueError, FileNotFoundError, RuntimeError) as e:
             self.log.msg(Log.LOG_ERROR, f"{e}.")
             sys.exit(8)
         # Log the old fan mode and zone levels in DEBUG log mode.
         if self.log.log_level >= Log.LOG_DEBUG:
-            self.log.msg(Log.LOG_DEBUG, f"Old IPMI fan mode = {self.ipmi.get_fan_mode_name(old_mode)} ({old_mode})")
-            self.log.msg(Log.LOG_DEBUG, f"Old CPU zone (0) level = {self.ipmi.get_fan_level(Ipmi.CPU_ZONE)}%")
-            self.log.msg(Log.LOG_DEBUG, f"Old HD zone (1) level = {self.ipmi.get_fan_level(Ipmi.HD_ZONE)}%")
-        #  Set the FULL IPMI fan mode if it is not the current fan mode.
-        if old_mode != Ipmi.FULL_MODE:
+            self.log.msg(Log.LOG_DEBUG, f"Old IPMI fan mode = "
+                                        f"{self.ipmi.get_fan_mode_name(self.last_fan_mode)} ({self.last_fan_mode})")
+            configured_zones: Set[int] = set()
+            for cfg_list in (self.config.cpu, self.config.hd, self.config.nvme,
+                             self.config.gpu, self.config.const):
+                for cfg in cfg_list:
+                    if cfg.enabled:
+                        configured_zones.update(cfg.ipmi_zone)
+            for zone in sorted(configured_zones):
+                self.log.msg(Log.LOG_DEBUG, f"Old level in IPMI zone {zone} = {self.ipmi.get_fan_level(zone)}%")
+        # Set the FULL IPMI fan mode if it is not the current fan mode, and update the cache.
+        if self.last_fan_mode != Ipmi.FULL_MODE:
             self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
+            self.last_fan_mode = Ipmi.FULL_MODE
+            self.last_fan_mode_at = time.monotonic()
             self.log.msg(Log.LOG_DEBUG, f"New IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}")
 
         # Initialize connection to udev database
@@ -334,6 +386,7 @@ class Service:
                 fc.run()
             if self.shared_zones:
                 self._apply_fan_levels()
+            self._check_fan_mode()
             time.sleep(wait)
 
 
