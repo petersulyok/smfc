@@ -417,6 +417,11 @@ class Service:
         while True:
             for fc in self.controllers:
                 fc.run()
+                # Record applied levels for non-deferred controllers so every zone shows up in the
+                # snapshot. Deferred controllers (shared zones) are recorded by _apply_fan_levels().
+                if not fc.deferred_apply:
+                    for zone in fc.config.ipmi_zone:
+                        self.applied_levels[zone] = fc.last_level
             if self.shared_zones:
                 self._apply_fan_levels()
             self._check_fan_mode()
