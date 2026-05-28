@@ -736,6 +736,79 @@ class TestService:
             f"{f}: cache must hold the drifted mode so the next iteration retries"
         assert mock_set_level.call_count == 0, f"{f}: must not re-apply levels when set_fan_mode failed"
 
+    def test_exporter_disabled_does_not_start(self, mocker: MockerFixture):
+        """Regression: when [Exporter] enabled=false, _start_exporter() leaves self.exporter=None."""
+        f = "TestService.test_exporter_disabled_does_not_start"
+        mock_exporter_cls = MagicMock()
+        mocker.patch("smfc.service.Exporter", mock_exporter_cls)
+        service = Service()
+        service.log = Log(Log.LOG_NONE, Log.LOG_STDOUT)
+        service.config = MagicMock()
+        service.config.exporter.enabled = False
+        service._start_exporter()  # pylint: disable=protected-access
+        assert service.exporter is None, f"{f}: exporter must be None when disabled"
+        assert mock_exporter_cls.called is False, f"{f}: Exporter() must not be constructed when disabled"
+
+    def test_exporter_enabled_started(self, mocker: MockerFixture):
+        """Regression: when [Exporter] enabled=true, _start_exporter() constructs and start()s an Exporter."""
+        f = "TestService.test_exporter_enabled_started"
+        mock_exporter = MagicMock()
+        mock_exporter_cls = MagicMock(return_value=mock_exporter)
+        mocker.patch("smfc.service.Exporter", mock_exporter_cls)
+        service = Service()
+        service.log = Log(Log.LOG_NONE, Log.LOG_STDOUT)
+        service.config = MagicMock()
+        service.config.exporter.enabled = True
+        service.config.exporter.bind_address = "127.0.0.1"
+        service.config.exporter.port = 9099
+        service._start_exporter()  # pylint: disable=protected-access
+        assert mock_exporter_cls.call_count == 1, f"{f}: Exporter() must be constructed once"
+        assert mock_exporter.start.call_count == 1, f"{f}: start() must be called once"
+        kwargs = mock_exporter_cls.call_args.kwargs
+        assert kwargs["bind_address"] == "127.0.0.1"
+        assert kwargs["port"] == 9099
+        assert service.exporter is mock_exporter
+
+    def test_exporter_bind_failure_does_not_kill_service(self, mocker: MockerFixture):
+        """Regression: an OSError on Exporter.start() is logged and the daemon continues with exporter=None."""
+        f = "TestService.test_exporter_bind_failure_does_not_kill_service"
+        mock_exporter = MagicMock()
+        mock_exporter.start.side_effect = OSError("port already in use")
+        mock_exporter_cls = MagicMock(return_value=mock_exporter)
+        mocker.patch("smfc.service.Exporter", mock_exporter_cls)
+        service = Service()
+        service.log = Log(Log.LOG_NONE, Log.LOG_STDOUT)
+        service.config = MagicMock()
+        service.config.exporter.enabled = True
+        service.config.exporter.bind_address = "0.0.0.0"
+        service.config.exporter.port = 9099
+        service._start_exporter()  # pylint: disable=protected-access
+        assert service.exporter is None, f"{f}: exporter must be None after a bind failure"
+
+    def test_exit_func_stops_running_exporter(self, mocker: MockerFixture):
+        """exit_func() calls exporter.stop() before resetting the BMC, and tolerates a stop() error."""
+        mocker.patch("builtins.print", MagicMock())
+        service = Service()
+        service.log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
+        service.ipmi = MagicMock()
+        service.exporter = MagicMock()
+        service.exit_func()
+        # Exporter was stopped, then BMC reset to FULL.
+        assert service.exporter.stop.call_count == 1
+        service.ipmi.set_fan_mode.assert_called_with(Ipmi.FULL_MODE)
+
+    def test_exit_func_tolerates_exporter_stop_failure(self, mocker: MockerFixture):
+        """A failure inside exporter.stop() must not prevent the BMC fan-mode reset."""
+        mocker.patch("builtins.print", MagicMock())
+        service = Service()
+        service.log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
+        service.ipmi = MagicMock()
+        service.exporter = MagicMock()
+        service.exporter.stop.side_effect = RuntimeError("stop failed")
+        service.exit_func()
+        # set_fan_mode still called even though stop() raised.
+        service.ipmi.set_fan_mode.assert_called_with(Ipmi.FULL_MODE)
+
     def test_collect_desired_levels(self, mocker: MockerFixture):
         """Positive unit test for Service._collect_desired_levels() method. It contains the following steps:
         - mock print() function

@@ -781,6 +781,17 @@ ipmi_zone=1
 polling=30
 # Constant fan level (int, %, default=50)
 level=50
+
+
+# HTTP exporter: serves /snapshot (JSON for smfc-client) and /metrics (Prometheus text format).
+[Exporter]
+# Enable the HTTP exporter (bool, default=false)
+enabled=false
+# IP to bind on (str, default=127.0.0.1)
+# Use 127.0.0.1 for local-only access; use 0.0.0.0 or a specific LAN IP for remote Prometheus.
+bind_address=127.0.0.1
+# TCP port (int, 1..65535, default=9099)
+port=9099
 ```
 
 Important notes:
@@ -857,7 +868,48 @@ With the help of command `journalctl` you can check logs easily. For example:
 
 		journalctl -b -u smfc
 
-### 13. FAQ
+### 13. Remote monitoring (HTTP exporter)
+For users who want a quick view of the daemon's live state — what each controller "sees", what fan level is applied to each IPMI zone, which disks are in standby — `smfc` can run a small HTTP exporter alongside the main control loop. The exporter serves two routes on the same port:
+
+- `/snapshot` — JSON, consumed by [`smfc-client`](#smfc-client) and easy to script against with `curl | jq`.
+- `/metrics` — Prometheus text format, scrapeable by Prometheus (no third-party Python deps).
+
+The exporter is **disabled by default** — opt in via the `[Exporter]` section:
+
+```ini
+[Exporter]
+enabled=true
+bind_address=127.0.0.1   # change to 0.0.0.0 (or a specific LAN IP) when Prometheus runs elsewhere
+port=9099
+```
+
+`smfc-client` automatically uses the exporter's `/snapshot` when it's enabled, which is dramatically faster than the standalone path because it avoids spawning ~10 ipmitool / smartctl subprocesses per invocation. Pass `--standalone` to bypass the exporter for diagnostics.
+
+**Verifying the routes locally:**
+
+```bash
+curl -s http://127.0.0.1:9099/snapshot | jq .
+curl -s http://127.0.0.1:9099/metrics
+curl -s http://127.0.0.1:9099/healthz   # always 200 "ok" while the exporter is running
+```
+
+**Example Prometheus scrape job** (the typical homelab setup is Prometheus running in Docker inside an LXC on a different host than smfc itself — point it at the host running `smfc.service`):
+
+```yaml
+scrape_configs:
+  - job_name: smfc
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['<smfc-host-or-ip>:9099']
+```
+
+Notes:
+- Metrics include `smfc_temperature_celsius`, `smfc_fan_level_percent`, `smfc_fan_mode`, `smfc_fan_mode_age_seconds`, `smfc_disk_standby`, and an `smfc_up{version="...",bmc_product="..."} 1` sentinel.
+- The exporter uses only Python's stdlib (`http.server`, `urllib`, `json`). No `prometheus_client` package is required.
+- A bind failure (e.g. port already in use) is logged but does **not** stop the fan-control loop — fan control is the priority.
+- All data is served from the daemon's already-cached state. The request handler issues no `ipmitool` or `smartctl` subprocesses, so a Prometheus scrape can never wake disks the daemon has put to sleep.
+
+### 14. FAQ
 
 ### Q: My fans are spinning up and loud. What's wrong?
 Most probably, there was an assertion (i.e., the rotational speed of a fan went above or below an IPMI threshold) and IPMI switched back that zone to full rotational speed.
@@ -894,7 +946,7 @@ The configuration is the following:
  - 4 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN3, FAN4) in IPMI CPU zone
  - 2 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) on an Y-adapter + [Noctua NF-A14 PWM](https://noctua.at/en/products/fan/nf-a14-pwm) fans (FANA, FANB) in IPMI HD zone
 
-### 14. References
+### 15. References
 Further readings:
 
 #### Supermicro

@@ -112,6 +112,14 @@ class ConstConfig:
     level: int              # Constant fan level (0..100%)
 
 
+@dataclass
+class ExporterConfig:
+    """Configuration for the smfc HTTP exporter (smfc-client IPC + Prometheus)."""
+    enabled: bool           # Whether to start the HTTP exporter on Service.run()
+    bind_address: str       # IP to bind to ("127.0.0.1", "0.0.0.0", LAN IP, or IPv6)
+    port: int               # TCP port (1..65535)
+
+
 class Config:
     """Centralized configuration class that parses the INI file and produces typed dataclass instances."""
 
@@ -122,6 +130,7 @@ class Config:
     CS_NVME: str = "NVME"       # [NVME] section name
     CS_GPU: str = "GPU"         # [GPU] section name
     CS_CONST: str = "CONST"     # [CONST] section name
+    CS_EXPORTER: str = "Exporter"   # [Exporter] section name
 
     # Shared variable names (common across multiple controller types)
     CV_ENABLED: str = "enabled"             # Fan controller enabled flag
@@ -169,6 +178,11 @@ class Config:
 
     # [CONST] section variable names
     CV_CONST_LEVEL: str = "level"   # Constant fan level
+
+    # [Exporter] section variable names
+    CV_EXPORTER_ENABLED: str = "enabled"            # Enable HTTP exporter
+    CV_EXPORTER_BIND_ADDRESS: str = "bind_address"  # IP to bind on
+    CV_EXPORTER_PORT: str = "port"                  # TCP port
 
     # Constant values for temperature calculation
     CALC_MIN: int = 0   # Use minimum temperature
@@ -238,6 +252,11 @@ class Config:
     DV_CONST_POLLING: float = 30.0
     DV_CONST_LEVEL: int = 50
 
+    # Default values — [Exporter] section
+    DV_EXPORTER_ENABLED: bool = False
+    DV_EXPORTER_BIND_ADDRESS: str = "127.0.0.1"
+    DV_EXPORTER_PORT: int = 9099
+
     # Parsed configuration dataclasses
     ipmi: IpmiConfig            # IPMI configuration
     cpu: List[CpuConfig]        # List of CPU fan controller configurations
@@ -245,6 +264,7 @@ class Config:
     nvme: List[NvmeConfig]      # List of NVME fan controller configurations
     gpu: List[GpuConfig]        # List of GPU fan controller configurations
     const: List[ConstConfig]    # List of CONST fan controller configurations
+    exporter: ExporterConfig    # HTTP exporter configuration
 
     def __init__(self, path: str) -> None:
         """Initialize the Config class by reading and parsing the INI file.
@@ -268,6 +288,7 @@ class Config:
         self._validate_no_duplicate_zones(self.gpu)
         self.const = self._parse_const_sections(parser)
         self._validate_no_duplicate_zones(self.const)
+        self.exporter = self._parse_exporter(parser)
 
     @staticmethod
     def _get_sections(parser: ConfigParser, base_name: str) -> List[str]:
@@ -395,6 +416,34 @@ class Config:
             enforce_fan_mode=parser[s].getboolean(self.CV_IPMI_ENFORCE_FAN_MODE,
                                                   fallback=self.DV_IPMI_ENFORCE_FAN_MODE),
         )
+
+    def _parse_exporter(self, parser: ConfigParser) -> ExporterConfig:
+        """Parse [Exporter] section. The section is optional; defaults are used when absent.
+
+        Args:
+            parser (ConfigParser): configuration parser
+
+        Returns:
+            ExporterConfig: parsed exporter configuration
+
+        Raises:
+            ValueError: invalid configuration parameters (e.g. port out of range)
+        """
+        s = self.CS_EXPORTER
+        if s not in parser:
+            return ExporterConfig(
+                enabled=self.DV_EXPORTER_ENABLED,
+                bind_address=self.DV_EXPORTER_BIND_ADDRESS,
+                port=self.DV_EXPORTER_PORT,
+            )
+        enabled = parser[s].getboolean(self.CV_EXPORTER_ENABLED, fallback=self.DV_EXPORTER_ENABLED)
+        bind_address = parser[s].get(self.CV_EXPORTER_BIND_ADDRESS, self.DV_EXPORTER_BIND_ADDRESS).strip()
+        if not bind_address:
+            raise ValueError(f"Empty {self.CV_EXPORTER_BIND_ADDRESS}= parameter")
+        port = parser[s].getint(self.CV_EXPORTER_PORT, fallback=self.DV_EXPORTER_PORT)
+        if not 1 <= port <= 65535:
+            raise ValueError(f"Invalid {self.CV_EXPORTER_PORT}= parameter ({port}); must be in 1..65535")
+        return ExporterConfig(enabled=enabled, bind_address=bind_address, port=port)
 
     def _read_control_function(self, parser: ConfigParser, section: str, steps: int) -> List[Tuple[int, int]]:
         """Read control_function from a section, enforcing mutual exclusion with legacy min/max keys

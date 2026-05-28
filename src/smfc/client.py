@@ -4,11 +4,14 @@
 #   smfc-client: read-only one-shot snapshot of smfc-managed state.
 #
 import argparse
+import json
 import sys
+import urllib.error
+import urllib.request
 from importlib.metadata import version
-from typing import List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from pyudev import Context
-from smfc.config import Config
+from smfc.config import Config, ExporterConfig
 from smfc.constfc import ConstFc
 from smfc.cpufc import CpuFc
 from smfc.fancontroller import FanController
@@ -27,6 +30,9 @@ EXIT_UDEV_ERROR: int = 9
 
 # BMC init timeout for the client (default service uses 120 s).
 CLIENT_BMC_INIT_TIMEOUT: float = 5.0
+
+# Snapshot fetch timeout (used when the exporter is enabled in config).
+SNAPSHOT_FETCH_TIMEOUT: float = 1.0
 
 # Default configuration file path (matches systemd unit).
 DEFAULT_CONFIG_PATH: str = "/etc/smfc/smfc.conf"
@@ -51,7 +57,9 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         prog="smfc-client",
-        description="Print a one-shot snapshot of smfc-managed fans and temperatures.",
+        description="Print a one-shot snapshot of smfc-managed fans and temperatures. "
+                    "Reads /snapshot from the smfc service when [Exporter] is enabled in the "
+                    "config; otherwise (or with --standalone) reads sensors directly.",
         epilog="Exit codes: 0=ok  6=config error  8=ipmi error  9=udev error",
     )
     parser.add_argument("-c", "--config", action="store", dest="config_file", default=DEFAULT_CONFIG_PATH,
@@ -60,6 +68,8 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         help="run ipmitool and smartctl with sudo")
     parser.add_argument("-nc", "--no-color", action="store_true", default=False,
                         dest="no_color", help="disable ANSI colors in output")
+    parser.add_argument("--standalone", action="store_true", default=False, dest="standalone",
+                        help="bypass the smfc service and read sensors directly")
     parser.add_argument("-v", "--version", action="version", version="%(prog)s " + version("smfc"))
     return parser.parse_args(argv)
 
@@ -309,7 +319,7 @@ def _format_standby_section(entries: List[ControllerEntry], use_color: bool) -> 
 
 
 def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str, use_color: bool) -> str:
-    """Build the full snapshot report.
+    """Build the full snapshot report (standalone path: reads ipmitool/smartctl directly).
     Args:
         ipmi (Ipmi): Ipmi instance
         entries (List[ControllerEntry]): controllers
@@ -320,6 +330,7 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     """
     pkg_version = version("smfc")
     lines: List[str] = []
+    lines.append(_format_source_line(online=False, use_color=use_color))
     banner = _wrap(f"smfc-client {pkg_version}", BOLD, use_color)
     cfg_hint = _wrap(f"(config: {config_path})", DIM, use_color)
     lines.append(f"{banner}  {cfg_hint}")
@@ -364,6 +375,166 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _format_source_line(online: bool, use_color: bool) -> str:
+    """Render the leading "Source:" line printed above the banner.
+
+    Args:
+        online (bool): True if the snapshot came from the smfc service exporter.
+        use_color (bool): whether to emit ANSI colors.
+
+    Returns:
+        str: the formatted line (without trailing newline).
+    """
+    label = "online (via smfc service)" if online else "offline (smfc service not running)"
+    return _wrap(f"Source: {label}", DIM, use_color)
+
+
+def _try_fetch_snapshot(exporter_cfg: ExporterConfig,
+                        timeout: float = SNAPSHOT_FETCH_TIMEOUT) -> Optional[Dict[str, Any]]:
+    """Attempt to fetch /snapshot from the smfc service exporter.
+
+    Args:
+        exporter_cfg (ExporterConfig): exporter section of the config (read for bind_address/port).
+        timeout (float): per-request timeout in seconds.
+
+    Returns:
+        Optional[Dict[str, Any]]: parsed snapshot dict on HTTP 200, or None on any failure
+            (connection refused, timeout, non-200 status, malformed JSON).
+    """
+    # Pick a host string the urllib will accept: 0.0.0.0 / :: aren't valid client addresses,
+    # so when the service binds to those, talk to localhost instead.
+    host = exporter_cfg.bind_address
+    if host in ("0.0.0.0", "::", ""):
+        host = "127.0.0.1"
+    url = f"http://{host}:{exporter_cfg.port}/snapshot"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            if resp.status != 200:
+                return None
+            data = resp.read()
+        snapshot = json.loads(data.decode("utf-8"))
+        if not isinstance(snapshot, dict):
+            return None
+        return snapshot
+    except (urllib.error.URLError, OSError, TimeoutError, json.JSONDecodeError):
+        return None
+
+
+def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use_color: bool) -> str:
+    """Build the full report from a snapshot dict served by the smfc exporter.
+
+    The output mirrors the standalone path's structure (banner, BMC, IPMI fan mode, Controllers
+    table, IPMI zones, Standby Guard) but is built from already-cached state — no ipmitool
+    subprocesses, no smartctl, no controller instantiation. The data source is identified by the
+    `Source: online (via smfc service)` line above the banner.
+
+    Args:
+        snapshot (Dict[str, Any]): parsed snapshot dict from the exporter's /snapshot endpoint.
+        config_path (str): path to the loaded configuration file.
+        use_color (bool): whether to emit ANSI colors.
+
+    Returns:
+        str: full report text (with a trailing newline).
+    """
+    lines: List[str] = []
+    lines.append(_format_source_line(online=True, use_color=use_color))
+
+    pkg_version = snapshot.get("smfc_version", version("smfc"))
+    banner = _wrap(f"smfc-client {pkg_version}", BOLD, use_color)
+    cfg_hint = _wrap(f"(config: {config_path})", DIM, use_color)
+    lines.append(f"{banner}  {cfg_hint}")
+    lines.append("")
+
+    # BMC section.
+    bmc = snapshot.get("bmc", {}) or {}
+    lines.append(_wrap("BMC", BOLD, use_color))
+    lines.append(f"  Manufacturer  : {bmc.get('manufacturer_name', '?')} ({bmc.get('manufacturer_id', '?')})")
+    lines.append(f"  Product       : {bmc.get('product_name', '?')} ({bmc.get('product_id', '?')})")
+    lines.append(f"  Firmware      : {bmc.get('firmware_rev', '?')}")
+    lines.append(f"  IPMI version  : {bmc.get('ipmi_version', '?')}")
+    lines.append(f"  Platform      : {bmc.get('platform_name', '?')} ({bmc.get('platform_class', '?')})")
+    lines.append("")
+
+    # IPMI fan mode (always FULL when smfc is running with enforce_fan_mode=true; the exporter
+    # served whatever was cached on the loop's last poll).
+    fan_mode = snapshot.get("fan_mode", {}) or {}
+    mode_id = fan_mode.get("id", -1)
+    mode_name = fan_mode.get("name", "?")
+    mode_color = GREEN if mode_id == int(Ipmi.FULL_MODE) else RED
+    lines.append(f"IPMI fan mode   : {_wrap(str(mode_name), mode_color, use_color)} ({mode_id})")
+    lines.append("")
+
+    # Controllers table.
+    controllers = snapshot.get("controllers", []) or []
+    lines.append(_wrap("Controllers", BOLD, use_color))
+    header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}{'Level':<8}Status"
+    sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6:<8}{'-' * 10}"
+    lines.append(header)
+    lines.append(sep)
+    zones = snapshot.get("zones", {}) or {}
+    for c in controllers:
+        section = c.get("section", "?")
+        type_label = c.get("type", "?")
+        ipmi_zones = c.get("ipmi_zones", []) or []
+        zones_str = str(ipmi_zones) if ipmi_zones else "-"
+        if type_label == "const":
+            devices_str = "-"
+            temp_str = "-"
+            level_str = f"{int(c.get('target_level_pct', c.get('last_level_pct', 0))):3d} %"
+            status = _wrap("ok (target)", DIM, use_color)
+        else:
+            devices_str = str(int(c.get("device_count", 0)))
+            temp_str = f"{float(c.get('last_temp_c', 0.0)):.1f} C"
+            first_zone = ipmi_zones[0] if ipmi_zones else None
+            zone_info = zones.get(str(first_zone), {}) if first_zone is not None else {}
+            level = zone_info.get("applied_level_pct")
+            level_str = f"{int(level):3d} %" if level is not None else f"{int(c.get('last_level_pct', 0)):3d} %"
+            status = _wrap("ok", GREEN, use_color)
+        row = f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_str:<10}{level_str:<8}{status}"
+        lines.append(row)
+    lines.append("")
+
+    # IPMI zones (live) — applied levels straight from the snapshot.
+    if zones:
+        lines.append(_wrap("IPMI zones (live)", BOLD, use_color))
+        lines.append(f"  {'Zone':<8}Level")
+        lines.append(f"  {'-' * 6:<8}-----")
+        for zone_str, info in sorted(zones.items(), key=lambda kv: int(kv[0])):
+            level = info.get("applied_level_pct")
+            level_fmt = f"{int(level):3d} %" if level is not None else "-"
+            lines.append(f"  {zone_str:<8}{level_fmt}")
+        lines.append("")
+
+    # Standby Guard — show a section per HD controller that has it enabled.
+    standby_lines: List[str] = []
+    for c in controllers:
+        if c.get("type") != "hd":
+            continue
+        sb = c.get("standby") or {}
+        if not sb.get("enabled"):
+            continue
+        section = c.get("section", "HD")
+        device_names = c.get("device_names", []) or []
+        states = sb.get("states", []) or []
+        title = f"Standby Guard ([{section}], standby_hd_limit={sb.get('limit', 1)})"
+        standby_lines.append(_wrap(title, BOLD, use_color))
+        for i, name in enumerate(device_names):
+            if i >= len(states):
+                break
+            state_str = (_wrap("STANDBY", DIM, use_color) if states[i]
+                         else _wrap("ACTIVE", GREEN, use_color))
+            standby_lines.append(f"  {name}  {state_str}")
+        arr_str = sb.get("array_state", "")
+        standby_count = sb.get("standby_count", sum(1 for s in states if s))
+        if arr_str:
+            standby_lines.append(f"  Array state: {arr_str}  ({standby_count}/{len(states)} standby)")
+    if standby_lines:
+        lines.extend(standby_lines)
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Entry point for the smfc-client console script.
     Args:
@@ -380,6 +551,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"ERROR: config: {e}", file=sys.stderr, flush=True)
         return EXIT_CONFIG_ERROR
 
+    use_color = _use_color(args.no_color)
+
+    # Online path: when [Exporter] is enabled in config and --standalone wasn't passed,
+    # try /snapshot first. On any failure (connection refused, timeout, malformed JSON),
+    # transparently fall back to the standalone path below.
+    if cfg.exporter.enabled and not args.standalone:
+        snapshot = _try_fetch_snapshot(cfg.exporter)
+        if snapshot is not None:
+            report = _format_report_from_snapshot(snapshot, args.config_file, use_color)
+            sys.stdout.write(report)
+            sys.stdout.flush()
+            return EXIT_OK
+
+    # Standalone path: reach the BMC and disks directly.
     log = _build_silent_log()
 
     # Connect to IPMI in read-only mode with a short BMC timeout.
@@ -400,7 +585,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         return EXIT_UDEV_ERROR
 
     entries = _construct_controllers(log, cfg, ipmi, udevc, args.sudo)
-    use_color = _use_color(args.no_color)
     report = _format_report(ipmi, entries, args.config_file, use_color)
     sys.stdout.write(report)
     sys.stdout.flush()

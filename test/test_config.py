@@ -386,6 +386,52 @@ enforce_fan_mode = false
             Config(config_path)
 
 
+class TestExporterConfigParsing:
+    """Unit tests for [Exporter] section parsing."""
+
+    def test_exporter_section_absent_uses_defaults(self, create_config):
+        """When [Exporter] is missing, the parser falls back to documented defaults (disabled, localhost, 9099)."""
+        f = "TestExporterConfigParsing.test_exporter_section_absent_uses_defaults"
+        cfg = create_config("[Ipmi]\n")
+        assert cfg.exporter.enabled is Config.DV_EXPORTER_ENABLED, f"{f}: enabled default"
+        assert cfg.exporter.bind_address == Config.DV_EXPORTER_BIND_ADDRESS, f"{f}: bind_address default"
+        assert cfg.exporter.port == Config.DV_EXPORTER_PORT, f"{f}: port default"
+
+    def test_exporter_custom_values(self, create_config):
+        """[Exporter] with all three keys populated parses correctly."""
+        f = "TestExporterConfigParsing.test_exporter_custom_values"
+        cfg = create_config("""
+[Ipmi]
+[Exporter]
+enabled = true
+bind_address = 0.0.0.0
+port = 8080
+""")
+        assert cfg.exporter.enabled is True, f"{f}: enabled"
+        assert cfg.exporter.bind_address == "0.0.0.0", f"{f}: bind_address"
+        assert cfg.exporter.port == 8080, f"{f}: port"
+
+    def test_exporter_section_present_keys_absent(self, create_config):
+        """An empty [Exporter] section uses defaults — same shape as section absent."""
+        cfg = create_config("[Ipmi]\n[Exporter]\n")
+        assert cfg.exporter.enabled is Config.DV_EXPORTER_ENABLED
+        assert cfg.exporter.bind_address == Config.DV_EXPORTER_BIND_ADDRESS
+        assert cfg.exporter.port == Config.DV_EXPORTER_PORT
+
+    @pytest.mark.parametrize("port", ["0", "-1", "65536", "100000"])
+    def test_exporter_invalid_port_rejected(self, create_config_file, port: str):
+        """Out-of-range port values are rejected with a ValueError at parse time."""
+        config_path = create_config_file(f"[Ipmi]\n[Exporter]\nport = {port}\n")
+        with pytest.raises(ValueError, match="port"):
+            Config(config_path)
+
+    def test_exporter_empty_bind_address_rejected(self, create_config_file):
+        """An explicitly empty bind_address is rejected; users who want defaults should omit the key."""
+        config_path = create_config_file("[Ipmi]\n[Exporter]\nbind_address =   \n")
+        with pytest.raises(ValueError, match="bind_address"):
+            Config(config_path)
+
+
 class TestCpuConfigParsing:
     """Unit tests for [CPU] section parsing."""
 

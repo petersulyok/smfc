@@ -7,11 +7,12 @@ import atexit
 import os
 import sys
 import time
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 from importlib.metadata import version
 from argparse import ArgumentParser, Namespace
 from pyudev import Context
 from smfc.constfc import ConstFc
+from smfc.exporter import Exporter
 from smfc.fancontroller import FanController
 from smfc.gpufc import GpuFc
 from smfc.cpufc import CpuFc
@@ -20,6 +21,7 @@ from smfc.nvmefc import NvmeFc
 from smfc.ipmi import Ipmi
 from smfc.log import Log
 from smfc.config import Config
+from smfc.snapshot import build_snapshot
 
 
 class Service:
@@ -37,10 +39,17 @@ class Service:
     last_desired: List[Tuple[str, List[int], int, float]]      # Cache of last desired levels for change detection
     last_fan_mode: int                                         # Last observed BMC fan mode (from _check_fan_mode)
     last_fan_mode_at: float                                    # monotonic() timestamp of last_fan_mode
+    exporter: Optional[Exporter]                               # HTTP exporter (None when disabled or bind failed)
 
     def exit_func(self) -> None:
         """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
         all fans back to the default speed 100% to avoid overheating while `smfc` is not running."""
+        # Stop the exporter first so no /snapshot request can race with the BMC reset below.
+        if getattr(self, "exporter", None) is not None:
+            try:
+                self.exporter.stop()
+            except Exception:  # pylint: disable=broad-except
+                pass
         # Configure fans.
         if hasattr(self, "ipmi"):
             self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
@@ -221,6 +230,26 @@ class Service:
             # Recovery itself failed transiently; the next loop iteration will try again.
             self.log.msg(Log.LOG_ERROR, f"Fan mode recovery failed: {e}")
 
+    def _start_exporter(self) -> None:
+        """Build and start the HTTP exporter when [Exporter] enabled=true; tolerate bind failures.
+
+        Stores the live `Exporter` on `self.exporter`, or `None` if disabled / failed to bind.
+        """
+        self.exporter = None
+        if not self.config.exporter.enabled:
+            return
+        try:
+            self.exporter = Exporter(
+                log=self.log,
+                bind_address=self.config.exporter.bind_address,
+                port=self.config.exporter.port,
+                snapshot_fn=lambda: build_snapshot(self),
+            )
+            self.exporter.start()
+        except OSError as e:
+            self.log.msg(Log.LOG_ERROR, f"Exporter failed to start ({e}); continuing without it.")
+            self.exporter = None
+
     @staticmethod
     def _parse_args() -> Namespace:
         """Parse command-line arguments.
@@ -379,6 +408,10 @@ class Service:
         # Calculate the wait time in the main loop.
         wait = min(fc.config.polling for fc in self.controllers) / 2
         self.log.msg(Log.LOG_DEBUG, f"Main loop sleep time = {wait} sec")
+
+        # Start the HTTP exporter if enabled (smfc-client + Prometheus). Bind failure is logged
+        # and the daemon continues — fan-control behavior must not be gated on the listener.
+        self._start_exporter()
 
         # Main execution loop.
         while True:

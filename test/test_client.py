@@ -18,6 +18,14 @@ from smfc.client import (
 )
 
 
+def _make_offline_cfg() -> MagicMock:
+    """Build a Config-like mock with [Exporter] disabled (forces standalone path in main())."""
+    cfg = MagicMock()
+    cfg.ipmi = MagicMock()
+    cfg.exporter.enabled = False
+    return cfg
+
+
 def _make_fake_ipmi(fan_mode_value: int = 1, fan_level_value: int = 50) -> MagicMock:
     """Create a fully-mocked Ipmi instance suitable for _format_report()."""
     fake = MagicMock()
@@ -248,7 +256,7 @@ class TestMain:
 
     def test_ipmi_error_emits_sudo_hint(self, mocker: MockerFixture, capsys: pytest.CaptureFixture) -> None:
         """An Ipmi initialization error returns EXIT_IPMI_ERROR with a sudo hint on stderr."""
-        mocker.patch("smfc.client.Config", return_value=MagicMock())
+        mocker.patch("smfc.client.Config", return_value=_make_offline_cfg())
         mocker.patch("smfc.client.Ipmi", side_effect=RuntimeError("ipmitool error (1): permission denied."))
         rc = client.main(["-c", "/dummy.conf"])
         assert rc == EXIT_IPMI_ERROR
@@ -258,8 +266,7 @@ class TestMain:
 
     def test_happy_path(self, mocker: MockerFixture, capsys: pytest.CaptureFixture) -> None:
         """When all stages succeed, main() prints the report and returns EXIT_OK."""
-        cfg = MagicMock()
-        cfg.ipmi = MagicMock()
+        cfg = _make_offline_cfg()
         mocker.patch("smfc.client.Config", return_value=cfg)
         fake_ipmi = _make_fake_ipmi()
         mocker.patch("smfc.client.Ipmi", return_value=fake_ipmi)
@@ -278,8 +285,7 @@ class TestMain:
 
     def test_no_tty_disables_color(self, mocker: MockerFixture) -> None:
         """When stdout is not a TTY, the report contains no ANSI sequences even without -nc."""
-        cfg = MagicMock()
-        cfg.ipmi = MagicMock()
+        cfg = _make_offline_cfg()
         mocker.patch("smfc.client.Config", return_value=cfg)
         fake_ipmi = _make_fake_ipmi()
         mocker.patch("smfc.client.Ipmi", return_value=fake_ipmi)
@@ -295,8 +301,7 @@ class TestMain:
 
     def test_ipmi_invoked_in_client_mode(self, mocker: MockerFixture) -> None:
         """main() must construct Ipmi with in_client=True and a short bmc_init_timeout."""
-        cfg = MagicMock()
-        cfg.ipmi = MagicMock()
+        cfg = _make_offline_cfg()
         mocker.patch("smfc.client.Config", return_value=cfg)
         ipmi_ctor = mocker.patch("smfc.client.Ipmi", return_value=_make_fake_ipmi())
         mocker.patch("smfc.client.Context", return_value=MagicMock())
@@ -310,8 +315,7 @@ class TestMain:
 
     def test_udev_error(self, mocker: MockerFixture, capsys: pytest.CaptureFixture) -> None:
         """A pyudev Context() failure returns EXIT_UDEV_ERROR with a hint on stderr."""
-        cfg = MagicMock()
-        cfg.ipmi = MagicMock()
+        cfg = _make_offline_cfg()
         mocker.patch("smfc.client.Config", return_value=cfg)
         mocker.patch("smfc.client.Ipmi", return_value=_make_fake_ipmi())
         mocker.patch("smfc.client.Context", side_effect=OSError("libudev not available"))
@@ -458,7 +462,7 @@ class TestConstructControllers:
         ipmi = MagicMock()
         udevc = MagicMock()
         entries = client._construct_controllers(log, cfg, ipmi, udevc, sudo=False)
-        assert entries == []
+        assert not entries
         cpu_ctor.assert_not_called()
         hd_ctor.assert_not_called()
         nvme_ctor.assert_not_called()
@@ -488,7 +492,7 @@ class TestConstructControllers:
         ipmi = MagicMock()
         udevc = MagicMock()
         entries = client._construct_controllers(log, cfg, ipmi, udevc, sudo=True)
-        assert [(s, t, c, e) for s, t, c, e in entries] == [
+        assert list(entries) == [
             ("CPU", "cpu", cpu_obj, None),
             ("HD", "hd", hd_obj, None),
             ("NVME", "nvme", nvme_obj, None),
@@ -520,6 +524,267 @@ class TestConstructControllers:
         assert entries[2][0:3] == ("NVME", "nvme", None) and "nvme boom" in entries[2][3]
         assert entries[3][0:3] == ("GPU", "gpu", None) and "nvidia-smi" in entries[3][3]
         assert entries[4][0:3] == ("CONST", "const", None) and "const boom" in entries[4][3]
+
+
+def _sample_snapshot_dict() -> dict:
+    """A minimal valid /snapshot response for online-path tests."""
+    return {
+        "version": 1,
+        "generated_at": 1716902400.0,
+        "smfc_version": "5.4.0",
+        "bmc": {
+            "manufacturer_name": "Super Micro Computer Inc.",
+            "manufacturer_id": 10876,
+            "product_name": "X11SCH-LN4F",
+            "product_id": 6929,
+            "firmware_rev": "1.74",
+            "ipmi_version": "2.0",
+            "platform_name": "X11SCH-LN4F",
+            "platform_class": "GenericPlatform",
+        },
+        "fan_mode": {"id": 1, "name": "FULL", "age_s": 0.5},
+        "controllers": [
+            {
+                "section": "CPU", "type": "cpu", "enabled": True,
+                "ipmi_zones": [0], "device_count": 1, "polling": 2.0,
+                "last_temp_c": 42.3, "last_level_pct": 45, "deferred_apply": False,
+            },
+            {
+                "section": "HD", "type": "hd", "enabled": True,
+                "ipmi_zones": [1], "device_count": 4, "polling": 10.0,
+                "last_temp_c": 34.1, "last_level_pct": 55, "deferred_apply": False,
+                "device_names": ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"],
+                "standby": {
+                    "enabled": True, "limit": 1,
+                    "states": [False, False, True, True],
+                    "array_state": "AASS", "standby_count": 2,
+                },
+            },
+        ],
+        "zones": {"0": {"applied_level_pct": 45}, "1": {"applied_level_pct": 55}},
+    }
+
+
+class TestFormatReportFromSnapshot:
+    """Unit tests for _format_report_from_snapshot()."""
+
+    def test_basic_report(self) -> None:
+        """The online-path report emits the Source line and all the standard sections."""
+        snap = _sample_snapshot_dict()
+        out = client._format_report_from_snapshot(snap, "/etc/smfc/smfc.conf", use_color=False)
+        assert out.startswith("Source: online (via smfc service)\n")
+        assert "smfc-client 5.4.0" in out
+        assert "/etc/smfc/smfc.conf" in out
+        assert "BMC" in out
+        assert "Super Micro Computer Inc." in out
+        assert "FULL" in out
+        assert "Controllers" in out
+        assert "42.3 C" in out
+        assert "34.1 C" in out
+        assert "IPMI zones (live)" in out
+
+    def test_standby_section_present_when_enabled(self) -> None:
+        """The Standby Guard section renders the per-disk states from the snapshot."""
+        snap = _sample_snapshot_dict()
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
+        assert "Standby Guard" in out
+        assert "/dev/sda" in out
+        assert "ACTIVE" in out
+        assert "STANDBY" in out
+        assert "AASS" in out
+        assert "2/4 standby" in out
+
+    def test_standby_section_absent_when_disabled(self) -> None:
+        """If no HD has standby enabled, the Standby Guard section is omitted."""
+        snap = _sample_snapshot_dict()
+        snap["controllers"][1]["standby"] = {"enabled": False}
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
+        assert "Standby Guard" not in out
+
+    def test_color_mode_emits_ansi(self) -> None:
+        """ANSI sequences appear in the report when colors are enabled."""
+        snap = _sample_snapshot_dict()
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=True)
+        assert "\x1b[" in out
+        assert client.BOLD in out
+        assert client.DIM in out  # Source line is dim
+
+    def test_const_controller_shows_target_level(self) -> None:
+        """A ConstFc entry's row shows the configured target level and the (target) status hint."""
+        snap = _sample_snapshot_dict()
+        snap["controllers"].append({
+            "section": "CONST", "type": "const", "enabled": True,
+            "ipmi_zones": [2], "device_count": 0, "polling": 30.0,
+            "last_temp_c": 0.0, "last_level_pct": 50, "deferred_apply": False,
+            "target_level_pct": 50,
+        })
+        snap["zones"]["2"] = {"applied_level_pct": 50}
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
+        assert "CONST" in out
+        assert " 50 %" in out
+        assert "ok (target)" in out
+
+    def test_non_full_fan_mode_renders_red(self) -> None:
+        """When the cached fan_mode is not FULL, the value is emphasized differently (color test)."""
+        snap = _sample_snapshot_dict()
+        snap["fan_mode"] = {"id": 0, "name": "STANDARD", "age_s": 0.5}
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=True)
+        # The label is wrapped in RED (not GREEN) when mode != FULL.
+        assert client.RED in out
+
+    def test_standby_states_shorter_than_devices_truncates(self) -> None:
+        """Defensive: when standby.states is shorter than device_names, the loop stops at the shorter length."""
+        snap = _sample_snapshot_dict()
+        # 4 device names but only 2 states — the loop must break at i=2.
+        snap["controllers"][1]["standby"] = {
+            "enabled": True, "limit": 1, "states": [False, False],
+            "array_state": "AA", "standby_count": 0,
+        }
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
+        assert "/dev/sda" in out
+        assert "/dev/sdb" in out
+        # Devices beyond the states length are not rendered.
+        assert "/dev/sdc" not in out
+        assert "/dev/sdd" not in out
+
+
+class TestTryFetchSnapshot:
+    """Unit tests for _try_fetch_snapshot()."""
+
+    def _exporter_cfg(self, host: str = "127.0.0.1", port: int = 9099) -> MagicMock:
+        cfg = MagicMock()
+        cfg.bind_address = host
+        cfg.port = port
+        return cfg
+
+    def test_success(self, mocker: MockerFixture) -> None:
+        """A 200 response with valid JSON returns the parsed dict."""
+        body = b'{"version": 1, "ok": true}'
+        fake_resp = MagicMock()
+        fake_resp.status = 200
+        fake_resp.read.return_value = body
+        ctx = MagicMock()
+        ctx.__enter__.return_value = fake_resp
+        ctx.__exit__.return_value = False
+        mocker.patch("smfc.client.urllib.request.urlopen", return_value=ctx)
+        result = client._try_fetch_snapshot(self._exporter_cfg())
+        assert result == {"version": 1, "ok": True}
+
+    def test_connection_refused_returns_none(self, mocker: MockerFixture) -> None:
+        """A URLError (e.g. connection refused) yields None, not an exception."""
+        import urllib.error  # pylint: disable=import-outside-toplevel
+        mocker.patch("smfc.client.urllib.request.urlopen",
+                     side_effect=urllib.error.URLError("Connection refused"))
+        assert client._try_fetch_snapshot(self._exporter_cfg()) is None
+
+    def test_timeout_returns_none(self, mocker: MockerFixture) -> None:
+        """A TimeoutError yields None."""
+        mocker.patch("smfc.client.urllib.request.urlopen", side_effect=TimeoutError("slow"))
+        assert client._try_fetch_snapshot(self._exporter_cfg()) is None
+
+    def test_non_200_returns_none(self, mocker: MockerFixture) -> None:
+        """A non-200 status (500) yields None."""
+        fake_resp = MagicMock()
+        fake_resp.status = 500
+        fake_resp.read.return_value = b""
+        ctx = MagicMock()
+        ctx.__enter__.return_value = fake_resp
+        ctx.__exit__.return_value = False
+        mocker.patch("smfc.client.urllib.request.urlopen", return_value=ctx)
+        assert client._try_fetch_snapshot(self._exporter_cfg()) is None
+
+    def test_malformed_json_returns_none(self, mocker: MockerFixture) -> None:
+        """A 200 with non-JSON body yields None."""
+        fake_resp = MagicMock()
+        fake_resp.status = 200
+        fake_resp.read.return_value = b"not json"
+        ctx = MagicMock()
+        ctx.__enter__.return_value = fake_resp
+        ctx.__exit__.return_value = False
+        mocker.patch("smfc.client.urllib.request.urlopen", return_value=ctx)
+        assert client._try_fetch_snapshot(self._exporter_cfg()) is None
+
+    def test_non_dict_payload_returns_none(self, mocker: MockerFixture) -> None:
+        """A JSON list or scalar (not a dict) yields None — the schema is a dict."""
+        fake_resp = MagicMock()
+        fake_resp.status = 200
+        fake_resp.read.return_value = b"[1,2,3]"
+        ctx = MagicMock()
+        ctx.__enter__.return_value = fake_resp
+        ctx.__exit__.return_value = False
+        mocker.patch("smfc.client.urllib.request.urlopen", return_value=ctx)
+        assert client._try_fetch_snapshot(self._exporter_cfg()) is None
+
+    def test_unspecified_bind_address_uses_localhost(self, mocker: MockerFixture) -> None:
+        """When the service binds to 0.0.0.0, the client connects to 127.0.0.1 instead."""
+        captured = {}
+
+        def fake_urlopen(url, timeout):  # pylint: disable=unused-argument
+            captured["url"] = url
+            raise TimeoutError("fake")
+
+        mocker.patch("smfc.client.urllib.request.urlopen", side_effect=fake_urlopen)
+        client._try_fetch_snapshot(self._exporter_cfg(host="0.0.0.0", port=9099))
+        assert captured["url"] == "http://127.0.0.1:9099/snapshot"
+
+
+class TestMainOnlinePath:
+    """Integration tests: main() with [Exporter] enabled."""
+
+    def _exporter_enabled_cfg(self) -> MagicMock:
+        cfg = MagicMock()
+        cfg.exporter.enabled = True
+        cfg.exporter.bind_address = "127.0.0.1"
+        cfg.exporter.port = 9099
+        return cfg
+
+    def test_online_path_taken_when_reachable(self, mocker: MockerFixture, capsys: pytest.CaptureFixture) -> None:
+        """When [Exporter] enabled and /snapshot reachable, online formatter is used and standalone is skipped."""
+        mocker.patch("smfc.client.Config", return_value=self._exporter_enabled_cfg())
+        mocker.patch("smfc.client._try_fetch_snapshot", return_value=_sample_snapshot_dict())
+        # Standalone path setup — we want to verify these are NOT touched on the online path.
+        ipmi_ctor = mocker.patch("smfc.client.Ipmi", return_value=_make_fake_ipmi())
+        ctx_ctor = mocker.patch("smfc.client.Context", return_value=MagicMock())
+        construct = mocker.patch("smfc.client._construct_controllers", return_value=[])
+        rc = client.main(["-c", "/dummy.conf", "-nc"])
+        assert rc == EXIT_OK
+        captured = capsys.readouterr()
+        assert "Source: online" in captured.out
+        # Online path means none of the standalone construction work happens.
+        assert ipmi_ctor.call_count == 0, "Ipmi must not be constructed on the online path"
+        assert ctx_ctor.call_count == 0, "pyudev Context must not be constructed on the online path"
+        assert construct.call_count == 0, "controllers must not be constructed on the online path"
+
+    def test_falls_back_to_standalone_on_unreachable(self, mocker: MockerFixture,
+                                                     capsys: pytest.CaptureFixture) -> None:
+        """When [Exporter] enabled but /snapshot unreachable, main() falls back to the standalone path."""
+        mocker.patch("smfc.client.Config", return_value=self._exporter_enabled_cfg())
+        mocker.patch("smfc.client._try_fetch_snapshot", return_value=None)
+        mocker.patch("smfc.client.Ipmi", return_value=_make_fake_ipmi())
+        mocker.patch("smfc.client.Context", return_value=MagicMock())
+        cpu = _make_fake_cpu_controller()
+        mocker.patch("smfc.client._construct_controllers", return_value=[("CPU", "cpu", cpu, None)])
+        rc = client.main(["-c", "/dummy.conf", "-nc"])
+        assert rc == EXIT_OK
+        out = capsys.readouterr().out
+        assert "Source: offline (smfc service not running)" in out
+        assert "smfc-client" in out
+
+    def test_standalone_flag_forces_offline(self, mocker: MockerFixture,
+                                            capsys: pytest.CaptureFixture) -> None:
+        """`--standalone` skips /snapshot even when the exporter is reachable."""
+        mocker.patch("smfc.client.Config", return_value=self._exporter_enabled_cfg())
+        # If the online path were attempted, this would assert.
+        try_fetch = mocker.patch("smfc.client._try_fetch_snapshot", return_value=_sample_snapshot_dict())
+        mocker.patch("smfc.client.Ipmi", return_value=_make_fake_ipmi())
+        mocker.patch("smfc.client.Context", return_value=MagicMock())
+        cpu = _make_fake_cpu_controller()
+        mocker.patch("smfc.client._construct_controllers", return_value=[("CPU", "cpu", cpu, None)])
+        rc = client.main(["-c", "/dummy.conf", "-nc", "--standalone"])
+        assert rc == EXIT_OK
+        out = capsys.readouterr().out
+        assert "Source: offline (smfc service not running)" in out
+        assert try_fetch.call_count == 0, "_try_fetch_snapshot must not be called when --standalone is passed"
 
 
 # End.
