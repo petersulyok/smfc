@@ -325,14 +325,15 @@ class FanController:
 
     # ASCII chart geometry constants for print_temp_level_mapping().
     CHART_PREFIX_WIDTH: int = 6     # Width of the "100% |" row prefix; bars start at this column.
-    CHART_CELL_WIDTH: int = 2       # Characters drawn per 1 C temperature column.
+    CHART_WIDTH: int = 60           # Fixed inner width (characters) of every chart, regardless of range.
 
     def print_temp_level_mapping(self) -> None:
         """Render the resulting temperature->level curve at LOG_CONFIG level as an ASCII bar chart
-        (Y = fan level in 10% rows, X = temperature in 1 C columns). The chart auto-fits the curve's
-        temperature range (snapped to 5 C with a small margin); '#' fills the area under the curve and
-        '^' markers under the X axis flag the breakpoints. The curve definition (control_function or
-        legacy min/max keys) is logged separately by __init__."""
+        (Y = fan level in 10% rows, X = temperature). The chart has a fixed inner width of CHART_WIDTH
+        columns regardless of the temperature range, so every controller's chart lines up; the X scale
+        therefore varies per controller and must be read from the axis labels. '#' fills the area under
+        the curve and '^' markers under the X axis flag the breakpoints. The curve definition
+        (control_function or legacy min/max keys) is logged separately by __init__."""
         # Breakpoint temperatures and the curve's first/last knee define the chart's X range.
         if self.config.control_function:
             bp_temps = {t for t, _ in self.config.control_function}
@@ -342,27 +343,31 @@ class FanController:
             bp_temps = {t_first, t_last}
         lo = max(0, (t_first - 5) // 5 * 5)
         hi = min(100, (t_last + 9) // 5 * 5)
-        pw, cell = self.CHART_PREFIX_WIDTH, self.CHART_CELL_WIDTH
+        pw, width, span = self.CHART_PREFIX_WIDTH, self.CHART_WIDTH, max(1, hi - lo)
 
+        # Map a temperature (C) to its 0-based chart column, and a column back to a LUT temperature.
+        def temp_to_col(temp: float) -> int:
+            return round((temp - lo) / span * (width - 1))
         self.log.msg(Log.LOG_CONFIG, "   Temperature to level mapping:")
         for y in range(100, -1, -10):
             row = f"{y:3d}% |"
-            for t in range(lo, hi + 1):
-                lvl = self.levels_lut[t]
-                row += ("#" if (lvl >= y or y == 0) else " ") * cell
+            for c in range(width):
+                lvl = self.levels_lut[round(lo + c * span / (width - 1))]
+                row += "#" if (lvl >= y or y == 0) else " "
             self.log.msg(Log.LOG_CONFIG, "   " + row + "|")
-        ncol = hi - lo + 1
-        self.log.msg(Log.LOG_CONFIG, "   " + " " * (pw - 1) + "+" + "-" * (cell * ncol) + "+")
-        # X-axis tick labels (every 5 C) and breakpoint markers, aligned under their columns.
-        ticks = [" "] * (pw + cell * ncol + 4)
-        marks = [" "] * (pw + cell * ncol + 4)
-        for i, t in enumerate(range(lo, hi + 1)):
-            col = pw + i * cell
-            if t % 5 == 0:
+        self.log.msg(Log.LOG_CONFIG, "   " + " " * (pw - 1) + "+" + "-" * width + "+")
+        # X-axis tick labels (every 5 C, skipping any that would overlap) and breakpoint markers.
+        ticks = [" "] * (pw + width + 6)
+        marks = [" "] * (pw + width + 6)
+        last_label_end = -1
+        for t in range(lo, hi + 1, 5):
+            col = pw + temp_to_col(t)
+            if col > last_label_end:
                 for j, ch in enumerate(str(t)):
                     ticks[col + j] = ch
-            if t in bp_temps:
-                marks[col] = "^"
+                last_label_end = col + len(str(t))
+        for t in bp_temps:
+            marks[pw + temp_to_col(t)] = "^"
         self.log.msg(Log.LOG_CONFIG, "   " + "".join(ticks).rstrip() + "  (C)")
         self.log.msg(Log.LOG_CONFIG, "   " + "".join(marks).rstrip() + "   (^ = breakpoint)")
 

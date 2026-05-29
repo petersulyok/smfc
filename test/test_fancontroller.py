@@ -753,10 +753,36 @@ class TestFanController:
         assert "100% |" in printed and "  0% |" in printed, f"{f}: top and bottom level rows present"
         assert "(C)" in printed, f"{f}: X-axis temperature unit present"
         assert "(^ = breakpoint)" in printed, f"{f}: breakpoint legend present"
-        assert "+" + "-" * 10 in printed, f"{f}: axis frame line present"
+        assert "+" + "-" * FanController.CHART_WIDTH + "+" in printed, f"{f}: axis frame is CHART_WIDTH wide"
         # The 100% row must contain filled cells (the curve reaches 100% at the top breakpoint).
         top_row = next(ln for ln in lines if "100% |" in ln)
         assert "#" in top_row, f"{f}: 100% row is filled where the curve peaks"
+        # Every bar row has a fixed inner width of CHART_WIDTH, independent of the temperature range.
+        for ln in lines:
+            if "% |" in ln:
+                inner = ln.split("|")[1]
+                assert len(inner) == FanController.CHART_WIDTH, f"{f}: bar row inner width == CHART_WIDTH"
+
+    def test_print_temp_level_mapping_fixed_width_across_ranges(self, mocker: MockerFixture):
+        """Positive unit test: the chart inner width is fixed (CHART_WIDTH) regardless of the curve's
+        temperature span, so charts from different controllers line up."""
+        mocker.patch("smfc.FanController.set_fan_level", MagicMock())
+        mocker.patch("smfc.FanController._get_nth_temp", MagicMock(return_value=30.0))
+        my_log = Log(Log.LOG_CONFIG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        f = "TestFanController.test_print_temp_level_mapping_fixed_width_across_ranges"
+        widths = set()
+        for min_t, max_t in [(32, 44), (35, 65), (20, 90)]:
+            mock_print = MagicMock()
+            mocker.patch("builtins.print", mock_print)
+            cfg = create_cpu_config(steps=4, sensitivity=1, polling=1,
+                                    min_temp=min_t, max_temp=max_t, min_level=35, max_level=100)
+            my_fc = FanController.__new__(FanController)
+            my_fc.config = cfg
+            FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, 1)
+            top = next(str(c.args[0]) for c in mock_print.call_args_list if "100% |" in str(c.args[0]))
+            widths.add(len(top.split("|")[1]))
+        assert widths == {FanController.CHART_WIDTH}, f"{f}: all ranges render at CHART_WIDTH, got {widths}"
 
     @pytest.mark.parametrize(
         "control_function, expect_new_path, error_str",
