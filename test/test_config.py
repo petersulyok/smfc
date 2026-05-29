@@ -193,7 +193,7 @@ class TestConfigStaticMethods:
 
 
 class TestControlFunctionSectionWiring:
-    """Section-level tests for control_function parsing (mutual exclusion, cross-field, defaults)."""
+    """Section-level tests for control_function parsing (legacy-key precedence, cross-field, defaults)."""
 
     @pytest.mark.parametrize(
         "section",
@@ -233,18 +233,17 @@ class TestControlFunctionSectionWiring:
             ("GPU", "min_level", "35"),
         ],
     )
-    def test_mutual_exclusion_with_legacy_keys(self, create_config_file, section: str, legacy_key: str,
-                                               legacy_val: str):
-        """Negative test: setting both control_function and any legacy min/max key in the same section
-        raises ValueError."""
+    def test_legacy_keys_ignored_when_control_function_defined(self, create_config, section: str, legacy_key: str,
+                                                               legacy_val: str):
+        """Positive test: setting both control_function and any legacy min/max key in the same section is
+        accepted; the legacy key is ignored and control_function is used."""
         body = ("[Ipmi]\n[" + section + "]\nenabled = 0\nsteps = 4\n"
                 "control_function = 30-35, 65-100\n"
                 f"{legacy_key} = {legacy_val}\n")
-        path = create_config_file(body)
-        with pytest.raises(ValueError) as exc_info:
-            Config(path)
-        assert "mutually exclusive" in str(exc_info.value), \
-            f"expected mutual-exclusion error, got: {exc_info.value}"
+        cfg = create_config(body)
+        sec_list = {"CPU": cfg.cpu, "HD": cfg.hd, "NVME": cfg.nvme, "GPU": cfg.gpu}[section]
+        assert sec_list[0].control_function == [(30, 35), (65, 100)], \
+            f"control_function parsed despite legacy {legacy_key} present"
 
     def test_cross_field_interior_too_small_for_steps(self, create_config_file):
         """Negative test: interior width (t_last - t_first - 1) < steps raises ValueError."""

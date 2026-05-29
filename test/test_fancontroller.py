@@ -732,22 +732,31 @@ class TestFanController:
         assert all(v == 35 for v in lut[:30]), f"{f}: head padded with l_first"
         assert all(v == 100 for v in lut[33:]), f"{f}: tail padded with l_last"
 
-    def test_print_temp_level_mapping_single_temp_plateau(self, mocker: MockerFixture):
-        """Positive unit test for FanController.print_temp_level_mapping() with a single-temperature plateau.
-        Covers the plateau_start==end branch: lut[31]=68 is a 1-element plateau between lut[30]=35 and lut[32]=100."""
+    def test_print_temp_level_mapping_renders_ascii_chart(self, mocker: MockerFixture):
+        """Positive unit test for FanController.print_temp_level_mapping(): emits an ASCII bar chart with
+        a header, axis frame, X-axis ticks/units, breakpoint markers, and rows tracing the LUT."""
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mocker.patch("smfc.FanController.set_fan_level", MagicMock())
         mocker.patch("smfc.FanController._get_nth_temp", MagicMock(return_value=30.0))
         my_log = Log(Log.LOG_CONFIG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
-        cfg = create_cpu_config(steps=5, sensitivity=1, polling=1, control_function=[(30, 35), (32, 100)])
+        cfg = create_cpu_config(steps=4, sensitivity=1, polling=1,
+                                control_function=[(35, 35), (45, 50), (50, 70), (55, 100)])
         my_fc = FanController.__new__(FanController)
         my_fc.config = cfg
         FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, 1)
-        f = "TestFanController.test_print_temp_level_mapping_single_temp_plateau"
-        printed = " ".join(str(c) for c in mock_print.call_args_list)
-        assert "T=31C -> L=68%" in printed, f"{f}: single-temp plateau should emit T=NNC format"
+        f = "TestFanController.test_print_temp_level_mapping_renders_ascii_chart"
+        lines = [str(c.args[0]) for c in mock_print.call_args_list]
+        printed = "\n".join(lines)
+        assert "Temperature to level mapping:" in printed, f"{f}: chart header present"
+        assert "100% |" in printed and "  0% |" in printed, f"{f}: top and bottom level rows present"
+        assert "(C)" in printed, f"{f}: X-axis temperature unit present"
+        assert "(^ = breakpoint)" in printed, f"{f}: breakpoint legend present"
+        assert "+" + "-" * 10 in printed, f"{f}: axis frame line present"
+        # The 100% row must contain filled cells (the curve reaches 100% at the top breakpoint).
+        top_row = next(ln for ln in lines if "100% |" in ln)
+        assert "#" in top_row, f"{f}: 100% row is filled where the curve peaks"
 
     @pytest.mark.parametrize(
         "control_function, expect_new_path, error_str",
@@ -787,7 +796,7 @@ class TestFanController:
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
         # 4-point curve; steps=5 -> 7 plateaus.
-        # NOTE: min_temp/max_temp/min_level/max_level are mutually exclusive with control_function in
+        # NOTE: min_temp/max_temp/min_level/max_level are ignored when control_function is defined in
         # Config-driven parsing, but the factory bypasses Config so we just set control_function.
         cfg = create_cpu_config(steps=5, sensitivity=1, polling=1,
                                 control_function=[(30, 35), (50, 40), (60, 90), (65, 100)])

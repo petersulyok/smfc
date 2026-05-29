@@ -166,7 +166,7 @@ The suffix number after `:` is used only for ordering and logging — it has no 
 Multiple instances on the same IPMI zone participate in the shared zone arbitration described in [chapter 1.3](#13-shared-ipmi-zone-arbitration).
 
 ### 2. User-defined control function
-Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval. Two forms are supported in each temperature-driven section: a **simple linear** mapping (chapter 2.1) or an **advanced multi-segment** piecewise-linear curve (chapter 2.2). The two forms are mutually exclusive within the same section.
+Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval. Two forms are supported in each temperature-driven section: a **simple linear** mapping (chapter 2.1) or an **advanced multi-segment** piecewise-linear curve (chapter 2.2). When both are present in the same section, `control_function=` takes precedence and the `min_temp/max_temp/min_level/max_level` keys are ignored.
 
 #### 2.1 Linear user-defined function
 The simple form maps a single temperature interval `[min_temp..max_temp]` linearly to a single fan-level interval `[min_level..max_level]`, divided into discrete plateaus by the `steps=` parameter:
@@ -194,7 +194,7 @@ steps=5
 control_function = 30-35, 50-40, 60-90, 65-100
 ```
 
-Each pair is written as `T-L` where `T` is a temperature in °C and `L` is a fan level in %. At least two pairs are required, temperatures must be strictly ascending, and all values must be in the range `[0..100]`. When `control_function=` is present in a section it overrides `min_temp=`, `max_temp=`, `min_level=`, and `max_level=` — the two forms are mutually exclusive.
+Each pair is written as `T-L` where `T` is a temperature in °C and `L` is a fan level in %. At least two pairs are required, temperatures must be strictly ascending, and all values must be in the range `[0..100]`. When `control_function=` is present in a section it takes precedence over `min_temp=`, `max_temp=`, `min_level=`, and `max_level=` — those keys are ignored (and not validated). The ignored state is reported at `CONFIG` log level.
 
 The `steps=` parameter still applies: it controls how many discrete plateaus the interior of the curve is divided into before being sent to the fan. The two endpoint temperatures are always pinned exactly to their specified levels; the `steps` interior plateaus together with the 2 pinned endpoints produce `steps + 2` plateaus in total.
 

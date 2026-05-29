@@ -91,13 +91,20 @@ class FanController:
             self.log.msg(Log.LOG_CONFIG, f"   ipmi zone = {self.config.ipmi_zone}")
             self.log.msg(Log.LOG_CONFIG, f"   count = {self.count}")
             self.log.msg(Log.LOG_CONFIG, f"   temp_calc = {self.config.temp_calc}")
-            self.log.msg(Log.LOG_CONFIG, f"   steps = {self.config.steps}")
             self.log.msg(Log.LOG_CONFIG, f"   sensitivity = {self.config.sensitivity}")
             self.log.msg(Log.LOG_CONFIG, f"   polling = {self.config.polling}")
-            self.log.msg(Log.LOG_CONFIG, f"   min_temp = {self.config.min_temp}")
-            self.log.msg(Log.LOG_CONFIG, f"   max_temp = {self.config.max_temp}")
-            self.log.msg(Log.LOG_CONFIG, f"   min_level = {self.config.min_level}")
-            self.log.msg(Log.LOG_CONFIG, f"   max_level = {self.config.max_level}")
+            # steps is logged just above the curve definition (min/max keys or control_function) because
+            # it controls the digitalization of that curve.
+            self.log.msg(Log.LOG_CONFIG, f"   steps = {self.config.steps}")
+            # The curve is defined either by control_function (which overrides and hides the legacy
+            # min/max keys) or by the legacy min/max keys; log only the one in effect.
+            if self.config.control_function:
+                self.log.msg(Log.LOG_CONFIG, f"   control_function = {self.config.control_function}")
+            else:
+                self.log.msg(Log.LOG_CONFIG, f"   min_temp = {self.config.min_temp}")
+                self.log.msg(Log.LOG_CONFIG, f"   max_temp = {self.config.max_temp}")
+                self.log.msg(Log.LOG_CONFIG, f"   min_level = {self.config.min_level}")
+                self.log.msg(Log.LOG_CONFIG, f"   max_level = {self.config.max_level}")
             self.log.msg(Log.LOG_CONFIG, f"   smoothing = {self.config.smoothing}")
             if hasattr(self, "hwmon_path"):
                 self.log.msg(Log.LOG_CONFIG, f"   hwmon_path = {[p if p else 'smartctl' for p in self.hwmon_path]}")
@@ -316,23 +323,48 @@ class FanController:
             self.log.msg(Log.LOG_DEBUG, f"{self.name}: polling skipped "
                          f"(remaining={self.config.polling - (current_time - self.last_time):.1f}s)")
 
+    # ASCII chart geometry constants for print_temp_level_mapping().
+    CHART_PREFIX_WIDTH: int = 6     # Width of the "100% |" row prefix; bars start at this column.
+    CHART_CELL_WIDTH: int = 2       # Characters drawn per 1 C temperature column.
+
     def print_temp_level_mapping(self) -> None:
-        """Print the temperature->level mapping at LOG_CONFIG level by walking the LUT and emitting
-        one line per plateau (consecutive temperatures sharing the same level)."""
+        """Render the resulting temperature->level curve at LOG_CONFIG level as an ASCII bar chart
+        (Y = fan level in 10% rows, X = temperature in 1 C columns). The chart auto-fits the curve's
+        temperature range (snapped to 5 C with a small margin); '#' fills the area under the curve and
+        '^' markers under the X axis flag the breakpoints. The curve definition (control_function or
+        legacy min/max keys) is logged separately by __init__."""
+        # Breakpoint temperatures and the curve's first/last knee define the chart's X range.
         if self.config.control_function:
-            self.log.msg(Log.LOG_CONFIG, f"   control_function = {self.config.control_function}")
+            bp_temps = {t for t, _ in self.config.control_function}
+            t_first, t_last = self.config.control_function[0][0], self.config.control_function[-1][0]
         else:
-            self.log.msg(Log.LOG_CONFIG, "   Temperature to level mapping (from legacy min/max keys):")
-        plateau_start = 0
-        for t in range(1, 102):
-            if t == 101 or self.levels_lut[t] != self.levels_lut[plateau_start]:
-                end = t - 1
-                lvl = self.levels_lut[plateau_start]
-                if plateau_start == end:
-                    self.log.msg(Log.LOG_CONFIG, f"   T={plateau_start}C -> L={lvl}%")
-                else:
-                    self.log.msg(Log.LOG_CONFIG, f"   T=[{plateau_start}..{end}]C -> L={lvl}%")
-                plateau_start = t
+            t_first, t_last = round(self.config.min_temp), round(self.config.max_temp)
+            bp_temps = {t_first, t_last}
+        lo = max(0, (t_first - 5) // 5 * 5)
+        hi = min(100, (t_last + 9) // 5 * 5)
+        pw, cell = self.CHART_PREFIX_WIDTH, self.CHART_CELL_WIDTH
+
+        self.log.msg(Log.LOG_CONFIG, "   Temperature to level mapping:")
+        for y in range(100, -1, -10):
+            row = f"{y:3d}% |"
+            for t in range(lo, hi + 1):
+                lvl = self.levels_lut[t]
+                row += ("#" if (lvl >= y or y == 0) else " ") * cell
+            self.log.msg(Log.LOG_CONFIG, "   " + row + "|")
+        ncol = hi - lo + 1
+        self.log.msg(Log.LOG_CONFIG, "   " + " " * (pw - 1) + "+" + "-" * (cell * ncol) + "+")
+        # X-axis tick labels (every 5 C) and breakpoint markers, aligned under their columns.
+        ticks = [" "] * (pw + cell * ncol + 4)
+        marks = [" "] * (pw + cell * ncol + 4)
+        for i, t in enumerate(range(lo, hi + 1)):
+            col = pw + i * cell
+            if t % 5 == 0:
+                for j, ch in enumerate(str(t)):
+                    ticks[col + j] = ch
+            if t in bp_temps:
+                marks[col] = "^"
+        self.log.msg(Log.LOG_CONFIG, "   " + "".join(ticks).rstrip() + "  (C)")
+        self.log.msg(Log.LOG_CONFIG, "   " + "".join(marks).rstrip() + "   (^ = breakpoint)")
 
 
 # End.

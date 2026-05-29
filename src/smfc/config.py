@@ -446,8 +446,9 @@ class Config:
         return ExporterConfig(enabled=enabled, bind_address=bind_address, port=port)
 
     def _read_control_function(self, parser: ConfigParser, section: str, steps: int) -> List[Tuple[int, int]]:
-        """Read control_function from a section, enforcing mutual exclusion with legacy min/max keys
-        and the cross-field constraint with `steps` (interior digitalization requires t_n - t_1 - 1 >= steps).
+        """Read control_function from a section and the cross-field constraint with `steps`
+        (interior digitalization requires t_n - t_1 - 1 >= steps). When control_function is defined,
+        the legacy min/max keys are ignored (control_function takes precedence).
         Args:
             parser (ConfigParser): configuration parser
             section (str): section name
@@ -455,15 +456,11 @@ class Config:
         Returns:
             List[Tuple[int, int]]: parsed breakpoints, or [] when control_function is absent
         Raises:
-            ValueError: mutual-exclusion violation, parse error, or cross-field violation
+            ValueError: parse error or cross-field violation
         """
         raw = parser[section].get(self.CV_CONTROL_FUNCTION, fallback="").strip()
         if not raw:
             return []
-        legacy_keys = (self.CV_MIN_TEMP, self.CV_MAX_TEMP, self.CV_MIN_LEVEL, self.CV_MAX_LEVEL)
-        if any(parser.has_option(section, k) for k in legacy_keys):
-            raise ValueError(f"[{section}] {self.CV_CONTROL_FUNCTION} is mutually exclusive with "
-                             f"{'/'.join(legacy_keys)}")
         pairs = self.parse_control_function(raw)
         interior = pairs[-1][0] - pairs[0][0] - 1
         if interior < steps:
@@ -696,24 +693,28 @@ class Config:
             raise ValueError(f"[{section}] invalid value: {self.CV_TEMP_CALC} ({cfg.temp_calc}).")
         if cfg.steps <= 0:
             raise ValueError(f"[{section}] invalid value: {self.CV_STEPS} <= 0")
-        if cfg.max_level > cfg.min_level and cfg.steps > cfg.max_level - cfg.min_level:
-            raise ValueError(f"[{section}] invalid value: {self.CV_STEPS} > {self.CV_MAX_LEVEL} - {self.CV_MIN_LEVEL}")
         if cfg.sensitivity <= 0:
             raise ValueError(f"[{section}] invalid value: {self.CV_SENSITIVITY} <= 0")
         if cfg.polling < 0:
             raise ValueError(f"[{section}] {self.CV_POLLING} < 0")
-        if cfg.min_temp < 0:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MIN_TEMP} < 0")
-        if cfg.max_temp > 200:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} > 200")
-        if cfg.max_temp < cfg.min_temp:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} < {self.CV_MIN_TEMP}")
-        if cfg.min_level < 0:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MIN_LEVEL} < 0")
-        if cfg.max_level > 100:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} > 100")
-        if cfg.max_level < cfg.min_level:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} < {self.CV_MIN_LEVEL}")
+        # The legacy min/max keys are only used in legacy mode; they are ignored (and not validated)
+        # when control_function is defined.
+        if not cfg.control_function:
+            if cfg.max_level > cfg.min_level and cfg.steps > cfg.max_level - cfg.min_level:
+                raise ValueError(f"[{section}] invalid value: {self.CV_STEPS} > {self.CV_MAX_LEVEL} - "
+                                 f"{self.CV_MIN_LEVEL}")
+            if cfg.min_temp < 0:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MIN_TEMP} < 0")
+            if cfg.max_temp > 200:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} > 200")
+            if cfg.max_temp < cfg.min_temp:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} < {self.CV_MIN_TEMP}")
+            if cfg.min_level < 0:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MIN_LEVEL} < 0")
+            if cfg.max_level > 100:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} > 100")
+            if cfg.max_level < cfg.min_level:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} < {self.CV_MIN_LEVEL}")
         if cfg.smoothing < 1:
             raise ValueError(f"[{section}] invalid value: {self.CV_SMOOTHING} < 1")
 

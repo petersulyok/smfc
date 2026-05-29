@@ -199,8 +199,9 @@ Validation policy:
 (see §10.2). When the key is absent `_read_control_function()` returns an
 empty list and `config.control_function` stays empty; `FanController.build_lut()`
 then falls back to `create_legacy_lut()` and reads `min_temp` / `max_temp` /
-`min_level` / `max_level` directly. The two forms are mutually exclusive within
-a single section — specifying both raises `ValueError` at parse time.
+`min_level` / `max_level` directly. When `control_function=` is present it takes
+precedence; any `min_temp` / `max_temp` / `min_level` / `max_level` keys in the
+same section are ignored (and not validated).
 
 ---
 
@@ -349,6 +350,39 @@ configured and the solid red staircase is the digitalized output actually
 written to the fan. The shape is the same in both cases — a staircase rising
 from the minimum to the maximum fan level — only the underlying ideal differs
 (single linear segment vs. arbitrary piecewise-linear curve).
+
+At `CONFIG` log level, `print_temp_level_mapping()` renders the resulting
+`levels_lut` as an ASCII bar chart so the curve can be eyeballed directly in
+the logs (no image viewer needed). The Y axis is the fan level in 10 % rows and
+the X axis is temperature in 1 °C columns (2 characters wide each); the chart
+auto-fits the curve's temperature span (snapped to 5 °C with a small margin).
+`#` fills the area under the curve and `^` markers under the X axis flag the
+breakpoints. The same renderer is used for both configuration styles (it reads
+only the LUT plus the breakpoint / min-max temperatures for the X range).
+Example for `control_function = 35-35, 45-50, 50-70, 55-100` (`steps = 4`):
+
+```
+   Temperature to level mapping:
+   100% |                                                  ############|
+    90% |                                                  ############|
+    80% |                                          ####################|
+    70% |                                          ####################|
+    60% |                                ##############################|
+    50% |                                ##############################|
+    40% |                      ########################################|
+    30% |##############################################################|
+    20% |##############################################################|
+    10% |##############################################################|
+     0% |##############################################################|
+        +--------------------------------------------------------------+
+         30        35        40        45        50        55        60  (C)
+                   ^                   ^         ^         ^   (^ = breakpoint)
+```
+
+Only ASCII characters (`#`, `^`, `-`, `+`, `|`) are emitted so the output stays
+clean under `grep` / `journalctl` / `syslog`. The chart width scales with the
+curve's temperature span; the geometry is controlled by the
+`CHART_PREFIX_WIDTH` and `CHART_CELL_WIDTH` class constants.
 
 `run()` semantics, every iteration of the service main loop:
 
@@ -641,12 +675,13 @@ interior plateau values are averages of the underlying linear curve.
 | Syntactic: ≥ 2 pairs, each `T-L`, both integers | `Config.parse_control_function()` |
 | Range: T ∈ [0..100], L ∈ [0..100] | `Config.parse_control_function()` |
 | Monotonicity: temperatures strictly ascending | `Config.parse_control_function()` |
-| Interior range: `(t_last − t_first − 1) ≥ steps` | `Config._validate_fan_controller_config()` |
-| Mutual exclusion with legacy keys | Section parser (`_parse_*_sections`) |
+| Interior range: `(t_last − t_first − 1) ≥ steps` | `Config._read_control_function()` |
 
-`control_function=` and any of `min_temp=` / `max_temp=` / `min_level=` /
-`max_level=` in the same section raises `ValueError` at parse time — the two
-forms are mutually exclusive by design.
+When `control_function=` is defined, any `min_temp=` / `max_temp=` / `min_level=`
+/ `max_level=` keys in the same section are ignored (and not validated):
+`control_function=` takes precedence by design. This state is reported at
+`CONFIG` log level as `min_temp/max_temp/min_level/max_level = ignored
+(control_function defined)`.
 
 ---
 
