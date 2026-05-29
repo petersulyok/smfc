@@ -58,7 +58,7 @@ if [ $1 -eq 1 ]; then
         fi
     fi
     if [ -d /dev/disk/by-id ] && grep -q '^nvme_names=$' "$CONF_FILE"; then
-        nvme_disks=$(ls /dev/disk/by-id/ | grep -E '^nvme-' | grep -v -E '\-part|\-eui|_1+$' || true)
+        nvme_disks=$(ls /dev/disk/by-id/ | grep -E '^nvme-' | grep -v -E '\-part|\-eui|\-nvme|_1+$' || true)
         if [ -n "$nvme_disks" ]; then
             replacement=""
             first=1

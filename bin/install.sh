@@ -172,7 +172,7 @@ fi
 
 # Collect all NVMe names for `nvme_names=` parameter in 'smfc.conf' file.
 if [ -z "${KEEP_CONFIG}" ]; then
-  nvme_list=$(ls /dev/disk/by-id/|grep -E '^nvme-'|grep -v -E '\-part|\-eui|_1+$' || true)
+  nvme_list=$(ls /dev/disk/by-id/|grep -E '^nvme-'|grep -v -E '\-part|\-eui|\-nvme|_1+$' || true)
   if [ -n "$nvme_list" ]; then
     nvme_names=""
     for nl in $nvme_list; do
