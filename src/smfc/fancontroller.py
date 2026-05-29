@@ -105,10 +105,10 @@ class FanController:
                 self.log.msg(Log.LOG_CONFIG, f"   max_temp = {self.config.max_temp}")
                 self.log.msg(Log.LOG_CONFIG, f"   min_level = {self.config.min_level}")
                 self.log.msg(Log.LOG_CONFIG, f"   max_level = {self.config.max_level}")
+            self.print_temp_level_mapping()
             self.log.msg(Log.LOG_CONFIG, f"   smoothing = {self.config.smoothing}")
             if hasattr(self, "hwmon_path"):
                 self.log.msg(Log.LOG_CONFIG, f"   hwmon_path = {[p if p else 'smartctl' for p in self.hwmon_path]}")
-            self.print_temp_level_mapping()
 
     @staticmethod
     def get_hwmon_path(udevc: Context, parent_dev: Device) -> str:
