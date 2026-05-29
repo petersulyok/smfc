@@ -325,15 +325,16 @@ class FanController:
 
     # ASCII chart geometry constants for print_temp_level_mapping().
     CHART_PREFIX_WIDTH: int = 6     # Width of the "100% |" row prefix; bars start at this column.
-    CHART_WIDTH: int = 60           # Fixed inner width (characters) of every chart, regardless of range.
+    CHART_WIDTH: int = 44           # Fixed inner width (chars) of every chart; keeps chart+legend <80 cols.
 
     def print_temp_level_mapping(self) -> None:
         """Render the resulting temperature->level curve at LOG_CONFIG level as an ASCII bar chart
         (Y = fan level in 10% rows, X = temperature). The chart has a fixed inner width of CHART_WIDTH
         columns regardless of the temperature range, so every controller's chart lines up; the X scale
         therefore varies per controller and must be read from the axis labels. '#' fills the area under
-        the curve and '^' markers under the X axis flag the breakpoints. The curve definition
-        (control_function or legacy min/max keys) is logged separately by __init__."""
+        the curve and '^' markers under the X axis flag the breakpoints. The exact temperature->level
+        plateaus are listed to the right of the chart. The curve definition (control_function or legacy
+        min/max keys) is logged separately by __init__."""
         # Breakpoint temperatures and the curve's first/last knee define the chart's X range.
         if self.config.control_function:
             bp_temps = {t for t, _ in self.config.control_function}
@@ -345,16 +346,25 @@ class FanController:
         hi = min(100, (t_last + 9) // 5 * 5)
         pw, width, span = self.CHART_PREFIX_WIDTH, self.CHART_WIDTH, max(1, hi - lo)
 
-        # Map a temperature (C) to its 0-based chart column, and a column back to a LUT temperature.
+        # Map a temperature (C) to its 0-based chart column.
         def temp_to_col(temp: float) -> int:
             return round((temp - lo) / span * (width - 1))
+        # The exact temperature->level plateaus, listed to the right of the chart (T-ranges aligned).
+        plateaus = self._level_plateaus()
+        rng_w = max(len(rng) for rng, _ in plateaus)
+        legend = [f"{rng.ljust(rng_w)} -> L={lvl}%" for rng, lvl in plateaus]
+
         self.log.msg(Log.LOG_CONFIG, "   Temperature to level mapping:")
-        for y in range(100, -1, -10):
+        block_w = pw + width + 1   # width of a full bar row: "100% |" + bars + "|"
+        for i, y in enumerate(range(100, -1, -10)):
             row = f"{y:3d}% |"
             for c in range(width):
                 lvl = self.levels_lut[round(lo + c * span / (width - 1))]
                 row += "#" if (lvl >= y or y == 0) else " "
-            self.log.msg(Log.LOG_CONFIG, "   " + row + "|")
+            row += "|"
+            if i < len(legend):
+                row += "  " + legend[i]     # attach a plateau entry to the right of this bar row
+            self.log.msg(Log.LOG_CONFIG, "   " + row)
         self.log.msg(Log.LOG_CONFIG, "   " + " " * (pw - 1) + "+" + "-" * width + "+")
         # X-axis tick labels (every 5 C, skipping any that would overlap) and breakpoint markers.
         ticks = [" "] * (pw + width + 6)
@@ -370,6 +380,22 @@ class FanController:
             marks[pw + temp_to_col(t)] = "^"
         self.log.msg(Log.LOG_CONFIG, "   " + "".join(ticks).rstrip() + "  (C)")
         self.log.msg(Log.LOG_CONFIG, "   " + "".join(marks).rstrip() + "   (^ = breakpoint)")
+        # Any plateaus beyond the chart's bar rows continue under the legend column.
+        for entry in legend[len(range(100, -1, -10)):]:
+            self.log.msg(Log.LOG_CONFIG, "   " + " " * block_w + "  " + entry)
+
+    def _level_plateaus(self) -> List[Tuple[str, int]]:
+        """Walk levels_lut and return one (temperature-range string, level) tuple per plateau
+        (consecutive temperatures sharing the same fan level), in ascending temperature order."""
+        plateaus: List[Tuple[str, int]] = []
+        start = 0
+        for t in range(1, 102):
+            if t == 101 or self.levels_lut[t] != self.levels_lut[start]:
+                end = t - 1
+                rng = f"T={start}C" if start == end else f"T=[{start}..{end}]C"
+                plateaus.append((rng, self.levels_lut[start]))
+                start = t
+        return plateaus
 
 
 # End.

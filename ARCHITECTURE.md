@@ -359,33 +359,36 @@ the X axis is temperature. The chart has a **fixed inner width** of
 different controllers line up; the X scale therefore varies per controller and
 must be read from the axis labels. The range is auto-fitted to the curve
 (snapped to 5 °C with a small margin); `#` fills the area under the curve and
-`^` markers under the X axis flag the breakpoints. The same renderer is used
-for both configuration styles (it reads only the LUT plus the breakpoint /
-min-max temperatures for the X range). Example for
+`^` markers under the X axis flag the breakpoints. The exact temperature->level
+plateaus are listed to the right of the chart. The same renderer is used for
+both configuration styles (it reads only the LUT plus the breakpoint / min-max
+temperatures for the X range). Example for
 `control_function = 35-35, 45-50, 50-70, 55-100` (`steps = 4`):
 
 ```
    Temperature to level mapping:
-   100% |                                                 ###########|
-    90% |                                                 ###########|
-    80% |                                         ###################|
-    70% |                                         ###################|
-    60% |                               #############################|
-    50% |                               #############################|
-    40% |                     #######################################|
-    30% |############################################################|
-    20% |############################################################|
-    10% |############################################################|
-     0% |############################################################|
-        +------------------------------------------------------------+
-         30        35        40        45       50        55        60  (C)
-                   ^                   ^        ^         ^   (^ = breakpoint)
+   100% |                                    ########|  T=[0..35]C   -> L=35%
+    90% |                                    ########|  T=[36..40]C  -> L=39%
+    80% |                              ##############|  T=[41..45]C  -> L=47%
+    70% |                              ##############|  T=[46..50]C  -> L=62%
+    60% |                       #####################|  T=[51..54]C  -> L=85%
+    50% |                       #####################|  T=[55..100]C -> L=100%
+    40% |                ############################|
+    30% |############################################|
+    20% |############################################|
+    10% |############################################|
+     0% |############################################|
+        +--------------------------------------------+
+         30     35     40      45     50     55     60  (C)
+                ^              ^      ^      ^   (^ = breakpoint)
 ```
 
 Only ASCII characters (`#`, `^`, `-`, `+`, `|`) are emitted so the output stays
 clean under `grep` / `journalctl` / `syslog`. The geometry is controlled by the
-`CHART_PREFIX_WIDTH` and `CHART_WIDTH` class constants; tick labels are placed
-every 5 °C and any that would overlap on the fixed-width axis are skipped.
+`CHART_PREFIX_WIDTH` and `CHART_WIDTH` class constants; `CHART_WIDTH` (44) is
+chosen so the chart plus its plateau legend stays within 80 columns. Tick labels
+are placed every 5 °C and any that would overlap on the fixed-width axis are
+skipped.
 
 `run()` semantics, every iteration of the service main loop:
 

@@ -784,6 +784,38 @@ class TestFanController:
             widths.add(len(top.split("|")[1]))
         assert widths == {FanController.CHART_WIDTH}, f"{f}: all ranges render at CHART_WIDTH, got {widths}"
 
+    def test_print_temp_level_mapping_plateau_overflow(self, mocker: MockerFixture):
+        """Positive unit test: when a curve has more plateaus than the chart's bar rows, the extra
+        temperature->level entries continue on lines below the chart axis and none are dropped."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mocker.patch("smfc.FanController.set_fan_level", MagicMock())
+        mocker.patch("smfc.FanController._get_nth_temp", MagicMock(return_value=30.0))
+        my_log = Log(Log.LOG_CONFIG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        # steps=15 over 35..65 -> 17 plateaus, exceeding the 11 bar rows (100%..0% in 10% steps).
+        cfg = create_cpu_config(steps=15, sensitivity=2, polling=2,
+                                min_temp=35, max_temp=65, min_level=35, max_level=100)
+        my_fc = FanController.__new__(FanController)
+        my_fc.config = cfg
+        FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, 1)
+        f = "TestFanController.test_print_temp_level_mapping_plateau_overflow"
+        lines = [str(c.args[0]) for c in mock_print.call_args_list]
+        bar_rows = 11
+        total_plateaus = len(my_fc._level_plateaus())
+        assert total_plateaus > bar_rows, f"{f}: test needs >bar_rows plateaus, got {total_plateaus}"
+        frame_idx = next(i for i, ln in enumerate(lines) if "+" + "-" * FanController.CHART_WIDTH + "+" in ln)
+        # Plateau lines printed after the axis/tick/marker block are the overflow continuation.
+        overflow = [ln for ln in lines[frame_idx + 1:] if "-> L=" in ln]
+        assert len(overflow) == total_plateaus - bar_rows, \
+            f"{f}: overflow count == plateaus - bar_rows ({total_plateaus} - {bar_rows})"
+        # Overflow lines are legend-only: no bar row and no axis frame.
+        for ln in overflow:
+            assert "% |" not in ln and "+--" not in ln, f"{f}: overflow line is legend-only"
+        assert any("-> L=100%" in ln for ln in overflow), f"{f}: final 100% plateau present in overflow"
+        # Nothing dropped: every plateau is listed exactly once across the whole output.
+        assert sum(ln.count("-> L=") for ln in lines) == total_plateaus, f"{f}: all plateaus listed once"
+
     @pytest.mark.parametrize(
         "control_function, expect_new_path, error_str",
         [
