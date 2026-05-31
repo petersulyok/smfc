@@ -572,8 +572,9 @@ class TestFormatReportFromSnapshot:
         """The online-path report emits the Source line and all the standard sections."""
         snap = _sample_snapshot_dict()
         out = client._format_report_from_snapshot(snap, "/etc/smfc/smfc.conf", use_color=False)
-        assert out.startswith("Source: online (via smfc service)\n")
-        assert "smfc-client 5.4.0" in out
+        assert out.startswith("smfc-client 5.4.0\n")
+        assert "    config: /etc/smfc/smfc.conf\n" in out
+        assert "    source: online (via smfc service)\n" in out
         assert "/etc/smfc/smfc.conf" in out
         assert "BMC" in out
         assert "Super Micro Computer Inc." in out
@@ -749,7 +750,7 @@ class TestMainOnlinePath:
         rc = client.main(["-c", "/dummy.conf", "-nc"])
         assert rc == EXIT_OK
         captured = capsys.readouterr()
-        assert "Source: online" in captured.out
+        assert "    source: online" in captured.out
         # Online path means none of the standalone construction work happens.
         assert ipmi_ctor.call_count == 0, "Ipmi must not be constructed on the online path"
         assert ctx_ctor.call_count == 0, "pyudev Context must not be constructed on the online path"
@@ -767,7 +768,7 @@ class TestMainOnlinePath:
         rc = client.main(["-c", "/dummy.conf", "-nc"])
         assert rc == EXIT_OK
         out = capsys.readouterr().out
-        assert "Source: offline (smfc service not running)" in out
+        assert "    source: offline (smfc service not running)" in out
         assert "smfc-client" in out
 
     def test_standalone_flag_forces_offline(self, mocker: MockerFixture,
@@ -783,7 +784,7 @@ class TestMainOnlinePath:
         rc = client.main(["-c", "/dummy.conf", "-nc", "--standalone"])
         assert rc == EXIT_OK
         out = capsys.readouterr().out
-        assert "Source: offline (smfc service not running)" in out
+        assert "    source: offline (smfc service not running)" in out
         assert try_fetch.call_count == 0, "_try_fetch_snapshot must not be called when --standalone is passed"
 
 

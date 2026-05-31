@@ -330,10 +330,10 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     """
     pkg_version = version("smfc")
     lines: List[str] = []
-    lines.append(_format_source_line(online=False, use_color=use_color))
     banner = _wrap(f"smfc-client {pkg_version}", BOLD, use_color)
-    cfg_hint = _wrap(f"(config: {config_path})", DIM, use_color)
-    lines.append(f"{banner}  {cfg_hint}")
+    lines.append(banner)
+    lines.append(_wrap(f"    config: {config_path}", DIM, use_color))
+    lines.append(_format_source_line(online=False, use_color=use_color))
     lines.append("")
 
     # BMC section
@@ -376,7 +376,7 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
 
 
 def _format_source_line(online: bool, use_color: bool) -> str:
-    """Render the leading "Source:" line printed above the banner.
+    """Render the tabbed "source:" line printed below the banner.
 
     Args:
         online (bool): True if the snapshot came from the smfc service exporter.
@@ -386,7 +386,7 @@ def _format_source_line(online: bool, use_color: bool) -> str:
         str: the formatted line (without trailing newline).
     """
     label = "online (via smfc service)" if online else "offline (smfc service not running)"
-    return _wrap(f"Source: {label}", DIM, use_color)
+    return _wrap(f"    source: {label}", DIM, use_color)
 
 
 def _try_fetch_snapshot(exporter_cfg: ExporterConfig,
@@ -426,7 +426,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     The output mirrors the standalone path's structure (banner, BMC, IPMI fan mode, Controllers
     table, IPMI zones, Standby Guard) but is built from already-cached state — no ipmitool
     subprocesses, no smartctl, no controller instantiation. The data source is identified by the
-    `Source: online (via smfc service)` line above the banner.
+    `source: online (via smfc service)` line below the banner.
 
     Args:
         snapshot (Dict[str, Any]): parsed snapshot dict from the exporter's /snapshot endpoint.
@@ -437,12 +437,11 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
         str: full report text (with a trailing newline).
     """
     lines: List[str] = []
-    lines.append(_format_source_line(online=True, use_color=use_color))
-
     pkg_version = snapshot.get("smfc_version", version("smfc"))
     banner = _wrap(f"smfc-client {pkg_version}", BOLD, use_color)
-    cfg_hint = _wrap(f"(config: {config_path})", DIM, use_color)
-    lines.append(f"{banner}  {cfg_hint}")
+    lines.append(banner)
+    lines.append(_wrap(f"    config: {config_path}", DIM, use_color))
+    lines.append(_format_source_line(online=True, use_color=use_color))
     lines.append("")
 
     # BMC section.
