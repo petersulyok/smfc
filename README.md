@@ -13,7 +13,7 @@ Supermicro fan control for Linux (home) servers.
 This is a `systemd service` running on Linux that can control fans with the help of IPMI on Supermicro X10-X13/H10-H13 (and some X9) motherboards.
 
 ### 1. Prerequisites
- - a Supermicro motherboard with ASPEED AST2400/2500/2600 chip
+ - a Supermicro motherboard with IPMI 2.0 (ASPEED AST2400/2500/2600 chip)
  - Python 3.10-3.14
  - a Linux distribution with:
    - `systemd` and `bash`
@@ -172,11 +172,11 @@ Fan controllers use user-defined control functions that map a temperature interv
 The simple form maps a single temperature interval `[min_temp..max_temp]` linearly to a single fan-level interval `[min_level..max_level]`, divided into discrete plateaus by the `steps=` parameter:
 
 ```ini
+     steps=5
      min_temp=30
      max_temp=65
      min_level=35
      max_level=100
-     steps=5
 ```
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/linear_control_function.png" align="center" width="500">
@@ -265,7 +265,7 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 
 | `platform_name=` parameter | Platform                                     | Notes                                                                                            |
 |----------------------------|----------------------------------------------|--------------------------------------------------------------------------------------------------|
-| `auto`                     | automatic discovery based on BMC information | Default behaviour                                                                                |
+| `auto`                     | automatic discovery based on BMC information | Reads product name from IPMI; selects `X10QBi` if the name is `X10QBi`, `genericx9` if the name starts with `X9`, otherwise falls back to `generic` |
 | `generic`                  | Generic X10-X13/H10-H13 Supermicro boards    | Uses standard Supermicro IPMI raw commands                                                       |
 | `genericx9`                | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                  |
 | `X10QBi`                   | Supermicro X10QBi motherboard                | Nuvoton NCT7904D fan controller, 4 fan zones (0x10-0x13), see [issue #69](https://github.com/petersulyok/smfc/issues/69) and [PR #97](https://github.com/petersulyok/smfc/pull/97) |
@@ -273,7 +273,7 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 With this abstraction layer, new Supermicro motherboards can also be added to `smfc` with a good understanding of their IPMI raw commands and fan control logic.
 
 Some X9 motherboards are supported (since `smfc v5.2.0`) via the `genericx9` platform, provided they support the specific IPMI raw commands used for fan control. There is 
-no auto-detection for X9 boards, so you must set `platform_name=genericx9` in the configuration file.
+no auto-detection for X9 boards, so you must set `platform_name=genericx9` in the configuration file. The `X10QBi` platform is auto-detected when the BMC product name is exactly `X10QBi`.
 
 For the newer X14/H14 motherboards, compatibility is still being investigated. There are some issues ([#98](https://github.com/petersulyok/smfc/issues/98)) and discussions ([#92](https://github.com/petersulyok/smfc/discussions/92), [#106](https://github.com/petersulyok/smfc/discussions/106)) about this to get better understanding.
 
