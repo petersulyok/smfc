@@ -8,5 +8,10 @@ export PYBUILD_NAME=smfc
 override_dh_auto_test:
 	# Tests require IPMI hardware; skip during package build
 
+override_dh_installsystemd:
+	# Enable the service but do not start it on install; the user must
+	# review the configuration first (matches the RPM %systemd_post behavior)
+	dh_installsystemd --no-start
+
 override_dh_builddeb:
 	dh_builddeb
