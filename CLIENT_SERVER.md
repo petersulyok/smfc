@@ -420,3 +420,141 @@ Each step is independently runnable through the existing `pytest` suite.
 - **Should `/snapshot` and `/metrics` be on different ports?** Decided
   no: same data, same audience (anyone on the network), one fewer thing
   to configure.
+
+---
+
+# Grafana dashboard (`/metrics` contract extension)
+
+A Grafana dashboard visualises the exporter's `/metrics`. The **visual design**
+(panels, layout, transformations) is owned by the separate Grafana stack repo
+(`grafana/GRAFANA.md`, deployed via `docker.home.sulyok.net`); this section is the
+authoritative **`/metrics` contract** that smfc must emit to feed it, plus the design
+decisions that shaped it. The dashboard reads from VictoriaMetrics, which scrapes the
+exporter's `/metrics`.
+
+All names follow **smfc's own terminology**: the `section` / `type` / `zone` labels, and
+**percent** (0–100) for fan levels — not a Prometheus-idiomatic `_ratio` (0–1), because
+smfc speaks in percent everywhere (config keys, IPMI levels).
+
+## Design decisions (locked in with user)
+
+1. **Winner is by level, not temperature, and is derived — not a metric.** Arbitration
+   applies the **highest desired level** to a shared zone (`Service._apply_fan_levels`),
+   not the highest temperature. The dashboard derives the per-zone winner as
+   `max(smfc_controller_level_percent)` — so there is **no** `smfc_zone_winner_temperature_celsius`
+   metric. Every zone is either shared (deferred controllers, arbitrated) or exclusive
+   (single controller); in both cases the applied level always equals some controller's
+   level, so the winner is always recoverable.
+2. **No synthesized "zone temperature".** Temperatures are per-controller quantities with
+   per-controller curves and safe ranges (an HD at 50 °C is alarming; an NVME at 50 °C is
+   normal), so no single zone temperature is meaningful. The dashboard shows per-controller
+   temperatures only; the winner is surfaced on the comparable quantity — **level**.
+3. **No current-fan-mode panel; `smfc_fan_mode` removed.** smfc's invariant is *always
+   FULL, or terminated*: with `enforce_fan_mode` on, drift is corrected within the same
+   loop pass; with it off, drift `exit(11)`s (→ `up == 0`). Liveness plus the enforcement
+   counter cover every not-FULL state, so the current-mode gauge is redundant and was
+   dropped.
+4. **Enforcement counter, not a "drift" gauge.** `smfc_fan_mode_enforced_total` is a
+   `counter`, +1 per detected drift-and-correct excursion (named after the
+   `enforce_fan_mode` knob); `increase()[$__range]` gives excursions over a window.
+5. **Version lives on `smfc_up` only.** `smfc_up{version}` is both liveness and version
+   (no separate `smfc_build_info`); the `bmc_product` label is removed from `smfc_up` and
+   BMC identity moves to a dedicated `smfc_bmc_info`.
+6. **Per-controller temperature and level carry a `zone` label**, emitted once per targeted
+   zone (a controller spanning zones `[0,1]` yields two series), so per-zone panels filter
+   on `zone` with no PromQL join.
+
+## Finalized metric set
+
+Changes are relative to the Phase 2 exporter above.
+
+| Metric | Type | Labels | Status vs Phase 2 |
+|---|---|---|---|
+| `smfc_up` | gauge | `version` | **changed** — drop `bmc_product` label |
+| `smfc_start_time_seconds` | gauge | — | **new** — Unix start time; panel computes `time() - …` |
+| `smfc_bmc_info` | gauge | `product_name`, `firmware_version`, `manufacturer_name` | **new** |
+| `smfc_fan_mode_enforced_total` | counter | — | **new** — +1 per drift-from-FULL correction |
+| `smfc_controller_zone` | gauge | `section`, `type`, `zone` | **new** — value `1` per enabled controller↔zone pair |
+| `smfc_temperature_celsius` | gauge | `section`, `type`, **`zone`** | **changed** — add `zone` label (still skips CONST) |
+| `smfc_controller_level_percent` | gauge | `section`, `type`, **`zone`** | **changed** — add `zone` label (incl. CONST) |
+| `smfc_fan_level_percent` | gauge | `zone` | unchanged |
+| `smfc_disk_standby` | gauge | `section`, `device` | unchanged |
+| ~~`smfc_fan_mode`~~ | — | — | **removed** (decision 3) |
+| ~~`smfc_fan_mode_age_seconds`~~ | — | — | **removed** (no consumer) |
+
+## smfc-side changes required
+
+- **`Service`**: add `start_time` (set at init) and `fan_mode_enforced_count` (a plain int,
+  incremented in `_check_fan_mode()` on each detected drift; written only by the loop
+  thread — same single-writer discipline as `applied_levels`, no lock).
+- **`snapshot.py` (`build_snapshot`)**: surface the two new `Service` fields. No per-zone
+  restructuring needed — controller entries already carry `ipmi_zones`, `last_temp_c`,
+  `last_level_pct`; the exporter expands them per zone.
+- **`exporter.py` (`render_prometheus`)**: drop `bmc_product` from `smfc_up`; emit
+  `smfc_bmc_info`, `smfc_start_time_seconds`, `smfc_fan_mode_enforced_total`,
+  `smfc_controller_zone`; loop each controller's `ipmi_zones` to add the `zone` label on
+  `smfc_temperature_celsius` and `smfc_controller_level_percent`; remove `smfc_fan_mode`
+  and `smfc_fan_mode_age_seconds`.
+- **Tests**: update `test/test_exporter.py` and `test/test_snapshot.py` to the new
+  exposition / shape (new metrics, `zone` label, removed metrics, enforcement counter).
+
+## Dashboard layout (summary; full spec in `grafana/GRAFANA.md`)
+
+- **Row 1 — current state**: Stat panels for version (`smfc_up`), uptime
+  (`time() - smfc_start_time_seconds`), BMC product (`smfc_bmc_info`), enforcement count
+  (`increase(smfc_fan_mode_enforced_total[$__range])`), plus a zone↔controller mapping
+  Table pivoted from `smfc_controller_zone` (rows = zones, columns = `section`).
+- **Per-zone rows** (one per IPMI zone), two thematic bands:
+  - **Top = level**: fan-level Time series (`smfc_fan_level_percent{zone}`, step
+    interpolation) + a Stat showing the applied %.
+  - **Bottom = temperature**: per-controller Time series (`smfc_temperature_celsius{zone}`,
+    legend `{{section}}`, per-family thresholds) + a Table listing each controller's Temp
+    and Level, where **Level is an inline bar-gauge cell** (0–100) and the highest level
+    (= winner) stands out by colour. CONST appears with a Level bar and a blank Temp cell.
+
+## Worked example `/metrics`
+
+Scenario: Zone 0 ← CPU 30 % beats CONST 20 %; Zone 1 ← HD 47 % beats hotter NVME 52 %.
+
+```text
+# HELP smfc_up smfc service is up (1); carries the running version.
+# TYPE smfc_up gauge
+smfc_up{version="5.4.0"} 1
+
+# HELP smfc_start_time_seconds Unix start time of the smfc service.
+# TYPE smfc_start_time_seconds gauge
+smfc_start_time_seconds 1780272000
+
+# HELP smfc_bmc_info BMC identity reported by ipmitool bmc info.
+# TYPE smfc_bmc_info gauge
+smfc_bmc_info{product_name="X11SPH-nCTPF",firmware_version="1.68",manufacturer_name="Supermicro"} 1
+
+# HELP smfc_fan_mode_enforced_total Times smfc detected the BMC fan mode left FULL and re-asserted it.
+# TYPE smfc_fan_mode_enforced_total counter
+smfc_fan_mode_enforced_total 2
+
+# HELP smfc_controller_zone Enabled fan-controller-to-IPMI-zone mapping (value always 1).
+# TYPE smfc_controller_zone gauge
+smfc_controller_zone{section="CPU",type="cpu",zone="0"} 1
+smfc_controller_zone{section="CONST",type="const",zone="0"} 1
+smfc_controller_zone{section="HD",type="hd",zone="1"} 1
+smfc_controller_zone{section="NVME",type="nvme",zone="1"} 1
+
+# HELP smfc_temperature_celsius Current smoothed controller temperature, per targeted zone. Not emitted for CONST.
+# TYPE smfc_temperature_celsius gauge
+smfc_temperature_celsius{section="CPU",type="cpu",zone="0"} 38.5
+smfc_temperature_celsius{section="HD",type="hd",zone="1"} 41.0
+smfc_temperature_celsius{section="NVME",type="nvme",zone="1"} 52.0
+
+# HELP smfc_controller_level_percent Fan level requested by the controller, per targeted zone.
+# TYPE smfc_controller_level_percent gauge
+smfc_controller_level_percent{section="CPU",type="cpu",zone="0"} 30
+smfc_controller_level_percent{section="CONST",type="const",zone="0"} 20
+smfc_controller_level_percent{section="HD",type="hd",zone="1"} 47
+smfc_controller_level_percent{section="NVME",type="nvme",zone="1"} 40
+
+# HELP smfc_fan_level_percent Fan level applied to the IPMI zone after arbitration.
+# TYPE smfc_fan_level_percent gauge
+smfc_fan_level_percent{zone="0"} 30
+smfc_fan_level_percent{zone="1"} 47
+```
