@@ -26,6 +26,8 @@ def _sample_snapshot() -> Dict[str, Any]:
         "version": 1,
         "generated_at": 1716902400.0,
         "smfc_version": "5.4.0",
+        "start_time": 1716902400.0,
+        "fan_mode_enforced_count": 2,
         "bmc": {
             "manufacturer_name": "Super Micro Computer Inc.",
             "manufacturer_id": 10876,
@@ -89,14 +91,58 @@ class TestPrometheusRenderer:
     """Unit tests for render_prometheus() (no HTTP server involved)."""
 
     def test_well_formed_output(self) -> None:
-        """Output ends with a newline, contains HELP+TYPE for every metric, and the smfc_up sentinel."""
+        """Output ends with a newline and carries HELP+TYPE for every gauge plus the enforcement counter."""
         out = render_prometheus(_sample_snapshot())
         assert out.endswith("\n")
-        for metric in ("smfc_up", "smfc_fan_mode", "smfc_fan_mode_age_seconds",
-                       "smfc_temperature_celsius", "smfc_controller_level_percent",
-                       "smfc_fan_level_percent", "smfc_disk_standby"):
+        for metric in ("smfc_up", "smfc_start_time_seconds", "smfc_bmc_info",
+                       "smfc_controller_zone", "smfc_temperature_celsius",
+                       "smfc_controller_level_percent", "smfc_fan_level_percent",
+                       "smfc_disk_standby"):
             assert f"# HELP {metric} " in out, f"missing HELP for {metric}"
             assert f"# TYPE {metric} gauge" in out, f"missing TYPE for {metric}"
+        # The enforcement metric is a counter, not a gauge.
+        assert "# HELP smfc_fan_mode_enforced_total " in out
+        assert "# TYPE smfc_fan_mode_enforced_total counter" in out
+        # Removed metrics must not reappear.
+        assert "smfc_fan_mode " not in out
+        assert "smfc_fan_mode_age_seconds" not in out
+
+    def test_up_and_bmc_info(self) -> None:
+        """smfc_up carries only the version; BMC identity moves to smfc_bmc_info."""
+        out = render_prometheus(_sample_snapshot())
+        assert 'smfc_up{version="5.4.0"} 1' in out
+        assert "bmc_product" not in out
+        expected = ('smfc_bmc_info{product_name="X11SCH-LN4F",firmware_version="1.74",'
+                    'manufacturer_name="Super Micro Computer Inc."} 1')
+        assert expected in out
+
+    def test_start_time_and_enforcement_counter(self) -> None:
+        """The start timestamp and enforcement counter are rendered from the snapshot."""
+        out = render_prometheus(_sample_snapshot())
+        assert "smfc_start_time_seconds 1716902400.0" in out
+        assert "smfc_fan_mode_enforced_total 2" in out
+
+    def test_controller_zone_mapping(self) -> None:
+        """smfc_controller_zone emits value 1 per enabled controller, one series per targeted zone."""
+        out = render_prometheus(_sample_snapshot())
+        assert 'smfc_controller_zone{section="CPU",type="cpu",zone="0"} 1' in out
+        assert 'smfc_controller_zone{section="HD",type="hd",zone="1"} 1' in out
+        assert 'smfc_controller_zone{section="CONST",type="const",zone="2"} 1' in out
+
+    def test_controller_level_includes_const_per_zone(self) -> None:
+        """smfc_controller_level_percent carries a zone label and includes CONST."""
+        out = render_prometheus(_sample_snapshot())
+        assert 'smfc_controller_level_percent{section="CPU",type="cpu",zone="0"} 45' in out
+        assert 'smfc_controller_level_percent{section="CONST",type="const",zone="2"} 50' in out
+
+    def test_multi_zone_controller_expands_per_zone(self) -> None:
+        """A controller targeting two zones yields one series per zone for temp/level/mapping."""
+        snap = _sample_snapshot()
+        snap["controllers"][0]["ipmi_zones"] = [0, 1]
+        out = render_prometheus(snap)
+        assert 'smfc_temperature_celsius{section="CPU",type="cpu",zone="0"} 42.3' in out
+        assert 'smfc_temperature_celsius{section="CPU",type="cpu",zone="1"} 42.3' in out
+        assert 'smfc_controller_zone{section="CPU",type="cpu",zone="1"} 1' in out
 
     def test_per_zone_levels(self) -> None:
         """smfc_fan_level_percent emits one line per zone in numerical order."""
@@ -106,11 +152,12 @@ class TestPrometheusRenderer:
         assert 'smfc_fan_level_percent{zone="2"} 50' in out
 
     def test_temperature_skips_const(self) -> None:
-        """smfc_temperature_celsius is emitted for cpu and hd but not const (no temperature concept)."""
+        """smfc_temperature_celsius is emitted (with a zone label) for cpu and hd but not const."""
         out = render_prometheus(_sample_snapshot())
-        assert 'smfc_temperature_celsius{section="CPU",type="cpu"} 42.3' in out
-        assert 'smfc_temperature_celsius{section="HD",type="hd"} 34.1' in out
-        assert 'section="CONST"' not in out.split("smfc_temperature_celsius", 1)[1].split("# HELP")[0]
+        assert 'smfc_temperature_celsius{section="CPU",type="cpu",zone="0"} 42.3' in out
+        assert 'smfc_temperature_celsius{section="HD",type="hd",zone="1"} 34.1' in out
+        temp_block = out.split("# TYPE smfc_temperature_celsius", 1)[1].split("# HELP")[0]
+        assert 'section="CONST"' not in temp_block
 
     def test_disk_standby_per_device(self) -> None:
         """smfc_disk_standby renders one row per (section, device) with 1/0 reflecting the state."""

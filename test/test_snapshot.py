@@ -119,7 +119,8 @@ def _make_gpu_fc(zones=None, count=1, last_temp=55.0, last_level=60) -> MagicMoc
 
 
 def _make_service(controllers=None, applied_levels=None,
-                  last_fan_mode=Ipmi.FULL_MODE, last_fan_mode_at=None) -> MagicMock:
+                  last_fan_mode=Ipmi.FULL_MODE, last_fan_mode_at=None,
+                  start_time=1716902400.0, fan_mode_enforced_count=0) -> MagicMock:
     """Build a fake Service with attributes the snapshot reads."""
     service = MagicMock()
     service.ipmi = _make_ipmi()
@@ -127,6 +128,8 @@ def _make_service(controllers=None, applied_levels=None,
     service.applied_levels = applied_levels if applied_levels is not None else {}
     service.last_fan_mode = last_fan_mode
     service.last_fan_mode_at = last_fan_mode_at if last_fan_mode_at is not None else time.monotonic()
+    service.start_time = start_time
+    service.fan_mode_enforced_count = fan_mode_enforced_count
     return service
 
 
@@ -144,6 +147,13 @@ class TestBuildSnapshot:
         assert snap["bmc"]["product_name"] == "X11SCH-LN4F"
         assert snap["bmc"]["platform_name"] == "X11SCH-LN4F"
         assert snap["bmc"]["platform_class"] == "GenericPlatform"
+
+    def test_start_time_and_enforcement_count(self) -> None:
+        """The snapshot surfaces the service start time and the fan-mode enforcement counter."""
+        service = _make_service(start_time=1716902400.0, fan_mode_enforced_count=3)
+        snap = build_snapshot(service)
+        assert snap["start_time"] == pytest.approx(1716902400.0)
+        assert snap["fan_mode_enforced_count"] == 3
 
     def test_fan_mode_block(self) -> None:
         """fan_mode reflects service.last_fan_mode and reports a non-negative age."""

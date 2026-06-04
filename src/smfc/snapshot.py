@@ -113,6 +113,8 @@ def build_snapshot(service: "Service") -> Dict[str, Any]:
         "version": SNAPSHOT_SCHEMA_VERSION,
         "generated_at": now,
         "smfc_version": version("smfc"),
+        "start_time": float(getattr(service, "start_time", 0.0)),
+        "fan_mode_enforced_count": int(getattr(service, "fan_mode_enforced_count", 0)),
         "bmc": {
             "manufacturer_name": ipmi.bmc_manufacturer_name,
             "manufacturer_id": int(ipmi.bmc_manufacturer_id),

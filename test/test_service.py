@@ -658,6 +658,7 @@ class TestService:
         service.applied_levels = {0: 45, 1: 55}
         service.last_fan_mode = Ipmi.FULL_MODE
         service.last_fan_mode_at = time.monotonic()
+        service.fan_mode_enforced_count = 0
         return service
 
     def test_check_fan_mode_no_drift(self, mocker: MockerFixture):
@@ -692,6 +693,7 @@ class TestService:
         called_zones = {c.args[0] for c in mock_set_level.call_args_list}
         assert called_zones == set(service.applied_levels.keys()), f"{f}: re-apply set must match cache"
         assert service.last_fan_mode == Ipmi.FULL_MODE, f"{f}: cache should reflect restored mode"
+        assert service.fan_mode_enforced_count == 1, f"{f}: enforcement counter should increment once per excursion"
 
     def test_check_fan_mode_drift_exits_when_disabled(self, mocker: MockerFixture):
         """Negative: enforce=false, BMC drifts → exit code 11."""

@@ -43,49 +43,76 @@ def render_prometheus(snapshot: Dict[str, Any]) -> str:
     lines: List[str] = []
 
     bmc = snapshot.get("bmc", {})
-    bmc_product = str(bmc.get("product_name", ""))
     smfc_version = str(snapshot.get("smfc_version", ""))
 
-    lines.append("# HELP smfc_up smfc service is up (1).")
+    # Liveness sentinel + running version.
+    lines.append("# HELP smfc_up smfc service is up (1); carries the running version.")
     lines.append("# TYPE smfc_up gauge")
-    lines.append(f'smfc_up{_format_labels([("version", smfc_version), ("bmc_product", bmc_product)])} 1')
+    lines.append(f'smfc_up{_format_labels([("version", smfc_version)])} 1')
 
-    fan_mode = snapshot.get("fan_mode", {})
+    # Service start time (Unix seconds); dashboards compute uptime as time() - this.
     lines.append("")
-    lines.append("# HELP smfc_fan_mode Current IPMI fan mode (0=STANDARD,1=FULL,2=OPTIMAL,3=PUE,4=HEAVY_IO).")
-    lines.append("# TYPE smfc_fan_mode gauge")
-    lines.append(f"smfc_fan_mode {int(fan_mode.get('id', 0))}")
+    lines.append("# HELP smfc_start_time_seconds Unix start time of the smfc service.")
+    lines.append("# TYPE smfc_start_time_seconds gauge")
+    lines.append(f"smfc_start_time_seconds {float(snapshot.get('start_time', 0.0))}")
 
+    # BMC identity (static; read once at startup).
+    bmc_labels = _format_labels([("product_name", bmc.get("product_name", "")),
+                                 ("firmware_version", bmc.get("firmware_rev", "")),
+                                 ("manufacturer_name", bmc.get("manufacturer_name", ""))])
     lines.append("")
-    lines.append("# HELP smfc_fan_mode_age_seconds Age of the cached fan_mode reading.")
-    lines.append("# TYPE smfc_fan_mode_age_seconds gauge")
-    lines.append(f"smfc_fan_mode_age_seconds {float(fan_mode.get('age_s', 0.0))}")
+    lines.append("# HELP smfc_bmc_info BMC identity reported by ipmitool bmc info.")
+    lines.append("# TYPE smfc_bmc_info gauge")
+    lines.append(f"smfc_bmc_info{bmc_labels} 1")
+
+    # Fan-mode enforcement counter (+1 per detected drift-from-FULL correction).
+    lines.append("")
+    lines.append("# HELP smfc_fan_mode_enforced_total Times smfc re-asserted FULL after the BMC fan mode drifted.")
+    lines.append("# TYPE smfc_fan_mode_enforced_total counter")
+    lines.append(f"smfc_fan_mode_enforced_total {int(snapshot.get('fan_mode_enforced_count', 0))}")
 
     controllers = snapshot.get("controllers", []) or []
 
-    # Per-controller temperature.
+    # Enabled controller-to-IPMI-zone mapping (value always 1), one series per targeted zone.
     lines.append("")
-    lines.append("# HELP smfc_temperature_celsius Last observed temperature per controller.")
+    lines.append("# HELP smfc_controller_zone Enabled fan-controller-to-IPMI-zone mapping (value always 1).")
+    lines.append("# TYPE smfc_controller_zone gauge")
+    for c in controllers:
+        if not c.get("enabled", True):
+            continue
+        section, ctype = c.get("section", ""), c.get("type", "")
+        for zone in c.get("ipmi_zones", []) or []:
+            labels = _format_labels([("section", section), ("type", ctype), ("zone", str(zone))])
+            lines.append(f"smfc_controller_zone{labels} 1")
+
+    # Per-controller temperature, one series per targeted zone (CONST has no temperature).
+    lines.append("")
+    lines.append("# HELP smfc_temperature_celsius Per-controller temperature, per targeted zone; skipped for CONST.")
     lines.append("# TYPE smfc_temperature_celsius gauge")
     for c in controllers:
-        # Const controllers don't have a meaningful temperature; skip them in the temperature metric.
         if c.get("type") == "const":
             continue
-        labels = _format_labels([("section", c.get("section", "")), ("type", c.get("type", ""))])
-        lines.append(f"smfc_temperature_celsius{labels} {float(c.get('last_temp_c', 0.0))}")
+        section, ctype = c.get("section", ""), c.get("type", "")
+        temp = float(c.get("last_temp_c", 0.0))
+        for zone in c.get("ipmi_zones", []) or []:
+            labels = _format_labels([("section", section), ("type", ctype), ("zone", str(zone))])
+            lines.append(f"smfc_temperature_celsius{labels} {temp}")
 
-    # Per-controller last computed level.
+    # Per-controller requested level, one series per targeted zone (CONST included).
     lines.append("")
-    lines.append("# HELP smfc_controller_level_percent Last computed fan level per controller.")
+    lines.append("# HELP smfc_controller_level_percent Fan level requested by the controller, per targeted zone.")
     lines.append("# TYPE smfc_controller_level_percent gauge")
     for c in controllers:
-        labels = _format_labels([("section", c.get("section", "")), ("type", c.get("type", ""))])
-        lines.append(f"smfc_controller_level_percent{labels} {int(c.get('last_level_pct', 0))}")
+        section, ctype = c.get("section", ""), c.get("type", "")
+        level = int(c.get("last_level_pct", 0))
+        for zone in c.get("ipmi_zones", []) or []:
+            labels = _format_labels([("section", section), ("type", ctype), ("zone", str(zone))])
+            lines.append(f"smfc_controller_level_percent{labels} {level}")
 
-    # Per-zone applied level (the actual BMC value).
+    # Per-zone applied level (the actual BMC value after arbitration).
     zones = snapshot.get("zones", {}) or {}
     lines.append("")
-    lines.append("# HELP smfc_fan_level_percent Last applied fan level per IPMI zone.")
+    lines.append("# HELP smfc_fan_level_percent Fan level applied to the IPMI zone after arbitration.")
     lines.append("# TYPE smfc_fan_level_percent gauge")
     for zone, info in sorted(zones.items(), key=lambda kv: int(kv[0])):
         labels = _format_labels([("zone", zone)])

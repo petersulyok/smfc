@@ -39,6 +39,8 @@ class Service:
     last_desired: List[Tuple[str, List[int], int, float]]      # Cache of last desired levels for change detection
     last_fan_mode: int                                         # Last observed BMC fan mode (from _check_fan_mode)
     last_fan_mode_at: float                                    # monotonic() timestamp of last_fan_mode
+    start_time: float                                          # Unix wall-clock start time of the service
+    fan_mode_enforced_count: int                               # Count of detected drift-from-FULL corrections
     exporter: Optional[Exporter]                               # HTTP exporter (None when disabled or bind failed)
 
     def exit_func(self) -> None:
@@ -218,6 +220,7 @@ class Service:
                          f"enforce_fan_mode is disabled, smfc exiting.")
             sys.exit(11)
 
+        self.fan_mode_enforced_count += 1
         self.log.msg(Log.LOG_INFO,
                      f"BMC fan mode drifted from FULL to {mode_name}; restoring FULL.")
         try:
@@ -294,6 +297,10 @@ class Service:
 
         # Store `sudo` option.
         self.sudo = parsed_results.s
+
+        # Record service start time and reset the fan-mode enforcement counter (exposed via /metrics).
+        self.start_time = time.time()
+        self.fan_mode_enforced_count = 0
 
         # Create a Log class instance (in theory, this cannot fail).
         try:
