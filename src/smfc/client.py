@@ -468,6 +468,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     lines.append(f"  Product       : {bmc.get('product_name', '?')} ({bmc.get('product_id', '?')})")
     lines.append(f"  Firmware      : {bmc.get('firmware_rev', '?')}")
     lines.append(f"  IPMI version  : {bmc.get('ipmi_version', '?')}")
+    lines.append(f"  Platform      : {bmc.get('platform_name', '?')} ({bmc.get('platform_class', '?')})")
     # Fan mode (service-cached) closes the BMC block. It is always FULL when smfc is running with
     # enforce_fan_mode=true; the exporter served whatever was cached on the loop's last poll.
     fan_mode = snapshot.get("fan_mode", {}) or {}

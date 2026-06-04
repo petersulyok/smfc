@@ -595,6 +595,7 @@ class TestFormatReportFromSnapshot:
         assert "/etc/smfc/smfc.conf" in out
         assert "BMC" in out
         assert "Super Micro Computer Inc." in out
+        assert "Platform      : X11SCH-LN4F (GenericPlatform)" in out
         assert "FULL" in out
         # The fan-mode line carries the enforced count and reading age (online only).
         assert "enforced 3x" in out
