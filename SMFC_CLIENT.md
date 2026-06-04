@@ -4,7 +4,7 @@
 > [src/smfc/client.py](src/smfc/client.py),
 > [test/test_client.py](test/test_client.py), and the `[project.scripts]`
 > entry in [pyproject.toml](pyproject.toml). The IPC integration with a
-> running smfc service (the `Source: online` / `Source: offline` header)
+> running smfc service (the `source:` line that reads `smfc service` vs `ipmitool`)
 > lands as part of [CLIENT_SERVER.md](CLIENT_SERVER.md) — until that plan
 > is implemented, smfc-client always uses the standalone path and does
 > not print a `Source:` line.
@@ -183,8 +183,9 @@ Exit codes: 0=ok  6=config error  8=ipmi error  9=udev error
 ## Output format (≤80 cols)
 
 ```
-Source: offline (smfc service not running)
-smfc-client 5.4.0  (config: /etc/smfc/smfc.conf)
+smfc-client 5.4.0
+    config: /etc/smfc/smfc.conf
+    source: ipmitool (smfc service is not reachable)
 
 BMC
   Manufacturer  : Super Micro Computer Inc. (10876)
@@ -196,13 +197,13 @@ BMC
 IPMI fan mode   : FULL (1)
 
 Controllers
-  Section   Type    Zones   Devices  Temp     Level   Status
-  --------  ------  ------  -------  -------  ------  ----------
-  CPU       cpu     [0]     1         42.3 C   45 %   ok
-  HD        hd      [1]     4         34.1 C   55 %   ok
-  NVME      nvme    [1]     2         48.5 C   55 %   ok
-  CONST:0   const   [2]     -         -        50 %   ok (target)
-  GPU       gpu     [3]     -        ERROR: nvidia-smi not found
+  Section   Type    Zones   Devices  Temp     Level
+  --------  ------  ------  -------  -------  ------
+  CPU       cpu     [0]     1         42.3 C   45 %
+  HD        hd      [1]     4         34.1 C   55 %
+  NVME      nvme    [1]     2         48.5 C   55 %
+  CONST:0   const   [2]     -         -        50 %
+  GPU       gpu     ERROR: nvidia-smi not found
 
 IPMI zones (live)
   Zone   Level
@@ -220,11 +221,22 @@ Standby Guard ([HD], standby_hd_limit=1)
 ```
 
 Notes:
-- The first line declares the data source: `Source: offline (smfc service not
-  running)` for the standalone path implemented here, or `Source: online (via
-  smfc service)` for the IPC path added by [CLIENT_SERVER.md](CLIENT_SERVER.md).
-  Easy to grep, easy to scan; printed before the banner so it's the first
-  thing the user reads.
+- A `    source:` line below the banner declares the data source: `ipmitool
+  (smfc service is not reachable)` for the standalone path, or `smfc service
+  (live snapshot)` for the IPC path added by
+  [CLIENT_SERVER.md](CLIENT_SERVER.md). "Not reachable" (not "not running") is
+  deliberate: offline mode is also reached when `[Exporter]` is disabled in the
+  config or `--standalone` is passed, so the service may well be running.
+- Source-specific detail: **online** adds an `    uptime:` line and annotates
+  the fan-mode line with the enforced count and reading age
+  (`enforced 3x, read 0.4s ago`) — these come from service-tracked counters.
+  **Offline** reads the IPMI fan mode live and appends a
+  `! not in FULL mode - smfc may not be controlling the fans` warning when the
+  BMC reports anything other than FULL.
+- There is no **Status** column: it was always `ok` online, and offline its only
+  unique signal was the controller-construction error, which now runs free from
+  the **Zones** column (Section/Type are the only knowns when a controller fails
+  to build). Per-cell read failures still show `ERROR` in the Temp/Level column.
 - The "IPMI zones (live)" table queries the **union of zones** across all
   successfully-constructed controllers (avoids probing zones the platform
   doesn't have).
@@ -232,10 +244,10 @@ Notes:
   `standby_guard_enabled=True and count>1`. Always guard the read with
   `getattr(hdfc, "standby_array_states", None)` — the attribute is only set
   when standby is enabled (see [hdfc.py:75](src/smfc/hdfc.py#L75)).
-- ANSI colors: green for `ok` and `ACTIVE`, red for `ERROR`, dim for
-  placeholders, `STANDBY`, and the `(target)` annotation, bold for section
-  headers and the program banner. Auto-disabled when stdout is not a TTY or
-  `--no-color` is passed.
+- ANSI colors: green for FULL fan mode and `ACTIVE`, red for `ERROR` and the
+  not-in-FULL warning, dim for placeholders, `STANDBY`, and the source/uptime
+  lines, bold for section headers and the program banner. Auto-disabled when
+  stdout is not a TTY or `--no-color` is passed.
 
 ### Colorized rendering (illustrative)
 
@@ -256,8 +268,9 @@ So `[green]ok[/green]` in the sample below maps to `\x1b[32mok\x1b[0m` in
 real output. Roughly six string constants in `client.py`.
 
 ```
-[dim]Source: offline (smfc service not running)[/dim]
-[bold]smfc-client 5.4.0[/bold]  [dim](config: /etc/smfc/smfc.conf)[/dim]
+[bold]smfc-client 5.4.0[/bold]
+    [dim]config: /etc/smfc/smfc.conf[/dim]
+    [dim]source: ipmitool (smfc service is not reachable)[/dim]
 
 [bold]BMC[/bold]
   Manufacturer  : Super Micro Computer Inc. (10876)
@@ -267,12 +280,12 @@ real output. Roughly six string constants in `client.py`.
 IPMI fan mode   : [green]FULL[/green] (1)
 
 [bold]Controllers[/bold]
-  Section   Type    Zones   Devices  Temp     Level   Status
-  --------  ------  ------  -------  -------  ------  ----------
-  CPU       cpu     [0]     1         42.3 C   45 %   [green]ok[/green]
-  HD        hd      [1]     4         34.1 C   55 %   [green]ok[/green]
-  CONST:0   const   [2]     -         -        50 %   [dim]ok (target)[/dim]
-  GPU       gpu     [3]     -        [red]ERROR: nvidia-smi not found[/red]
+  Section   Type    Zones   Devices  Temp     Level
+  --------  ------  ------  -------  -------  ------
+  CPU       cpu     [0]     1         42.3 C   45 %
+  HD        hd      [1]     4         34.1 C   55 %
+  CONST:0   const   [2]     -         -        50 %
+  GPU       gpu     [red]ERROR: nvidia-smi not found[/red]
 
 [bold]Standby Guard[/bold] ([HD], standby_hd_limit=1)
   /dev/sda  [green]ACTIVE[/green]

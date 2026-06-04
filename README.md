@@ -920,7 +920,7 @@ It reads the **same configuration file** as the service (`/etc/smfc/smfc.conf` b
 - **Online (via the service):** if the `[Exporter]` section is enabled in the configuration (see [chapter 13.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#13-remote-monitoring-http-exporter)), `smfc-client` fetches the `/snapshot` JSON from the running service. This is dramatically faster because it serves already-cached state and spawns no `ipmitool`/`smartctl` subprocesses (so it can never wake disks the daemon has put to sleep).
 - **Offline (standalone):** if the exporter is disabled, unreachable, or `--standalone` is given, `smfc-client` reads the BMC and disks directly via `ipmitool`/hwmon/`smartctl`. This path typically needs root, so run it with `sudo smfc-client -s`.
 
-The first lines of the output state which source was used (`source: online (via smfc service)` or `source: offline (smfc service not running)`).
+The first lines of the output state which source was used: `source: smfc service (live snapshot)` online, or `source: ipmitool (smfc service is not reachable)` offline (it says "not reachable" rather than "not running" because offline mode is also reached when the exporter is simply disabled or `--standalone` is passed). The online report additionally shows the service `uptime` and annotates the fan-mode line with how many times FULL mode was re-enforced and how old the reading is; the offline report reads the IPMI fan mode live and warns if the BMC is not in FULL mode.
 
 #### 14.1. Command-line parameters
 
@@ -940,7 +940,7 @@ Exit codes: `0` = snapshot printed (per-controller errors are non-fatal), `6` = 
 ```
 smfc-client 5.4.0
     config: /etc/smfc/smfc.conf
-    source: offline (smfc service not running)
+    source: ipmitool (smfc service is not reachable)
 
 BMC
   Manufacturer  : Super Micro Computer Inc. (10876)
@@ -952,13 +952,13 @@ BMC
 IPMI fan mode   : FULL (1)
 
 Controllers
-  Section   Type    Zones     Devices  Temp      Level   Status
-  --------  ------  --------  -------  --------  ------  ----------
-  CPU       cpu     [0]       1        42.3 C     45 %   ok
-  HD        hd      [1]       4        34.1 C     55 %   ok
-  NVME      nvme    [1]       2        48.5 C     55 %   ok
-  CONST:0   const   [2]       -        -          50 %   ok (target)
-  GPU       gpu     -         -        -         -       ERROR: nvidia-smi not found
+  Section   Type    Zones     Devices  Temp      Level
+  --------  ------  --------  -------  --------  ------
+  CPU       cpu     [0]       1        42.3 C     45 %
+  HD        hd      [1]       4        34.1 C     55 %
+  NVME      nvme    [1]       2        48.5 C     55 %
+  CONST:0   const   [2]       -        -          50 %
+  GPU       gpu     ERROR: nvidia-smi not found
 
 IPMI zones (live)
   Zone    Level

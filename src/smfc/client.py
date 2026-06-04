@@ -219,37 +219,30 @@ def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_co
     """
     lines: List[str] = []
     lines.append(_wrap("Controllers", BOLD, use_color))
-    header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}{'Level':<8}Status"
-    sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6:<8}{'-' * 10}"
+    header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
+    sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6}"
     lines.append(header)
     lines.append(sep)
     for section, type_label, controller, error in entries:
-        zones_str = str(getattr(controller, "config", None).ipmi_zone) if controller else "-"
         if controller is None:
+            # Construction failed: only Section and Type are known, so let the error message
+            # run free from the Zones column to the end of the line.
+            err_cell = _wrap(f"ERROR: {error}", RED, use_color)
+            lines.append(f"  {section:<10}{type_label:<8}{err_cell}")
+            continue
+        zones_str = str(controller.config.ipmi_zone)
+        count = getattr(controller, "count", None)
+        if type_label == "const":
             devices_str = "-"
             temp_str = "-"
-            level_str = "-"
-            status = _wrap(f"ERROR: {error}", RED, use_color)
+            level_str = f"{controller.config.level:3d} %"
         else:
-            count = getattr(controller, "count", None)
-            if type_label == "const":
-                devices_str = "-"
-                temp_str = "-"
-                level_str = f"{controller.config.level:3d} %"
-                status = _wrap("ok (target)", DIM, use_color)
-            else:
-                devices_str = str(count) if count is not None else "-"
-                temp_str = _safe_temp_str(controller, type_label)
-                # Level: use the first zone (controllers usually own a single zone or share).
-                first_zone = controller.config.ipmi_zone[0] if controller.config.ipmi_zone else None
-                level_str = _safe_zone_level(ipmi, first_zone) if first_zone is not None else "-"
-                if temp_str == "ERROR" or level_str == "ERROR":
-                    status = _wrap("error", RED, use_color)
-                else:
-                    status = _wrap("ok", GREEN, use_color)
-        # Build row with consistent column widths (pad first, then color-wrap status).
-        row = f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_str:<10}{level_str:<8}{status}"
-        lines.append(row)
+            devices_str = str(count) if count is not None else "-"
+            temp_str = _safe_temp_str(controller, type_label)
+            # Level: use the first zone (controllers usually own a single zone or share).
+            first_zone = controller.config.ipmi_zone[0] if controller.config.ipmi_zone else None
+            level_str = _safe_zone_level(ipmi, first_zone) if first_zone is not None else "-"
+        lines.append(f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_str:<10}{level_str}")
     return lines
 
 
@@ -349,8 +342,13 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     try:
         mode = ipmi.get_fan_mode()
         mode_name = Ipmi.get_fan_mode_name(mode)
-        mode_str = _wrap(mode_name, GREEN, use_color)
-        lines.append(f"IPMI fan mode   : {mode_str} ({mode})")
+        if mode == int(Ipmi.FULL_MODE):
+            mode_str = _wrap(mode_name, GREEN, use_color)
+            lines.append(f"IPMI fan mode   : {mode_str} ({mode})")
+        else:
+            mode_str = _wrap(mode_name, RED, use_color)
+            warn = _wrap("  ! not in FULL mode - smfc may not be controlling the fans", RED, use_color)
+            lines.append(f"IPMI fan mode   : {mode_str} ({mode}){warn}")
     except Exception as e:  # pylint: disable=broad-except
         err_str = _wrap(f"ERROR: {e}", RED, use_color)
         lines.append(f"IPMI fan mode   : {err_str}")
@@ -385,8 +383,24 @@ def _format_source_line(online: bool, use_color: bool) -> str:
     Returns:
         str: the formatted line (without trailing newline).
     """
-    label = "online (via smfc service)" if online else "offline (smfc service not running)"
+    label = "smfc service (live snapshot)" if online else "ipmitool (smfc service is not reachable)"
     return _wrap(f"    source: {label}", DIM, use_color)
+
+
+def _format_uptime(seconds: float) -> str:
+    """Format an uptime duration as 'Nd HH:MM:SS' (the day field is omitted when zero).
+    Args:
+        seconds (float): elapsed time in seconds
+    Returns:
+        str: human-friendly duration string
+    """
+    secs = int(max(0.0, seconds))
+    days, rem = divmod(secs, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, sec = divmod(rem, 60)
+    if days:
+        return f"{days}d {hours:02d}:{minutes:02d}:{sec:02d}"
+    return f"{hours:02d}:{minutes:02d}:{sec:02d}"
 
 
 def _try_fetch_snapshot(exporter_cfg: ExporterConfig,
@@ -426,7 +440,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     The output mirrors the standalone path's structure (banner, BMC, IPMI fan mode, Controllers
     table, IPMI zones, Standby Guard) but is built from already-cached state — no ipmitool
     subprocesses, no smartctl, no controller instantiation. The data source is identified by the
-    `source: online (via smfc service)` line below the banner.
+    `source: smfc service (live snapshot)` line below the banner.
 
     Args:
         snapshot (Dict[str, Any]): parsed snapshot dict from the exporter's /snapshot endpoint.
@@ -442,6 +456,11 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     lines.append(banner)
     lines.append(_wrap(f"    config: {config_path}", DIM, use_color))
     lines.append(_format_source_line(online=True, use_color=use_color))
+    # Service uptime (online only): the daemon tracks start_time; the snapshot carries generated_at.
+    start_time = float(snapshot.get("start_time", 0.0) or 0.0)
+    generated_at = float(snapshot.get("generated_at", 0.0) or 0.0)
+    if start_time and generated_at >= start_time:
+        lines.append(_wrap(f"    uptime: {_format_uptime(generated_at - start_time)}", DIM, use_color))
     lines.append("")
 
     # BMC section.
@@ -460,14 +479,17 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     mode_id = fan_mode.get("id", -1)
     mode_name = fan_mode.get("name", "?")
     mode_color = GREEN if mode_id == int(Ipmi.FULL_MODE) else RED
-    lines.append(f"IPMI fan mode   : {_wrap(str(mode_name), mode_color, use_color)} ({mode_id})")
+    enforced = int(snapshot.get("fan_mode_enforced_count", 0) or 0)
+    age_s = float(fan_mode.get("age_s", 0.0) or 0.0)
+    detail = _wrap(f"  (enforced {enforced}x, read {age_s:.1f}s ago)", DIM, use_color)
+    lines.append(f"IPMI fan mode   : {_wrap(str(mode_name), mode_color, use_color)} ({mode_id}){detail}")
     lines.append("")
 
     # Controllers table.
     controllers = snapshot.get("controllers", []) or []
     lines.append(_wrap("Controllers", BOLD, use_color))
-    header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}{'Level':<8}Status"
-    sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6:<8}{'-' * 10}"
+    header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
+    sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6}"
     lines.append(header)
     lines.append(sep)
     zones = snapshot.get("zones", {}) or {}
@@ -480,7 +502,6 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             devices_str = "-"
             temp_str = "-"
             level_str = f"{int(c.get('target_level_pct', c.get('last_level_pct', 0))):3d} %"
-            status = _wrap("ok (target)", DIM, use_color)
         else:
             devices_str = str(int(c.get("device_count", 0)))
             temp_str = f"{float(c.get('last_temp_c', 0.0)):.1f} C"
@@ -488,9 +509,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             zone_info = zones.get(str(first_zone), {}) if first_zone is not None else {}
             level = zone_info.get("applied_level_pct")
             level_str = f"{int(level):3d} %" if level is not None else f"{int(c.get('last_level_pct', 0)):3d} %"
-            status = _wrap("ok", GREEN, use_color)
-        row = f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_str:<10}{level_str:<8}{status}"
-        lines.append(row)
+        lines.append(f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_str:<10}{level_str}")
     lines.append("")
 
     # IPMI zones (live) — applied levels straight from the snapshot.

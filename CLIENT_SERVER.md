@@ -250,13 +250,13 @@ if cfg.exporter.enabled and not args.standalone:
   `_format_standby_section`) by changing those helpers to read from a small
   intermediate `_RowData` dataclass that both paths build. This keeps the
   output identical regardless of source.
-- Header line gains a `Source:` prefix above the banner so the user knows
-  which path produced the report:
-  - `Source: online (via smfc service)` when the snapshot came from the
+- A `    source:` line below the banner tells the user which path produced
+  the report:
+  - `source: smfc service (live snapshot)` when the snapshot came from the
     exporter's `/snapshot` endpoint.
-  - `Source: offline (smfc service not running)` when the standalone path
-    was used (either because the exporter is unreachable or `--standalone`
-    was passed).
+  - `source: ipmitool (smfc service is not reachable)` when the standalone
+    path was used (the exporter is disabled/unreachable or `--standalone`
+    was passed — hence "not reachable" rather than "not running").
 
   This line is rendered in the `DIM` color when colors are enabled (see the
   colorized rendering example in [SMFC_CLIENT.md](SMFC_CLIENT.md)). Both

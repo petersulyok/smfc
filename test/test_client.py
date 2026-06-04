@@ -179,7 +179,8 @@ class TestFormatReport:
         assert "CONST" in out
         assert "const" in out
         assert " 50 %" in out
-        assert "ok (target)" in out
+        # The Status column was removed; the const row carries no status hint.
+        assert "Status" not in out
 
     def test_standby_guard_section_present(self) -> None:
         """Standby Guard section is present when an HD has it enabled with count>1."""
@@ -216,12 +217,13 @@ class TestFormatReport:
         assert client.RESET in out
 
     def test_fan_mode_standard_renders(self) -> None:
-        """STANDARD fan mode (smfc not running) renders without warnings/errors."""
+        """STANDARD fan mode (offline) renders the mode plus a 'not in FULL mode' warning."""
         ipmi = _make_fake_ipmi(fan_mode_value=0)
         cpu = _make_fake_cpu_controller()
         entries = [("CPU", "cpu", cpu, None)]
         out = client._format_report(ipmi, entries, "x.conf", use_color=False)
         assert "STANDARD" in out
+        assert "not in FULL mode" in out
         assert "ERROR" not in out
 
     def test_zones_table_unions_zones(self) -> None:
@@ -368,14 +370,13 @@ class TestFormatReportErrorPaths:
     """Cover the error branches in _format_*() and _format_report()."""
 
     def test_controllers_table_error_status(self) -> None:
-        """When temp/level read fails the controller row shows 'error' status."""
+        """When the level read fails, the controller row shows ERROR in the Level column."""
         ipmi = _make_fake_ipmi()
         ipmi.get_fan_level.side_effect = RuntimeError("ipmitool failed")
         cpu = _make_fake_cpu_controller()
         out = client._format_report(ipmi, [("CPU", "cpu", cpu, None)], "x.conf", use_color=False)
-        # ERROR appears in the level column and 'error' is the status word.
+        # ERROR appears in the Level column (the Status column was removed).
         assert "ERROR" in out
-        assert "error" in out
 
     def test_standby_states_truncated(self) -> None:
         """When hd_device_names is longer than standby_array_states, the loop breaks early."""
@@ -531,6 +532,8 @@ def _sample_snapshot_dict() -> dict:
     return {
         "version": 1,
         "generated_at": 1716902400.0,
+        "start_time": 1716816000.0,
+        "fan_mode_enforced_count": 3,
         "smfc_version": "5.4.0",
         "bmc": {
             "manufacturer_name": "Super Micro Computer Inc.",
@@ -574,11 +577,15 @@ class TestFormatReportFromSnapshot:
         out = client._format_report_from_snapshot(snap, "/etc/smfc/smfc.conf", use_color=False)
         assert out.startswith("smfc-client 5.4.0\n")
         assert "    config: /etc/smfc/smfc.conf\n" in out
-        assert "    source: online (via smfc service)\n" in out
+        assert "    source: smfc service (live snapshot)\n" in out
+        # Uptime = generated_at - start_time = 86400 s = exactly one day.
+        assert "    uptime: 1d 00:00:00\n" in out
         assert "/etc/smfc/smfc.conf" in out
         assert "BMC" in out
         assert "Super Micro Computer Inc." in out
         assert "FULL" in out
+        # The fan-mode line carries the enforced count and reading age (online only).
+        assert "enforced 3x" in out
         assert "Controllers" in out
         assert "42.3 C" in out
         assert "34.1 C" in out
@@ -611,7 +618,7 @@ class TestFormatReportFromSnapshot:
         assert client.DIM in out  # Source line is dim
 
     def test_const_controller_shows_target_level(self) -> None:
-        """A ConstFc entry's row shows the configured target level and the (target) status hint."""
+        """A ConstFc entry's row shows the configured target level (the Status column was removed)."""
         snap = _sample_snapshot_dict()
         snap["controllers"].append({
             "section": "CONST", "type": "const", "enabled": True,
@@ -623,7 +630,7 @@ class TestFormatReportFromSnapshot:
         out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
         assert "CONST" in out
         assert " 50 %" in out
-        assert "ok (target)" in out
+        assert "Status" not in out
 
     def test_non_full_fan_mode_renders_red(self) -> None:
         """When the cached fan_mode is not FULL, the value is emphasized differently (color test)."""
@@ -750,7 +757,7 @@ class TestMainOnlinePath:
         rc = client.main(["-c", "/dummy.conf", "-nc"])
         assert rc == EXIT_OK
         captured = capsys.readouterr()
-        assert "    source: online" in captured.out
+        assert "    source: smfc service" in captured.out
         # Online path means none of the standalone construction work happens.
         assert ipmi_ctor.call_count == 0, "Ipmi must not be constructed on the online path"
         assert ctx_ctor.call_count == 0, "pyudev Context must not be constructed on the online path"
@@ -768,7 +775,7 @@ class TestMainOnlinePath:
         rc = client.main(["-c", "/dummy.conf", "-nc"])
         assert rc == EXIT_OK
         out = capsys.readouterr().out
-        assert "    source: offline (smfc service not running)" in out
+        assert "    source: ipmitool (smfc service is not reachable)" in out
         assert "smfc-client" in out
 
     def test_standalone_flag_forces_offline(self, mocker: MockerFixture,
@@ -784,7 +791,7 @@ class TestMainOnlinePath:
         rc = client.main(["-c", "/dummy.conf", "-nc", "--standalone"])
         assert rc == EXIT_OK
         out = capsys.readouterr().out
-        assert "    source: offline (smfc service not running)" in out
+        assert "    source: ipmitool (smfc service is not reachable)" in out
         assert try_fetch.call_count == 0, "_try_fetch_snapshot must not be called when --standalone is passed"
 
 
