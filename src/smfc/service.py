@@ -315,9 +315,11 @@ class Service:
             self.log.msg(Log.LOG_CONFIG, "Command line arguments:")
             self.log.msg(Log.LOG_CONFIG, f"   original arguments: {' '.join(sys.argv[:])}")
             self.log.msg(Log.LOG_CONFIG, f"   parsed config file = {parsed_results.config_file}")
+            level_str = Log.level_to_str(self.log.log_level)
+            output_str = Log.output_to_str(self.log.log_output)
             self.log.msg(Log.LOG_CONFIG, "Logging was initialized with:")
-            self.log.msg(Log.LOG_CONFIG, f"   log_level = {self.log.log_level}")
-            self.log.msg(Log.LOG_CONFIG, f"   log_output = {self.log.log_output}")
+            self.log.msg(Log.LOG_CONFIG, f"   log_level = {self.log.log_level} ({level_str})")
+            self.log.msg(Log.LOG_CONFIG, f"   log_output = {self.log.log_output} ({output_str})")
 
         # Parse and load configuration file.
         try:

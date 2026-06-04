@@ -90,7 +90,8 @@ class FanController:
             self.log.msg(Log.LOG_CONFIG, f"{self.name} fan controller was initialized with:")
             self.log.msg(Log.LOG_CONFIG, f"   ipmi zone = {self.config.ipmi_zone}")
             self.log.msg(Log.LOG_CONFIG, f"   count = {self.count}")
-            self.log.msg(Log.LOG_CONFIG, f"   temp_calc = {self.config.temp_calc}")
+            temp_calc_str = ("MIN", "AVG", "MAX")[self.config.temp_calc]
+            self.log.msg(Log.LOG_CONFIG, f"   temp_calc = {self.config.temp_calc} ({temp_calc_str})")
             self.log.msg(Log.LOG_CONFIG, f"   sensitivity = {self.config.sensitivity}")
             self.log.msg(Log.LOG_CONFIG, f"   polling = {self.config.polling}")
             # steps is logged just above the curve definition (min/max keys or control_function) because

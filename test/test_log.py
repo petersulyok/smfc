@@ -144,6 +144,28 @@ class TestLog:
         assert Log.level_to_str(level) == level_str, error_str
 
     @pytest.mark.parametrize(
+        "output, output_str, error_str",
+        [
+            # LOG_STDOUT to "STDOUT"
+            (Log.LOG_STDOUT, "STDOUT", "Log.output_to_str() p1"),
+            # LOG_STDERR to "STDERR"
+            (Log.LOG_STDERR, "STDERR", "Log.output_to_str() p2"),
+            # LOG_SYSLOG to "SYSLOG"
+            (Log.LOG_SYSLOG, "SYSLOG", "Log.output_to_str() p3"),
+            # Invalid output: -1 to "STDOUT"
+            (-1, "STDOUT", "Log.output_to_str() p4"),
+            # Invalid output: 1000 to "STDOUT"
+            (1000, "STDOUT", "Log.output_to_str() p5"),
+        ],
+    )
+    def test_ots(self, output: int, output_str: str, error_str: str) -> None:
+        """Positive unit test for Log.output_to_str() method. It contains the following steps:
+        - call output_to_str() with a specified output
+        - ASSERT: if output_to_str function maps a log output to an invalid string value
+        """
+        assert Log.output_to_str(output) == output_str, error_str
+
+    @pytest.mark.parametrize(
         "level, output, msg_level, count, error_str",
         [
             (Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_NONE, 0, "Log.msg_to_xxx() p1"),

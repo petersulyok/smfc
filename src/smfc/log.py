@@ -85,6 +85,21 @@ class Log:
             string = "DEBUG"
         return string
 
+    @staticmethod
+    def output_to_str(output: int) -> str:
+        """Convert a log output to a string.
+        Args:
+            output (int): log output (LOG_STDOUT, LOG_STDERR, LOG_SYSLOG)
+        Returns:
+            str: log output string
+        """
+        string = "STDOUT"
+        if output == Log.LOG_STDERR:
+            string = "STDERR"
+        elif output == Log.LOG_SYSLOG:
+            string = "SYSLOG"
+        return string
+
     def msg_to_syslog(self, level: int, msg: str) -> None:
         """Print a log message to syslog.
         Args:
