@@ -336,22 +336,20 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     lines.append(f"  Firmware      : {ipmi.bmc_firmware_rev}")
     lines.append(f"  IPMI version  : {ipmi.bmc_ipmi_version}")
     lines.append(f"  Platform      : {ipmi.platform.name} ({type(ipmi.platform).__name__})")
-    lines.append("")
-
-    # IPMI fan mode
+    # Fan mode (live read) closes the BMC block.
     try:
         mode = ipmi.get_fan_mode()
         mode_name = Ipmi.get_fan_mode_name(mode)
         if mode == int(Ipmi.FULL_MODE):
             mode_str = _wrap(mode_name, GREEN, use_color)
-            lines.append(f"IPMI fan mode   : {mode_str} ({mode})")
+            lines.append(f"  Fan mode      : {mode_str} ({mode})")
         else:
             mode_str = _wrap(mode_name, RED, use_color)
             warn = _wrap("  ! not in FULL mode - smfc may not be controlling the fans", RED, use_color)
-            lines.append(f"IPMI fan mode   : {mode_str} ({mode}){warn}")
+            lines.append(f"  Fan mode      : {mode_str} ({mode}){warn}")
     except Exception as e:  # pylint: disable=broad-except
         err_str = _wrap(f"ERROR: {e}", RED, use_color)
-        lines.append(f"IPMI fan mode   : {err_str}")
+        lines.append(f"  Fan mode      : {err_str}")
     lines.append("")
 
     # Controllers table
@@ -470,11 +468,8 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     lines.append(f"  Product       : {bmc.get('product_name', '?')} ({bmc.get('product_id', '?')})")
     lines.append(f"  Firmware      : {bmc.get('firmware_rev', '?')}")
     lines.append(f"  IPMI version  : {bmc.get('ipmi_version', '?')}")
-    lines.append(f"  Platform      : {bmc.get('platform_name', '?')} ({bmc.get('platform_class', '?')})")
-    lines.append("")
-
-    # IPMI fan mode (always FULL when smfc is running with enforce_fan_mode=true; the exporter
-    # served whatever was cached on the loop's last poll).
+    # Fan mode (service-cached) closes the BMC block. It is always FULL when smfc is running with
+    # enforce_fan_mode=true; the exporter served whatever was cached on the loop's last poll.
     fan_mode = snapshot.get("fan_mode", {}) or {}
     mode_id = fan_mode.get("id", -1)
     mode_name = fan_mode.get("name", "?")
@@ -482,7 +477,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     enforced = int(snapshot.get("fan_mode_enforced_count", 0) or 0)
     age_s = float(fan_mode.get("age_s", 0.0) or 0.0)
     detail = _wrap(f"  (enforced {enforced}x, read {age_s:.1f}s ago)", DIM, use_color)
-    lines.append(f"IPMI fan mode   : {_wrap(str(mode_name), mode_color, use_color)} ({mode_id}){detail}")
+    lines.append(f"  Fan mode      : {_wrap(str(mode_name), mode_color, use_color)} ({mode_id}){detail}")
     lines.append("")
 
     # Controllers table.
@@ -590,8 +585,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         ipmi = Ipmi(log, cfg.ipmi, args.sudo, in_client=True, bmc_init_timeout=CLIENT_BMC_INIT_TIMEOUT)
     except (ValueError, FileNotFoundError, RuntimeError) as e:
         print(f"ERROR: ipmi: {e}", file=sys.stderr, flush=True)
-        print("hint: ipmitool typically requires root; try `sudo smfc-client -s`.",
-              file=sys.stderr, flush=True)
+        # Tailor the hint to the failure: a missing binary needs installing, while an
+        # execution error is most often a permissions problem on an existing ipmitool.
+        if isinstance(e, FileNotFoundError):
+            print("hint: ipmitool not found; install it or fix `ipmi_command=` in the config.",
+                  file=sys.stderr, flush=True)
+        elif isinstance(e, RuntimeError):
+            print("hint: ipmitool typically requires root; try `sudo smfc-client -s`.",
+                  file=sys.stderr, flush=True)
         return EXIT_IPMI_ERROR
 
     # Initialize udev (required by CPU/HD/NVME controllers; GPU and CONST do not need it).

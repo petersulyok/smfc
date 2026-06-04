@@ -147,7 +147,7 @@ class TestFormatReport:
         assert "BMC" in out
         assert "Super Micro Computer Inc." in out
         assert "X11SCH-LN4F" in out
-        assert "IPMI fan mode" in out
+        assert "Fan mode" in out
         assert "FULL" in out
         assert "Controllers" in out
         assert "CPU" in out and "HD" in out
@@ -265,6 +265,18 @@ class TestMain:
         captured = capsys.readouterr()
         assert "sudo" in captured.err.lower()
         assert "ipmitool" in captured.err.lower()
+
+    def test_ipmi_not_found_emits_install_hint(self, mocker: MockerFixture,
+                                               capsys: pytest.CaptureFixture) -> None:
+        """A missing ipmitool (FileNotFoundError) returns EXIT_IPMI_ERROR with an install hint, not the sudo hint."""
+        mocker.patch("smfc.client.Config", return_value=_make_offline_cfg())
+        mocker.patch("smfc.client.Ipmi", side_effect=FileNotFoundError("[Errno 2] No such file or directory: 'ipmitool'"))
+        rc = client.main(["-c", "/dummy.conf"])
+        assert rc == EXIT_IPMI_ERROR
+        captured = capsys.readouterr()
+        assert "not found" in captured.err.lower()
+        assert "ipmi_command" in captured.err
+        assert "sudo" not in captured.err.lower()
 
     def test_happy_path(self, mocker: MockerFixture, capsys: pytest.CaptureFixture) -> None:
         """When all stages succeed, main() prints the report and returns EXIT_OK."""
@@ -405,12 +417,12 @@ class TestFormatReportErrorPaths:
         assert "Array state" not in out
 
     def test_fan_mode_read_error(self) -> None:
-        """When ipmi.get_fan_mode() raises, the IPMI fan mode line shows ERROR."""
+        """When ipmi.get_fan_mode() raises, the BMC block's Fan mode line shows ERROR."""
         ipmi = _make_fake_ipmi()
         ipmi.get_fan_mode.side_effect = RuntimeError("ipmitool failed")
         cpu = _make_fake_cpu_controller()
         out = client._format_report(ipmi, [("CPU", "cpu", cpu, None)], "x.conf", use_color=False)
-        assert "IPMI fan mode" in out
+        assert "Fan mode" in out
         assert "ERROR" in out
 
     def test_standby_states_attribute_missing(self) -> None:

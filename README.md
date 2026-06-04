@@ -948,8 +948,7 @@ BMC
   Firmware      : 1.74
   IPMI version  : 2.0
   Platform      : X11SCH-LN4F (GenericPlatform)
-
-IPMI fan mode   : FULL (1)
+  Fan mode      : FULL (1)
 
 Controllers
   Section   Type    Zones     Devices  Temp      Level

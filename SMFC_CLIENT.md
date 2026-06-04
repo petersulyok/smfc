@@ -81,8 +81,8 @@ surgical: one branch, one new test, zero risk to the service path.
   - `udevc = pyudev.Context()` — created once, shared across controllers
     that need it.
 - `_format_report(ipmi, controllers, no_color)` — pure formatter, returns
-  the full string. Sections: BMC info, IPMI fan mode, controllers table,
-  IPMI zones (live), Standby Guard (conditional).
+  the full string. Sections: BMC info (including the Fan mode line),
+  controllers table, IPMI zones (live), Standby Guard (conditional).
 - Exit codes: `0` ok, `6` config error, `8` ipmi error (with stderr hint
   suggesting `sudo smfc-client -s`), `9` udev error.
 
@@ -193,8 +193,7 @@ BMC
   Firmware      : 1.74
   IPMI version  : 2.0
   Platform      : X11SCH-LN4F (GenericPlatform)
-
-IPMI fan mode   : FULL (1)
+  Fan mode      : FULL (1)
 
 Controllers
   Section   Type    Zones   Devices  Temp     Level
@@ -276,8 +275,7 @@ real output. Roughly six string constants in `client.py`.
   Manufacturer  : Super Micro Computer Inc. (10876)
   Product       : X11SCH-LN4F (6929)
   ...
-
-IPMI fan mode   : [green]FULL[/green] (1)
+  Fan mode      : [green]FULL[/green] (1)
 
 [bold]Controllers[/bold]
   Section   Type    Zones   Devices  Temp     Level
@@ -332,8 +330,9 @@ End-to-end checks:
 - `sudo smfc-client -s -c config/samples/smfc.conf.cpu_only` (or whichever
   sample matches the dev box) prints a snapshot.
 - Run while `smfc.service` is active and inactive — both should produce
-  output; in the inactive case `IPMI fan mode` should reflect whatever the
-  BMC currently reports rather than `FULL`.
+  output; in the inactive case the BMC block's `Fan mode` line should reflect
+  whatever the BMC currently reports rather than `FULL` (with the
+  "not in FULL mode" warning when it isn't).
 - Trip a "controller error" path by pointing `hd_names=` at a non-existent
   disk path: that single row should show `ERROR`, the rest of the report
   should still render.
