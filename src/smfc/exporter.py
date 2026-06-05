@@ -109,6 +109,49 @@ def render_prometheus(snapshot: Dict[str, Any]) -> str:
             labels = _format_labels([("section", section), ("type", ctype), ("zone", str(zone))])
             lines.append(f"smfc_controller_level_percent{labels} {level}")
 
+    # Static steering window (config): [T_min, T_max] mapped onto [L_min, L_max]. These change only
+    # when the smfc config is retuned; dashboards use them to colour by a controller's normalised
+    # position within its own range (load% / severity%) instead of a single global scale.
+    lines.append("")
+    lines.append("# HELP smfc_controller_temperature_min_celsius Controller steering-window floor (static config).")
+    lines.append("# TYPE smfc_controller_temperature_min_celsius gauge")
+    for c in controllers:
+        if c.get("type") == "const":
+            continue
+        section, ctype = c.get("section", ""), c.get("type", "")
+        for zone in c.get("ipmi_zones", []) or []:
+            labels = _format_labels([("section", section), ("type", ctype), ("zone", str(zone))])
+            lines.append(f"smfc_controller_temperature_min_celsius{labels} {float(c.get('temp_min_c', 0.0))}")
+
+    lines.append("")
+    lines.append("# HELP smfc_controller_temperature_max_celsius Controller steering-window ceiling (static config).")
+    lines.append("# TYPE smfc_controller_temperature_max_celsius gauge")
+    for c in controllers:
+        if c.get("type") == "const":
+            continue
+        section, ctype = c.get("section", ""), c.get("type", "")
+        for zone in c.get("ipmi_zones", []) or []:
+            labels = _format_labels([("section", section), ("type", ctype), ("zone", str(zone))])
+            lines.append(f"smfc_controller_temperature_max_celsius{labels} {float(c.get('temp_max_c', 0.0))}")
+
+    lines.append("")
+    lines.append("# HELP smfc_controller_level_min_percent Controller fan-level-window floor (static config).")
+    lines.append("# TYPE smfc_controller_level_min_percent gauge")
+    for c in controllers:
+        section, ctype = c.get("section", ""), c.get("type", "")
+        for zone in c.get("ipmi_zones", []) or []:
+            labels = _format_labels([("section", section), ("type", ctype), ("zone", str(zone))])
+            lines.append(f"smfc_controller_level_min_percent{labels} {int(c.get('level_min_pct', 0))}")
+
+    lines.append("")
+    lines.append("# HELP smfc_controller_level_max_percent Controller fan-level-window ceiling (static config).")
+    lines.append("# TYPE smfc_controller_level_max_percent gauge")
+    for c in controllers:
+        section, ctype = c.get("section", ""), c.get("type", "")
+        for zone in c.get("ipmi_zones", []) or []:
+            labels = _format_labels([("section", section), ("type", ctype), ("zone", str(zone))])
+            lines.append(f"smfc_controller_level_max_percent{labels} {int(c.get('level_max_pct', 0))}")
+
     # Per-zone applied level (the actual BMC value after arbitration).
     zones = snapshot.get("zones", {}) or {}
     lines.append("")

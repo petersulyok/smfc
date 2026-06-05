@@ -36,6 +36,10 @@ def _make_cpu_fc(zones=None, last_temp=42.3, last_level=45, polling=2.0) -> Magi
     fc.config.enabled = True
     fc.config.ipmi_zone = zones
     fc.config.polling = polling
+    fc.config.min_temp = 30.0
+    fc.config.max_temp = 70.0
+    fc.config.min_level = 25
+    fc.config.max_level = 100
     fc.count = 1
     fc.last_temp = last_temp
     fc.last_level = last_level
@@ -57,6 +61,10 @@ def _make_hd_fc(zones=None, count=4, last_temp=34.1, last_level=55, standby_enab
     fc.config.polling = 10.0
     fc.config.standby_guard_enabled = standby_enabled
     fc.config.standby_hd_limit = 1
+    fc.config.min_temp = 32.0
+    fc.config.max_temp = 50.0
+    fc.config.min_level = 35
+    fc.config.max_level = 100
     fc.count = count
     fc.last_temp = last_temp
     fc.last_level = last_level
@@ -94,6 +102,10 @@ def _make_nvme_fc(zones=None, count=2, last_temp=48.5, last_level=55) -> MagicMo
     fc.config.enabled = True
     fc.config.ipmi_zone = zones
     fc.config.polling = 2.0
+    fc.config.min_temp = 40.0
+    fc.config.max_temp = 75.0
+    fc.config.min_level = 35
+    fc.config.max_level = 100
     fc.count = count
     fc.last_temp = last_temp
     fc.last_level = last_level
@@ -111,6 +123,10 @@ def _make_gpu_fc(zones=None, count=1, last_temp=55.0, last_level=60) -> MagicMoc
     fc.config.enabled = True
     fc.config.ipmi_zone = zones
     fc.config.polling = 2.0
+    fc.config.min_temp = 40.0
+    fc.config.max_temp = 80.0
+    fc.config.min_level = 35
+    fc.config.max_level = 100
     fc.count = count
     fc.last_temp = last_temp
     fc.last_level = last_level
@@ -181,6 +197,11 @@ class TestBuildSnapshot:
         assert entry["last_level_pct"] == 45
         assert entry["deferred_apply"] is False
         assert entry["enabled"] is True
+        # Static steering window [T_min,T_max] -> [L_min,L_max].
+        assert entry["temp_min_c"] == pytest.approx(30.0)
+        assert entry["temp_max_c"] == pytest.approx(70.0)
+        assert entry["level_min_pct"] == 25
+        assert entry["level_max_pct"] == 100
 
     def test_const_controller_entry(self) -> None:
         """A ConstFc entry has device_count=0 and a target_level_pct field; standby block is absent."""
@@ -191,6 +212,11 @@ class TestBuildSnapshot:
         assert entry["type"] == "const"
         assert entry["device_count"] == 0
         assert entry["target_level_pct"] == 50
+        # CONST has no temperature window; its level window collapses to the fixed level.
+        assert "temp_min_c" not in entry
+        assert "temp_max_c" not in entry
+        assert entry["level_min_pct"] == 50
+        assert entry["level_max_pct"] == 50
         assert "standby" not in entry  # only HdFc emits a standby block
 
     def test_hd_controller_entry_no_standby(self) -> None:

@@ -44,11 +44,13 @@ def _sample_snapshot() -> Dict[str, Any]:
                 "section": "CPU", "type": "cpu", "enabled": True,
                 "ipmi_zones": [0], "device_count": 1, "polling": 2.0,
                 "last_temp_c": 42.3, "last_level_pct": 45, "deferred_apply": False,
+                "temp_min_c": 30.0, "temp_max_c": 70.0, "level_min_pct": 25, "level_max_pct": 100,
             },
             {
                 "section": "HD", "type": "hd", "enabled": True,
                 "ipmi_zones": [1], "device_count": 4, "polling": 10.0,
                 "last_temp_c": 34.1, "last_level_pct": 55, "deferred_apply": False,
+                "temp_min_c": 32.0, "temp_max_c": 50.0, "level_min_pct": 35, "level_max_pct": 100,
                 "device_names": ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"],
                 "standby": {
                     "enabled": True, "limit": 1,
@@ -60,7 +62,7 @@ def _sample_snapshot() -> Dict[str, Any]:
                 "section": "CONST", "type": "const", "enabled": True,
                 "ipmi_zones": [2], "device_count": 0, "polling": 30.0,
                 "last_temp_c": 0.0, "last_level_pct": 50, "deferred_apply": False,
-                "target_level_pct": 50,
+                "target_level_pct": 50, "level_min_pct": 50, "level_max_pct": 50,
             },
         ],
         "zones": {"0": {"applied_level_pct": 45}, "1": {"applied_level_pct": 55},
@@ -97,6 +99,8 @@ class TestPrometheusRenderer:
         for metric in ("smfc_up", "smfc_start_time_seconds", "smfc_bmc_info",
                        "smfc_controller_zone", "smfc_temperature_celsius",
                        "smfc_controller_level_percent", "smfc_fan_level_percent",
+                       "smfc_controller_temperature_min_celsius", "smfc_controller_temperature_max_celsius",
+                       "smfc_controller_level_min_percent", "smfc_controller_level_max_percent",
                        "smfc_disk_standby"):
             assert f"# HELP {metric} " in out, f"missing HELP for {metric}"
             assert f"# TYPE {metric} gauge" in out, f"missing TYPE for {metric}"
@@ -158,6 +162,24 @@ class TestPrometheusRenderer:
         assert 'smfc_temperature_celsius{section="HD",type="hd",zone="1"} 34.1' in out
         temp_block = out.split("# TYPE smfc_temperature_celsius", 1)[1].split("# HELP")[0]
         assert 'section="CONST"' not in temp_block
+
+    def test_steering_window_metrics(self) -> None:
+        """The static [T_min,T_max]->[L_min,L_max] window is emitted, one series per targeted zone."""
+        out = render_prometheus(_sample_snapshot())
+        assert 'smfc_controller_temperature_min_celsius{section="CPU",type="cpu",zone="0"} 30.0' in out
+        assert 'smfc_controller_temperature_max_celsius{section="HD",type="hd",zone="1"} 50.0' in out
+        assert 'smfc_controller_level_min_percent{section="HD",type="hd",zone="1"} 35' in out
+        assert 'smfc_controller_level_max_percent{section="CPU",type="cpu",zone="0"} 100' in out
+
+    def test_steering_window_temperature_skips_const(self) -> None:
+        """The temperature window is omitted for CONST, but the level window includes it (L_min=L_max)."""
+        out = render_prometheus(_sample_snapshot())
+        tmin_block = out.split("# TYPE smfc_controller_temperature_min_celsius", 1)[1].split("# HELP")[0]
+        tmax_block = out.split("# TYPE smfc_controller_temperature_max_celsius", 1)[1].split("# HELP")[0]
+        assert 'section="CONST"' not in tmin_block
+        assert 'section="CONST"' not in tmax_block
+        assert 'smfc_controller_level_min_percent{section="CONST",type="const",zone="2"} 50' in out
+        assert 'smfc_controller_level_max_percent{section="CONST",type="const",zone="2"} 50' in out
 
     def test_disk_standby_per_device(self) -> None:
         """smfc_disk_standby renders one row per (section, device) with 1/0 reflecting the state."""

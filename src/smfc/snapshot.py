@@ -56,8 +56,16 @@ def _build_controller_entry(controller) -> Dict[str, Any]:
         # ConstFc has no underlying device set; expose its target level explicitly.
         entry["device_count"] = 0
         entry["target_level_pct"] = int(cfg.level)
+        # Static steering window: CONST drives a single fixed level and has no temperature window.
+        entry["level_min_pct"] = int(cfg.level)
+        entry["level_max_pct"] = int(cfg.level)
     else:
         entry["device_count"] = int(getattr(controller, "count", 0))
+        # Static steering window: [T_min, T_max] mapped onto [L_min, L_max] (static config).
+        entry["temp_min_c"] = float(cfg.min_temp)
+        entry["temp_max_c"] = float(cfg.max_temp)
+        entry["level_min_pct"] = int(cfg.min_level)
+        entry["level_max_pct"] = int(cfg.max_level)
 
     if isinstance(controller, HdFc):
         # Defensive shallow copy — the loop mutates these in place.

@@ -910,7 +910,7 @@ scrape_configs:
 ```
 
 Notes:
-- Metrics include `smfc_temperature_celsius`, `smfc_fan_level_percent`, `smfc_fan_mode`, `smfc_fan_mode_age_seconds`, `smfc_disk_standby`, and an `smfc_up{version="...",bmc_product="..."} 1` sentinel.
+- Metrics include `smfc_temperature_celsius`, `smfc_controller_level_percent`, `smfc_fan_level_percent`, `smfc_controller_zone`, `smfc_disk_standby`, the `smfc_fan_mode_enforced_total` counter, and an `smfc_up{version="..."} 1` sentinel (BMC identity is in `smfc_bmc_info`). Each controller's static steering window is exported as `smfc_controller_temperature_min_celsius` / `_max_celsius` and `smfc_controller_level_min_percent` / `_max_percent`, so a dashboard can colour each controller by its position within its own configured range.
 - The exporter uses only Python's stdlib (`http.server`, `urllib`, `json`). No `prometheus_client` package is required.
 - A bind failure (e.g. port already in use) is logged but does **not** stop the fan-control loop — fan control is the priority.
 - All data is served from the daemon's already-cached state. The request handler issues no `ipmitool` or `smartctl` subprocesses, so a Prometheus scrape can never wake disks the daemon has put to sleep.
