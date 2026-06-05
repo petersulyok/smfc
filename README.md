@@ -59,6 +59,9 @@ Key features:
  - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13) and edge cases (X10QBi)
  - Remote IPMI access via `remote_parameters=` for VM setups (e.g. TrueNAS on Proxmox with PCI passthrough)
  - Distributed as a `systemd` service, Docker image, DEB/RPM package, or PyPI package
+ - Companion `smfc-client` tool showing a live read-only snapshot of controllers, fan levels, IPMI zones, and standby state
+ - Optional HTTP exporter with Prometheus `/metrics` and JSON `/snapshot` endpoints (stdlib-only, Grafana-ready)
+ - Automatic FULL-mode enforcement that detects and corrects BMC fan-mode drift
  - Safe shutdown: all fans are set back to 100% speed at service termination
 
 #### 1.1 IPMI zones
