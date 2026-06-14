@@ -71,7 +71,8 @@ What's read:
   thread).
 - `fc.device_names()` — friendly device labels (configured `/dev/disk/by-id/...`
   paths for HD/NVMe, synthesized `cpu<i>` / `gpu<id>` for CPU/GPU).
-- `HdFc.standby_array_states` / `HdFc.hd_device_names` (refreshed by the loop).
+- `HdFc.standby_array_states` (refreshed by the loop; positionally indexed
+  against `devices[]`).
 - `Service.applied_levels` (snapshotted defensively as `dict(...)`).
 - `Service.last_fan_mode` / `last_fan_mode_at` (refreshed by the loop's
   periodic mode check — see [ENFORCE_FAN_MODE.md](ENFORCE_FAN_MODE.md)).
@@ -94,7 +95,7 @@ Schema sketch (JSON-shaped):
     "platform_class": "GenericPlatform"
   },
   "fan_mode": {"id": 1, "name": "FULL", "age_s": 12.4},
-  "controllers": [
+  "fan_controllers": [
     {
       "section": "CPU",
       "type": "cpu",
@@ -114,14 +115,13 @@ Schema sketch (JSON-shaped):
       "device_count": 4,
       "last_temp_c": 34.1,
       "last_level_pct": 55,
-      "device_names": ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"],
       "devices": [
         {"name": "/dev/sda", "temp_c": 33.0},
         {"name": "/dev/sdb", "temp_c": 34.5},
         {"name": "/dev/sdc", "temp_c": 36.1},
         {"name": "/dev/sdd", "temp_c": 39.0}
       ],
-      "standby": {
+      "standby_guard": {
         "enabled": true,
         "limit": 1,
         "states": [false, false, true, true],
@@ -136,6 +136,13 @@ Schema sketch (JSON-shaped):
 
 `zones` mirrors `Service.applied_levels`. The HTTP layer can serve this dict
 straight as `/snapshot` JSON, or transform it to Prometheus text for `/metrics`.
+
+`devices[].name` is the canonical per-device identifier — used by every
+consumer of the snapshot (Prometheus `device=` label, smfc-client's Devices
+section, the Standby Guard renderer). On HD entries, the standby block's
+`states[i]` array is positionally indexed against `devices[i]`: same length,
+same order. There is no separate `device_names` field — that data lives only
+on `devices[]`.
 
 ### Phase 2 — Exporter HTTP server
 
@@ -298,11 +305,11 @@ all synchronization primitives by following two rules:
    (see [ENFORCE_FAN_MODE.md](ENFORCE_FAN_MODE.md)).
 2. **Mutable containers are copied, not iterated in place.** The snapshot
    builder takes shallow copies of `Service.applied_levels` (a dict),
-   `HdFc.standby_array_states` (a list), `HdFc.hd_device_names` (a list),
-   and `fc.last_per_device_temps` (a list). Scalar attributes
-   (`fc.last_temp`, `fc.last_level`, `Service.last_fan_mode`) are read
-   directly — CPython attribute reads/writes are atomic under the GIL, so a
-   racing read sees either the pre- or post-write value, never a torn one.
+   `HdFc.standby_array_states` (a list), and `fc.last_per_device_temps`
+   (a list). Scalar attributes (`fc.last_temp`, `fc.last_level`,
+   `Service.last_fan_mode`) are read directly — CPython attribute
+   reads/writes are atomic under the GIL, so a racing read sees either the
+   pre- or post-write value, never a torn one.
    `last_per_device_temps` is a list whose binding is replaced (not
    mutated) by `get_temp()` on every loop iteration, so a racing read
    sees either the previous iteration's full list or the new one — never a

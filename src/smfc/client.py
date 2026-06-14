@@ -549,7 +549,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     lines.append("")
 
     # Controllers table.
-    controllers = snapshot.get("controllers", []) or []
+    controllers = snapshot.get("fan_controllers", []) or []
     lines.append(_wrap("Controllers", BOLD, use_color))
     header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
     sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6}"
@@ -607,11 +607,11 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     for c in controllers:
         if c.get("type") != "hd":
             continue
-        sb = c.get("standby") or {}
+        sb = c.get("standby_guard") or {}
         if not sb.get("enabled"):
             continue
         section = c.get("section", "HD")
-        device_names = c.get("device_names", []) or []
+        device_names = [d.get("name", "") for d in (c.get("devices", []) or [])]
         states = sb.get("states", []) or []
         title = f"Standby Guard ([{section}], standby_hd_limit={sb.get('limit', 1)})"
         standby_lines.append(_wrap(title, BOLD, use_color))

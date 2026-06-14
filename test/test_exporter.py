@@ -39,7 +39,7 @@ def _sample_snapshot() -> Dict[str, Any]:
             "platform_class": "GenericPlatform",
         },
         "fan_mode": {"id": 1, "name": "FULL", "age_s": 1.5},
-        "controllers": [
+        "fan_controllers": [
             {
                 "section": "CPU", "type": "cpu", "enabled": True,
                 "ipmi_zones": [0], "device_count": 1, "polling": 2.0,
@@ -52,14 +52,13 @@ def _sample_snapshot() -> Dict[str, Any]:
                 "ipmi_zones": [1], "device_count": 4, "polling": 10.0,
                 "last_temp_c": 34.1, "last_level_pct": 55, "deferred_apply": False,
                 "temp_min_c": 32.0, "temp_max_c": 50.0, "level_min_pct": 35, "level_max_pct": 100,
-                "device_names": ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"],
                 "devices": [
                     {"name": "/dev/sda", "temp_c": 33.0},
                     {"name": "/dev/sdb", "temp_c": 34.5},
                     {"name": "/dev/sdc", "temp_c": 36.1},
                     {"name": "/dev/sdd", "temp_c": 39.0},
                 ],
-                "standby": {
+                "standby_guard": {
                     "enabled": True, "limit": 1,
                     "states": [False, False, True, True],
                     "array_state": "AASS", "standby_count": 2,
@@ -150,7 +149,7 @@ class TestPrometheusRenderer:
     def test_multi_zone_controller_expands_per_zone(self) -> None:
         """A controller targeting two zones yields one series per zone for temp/level/mapping."""
         snap = _sample_snapshot()
-        snap["controllers"][0]["ipmi_zones"] = [0, 1]
+        snap["fan_controllers"][0]["ipmi_zones"] = [0, 1]
         out = render_prometheus(snap)
         assert 'smfc_temperature_celsius{section="CPU",type="cpu",zone="0"} 42.3' in out
         assert 'smfc_temperature_celsius{section="CPU",type="cpu",zone="1"} 42.3' in out
@@ -159,7 +158,7 @@ class TestPrometheusRenderer:
     def test_controller_zone_skips_disabled_controllers(self) -> None:
         """smfc_controller_zone omits controllers with enabled=False."""
         snap = _sample_snapshot()
-        snap["controllers"][0]["enabled"] = False
+        snap["fan_controllers"][0]["enabled"] = False
         out = render_prometheus(snap)
         # The disabled CPU controller's zone mapping must NOT appear.
         assert 'smfc_controller_zone{section="CPU",type="cpu",zone="0"} 1' not in out
@@ -223,7 +222,7 @@ class TestPrometheusRenderer:
     def test_disk_standby_omitted_when_disabled(self) -> None:
         """If no HD has standby enabled, smfc_disk_standby is omitted entirely."""
         snap = _sample_snapshot()
-        snap["controllers"][1]["standby"] = {"enabled": False}
+        snap["fan_controllers"][1]["standby_guard"] = {"enabled": False}
         out = render_prometheus(snap)
         assert "smfc_disk_standby" not in out
 

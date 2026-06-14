@@ -646,7 +646,7 @@ def _sample_snapshot_dict() -> dict:
             "platform_class": "GenericPlatform",
         },
         "fan_mode": {"id": 1, "name": "FULL", "age_s": 0.5},
-        "controllers": [
+        "fan_controllers": [
             {
                 "section": "CPU", "type": "cpu", "enabled": True,
                 "ipmi_zones": [0], "device_count": 1, "polling": 2.0,
@@ -657,14 +657,13 @@ def _sample_snapshot_dict() -> dict:
                 "section": "HD", "type": "hd", "enabled": True,
                 "ipmi_zones": [1], "device_count": 4, "polling": 10.0,
                 "last_temp_c": 34.1, "last_level_pct": 55, "deferred_apply": False,
-                "device_names": ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"],
                 "devices": [
                     {"name": "/dev/sda", "temp_c": 33.0},
                     {"name": "/dev/sdb", "temp_c": 34.5},
                     {"name": "/dev/sdc", "temp_c": 36.1},
                     {"name": "/dev/sdd", "temp_c": 39.0},
                 ],
-                "standby": {
+                "standby_guard": {
                     "enabled": True, "limit": 1,
                     "states": [False, False, True, True],
                     "array_state": "AASS", "standby_count": 2,
@@ -713,7 +712,7 @@ class TestFormatReportFromSnapshot:
     def test_standby_section_absent_when_disabled(self) -> None:
         """If no HD has standby enabled, the Standby Guard section is omitted."""
         snap = _sample_snapshot_dict()
-        snap["controllers"][1]["standby"] = {"enabled": False}
+        snap["fan_controllers"][1]["standby_guard"] = {"enabled": False}
         out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
         assert "Standby Guard" not in out
 
@@ -728,7 +727,7 @@ class TestFormatReportFromSnapshot:
     def test_const_controller_shows_target_level(self) -> None:
         """A ConstFc entry's row shows the configured target level (the Status column was removed)."""
         snap = _sample_snapshot_dict()
-        snap["controllers"].append({
+        snap["fan_controllers"].append({
             "section": "CONST", "type": "const", "enabled": True,
             "ipmi_zones": [2], "device_count": 0, "polling": 30.0,
             "last_temp_c": 0.0, "last_level_pct": 50, "deferred_apply": False,
@@ -749,10 +748,10 @@ class TestFormatReportFromSnapshot:
         assert client.RED in out
 
     def test_standby_states_shorter_than_devices_truncates(self) -> None:
-        """Defensive: when standby.states is shorter than device_names, the loop stops at the shorter length."""
+        """Defensive: when standby.states is shorter than the devices list, the loop stops at the shorter length."""
         snap = _sample_snapshot_dict()
         # 4 device names but only 2 states — the loop must break at i=2.
-        snap["controllers"][1]["standby"] = {
+        snap["fan_controllers"][1]["standby_guard"] = {
             "enabled": True, "limit": 1, "states": [False, False],
             "array_state": "AA", "standby_count": 0,
         }
@@ -788,7 +787,7 @@ class TestFormatReportFromSnapshot:
     def test_devices_section_skips_const_online(self) -> None:
         """CONST controllers are skipped in the snapshot's verbose Devices loop (no devices array)."""
         snap = _sample_snapshot_dict()
-        snap["controllers"].append({
+        snap["fan_controllers"].append({
             "section": "CONST", "type": "const", "enabled": True,
             "ipmi_zones": [2], "device_count": 0, "polling": 30.0,
             "last_temp_c": 0.0, "last_level_pct": 50, "deferred_apply": False,

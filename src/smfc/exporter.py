@@ -71,7 +71,7 @@ def render_prometheus(snapshot: Dict[str, Any]) -> str:
     lines.append("# TYPE smfc_fan_mode_enforced_total counter")
     lines.append(f"smfc_fan_mode_enforced_total {int(snapshot.get('fan_mode_enforced_count', 0))}")
 
-    controllers = snapshot.get("controllers", []) or []
+    controllers = snapshot.get("fan_controllers", []) or []
 
     # Enabled controller-to-IPMI-zone mapping (value always 1), one series per targeted zone.
     lines.append("")
@@ -181,11 +181,11 @@ def render_prometheus(snapshot: Dict[str, Any]) -> str:
     for c in controllers:
         if c.get("type") != "hd":
             continue
-        sb = c.get("standby") or {}
+        sb = c.get("standby_guard") or {}
         if not sb.get("enabled"):
             continue
         section = c.get("section", "")
-        names = c.get("device_names", []) or []
+        names = [d.get("name", "") for d in (c.get("devices", []) or [])]
         states = sb.get("states", []) or []
         for name, state in zip(names, states):
             labels = _format_labels([("section", section), ("device", name)])

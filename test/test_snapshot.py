@@ -205,8 +205,8 @@ class TestBuildSnapshot:
         cpu = _make_cpu_fc(zones=[0])
         service = _make_service(controllers=[cpu], applied_levels={0: 45})
         snap = build_snapshot(service)
-        assert len(snap["controllers"]) == 1
-        entry = snap["controllers"][0]
+        assert len(snap["fan_controllers"]) == 1
+        entry = snap["fan_controllers"][0]
         assert entry["section"] == "CPU"
         assert entry["type"] == "cpu"
         assert entry["ipmi_zones"] == [0]
@@ -226,7 +226,7 @@ class TestBuildSnapshot:
         const = _make_const_fc(zones=[2], level=50)
         service = _make_service(controllers=[const], applied_levels={2: 50})
         snap = build_snapshot(service)
-        entry = snap["controllers"][0]
+        entry = snap["fan_controllers"][0]
         assert entry["type"] == "const"
         assert entry["device_count"] == 0
         assert entry["target_level_pct"] == 50
@@ -235,18 +235,23 @@ class TestBuildSnapshot:
         assert "temp_max_c" not in entry
         assert entry["level_min_pct"] == 50
         assert entry["level_max_pct"] == 50
-        assert "standby" not in entry  # only HdFc emits a standby block
+        assert "standby_guard" not in entry  # only HdFc emits a standby_guard block
 
     def test_hd_controller_entry_no_standby(self) -> None:
-        """An HdFc with standby disabled emits standby={'enabled': False} and device_names list."""
+        """An HdFc with standby disabled emits standby={'enabled': False}.
+
+        Per-disk paths are exposed only via entry["devices"][i]["name"] — the legacy
+        device_names field was removed once devices[].name became the canonical source.
+        """
         hd = _make_hd_fc(zones=[1], count=4, standby_enabled=False)
         service = _make_service(controllers=[hd], applied_levels={1: 55})
         snap = build_snapshot(service)
-        entry = snap["controllers"][0]
+        entry = snap["fan_controllers"][0]
         assert entry["type"] == "hd"
         assert entry["device_count"] == 4
-        assert entry["device_names"] == [f"/dev/sd{c}" for c in "abcd"]
-        assert entry["standby"] == {"enabled": False}
+        assert "device_names" not in entry  # canonical names are now in entry["devices"]
+        assert [d["name"] for d in entry["devices"]] == [f"/dev/sd{c}" for c in "abcd"]
+        assert entry["standby_guard"] == {"enabled": False}
 
     def test_hd_controller_entry_standby_enabled(self) -> None:
         """An HdFc with standby enabled emits the full standby block, including array_state and counts."""
@@ -254,7 +259,7 @@ class TestBuildSnapshot:
         hd = _make_hd_fc(zones=[1], count=4, standby_enabled=True, standby_states=states)
         service = _make_service(controllers=[hd])
         snap = build_snapshot(service)
-        sb = snap["controllers"][0]["standby"]
+        sb = snap["fan_controllers"][0]["standby_guard"]
         assert sb["enabled"] is True
         assert sb["limit"] == 1
         assert sb["states"] == states
@@ -270,7 +275,7 @@ class TestBuildSnapshot:
         states.clear()
         states.append(True)
         # Snapshot still has the original four entries.
-        assert snap["controllers"][0]["standby"]["states"] == [False, False, True, True]
+        assert snap["fan_controllers"][0]["standby_guard"]["states"] == [False, False, True, True]
 
     def test_zones_block(self) -> None:
         """Zones mirrors applied_levels with stringified keys for JSON friendliness."""
@@ -298,14 +303,14 @@ class TestBuildSnapshot:
         const = _make_const_fc(zones=[2])
         service = _make_service(controllers=[cpu, hd, const])
         snap = build_snapshot(service)
-        assert [c["section"] for c in snap["controllers"]] == ["CPU", "HD", "CONST"]
+        assert [c["section"] for c in snap["fan_controllers"]] == ["CPU", "HD", "CONST"]
 
     def test_nvme_controller_entry(self) -> None:
         """An NvmeFc-like controller produces a complete entry with type 'nvme'."""
         nvme = _make_nvme_fc(zones=[1])
         service = _make_service(controllers=[nvme])
         snap = build_snapshot(service)
-        entry = snap["controllers"][0]
+        entry = snap["fan_controllers"][0]
         assert entry["type"] == "nvme"
         assert entry["section"] == "NVME"
         assert entry["device_count"] == 2
@@ -316,7 +321,7 @@ class TestBuildSnapshot:
         gpu = _make_gpu_fc(zones=[3])
         service = _make_service(controllers=[gpu])
         snap = build_snapshot(service)
-        entry = snap["controllers"][0]
+        entry = snap["fan_controllers"][0]
         assert entry["type"] == "gpu"
         assert entry["section"] == "GPU"
         assert entry["last_temp_c"] == pytest.approx(55.0)
@@ -328,7 +333,7 @@ class TestBuildSnapshot:
                          hd_names=["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"])
         service = _make_service(controllers=[hd])
         snap = build_snapshot(service)
-        devices = snap["controllers"][0]["devices"]
+        devices = snap["fan_controllers"][0]["devices"]
         assert [d["name"] for d in devices] == ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"]
         assert [d["temp_c"] for d in devices] == pytest.approx(per_dev)
 
@@ -338,7 +343,7 @@ class TestBuildSnapshot:
         cpu.count = 1
         service = _make_service(controllers=[cpu])
         snap = build_snapshot(service)
-        devices = snap["controllers"][0]["devices"]
+        devices = snap["fan_controllers"][0]["devices"]
         assert devices == [{"name": "cpu0", "temp_c": pytest.approx(42.3)}]
 
     def test_nvme_per_device_temperatures(self) -> None:
@@ -347,7 +352,7 @@ class TestBuildSnapshot:
                              nvme_names=["/dev/nvme0n1", "/dev/nvme1n1"])
         service = _make_service(controllers=[nvme])
         snap = build_snapshot(service)
-        devices = snap["controllers"][0]["devices"]
+        devices = snap["fan_controllers"][0]["devices"]
         assert [d["name"] for d in devices] == ["/dev/nvme0n1", "/dev/nvme1n1"]
         assert [d["temp_c"] for d in devices] == pytest.approx([47.5, 49.5])
 
@@ -357,7 +362,7 @@ class TestBuildSnapshot:
                            gpu_device_ids=[0, 2])
         service = _make_service(controllers=[gpu])
         snap = build_snapshot(service)
-        devices = snap["controllers"][0]["devices"]
+        devices = snap["fan_controllers"][0]["devices"]
         assert [d["name"] for d in devices] == ["gpu0", "gpu2"]
         assert [d["temp_c"] for d in devices] == pytest.approx([55.0, 62.5])
 
@@ -366,14 +371,14 @@ class TestBuildSnapshot:
         const = _make_const_fc(zones=[2], level=50)
         service = _make_service(controllers=[const])
         snap = build_snapshot(service)
-        assert "devices" not in snap["controllers"][0]
+        assert "devices" not in snap["fan_controllers"][0]
 
     def test_per_device_temps_shorter_than_names(self) -> None:
         """When the loop hasn't run yet, last_per_device_temps may be empty; entries get 0.0 fallback."""
         hd = _make_hd_fc(zones=[1], count=2, per_device_temps=[], hd_names=["/dev/sda", "/dev/sdb"])
         service = _make_service(controllers=[hd])
         snap = build_snapshot(service)
-        devices = snap["controllers"][0]["devices"]
+        devices = snap["fan_controllers"][0]["devices"]
         assert [d["name"] for d in devices] == ["/dev/sda", "/dev/sdb"]
         assert [d["temp_c"] for d in devices] == [0.0, 0.0]
 

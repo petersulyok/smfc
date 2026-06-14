@@ -78,11 +78,11 @@ def _build_controller_entry(controller) -> Dict[str, Any]:
         ]
 
     if isinstance(controller, HdFc):
-        # Defensive shallow copy — the loop mutates these in place.
-        entry["device_names"] = list(controller.hd_device_names)
+        # Per-disk paths live in entry["devices"][i]["name"] (built above); the standby block
+        # below indexes states[i] positionally against that list.
         if cfg.standby_guard_enabled and controller.count > 1:
             states = list(getattr(controller, "standby_array_states", []))
-            entry["standby"] = {
+            entry["standby_guard"] = {
                 "enabled": True,
                 "limit": int(cfg.standby_hd_limit),
                 "states": states,
@@ -90,7 +90,7 @@ def _build_controller_entry(controller) -> Dict[str, Any]:
                 "standby_count": sum(1 for s in states if s),
             }
         else:
-            entry["standby"] = {"enabled": False}
+            entry["standby_guard"] = {"enabled": False}
 
     return entry
 
@@ -148,7 +148,7 @@ def build_snapshot(service: "Service") -> Dict[str, Any]:
             "name": Ipmi.get_fan_mode_name(last_fan_mode),
             "age_s": round(age_s, 3),
         },
-        "controllers": controllers_section,
+        "fan_controllers": controllers_section,
         "zones": zones_section,
     }
 
