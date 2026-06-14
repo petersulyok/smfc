@@ -65,10 +65,13 @@ class TestLog:
         assert my_log.log_level == level, error_str
         assert my_log.log_output == output, error_str
         if my_log.log_output is Log.LOG_STDOUT:
+            # pylint: disable=comparison-with-callable
             assert my_log.msg == my_log.msg_to_stdout, error_str
         elif my_log.log_output is Log.LOG_STDERR:
+            # pylint: disable=comparison-with-callable
             assert my_log.msg == my_log.msg_to_stderr, error_str
         elif my_log.log_output == Log.LOG_SYSLOG:
+            # pylint: disable=comparison-with-callable
             assert my_log.msg == my_log.msg_to_syslog, error_str
 
     @pytest.mark.parametrize(

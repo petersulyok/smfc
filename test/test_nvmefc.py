@@ -68,6 +68,10 @@ class TestNvmeFc:
         assert mynvmefc.config.smoothing == 1, error_str
         assert mynvmefc.nvme_device_names == my_td.nvme_name_list, error_str
         assert mynvmefc.hwmon_path == my_td.nvme_files, error_str
+        # device_names() exposes a defensive copy of nvme_device_names for the snapshot/exporter path.
+        names = mynvmefc.device_names()
+        assert names == my_td.nvme_name_list, error_str
+        assert names is not mynvmefc.nvme_device_names, error_str
         del my_td
 
     @pytest.mark.parametrize(

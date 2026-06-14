@@ -45,6 +45,7 @@ def _sample_snapshot() -> Dict[str, Any]:
                 "ipmi_zones": [0], "device_count": 1, "polling": 2.0,
                 "last_temp_c": 42.3, "last_level_pct": 45, "deferred_apply": False,
                 "temp_min_c": 30.0, "temp_max_c": 70.0, "level_min_pct": 25, "level_max_pct": 100,
+                "devices": [{"name": "cpu0", "temp_c": 42.3}],
             },
             {
                 "section": "HD", "type": "hd", "enabled": True,
@@ -52,6 +53,12 @@ def _sample_snapshot() -> Dict[str, Any]:
                 "last_temp_c": 34.1, "last_level_pct": 55, "deferred_apply": False,
                 "temp_min_c": 32.0, "temp_max_c": 50.0, "level_min_pct": 35, "level_max_pct": 100,
                 "device_names": ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"],
+                "devices": [
+                    {"name": "/dev/sda", "temp_c": 33.0},
+                    {"name": "/dev/sdb", "temp_c": 34.5},
+                    {"name": "/dev/sdc", "temp_c": 36.1},
+                    {"name": "/dev/sdd", "temp_c": 39.0},
+                ],
                 "standby": {
                     "enabled": True, "limit": 1,
                     "states": [False, False, True, True],
@@ -98,6 +105,7 @@ class TestPrometheusRenderer:
         assert out.endswith("\n")
         for metric in ("smfc_up", "smfc_start_time_seconds", "smfc_bmc_info",
                        "smfc_controller_zone", "smfc_temperature_celsius",
+                       "smfc_device_temperature_celsius",
                        "smfc_controller_level_percent", "smfc_fan_level_percent",
                        "smfc_controller_temperature_min_celsius", "smfc_controller_temperature_max_celsius",
                        "smfc_controller_level_min_percent", "smfc_controller_level_max_percent",
@@ -148,6 +156,16 @@ class TestPrometheusRenderer:
         assert 'smfc_temperature_celsius{section="CPU",type="cpu",zone="1"} 42.3' in out
         assert 'smfc_controller_zone{section="CPU",type="cpu",zone="1"} 1' in out
 
+    def test_controller_zone_skips_disabled_controllers(self) -> None:
+        """smfc_controller_zone omits controllers with enabled=False."""
+        snap = _sample_snapshot()
+        snap["controllers"][0]["enabled"] = False
+        out = render_prometheus(snap)
+        # The disabled CPU controller's zone mapping must NOT appear.
+        assert 'smfc_controller_zone{section="CPU",type="cpu",zone="0"} 1' not in out
+        # The other controllers (HD, CONST) still emit their mappings.
+        assert 'smfc_controller_zone{section="HD",type="hd",zone="1"} 1' in out
+
     def test_per_zone_levels(self) -> None:
         """smfc_fan_level_percent emits one line per zone in numerical order."""
         out = render_prometheus(_sample_snapshot())
@@ -162,6 +180,19 @@ class TestPrometheusRenderer:
         assert 'smfc_temperature_celsius{section="HD",type="hd",zone="1"} 34.1' in out
         temp_block = out.split("# TYPE smfc_temperature_celsius", 1)[1].split("# HELP")[0]
         assert 'section="CONST"' not in temp_block
+
+    def test_per_device_temperature_emitted(self) -> None:
+        """smfc_device_temperature_celsius is emitted once per device with section/type/device labels."""
+        out = render_prometheus(_sample_snapshot())
+        assert 'smfc_device_temperature_celsius{section="CPU",type="cpu",device="cpu0"} 42.3' in out
+        assert 'smfc_device_temperature_celsius{section="HD",type="hd",device="/dev/sda"} 33.0' in out
+        assert 'smfc_device_temperature_celsius{section="HD",type="hd",device="/dev/sdd"} 39.0' in out
+
+    def test_per_device_temperature_skips_const(self) -> None:
+        """smfc_device_temperature_celsius is omitted for CONST controllers (no temperature concept)."""
+        out = render_prometheus(_sample_snapshot())
+        block = out.split("# TYPE smfc_device_temperature_celsius", 1)[1].split("# HELP")[0]
+        assert 'section="CONST"' not in block
 
     def test_steering_window_metrics(self) -> None:
         """The static [T_min,T_max]->[L_min,L_max] window is emitted, one series per targeted zone."""

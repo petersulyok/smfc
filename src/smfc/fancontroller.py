@@ -45,11 +45,12 @@ class FanController:
     temp_step: float        # A temperature steps value (C) — legacy mode only, used for logging
     level_step: float       # A fan level step value (0..100%) — legacy mode only, used for logging
     levels_lut: List[int]   # 101-element temperature->level lookup table (index = T in C)
-    last_time: float        # Last system time we polled temperature (timestamp)
-    last_temp: float        # Last measured temperature value (C)
-    last_level: int         # Last configured fan level (0..100%)
-    deferred_apply: bool    # If True, skip IPMI calls (used for zone arbitration)
-    _temp_history: deque    # Circular buffer storing recent temperature readings
+    last_time: float                    # Last system time we polled temperature (timestamp)
+    last_temp: float                    # Last measured (aggregated) temperature value (C)
+    last_per_device_temps: List[float]  # Last per-device temperature readings, one entry per device
+    last_level: int                     # Last configured fan level (0..100%)
+    deferred_apply: bool                # If True, skip IPMI calls (used for zone arbitration)
+    _temp_history: deque                # Circular buffer storing recent temperature readings
 
     def __init__(self, log: Log, ipmi: Ipmi, name: str, count: int) -> None:
         """Initialize the FanController class. Derived classes must set self.config before calling this.
@@ -80,6 +81,7 @@ class FanController:
         self.level_step = (self.config.max_level - self.config.min_level) / self.config.steps
         self.levels_lut = FanController.build_lut(self.config)
         self.last_temp = 0
+        self.last_per_device_temps = []
         self.last_level = 0
         self.last_time = time.monotonic() - (self.config.polling + 1)
         self.deferred_apply = False
@@ -144,12 +146,16 @@ class FanController:
     def get_temp(self) -> float:
         """Get the aggregated temperature of the controlled entities using the configured calculation method.
 
+        Side effect: refreshes self.last_per_device_temps with the per-device readings, so the
+        snapshot/exporter path can publish them without re-issuing subprocesses.
+
         Returns:
             float: aggregated temperature value (C)
         """
-        if self.count == 1:
-            return self._get_nth_temp(0)
         temps = [self._get_nth_temp(i) for i in range(self.count)]
+        self.last_per_device_temps = temps
+        if self.count == 1:
+            return temps[0]
         if self.config.temp_calc == Config.CALC_MIN:
             result = min(temps)
         elif self.config.temp_calc == Config.CALC_MAX:
@@ -161,6 +167,14 @@ class FanController:
             self.log.msg(Log.LOG_DEBUG,
                          f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} {label}={result:.1f}C")
         return result
+
+    def device_names(self) -> List[str]:
+        """Return human-readable device labels matching last_per_device_temps positionally.
+
+        Default implementation returns generic ordinal labels; subclasses override to expose the
+        configured device paths or IDs (e.g. /dev/disk/by-id/... for HD/NVMe, gpu<id> for GPU).
+        """
+        return [f"dev{i}" for i in range(self.count)]
 
     def set_fan_level(self, level: int) -> None:
         """Set the new fan level in all IPMI zones of the controller.

@@ -78,6 +78,10 @@ class TestHdFc:
         assert my_hdfc.hd_device_names == my_td.hd_name_list, error_str
         assert my_hdfc.config.smartctl_path == cmd_smart, error_str
         assert my_hdfc.hwmon_path == my_td.hd_files, error_str
+        # device_names() exposes a defensive copy of hd_device_names for the snapshot/exporter path.
+        names = my_hdfc.device_names()
+        assert names == my_td.hd_name_list, error_str
+        assert names is not my_hdfc.hd_device_names, error_str
         if count > 1:
             assert my_hdfc.config.standby_hd_limit == sb_limit, error_str
             assert my_hdfc.config.standby_guard_enabled is True, error_str

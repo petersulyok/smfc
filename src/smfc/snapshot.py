@@ -66,6 +66,16 @@ def _build_controller_entry(controller) -> Dict[str, Any]:
         entry["temp_max_c"] = float(cfg.max_temp)
         entry["level_min_pct"] = int(cfg.min_level)
         entry["level_max_pct"] = int(cfg.max_level)
+        # Per-device temperature readings cached by the loop's last get_temp() call. Names come
+        # from the controller (HD/NVMe expose configured paths; CPU/GPU synthesize ordinal labels).
+        # When the loop hasn't run yet temps may be shorter than names — pad with 0.0 so the
+        # array length always matches device_count.
+        names = list(controller.device_names())
+        temps = list(getattr(controller, "last_per_device_temps", []) or [])
+        entry["devices"] = [
+            {"name": names[i], "temp_c": float(temps[i]) if i < len(temps) else 0.0}
+            for i in range(len(names))
+        ]
 
     if isinstance(controller, HdFc):
         # Defensive shallow copy — the loop mutates these in place.

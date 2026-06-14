@@ -94,20 +94,23 @@ class TestParseArgs:
         assert args.config_file == client.DEFAULT_CONFIG_PATH
         assert args.sudo is False
         assert args.no_color is False
+        assert args.verbose is False
 
     def test_short_flags(self) -> None:
         """All short flags map to the right destinations."""
-        args = client._parse_args(["-c", "/tmp/foo.conf", "-s", "-nc"])
+        args = client._parse_args(["-c", "/tmp/foo.conf", "-s", "-nc", "-V"])
         assert args.config_file == "/tmp/foo.conf"
         assert args.sudo is True
         assert args.no_color is True
+        assert args.verbose is True
 
     def test_long_flags(self) -> None:
         """Long-form flags map to the right destinations."""
-        args = client._parse_args(["--config", "/tmp/bar.conf", "--sudo", "--no-color"])
+        args = client._parse_args(["--config", "/tmp/bar.conf", "--sudo", "--no-color", "--verbose"])
         assert args.config_file == "/tmp/bar.conf"
         assert args.sudo is True
         assert args.no_color is True
+        assert args.verbose is True
 
 
 class TestUseColor:
@@ -205,6 +208,72 @@ class TestFormatReport:
         out = client._format_report(ipmi, entries, "x.conf", use_color=False)
         assert "Standby Guard" not in out
 
+    def test_no_devices_section_without_verbose(self) -> None:
+        """The standalone path omits the Devices section unless verbose=True."""
+        ipmi = _make_fake_ipmi()
+        cpu = _make_fake_cpu_controller(zones=[0], count=1, temp=42.3)
+        entries = [("CPU", "cpu", cpu, None)]
+        out = client._format_report(ipmi, entries, "x.conf", use_color=False)
+        # The Controllers table has a "Devices" column header; the Devices *section* is a bare line.
+        assert "\nDevices\n" not in out
+
+    def test_devices_section_with_verbose(self) -> None:
+        """In verbose mode the standalone path issues _get_nth_temp() per device and renders a Devices table."""
+        ipmi = _make_fake_ipmi()
+        # An HD controller with two disks; mock device_names() and _get_nth_temp() so we don't shell out.
+        hd = _make_fake_hd_controller(zones=[1], count=2, standby_enabled=False,
+                                      hd_names=["/dev/sda", "/dev/sdb"])
+        hd.device_names.return_value = ["/dev/sda", "/dev/sdb"]
+        hd._get_nth_temp.side_effect = lambda i: [33.0, 34.5][i]
+        entries = [("HD", "hd", hd, None)]
+        out = client._format_report(ipmi, entries, "x.conf", use_color=False, verbose=True)
+        assert "Devices" in out
+        assert "/dev/sda" in out
+        assert "33.0 C" in out
+        assert "/dev/sdb" in out
+        assert "34.5 C" in out
+
+    def test_devices_section_per_device_error_isolated(self) -> None:
+        """A single failing _get_nth_temp() call renders 'ERROR' for that row but does not break the table."""
+        ipmi = _make_fake_ipmi()
+        hd = _make_fake_hd_controller(zones=[1], count=2, standby_enabled=False,
+                                      hd_names=["/dev/sda", "/dev/sdb"])
+        hd.device_names.return_value = ["/dev/sda", "/dev/sdb"]
+
+        def _read(i: int) -> float:
+            if i == 1:
+                raise RuntimeError("smartctl failed")
+            return 33.0
+        hd._get_nth_temp.side_effect = _read
+        entries = [("HD", "hd", hd, None)]
+        out = client._format_report(ipmi, entries, "x.conf", use_color=False, verbose=True)
+        assert "33.0 C" in out
+        assert "ERROR" in out
+
+    def test_devices_section_skips_const(self) -> None:
+        """CONST controllers are excluded from the Devices section even in verbose mode."""
+        ipmi = _make_fake_ipmi()
+        const_fc = _make_fake_const_controller(zones=[2], level=50)
+        entries = [("CONST", "const", const_fc, None)]
+        out = client._format_report(ipmi, entries, "x.conf", use_color=False, verbose=True)
+        # Without any non-CONST controllers, the Devices section header is never emitted.
+        assert "\nDevices\n" not in out
+
+    def test_devices_section_device_names_error(self) -> None:
+        """If device_names() itself raises, the controller is silently skipped (defensive guard)."""
+        ipmi = _make_fake_ipmi()
+        cpu = _make_fake_cpu_controller(zones=[0], count=1, temp=42.3)
+        cpu.device_names.side_effect = RuntimeError("device_names failed")
+        # Add a healthy HD so the Devices section still renders for the surviving controller.
+        hd = _make_fake_hd_controller(zones=[1], count=1, hd_names=["/dev/sda"])
+        hd.device_names.return_value = ["/dev/sda"]
+        hd._get_nth_temp.side_effect = lambda i: 33.0
+        entries = [("CPU", "cpu", cpu, None), ("HD", "hd", hd, None)]
+        out = client._format_report(ipmi, entries, "x.conf", use_color=False, verbose=True)
+        assert "/dev/sda" in out
+        # cpu0 must NOT appear because device_names() raised for the CPU controller.
+        assert "cpu0" not in out
+
     def test_color_mode_emits_ansi(self) -> None:
         """When color mode is enabled, ANSI sequences appear in output."""
         ipmi = _make_fake_ipmi()
@@ -270,7 +339,8 @@ class TestMain:
                                                capsys: pytest.CaptureFixture) -> None:
         """A missing ipmitool (FileNotFoundError) returns EXIT_IPMI_ERROR with an install hint, not the sudo hint."""
         mocker.patch("smfc.client.Config", return_value=_make_offline_cfg())
-        mocker.patch("smfc.client.Ipmi", side_effect=FileNotFoundError("[Errno 2] No such file or directory: 'ipmitool'"))
+        mocker.patch("smfc.client.Ipmi",
+                     side_effect=FileNotFoundError("[Errno 2] No such file or directory: 'ipmitool'"))
         rc = client.main(["-c", "/dummy.conf"])
         assert rc == EXIT_IPMI_ERROR
         captured = capsys.readouterr()
@@ -376,6 +446,24 @@ class TestSafeHelpers:
         ipmi = MagicMock()
         ipmi.get_fan_level.side_effect = RuntimeError("ipmitool failed")
         assert client._safe_zone_level(ipmi, 0) == "ERROR"
+
+    def test_safe_nth_temp_str_none_controller(self) -> None:
+        """A None controller renders as '-' (mirrors _safe_temp_str)."""
+        assert client._safe_nth_temp_str(None, 0) == "-"
+
+    def test_safe_nth_temp_str_raises(self) -> None:
+        """A controller whose _get_nth_temp() raises renders as 'ERROR'."""
+        controller = MagicMock()
+        controller._get_nth_temp.side_effect = RuntimeError("smartctl failed")
+        assert client._safe_nth_temp_str(controller, 0) == "ERROR"
+
+    def test_format_uptime_under_one_day(self) -> None:
+        """Sub-day durations omit the day field entirely (HH:MM:SS form)."""
+        assert client._format_uptime(3661.0) == "01:01:01"
+
+    def test_format_uptime_one_day_and_change(self) -> None:
+        """Multi-day durations prefix the day count."""
+        assert client._format_uptime(86400 + 7322) == "1d 02:02:02"
 
 
 class TestFormatReportErrorPaths:
@@ -563,12 +651,19 @@ def _sample_snapshot_dict() -> dict:
                 "section": "CPU", "type": "cpu", "enabled": True,
                 "ipmi_zones": [0], "device_count": 1, "polling": 2.0,
                 "last_temp_c": 42.3, "last_level_pct": 45, "deferred_apply": False,
+                "devices": [{"name": "cpu0", "temp_c": 42.3}],
             },
             {
                 "section": "HD", "type": "hd", "enabled": True,
                 "ipmi_zones": [1], "device_count": 4, "polling": 10.0,
                 "last_temp_c": 34.1, "last_level_pct": 55, "deferred_apply": False,
                 "device_names": ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"],
+                "devices": [
+                    {"name": "/dev/sda", "temp_c": 33.0},
+                    {"name": "/dev/sdb", "temp_c": 34.5},
+                    {"name": "/dev/sdc", "temp_c": 36.1},
+                    {"name": "/dev/sdd", "temp_c": 39.0},
+                ],
                 "standby": {
                     "enabled": True, "limit": 1,
                     "states": [False, False, True, True],
@@ -667,6 +762,42 @@ class TestFormatReportFromSnapshot:
         # Devices beyond the states length are not rendered.
         assert "/dev/sdc" not in out
         assert "/dev/sdd" not in out
+
+    def test_no_devices_section_without_verbose(self) -> None:
+        """Without verbose=True the per-device section is not rendered (default behaviour unchanged)."""
+        snap = _sample_snapshot_dict()
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
+        # The Controllers table has a "Devices" column header; the Devices *section* is a bare line.
+        assert "\nDevices\n" not in out
+        # And no per-device temps leak through (33.0 only appears in the devices array).
+        assert "33.0 C" not in out
+
+    def test_devices_section_present_with_verbose(self) -> None:
+        """With verbose=True a Devices section lists every (section, name, temp) tuple from the snapshot."""
+        snap = _sample_snapshot_dict()
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        assert "Devices" in out
+        # CPU + every disk should appear with the cached per-device temperature.
+        assert "cpu0" in out
+        assert "42.3 C" in out
+        for name, temp in [("/dev/sda", "33.0 C"), ("/dev/sdb", "34.5 C"),
+                           ("/dev/sdc", "36.1 C"), ("/dev/sdd", "39.0 C")]:
+            assert name in out
+            assert temp in out
+
+    def test_devices_section_skips_const_online(self) -> None:
+        """CONST controllers are skipped in the snapshot's verbose Devices loop (no devices array)."""
+        snap = _sample_snapshot_dict()
+        snap["controllers"].append({
+            "section": "CONST", "type": "const", "enabled": True,
+            "ipmi_zones": [2], "device_count": 0, "polling": 30.0,
+            "last_temp_c": 0.0, "last_level_pct": 50, "deferred_apply": False,
+            "target_level_pct": 50,
+        })
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        # Devices section still renders, but CONST never appears in its rows (only CPU + HD do).
+        devices_block = out.split("\nDevices\n", 1)[1].split("\n\n", 1)[0]
+        assert "CONST" not in devices_block
 
 
 class TestTryFetchSnapshot:

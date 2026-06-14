@@ -99,6 +99,10 @@ class HdFc(FanController):
         if self.config.standby_guard_enabled and self.count > 1:
             self.run_standby_guard()
 
+    def device_names(self) -> List[str]:
+        """Return per-HD device labels (configured hd_names) matching last_per_device_temps positionally."""
+        return list(self.hd_device_names)
+
     def _exec_smartctl(self, arguments: List[str]) -> subprocess.CompletedProcess:
         """Execute the `smartctl` command.
         Args:

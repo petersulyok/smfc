@@ -98,6 +98,21 @@ def render_prometheus(snapshot: Dict[str, Any]) -> str:
             labels = _format_labels([("section", section), ("type", ctype), ("zone", str(zone))])
             lines.append(f"smfc_temperature_celsius{labels} {temp}")
 
+    # Per-device temperature: one series per individual disk/CPU core/NVMe/GPU. The aggregated
+    # smfc_temperature_celsius above is what the controller acts on; this series exposes the raw
+    # per-device readings dashboards use to spot a single hot drive or core.
+    lines.append("")
+    lines.append("# HELP smfc_device_temperature_celsius Per-device temperature reading.")
+    lines.append("# TYPE smfc_device_temperature_celsius gauge")
+    for c in controllers:
+        if c.get("type") == "const":
+            continue
+        section, ctype = c.get("section", ""), c.get("type", "")
+        for d in c.get("devices", []) or []:
+            labels = _format_labels([("section", section), ("type", ctype),
+                                     ("device", str(d.get("name", "")))])
+            lines.append(f"smfc_device_temperature_celsius{labels} {float(d.get('temp_c', 0.0))}")
+
     # Per-controller requested level, one series per targeted zone (CONST included).
     lines.append("")
     lines.append("# HELP smfc_controller_level_percent Fan level requested by the controller, per targeted zone.")

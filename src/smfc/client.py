@@ -68,6 +68,8 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         help="run ipmitool and smartctl with sudo")
     parser.add_argument("-nc", "--no-color", action="store_true", default=False,
                         dest="no_color", help="disable ANSI colors in output")
+    parser.add_argument("-V", "--verbose", action="store_true", default=False,
+                        help="show per-device temperatures")
     parser.add_argument("--standalone", action="store_true", default=False, dest="standalone",
                         help="bypass the smfc service and read sensors directly")
     parser.add_argument("-v", "--version", action="version", version="%(prog)s " + version("smfc"))
@@ -194,6 +196,23 @@ def _safe_temp_str(controller: Union[FanController, ConstFc, None], type_label: 
         return "ERROR"
 
 
+def _safe_nth_temp_str(controller: Union[FanController, None], index: int) -> str:
+    """Read a single per-device temperature via the controller's _get_nth_temp(), formatted defensively.
+    Args:
+        controller: controller instance (or None)
+        index (int): device index in the controller's hwmon/device list
+    Returns:
+        str: formatted temperature string (e.g. "42.3 C", "ERROR", "-")
+    """
+    if controller is None:
+        return "-"
+    try:
+        # pylint: disable=protected-access
+        return f"{controller._get_nth_temp(index):.1f} C"
+    except Exception:  # pylint: disable=broad-except
+        return "ERROR"
+
+
 def _safe_zone_level(ipmi: Ipmi, zone: int) -> str:
     """Read the current fan level for an IPMI zone, returning a friendly string on failure.
     Args:
@@ -274,6 +293,32 @@ def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: b
     return lines
 
 
+def _format_devices_table(rows: List[Tuple[str, str, str]], use_color: bool) -> List[str]:
+    """Format a Devices table. Each row is (section, device-name, temp-string).
+
+    Both the online (snapshot) and standalone paths build the same row tuples and share this
+    renderer to keep verbose output consistent regardless of source.
+
+    Args:
+        rows (List[Tuple[str, str, str]]): per-device rows (section, name, temp_str)
+        use_color (bool): whether to emit ANSI colors
+
+    Returns:
+        List[str]: list of output lines (empty when rows is empty)
+    """
+    if not rows:
+        return []
+    # Width the Device column to the longest device name so /dev/disk/by-id/... paths line up.
+    name_w = max(len("Device"), max(len(r[1]) for r in rows))
+    lines: List[str] = []
+    lines.append(_wrap("Devices", BOLD, use_color))
+    lines.append(f"  {'Section':<10}{'Device':<{name_w + 2}}Temp")
+    lines.append(f"  {'-' * 8:<10}{'-' * name_w:<{name_w + 2}}-----")
+    for section, name, temp_str in rows:
+        lines.append(f"  {section:<10}{name:<{name_w + 2}}{temp_str}")
+    return lines
+
+
 def _format_standby_section(entries: List[ControllerEntry], use_color: bool) -> List[str]:
     """Format the Standby Guard section, when at least one HD controller has it enabled.
     Args:
@@ -311,13 +356,15 @@ def _format_standby_section(entries: List[ControllerEntry], use_color: bool) -> 
     return lines
 
 
-def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str, use_color: bool) -> str:
+def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str, use_color: bool,
+                   verbose: bool = False) -> str:
     """Build the full snapshot report (standalone path: reads ipmitool/smartctl directly).
     Args:
         ipmi (Ipmi): Ipmi instance
         entries (List[ControllerEntry]): controllers
         config_path (str): path to the loaded configuration file
         use_color (bool): whether to emit ANSI colors
+        verbose (bool): whether to include the per-device Devices section
     Returns:
         str: full report text
     """
@@ -355,6 +402,24 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     # Controllers table
     lines.extend(_format_controllers_table(entries, ipmi, use_color))
     lines.append("")
+
+    # Per-device temperatures (verbose only). Standalone path issues one _get_nth_temp() per
+    # device, so this section adds a smartctl/nvidia-smi call per device — gated behind --verbose.
+    if verbose:
+        device_rows: List[Tuple[str, str, str]] = []
+        for section, type_label, controller, _error in entries:
+            if controller is None or type_label == "const":
+                continue
+            try:
+                names = controller.device_names()
+            except Exception:  # pylint: disable=broad-except
+                names = []
+            for i, name in enumerate(names):
+                device_rows.append((section, name, _safe_nth_temp_str(controller, i)))
+        device_lines = _format_devices_table(device_rows, use_color)
+        if device_lines:
+            lines.extend(device_lines)
+            lines.append("")
 
     # Live IPMI zones
     zone_lines = _format_zones_table(entries, ipmi, use_color)
@@ -432,7 +497,8 @@ def _try_fetch_snapshot(exporter_cfg: ExporterConfig,
         return None
 
 
-def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use_color: bool) -> str:
+def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use_color: bool,
+                                 verbose: bool = False) -> str:
     """Build the full report from a snapshot dict served by the smfc exporter.
 
     The output mirrors the standalone path's structure (banner, BMC, IPMI fan mode, Controllers
@@ -444,6 +510,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
         snapshot (Dict[str, Any]): parsed snapshot dict from the exporter's /snapshot endpoint.
         config_path (str): path to the loaded configuration file.
         use_color (bool): whether to emit ANSI colors.
+        verbose (bool): whether to include the per-device Devices section.
 
     Returns:
         str: full report text (with a trailing newline).
@@ -507,6 +574,22 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             level_str = f"{int(level):3d} %" if level is not None else f"{int(c.get('last_level_pct', 0)):3d} %"
         lines.append(f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_str:<10}{level_str}")
     lines.append("")
+
+    # Per-device temperatures (verbose only). Pulled from the snapshot's `devices` array — the
+    # service has already cached them on the loop's last get_temp(); this path issues no
+    # subprocesses (preserving the request-thread contract from CLIENT_SERVER.md).
+    if verbose:
+        device_rows: List[Tuple[str, str, str]] = []
+        for c in controllers:
+            if c.get("type") == "const":
+                continue
+            section = c.get("section", "?")
+            for d in c.get("devices", []) or []:
+                device_rows.append((section, str(d.get("name", "")), f"{float(d.get('temp_c', 0.0)):.1f} C"))
+        device_lines = _format_devices_table(device_rows, use_color)
+        if device_lines:
+            lines.extend(device_lines)
+            lines.append("")
 
     # IPMI zones (live) — applied levels straight from the snapshot.
     if zones:
@@ -573,7 +656,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if cfg.exporter.enabled and not args.standalone:
         snapshot = _try_fetch_snapshot(cfg.exporter)
         if snapshot is not None:
-            report = _format_report_from_snapshot(snapshot, args.config_file, use_color)
+            report = _format_report_from_snapshot(snapshot, args.config_file, use_color, args.verbose)
             sys.stdout.write(report)
             sys.stdout.flush()
             return EXIT_OK
@@ -605,7 +688,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return EXIT_UDEV_ERROR
 
     entries = _construct_controllers(log, cfg, ipmi, udevc, args.sudo)
-    report = _format_report(ipmi, entries, args.config_file, use_color)
+    report = _format_report(ipmi, entries, args.config_file, use_color, args.verbose)
     sys.stdout.write(report)
     sys.stdout.flush()
     return EXIT_OK

@@ -59,5 +59,9 @@ class NvmeFc(FanController):
         if self.log.log_level >= Log.LOG_CONFIG:
             self.log.msg(Log.LOG_CONFIG, f"   nvme_names = {self.nvme_device_names}")
 
+    def device_names(self) -> List[str]:
+        """Return per-NVMe device labels (configured nvme_names) matching last_per_device_temps positionally."""
+        return list(self.nvme_device_names)
+
 
 # End.

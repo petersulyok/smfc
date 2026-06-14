@@ -65,6 +65,12 @@ What's read:
 - BMC info attributes on `Ipmi` (set once at startup, never mutated).
 - `fc.last_temp` / `fc.last_level` from each controller (refreshed by the
   loop on every iteration).
+- `fc.last_per_device_temps` — list of per-device temperature readings
+  populated as a side effect of every `get_temp()` call (so the snapshot
+  exposes them without re-issuing `smartctl`/`nvidia-smi` on the request
+  thread).
+- `fc.device_names()` — friendly device labels (configured `/dev/disk/by-id/...`
+  paths for HD/NVMe, synthesized `cpu<i>` / `gpu<id>` for CPU/GPU).
 - `HdFc.standby_array_states` / `HdFc.hd_device_names` (refreshed by the loop).
 - `Service.applied_levels` (snapshotted defensively as `dict(...)`).
 - `Service.last_fan_mode` / `last_fan_mode_at` (refreshed by the loop's
@@ -98,7 +104,8 @@ Schema sketch (JSON-shaped):
       "polling": 2.0,
       "last_temp_c": 42.3,
       "last_level_pct": 45,
-      "deferred_apply": false
+      "deferred_apply": false,
+      "devices": [{"name": "cpu0", "temp_c": 42.3}]
     },
     {
       "section": "HD",
@@ -108,6 +115,12 @@ Schema sketch (JSON-shaped):
       "last_temp_c": 34.1,
       "last_level_pct": 55,
       "device_names": ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"],
+      "devices": [
+        {"name": "/dev/sda", "temp_c": 33.0},
+        {"name": "/dev/sdb", "temp_c": 34.5},
+        {"name": "/dev/sdc", "temp_c": 36.1},
+        {"name": "/dev/sdd", "temp_c": 39.0}
+      ],
       "standby": {
         "enabled": true,
         "limit": 1,
@@ -156,6 +169,14 @@ Hand-roll the text format — it's a few lines per metric:
 # TYPE smfc_temperature_celsius gauge
 smfc_temperature_celsius{section="CPU",type="cpu"} 42.3
 smfc_temperature_celsius{section="HD",type="hd"} 34.1
+
+# HELP smfc_device_temperature_celsius Per-device temperature reading.
+# TYPE smfc_device_temperature_celsius gauge
+smfc_device_temperature_celsius{section="CPU",type="cpu",device="cpu0"} 42.3
+smfc_device_temperature_celsius{section="HD",type="hd",device="/dev/sda"} 33.0
+smfc_device_temperature_celsius{section="HD",type="hd",device="/dev/sdb"} 34.5
+smfc_device_temperature_celsius{section="HD",type="hd",device="/dev/sdc"} 36.1
+smfc_device_temperature_celsius{section="HD",type="hd",device="/dev/sdd"} 39.0
 
 # HELP smfc_fan_level_percent Last applied fan level per IPMI zone.
 # TYPE smfc_fan_level_percent gauge
@@ -277,11 +298,15 @@ all synchronization primitives by following two rules:
    (see [ENFORCE_FAN_MODE.md](ENFORCE_FAN_MODE.md)).
 2. **Mutable containers are copied, not iterated in place.** The snapshot
    builder takes shallow copies of `Service.applied_levels` (a dict),
-   `HdFc.standby_array_states` (a list), and `HdFc.hd_device_names` (a
-   list). Scalar attributes (`fc.last_temp`, `fc.last_level`,
-   `Service.last_fan_mode`) are read directly — CPython attribute
-   reads/writes are atomic under the GIL, so a racing read sees either the
-   pre- or post-write value, never a torn one.
+   `HdFc.standby_array_states` (a list), `HdFc.hd_device_names` (a list),
+   and `fc.last_per_device_temps` (a list). Scalar attributes
+   (`fc.last_temp`, `fc.last_level`, `Service.last_fan_mode`) are read
+   directly — CPython attribute reads/writes are atomic under the GIL, so a
+   racing read sees either the pre- or post-write value, never a torn one.
+   `last_per_device_temps` is a list whose binding is replaced (not
+   mutated) by `get_temp()` on every loop iteration, so a racing read
+   sees either the previous iteration's full list or the new one — never a
+   half-built list.
 
 What this **does not** guarantee: that a snapshot's `last_temp` and
 `last_level` for the same controller come from the same loop iteration.

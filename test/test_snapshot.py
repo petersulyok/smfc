@@ -26,7 +26,8 @@ def _make_ipmi() -> MagicMock:
     return ipmi
 
 
-def _make_cpu_fc(zones=None, last_temp=42.3, last_level=45, polling=2.0) -> MagicMock:
+def _make_cpu_fc(zones=None, last_temp=42.3, last_level=45, polling=2.0,
+                 per_device_temps=None) -> MagicMock:
     """Build a fake CpuFc-like controller (last_temp/last_level/count populated)."""
     from smfc.cpufc import CpuFc as _CpuFc  # pylint: disable=import-outside-toplevel
     zones = zones or [0]
@@ -44,11 +45,13 @@ def _make_cpu_fc(zones=None, last_temp=42.3, last_level=45, polling=2.0) -> Magi
     fc.last_temp = last_temp
     fc.last_level = last_level
     fc.deferred_apply = False
+    fc.last_per_device_temps = per_device_temps if per_device_temps is not None else [last_temp]
+    fc.device_names.return_value = [f"cpu{i}" for i in range(fc.count)]
     return fc
 
 
 def _make_hd_fc(zones=None, count=4, last_temp=34.1, last_level=55, standby_enabled=False,
-                standby_states=None, hd_names=None) -> MagicMock:
+                standby_states=None, hd_names=None, per_device_temps=None) -> MagicMock:
     """Build a fake HdFc-like controller. To make isinstance(fc, HdFc) work, use a real HdFc spec."""
     from smfc.hdfc import HdFc as _HdFc  # pylint: disable=import-outside-toplevel
     zones = zones or [1]
@@ -70,6 +73,9 @@ def _make_hd_fc(zones=None, count=4, last_temp=34.1, last_level=55, standby_enab
     fc.last_level = last_level
     fc.deferred_apply = False
     fc.hd_device_names = hd_names
+    fc.last_per_device_temps = (per_device_temps if per_device_temps is not None
+                                else [last_temp + i * 0.5 for i in range(count)])
+    fc.device_names.return_value = list(hd_names)
     if standby_enabled and standby_states is not None:
         fc.standby_array_states = standby_states
     return fc
@@ -92,10 +98,12 @@ def _make_const_fc(zones=None, level=50) -> MagicMock:
     return fc
 
 
-def _make_nvme_fc(zones=None, count=2, last_temp=48.5, last_level=55) -> MagicMock:
+def _make_nvme_fc(zones=None, count=2, last_temp=48.5, last_level=55,
+                  per_device_temps=None, nvme_names=None) -> MagicMock:
     """Build a fake NvmeFc-like controller (real spec so the snapshot's isinstance check finds it)."""
     from smfc.nvmefc import NvmeFc as _NvmeFc  # pylint: disable=import-outside-toplevel
     zones = zones or [1]
+    nvme_names = nvme_names if nvme_names is not None else [f"/dev/nvme{i}n1" for i in range(count)]
     fc = MagicMock(spec=_NvmeFc)
     fc.config = MagicMock()
     fc.config.section = "NVME"
@@ -110,13 +118,19 @@ def _make_nvme_fc(zones=None, count=2, last_temp=48.5, last_level=55) -> MagicMo
     fc.last_temp = last_temp
     fc.last_level = last_level
     fc.deferred_apply = False
+    fc.nvme_device_names = nvme_names
+    fc.last_per_device_temps = (per_device_temps if per_device_temps is not None
+                                else [last_temp + i * 0.7 for i in range(count)])
+    fc.device_names.return_value = list(nvme_names)
     return fc
 
 
-def _make_gpu_fc(zones=None, count=1, last_temp=55.0, last_level=60) -> MagicMock:
+def _make_gpu_fc(zones=None, count=1, last_temp=55.0, last_level=60,
+                 per_device_temps=None, gpu_device_ids=None) -> MagicMock:
     """Build a fake GpuFc-like controller (real spec so the snapshot's isinstance check finds it)."""
     from smfc.gpufc import GpuFc as _GpuFc  # pylint: disable=import-outside-toplevel
     zones = zones or [3]
+    gpu_device_ids = gpu_device_ids if gpu_device_ids is not None else list(range(count))
     fc = MagicMock(spec=_GpuFc)
     fc.config = MagicMock()
     fc.config.section = "GPU"
@@ -127,10 +141,14 @@ def _make_gpu_fc(zones=None, count=1, last_temp=55.0, last_level=60) -> MagicMoc
     fc.config.max_temp = 80.0
     fc.config.min_level = 35
     fc.config.max_level = 100
+    fc.config.gpu_device_ids = gpu_device_ids
     fc.count = count
     fc.last_temp = last_temp
     fc.last_level = last_level
     fc.deferred_apply = False
+    fc.last_per_device_temps = (per_device_temps if per_device_temps is not None
+                                else [last_temp + i * 1.5 for i in range(count)])
+    fc.device_names.return_value = [f"gpu{gid}" for gid in gpu_device_ids]
     return fc
 
 
@@ -302,6 +320,62 @@ class TestBuildSnapshot:
         assert entry["type"] == "gpu"
         assert entry["section"] == "GPU"
         assert entry["last_temp_c"] == pytest.approx(55.0)
+
+    def test_hd_per_device_temperatures(self) -> None:
+        """An HdFc entry carries a `devices` array pairing each hd_name with its cached per-device temp."""
+        per_dev = [33.0, 34.5, 36.1, 39.0]
+        hd = _make_hd_fc(zones=[1], count=4, per_device_temps=per_dev,
+                         hd_names=["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"])
+        service = _make_service(controllers=[hd])
+        snap = build_snapshot(service)
+        devices = snap["controllers"][0]["devices"]
+        assert [d["name"] for d in devices] == ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"]
+        assert [d["temp_c"] for d in devices] == pytest.approx(per_dev)
+
+    def test_cpu_per_device_temperatures(self) -> None:
+        """A CpuFc entry's `devices` array uses synthesized cpu0/cpu1/... labels."""
+        cpu = _make_cpu_fc(zones=[0], per_device_temps=[42.3])
+        cpu.count = 1
+        service = _make_service(controllers=[cpu])
+        snap = build_snapshot(service)
+        devices = snap["controllers"][0]["devices"]
+        assert devices == [{"name": "cpu0", "temp_c": pytest.approx(42.3)}]
+
+    def test_nvme_per_device_temperatures(self) -> None:
+        """An NvmeFc entry's `devices` array exposes the configured nvme_names with cached temps."""
+        nvme = _make_nvme_fc(zones=[1], count=2, per_device_temps=[47.5, 49.5],
+                             nvme_names=["/dev/nvme0n1", "/dev/nvme1n1"])
+        service = _make_service(controllers=[nvme])
+        snap = build_snapshot(service)
+        devices = snap["controllers"][0]["devices"]
+        assert [d["name"] for d in devices] == ["/dev/nvme0n1", "/dev/nvme1n1"]
+        assert [d["temp_c"] for d in devices] == pytest.approx([47.5, 49.5])
+
+    def test_gpu_per_device_temperatures(self) -> None:
+        """A GpuFc entry's `devices` array uses gpu<id> labels matching the configured device IDs."""
+        gpu = _make_gpu_fc(zones=[3], count=2, per_device_temps=[55.0, 62.5],
+                           gpu_device_ids=[0, 2])
+        service = _make_service(controllers=[gpu])
+        snap = build_snapshot(service)
+        devices = snap["controllers"][0]["devices"]
+        assert [d["name"] for d in devices] == ["gpu0", "gpu2"]
+        assert [d["temp_c"] for d in devices] == pytest.approx([55.0, 62.5])
+
+    def test_const_has_no_devices(self) -> None:
+        """A ConstFc entry never carries a `devices` array — CONST has no temperature concept."""
+        const = _make_const_fc(zones=[2], level=50)
+        service = _make_service(controllers=[const])
+        snap = build_snapshot(service)
+        assert "devices" not in snap["controllers"][0]
+
+    def test_per_device_temps_shorter_than_names(self) -> None:
+        """When the loop hasn't run yet, last_per_device_temps may be empty; entries get 0.0 fallback."""
+        hd = _make_hd_fc(zones=[1], count=2, per_device_temps=[], hd_names=["/dev/sda", "/dev/sdb"])
+        service = _make_service(controllers=[hd])
+        snap = build_snapshot(service)
+        devices = snap["controllers"][0]["devices"]
+        assert [d["name"] for d in devices] == ["/dev/sda", "/dev/sdb"]
+        assert [d["temp_c"] for d in devices] == [0.0, 0.0]
 
 
 # End.

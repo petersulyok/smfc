@@ -242,6 +242,34 @@ class TestFanController:
         assert my_fc.get_temp() == expected, error_str
 
     @pytest.mark.parametrize(
+        "count, temps, error_str",
+        [
+            (1, [38.5], "FanController.get_temp() per-device cache count=1"),
+            (4, [30.0, 32.0, 35.0, 40.0], "FanController.get_temp() per-device cache count=4"),
+        ],
+    )
+    def test_get_temp_caches_per_device(self, mocker: MockerFixture, count: int, temps: List[float],
+                                        error_str: str):
+        """get_temp() always populates self.last_per_device_temps so the snapshot/exporter path can
+        publish per-device readings without re-issuing subprocesses on the request thread."""
+        cfg = create_cpu_config(temp_calc=Config.CALC_AVG)
+        my_fc = FanController.__new__(FanController)
+        my_fc.config = cfg
+        my_fc.count = count
+        mock_temp = MagicMock()
+        mock_temp.side_effect = list(temps)
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
+        my_fc.get_temp()
+        assert my_fc.last_per_device_temps == temps, error_str
+
+    def test_default_device_names(self):
+        """The base FanController.device_names() returns generic ordinal labels.
+        Subclasses (CpuFc, HdFc, NvmeFc, GpuFc) override it with friendly names tested in their own files."""
+        my_fc = FanController.__new__(FanController)
+        my_fc.count = 3
+        assert my_fc.device_names() == ["dev0", "dev1", "dev2"]
+
+    @pytest.mark.parametrize(
         "zones, level, error_str",
         [
             # Single zone 0
@@ -802,7 +830,7 @@ class TestFanController:
         f = "TestFanController.test_print_temp_level_mapping_plateau_overflow"
         lines = [str(c.args[0]) for c in mock_print.call_args_list]
         bar_rows = 11
-        total_plateaus = len(my_fc._level_plateaus())
+        total_plateaus = len(my_fc._level_plateaus())  # pylint: disable=protected-access
         assert total_plateaus > bar_rows, f"{f}: test needs >bar_rows plateaus, got {total_plateaus}"
         frame_idx = next(i for i, ln in enumerate(lines) if "+" + "-" * FanController.CHART_WIDTH + "+" in ln)
         # Plateau lines printed after the axis/tick/marker block are the overflow continuation.
