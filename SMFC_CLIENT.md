@@ -183,7 +183,7 @@ Exit codes: 0=ok  6=config error  8=ipmi error  9=udev error
 ## Output format (≤80 cols)
 
 ```
-smfc-client 5.4.0
+smfc-client 6.0.0
     config: /etc/smfc/smfc.conf
     source: ipmitool (smfc service is not reachable)
 
@@ -267,7 +267,7 @@ So `[green]ok[/green]` in the sample below maps to `\x1b[32mok\x1b[0m` in
 real output. Roughly six string constants in `client.py`.
 
 ```
-[bold]smfc-client 5.4.0[/bold]
+[bold]smfc-client 6.0.0[/bold]
     [dim]config: /etc/smfc/smfc.conf[/dim]
     [dim]source: ipmitool (smfc service is not reachable)[/dim]
 

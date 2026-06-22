@@ -918,6 +918,8 @@ Notes:
 ### 14. smfc-client
 `smfc-client` is a separate console script (installed alongside the `smfc` service) that prints a **one-shot, read-only snapshot** of what `smfc` sees: BMC information, the current IPMI fan mode, every enabled fan controller with its temperature and applied fan level, the live per-zone levels, and the *Standby Guard* state for HD arrays. It never changes fan state and does not require the `smfc` service to be running. Use it to verify your configuration is doing the right thing without grepping through the system log.
 
+> `smfc-client` is shipped with `smfc v6.0.0` and later — it is not available on `smfc v5.x` and earlier releases.
+
 It reads the **same configuration file** as the service (`/etc/smfc/smfc.conf` by default), so it always reports on the same controllers and zones the service manages. There are two data sources, selected automatically:
 
 - **Online (via the service):** if the `[Exporter]` section is enabled in the configuration (see [chapter 13.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#13-remote-monitoring-http-exporter)), `smfc-client` fetches the `/snapshot` JSON from the running service. This is dramatically faster because it serves already-cached state and spawns no `ipmitool`/`smartctl` subprocesses (so it can never wake disks the daemon has put to sleep).
@@ -956,7 +958,7 @@ Exit codes: `0` = snapshot printed (per-controller errors are non-fatal), `6` = 
 Default (non-verbose) — the at-a-glance summary:
 
 ```
-smfc-client 5.4.0
+smfc-client 6.0.0
   config: /etc/smfc/smfc.conf
   source: smfc service (live snapshot)
 
@@ -982,7 +984,7 @@ IPMI zones (live)
 With `--verbose` (`-V`) the full report expands the BMC fingerprint, adds the service `uptime`, and emits one block per enabled fan controller with its steering window, active curve (when a `control_function` is configured), and per-device temperatures. The HD controller's `Standby Guard` line is folded into its block; CONST controllers stay in the Fan controllers table but don't get their own block (no devices, no curve):
 
 ```
-smfc-client 5.4.0
+smfc-client 6.0.0
   config: /etc/smfc/smfc.conf
   source: smfc service (live snapshot)
   uptime: 1d 00:00:00
