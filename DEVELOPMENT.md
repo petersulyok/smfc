@@ -89,22 +89,22 @@ $ ./test/run_test_cpu_1.sh
 
 * the following smoke scripts and fan controller configurations can be executed:
 
-   | Test script                  | CPU                         | HD        | NVME      | GPU           | CONST      | Standby guard |
-   |------------------------------|-----------------------------|-----------|-----------|---------------|------------|---------------|
-   | `run_test_cpu_1.sh`          | 1 x CPU                     | 1 x HD    | disabled  | disabled      | enabled    | enabled       |
-   | `run_test_cpu_2.sh`          | 2 x CPUs                    | disabled  | disabled  | 1 GPU         | disabled   | disabled      |
-   | `run_test_cpu_4.sh`          | 4 x CPUs                    | 4 x HDs   | disabled  | 4 GPUs        | disabled   | enabled       |
-   | `run_test_hd_1.sh`           | disabled                    | 1 x HD    | disabled  | disabled      | enabled    | enabled       |
-   | `run_test_hd_2.sh`           | 1 x CPU                     | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
-   | `run_test_hd_4.sh`           | disabled                    | 4 x HDs   | disabled  | 2 GPUs        | disabled   | disabled      |
-   | `run_test_hd_8.sh`           | 4 x CPUs                    | 8 x HDs   | disabled  | disabled      | disabled   | enabled       |
-   | `run_test_const_level.sh`    | 1 x CPU                     | disabled  | disabled  | disabled      | enabled    | enabled       |
-   | `run_test_gpu_8_nvidia.sh`   | 1 x CPU                     | disabled  | disabled  | 8 Nvidia GPUs | enabled    | disabled      |
-   | `run_test_gpu_8_amd.sh`      | 1 x CPU                     | disabled  | disabled  | 8 AMD GPUs    | enabled    | disabled      |
-   | `run_test_nvme_4.sh`         | 2 x CPU                     | disabled  | 4 x NVME  | disabled      | enabled    | disabled      |
-   | `run_test_shared_zones.sh`   | 1 x CPU                     | disabled  | 2 x NVMEs | disabled      | disabled   | disabled      |
-   | `run_test_shared_zones_2.sh`    | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
-   | `run_test_control_function.sh`  | 2 x CPUs                    | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
+   | Test script                    | CPU                         | HD        | NVME      | GPU           | CONST      | Standby guard |
+   |--------------------------------|-----------------------------|-----------|-----------|---------------|------------|---------------|
+   | `run_test_cpu_1.sh`            | 1 x CPU                     | 1 x HD    | disabled  | disabled      | enabled    | enabled       |
+   | `run_test_cpu_2.sh`            | 2 x CPUs                    | disabled  | disabled  | 1 GPU         | disabled   | disabled      |
+   | `run_test_cpu_4.sh`            | 4 x CPUs                    | 4 x HDs   | disabled  | 4 GPUs        | disabled   | enabled       |
+   | `run_test_hd_1.sh`             | disabled                    | 1 x HD    | disabled  | disabled      | enabled    | enabled       |
+   | `run_test_hd_2.sh`             | 1 x CPU                     | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
+   | `run_test_hd_4.sh`             | disabled                    | 4 x HDs   | disabled  | 2 GPUs        | disabled   | disabled      |
+   | `run_test_hd_8.sh`             | 4 x CPUs                    | 8 x HDs   | disabled  | disabled      | disabled   | enabled       |
+   | `run_test_const_level.sh`      | 1 x CPU                     | disabled  | disabled  | disabled      | enabled    | enabled       |
+   | `run_test_gpu_8_nvidia.sh`     | 1 x CPU                     | disabled  | disabled  | 8 Nvidia GPUs | enabled    | disabled      |
+   | `run_test_gpu_8_amd.sh`        | 1 x CPU                     | disabled  | disabled  | 8 AMD GPUs    | enabled    | disabled      |
+   | `run_test_nvme_4.sh`           | 2 x CPU                     | disabled  | 4 x NVME  | disabled      | enabled    | disabled      |
+   | `run_test_shared_zones.sh`     | 1 x CPU                     | disabled  | 2 x NVMEs | disabled      | disabled   | disabled      |
+   | `run_test_shared_zones_2.sh`   | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
+   | `run_test_control_function.sh` | 2 x CPUs                    | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
 
    Notes:
    - `run_test_shared_zones.sh` tests the shared IPMI zone arbitration where CPU and NVME fan controllers both use IPMI zone 0.
