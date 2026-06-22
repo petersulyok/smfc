@@ -924,6 +924,34 @@ class TestFormatReportFromSnapshot:
         zones_section = out.split("IPMI zones (live)", 1)[1]
         assert "Standby Guard" not in zones_section
 
+    def test_verbose_devices_table_has_aligned_headers(self) -> None:
+        """The Devices subsection emits column headers that line up with the data rows.
+
+        HD block (standby enabled) has Device/Temp/State; CPU (no standby) has Device/Temp only.
+        The 'Temp' header column must start at the same character offset as the temperature
+        value on the data row beneath it, and the 'State' header (when present) must align with
+        the STANDBY/ACTIVE cell.
+        """
+        snap = _sample_snapshot_dict()
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        # HD block (three columns: Device / Temp / State).
+        hd_block = out.split("[HD]", 1)[1].split("\n\n", 1)[0]
+        hd_lines = hd_block.splitlines()
+        hd_header_idx = next(i for i, l in enumerate(hd_lines) if l.lstrip().startswith("Device "))
+        hd_header = hd_lines[hd_header_idx]
+        hd_first_row = hd_lines[hd_header_idx + 1]  # /dev/sda → "sda" with temp 33.0 C
+        assert "Device" in hd_header and "Temp" in hd_header and "State" in hd_header
+        assert hd_header.index("Temp") == hd_first_row.index("33.0 C")
+        assert hd_header.index("State") == hd_first_row.index("ACTIVE")
+        # CPU block (two columns: Device / Temp).
+        cpu_block = out.split("[CPU]", 1)[1].split("\n\n", 1)[0]
+        cpu_lines = cpu_block.splitlines()
+        cpu_header_idx = next(i for i, l in enumerate(cpu_lines) if l.lstrip().startswith("Device "))
+        cpu_header = cpu_lines[cpu_header_idx]
+        cpu_row = cpu_lines[cpu_header_idx + 1]
+        assert "Device" in cpu_header and "Temp" in cpu_header and "State" not in cpu_header
+        assert cpu_header.index("Temp") == cpu_row.index("42.3 C")
+
 
 class TestTryFetchSnapshot:
     """Unit tests for _try_fetch_snapshot()."""

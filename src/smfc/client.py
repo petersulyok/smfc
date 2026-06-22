@@ -364,10 +364,15 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
     if devices:
         has_state = any(d[2] is not None for d in devices)
         name_w = max(len("Device"), max(len(d[0]) for d in devices))
+        temp_w = 10  # matches the data-row format string below
+        # The Devices subsection: a 'Devices:' lead-in, then column headers aligned to the data
+        # rows (same 4-space indent, same column widths). 'State' is only shown for HD with
+        # standby guard enabled — the data rows decide that with has_state.
+        lines.append("  Devices:")
         if has_state:
-            lines.append(f"  Devices:{' ' * (name_w + 11 - len('Devices:'))}State")
+            lines.append(f"    {'Device':<{name_w + 2}}{'Temp':<{temp_w}}State")
         else:
-            lines.append("  Devices:")
+            lines.append(f"    {'Device':<{name_w + 2}}Temp")
         for name, temp_str, state_str in devices:
             if has_state:
                 state_cell = state_str if state_str is not None else ""
@@ -375,7 +380,7 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
                     state_cell = _wrap("STANDBY", DIM, use_color)
                 elif state_cell == "ACTIVE":
                     state_cell = _wrap("ACTIVE", GREEN, use_color)
-                lines.append(f"    {name:<{name_w + 2}}{temp_str:<10}{state_cell}")
+                lines.append(f"    {name:<{name_w + 2}}{temp_str:<{temp_w}}{state_cell}")
             else:
                 lines.append(f"    {name:<{name_w + 2}}{temp_str}")
     return lines
