@@ -380,13 +380,18 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     lines.append(_format_source_line(online=False, use_color=use_color))
     lines.append("")
 
-    # BMC section
+    # BMC section. Non-verbose mode shows only Product + Fan mode (the two lines that matter
+    # for "is smfc running and on the right hardware?"); --verbose unfolds the full block with
+    # Manufacturer / Firmware / IPMI version / Platform (factory class) sandwiched between them.
     lines.append(_wrap("BMC", BOLD, use_color))
-    lines.append(f"  Manufacturer  : {ipmi.bmc_manufacturer_name} ({ipmi.bmc_manufacturer_id})")
+    if verbose:
+        lines.append(f"  Manufacturer  : {ipmi.bmc_manufacturer_name} ({ipmi.bmc_manufacturer_id})")
     lines.append(f"  Product       : {ipmi.bmc_product_name} ({ipmi.bmc_product_id})")
-    lines.append(f"  Firmware      : {ipmi.bmc_firmware_rev}")
-    lines.append(f"  IPMI version  : {ipmi.bmc_ipmi_version}")
-    lines.append(f"  Platform      : {ipmi.platform.name} ({type(ipmi.platform).__name__})")
+    if verbose:
+        lines.append(f"  Firmware      : {ipmi.bmc_firmware_rev}")
+        lines.append(f"  IPMI version  : {ipmi.bmc_ipmi_version}")
+        # Platform shows the factory class only — the product name is already on the line above.
+        lines.append(f"  Platform      : {type(ipmi.platform).__name__}")
     # Fan mode (live read) closes the BMC block.
     try:
         mode = ipmi.get_fan_mode()
@@ -572,14 +577,19 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             lines.append(_wrap(f"    uptime: {_format_uptime(generated_at - start_time)}", DIM, use_color))
     lines.append("")
 
-    # BMC section.
+    # BMC section. See the standalone-path comment above for the non-verbose / verbose split:
+    # non-verbose shows just Product + Fan mode; verbose adds Manufacturer / Firmware / IPMI
+    # version / Platform (factory class only).
     bmc = snapshot.get("bmc", {}) or {}
     lines.append(_wrap("BMC", BOLD, use_color))
-    lines.append(f"  Manufacturer  : {bmc.get('manufacturer_name', '?')} ({bmc.get('manufacturer_id', '?')})")
+    if verbose:
+        lines.append(f"  Manufacturer  : {bmc.get('manufacturer_name', '?')} ({bmc.get('manufacturer_id', '?')})")
     lines.append(f"  Product       : {bmc.get('product_name', '?')} ({bmc.get('product_id', '?')})")
-    lines.append(f"  Firmware      : {bmc.get('firmware_rev', '?')}")
-    lines.append(f"  IPMI version  : {bmc.get('ipmi_version', '?')}")
-    lines.append(f"  Platform      : {bmc.get('platform_name', '?')} ({bmc.get('platform_class', '?')})")
+    if verbose:
+        lines.append(f"  Firmware      : {bmc.get('firmware_rev', '?')}")
+        lines.append(f"  IPMI version  : {bmc.get('ipmi_version', '?')}")
+        # Platform shows the factory class only — the product name is already on the line above.
+        lines.append(f"  Platform      : {bmc.get('platform_class', '?')}")
     # Fan mode (service-cached) closes the BMC block. It is always FULL when smfc is running with
     # enforce_fan_mode=true; the exporter served whatever was cached on the loop's last poll.
     fan_mode = snapshot.get("fan_mode", {}) or {}

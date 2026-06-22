@@ -148,7 +148,8 @@ class TestFormatReport:
         assert "smfc-client" in out
         assert "/etc/smfc/smfc.conf" in out
         assert "BMC" in out
-        assert "Super Micro Computer Inc." in out
+        # Non-verbose BMC: only Product + Fan mode are shown. Manufacturer is verbose-only.
+        assert "Super Micro Computer Inc." not in out
         assert "X11SCH-LN4F" in out
         assert "Fan mode" in out
         assert "FULL" in out
@@ -708,8 +709,10 @@ class TestFormatReportFromSnapshot:
         assert "uptime:" not in out
         assert "/etc/smfc/smfc.conf" in out
         assert "BMC" in out
-        assert "Super Micro Computer Inc." in out
-        assert "Platform      : X11SCH-LN4F (GenericPlatform)" in out
+        # Non-verbose BMC: Manufacturer and Platform are verbose-only; Product + Fan mode remain.
+        assert "Super Micro Computer Inc." not in out
+        assert "X11SCH-LN4F" in out
+        assert "Platform" not in out
 
     def test_verbose_header_shows_uptime(self) -> None:
         """In verbose mode the online-path header additionally renders the service uptime line."""
@@ -720,6 +723,12 @@ class TestFormatReportFromSnapshot:
         # And the rest of the header is still present.
         assert "    config: x.conf\n" in out
         assert "    source: smfc service (live snapshot)\n" in out
+        # Verbose BMC: full layout. Manufacturer is back, Platform shows the factory class only
+        # (no product repetition).
+        assert "Super Micro Computer Inc." in out
+        assert "Platform      : GenericPlatform" in out
+        # The old "name (class)" form must not regress.
+        assert "Platform      : X11SCH-LN4F" not in out
         assert "FULL" in out
         # The fan-mode line carries the enforced count and reading age (online only).
         assert "enforced 3x" in out
