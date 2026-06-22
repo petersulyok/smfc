@@ -481,12 +481,14 @@ class TestSafeHelpers:
         assert client._parse_temp_cell("ERROR") is None
         assert client._parse_temp_cell("-") is None
         assert client._parse_temp_cell("") is None
+        assert client._parse_temp_cell("notanumber C") is None
 
     def test_parse_level_cell(self) -> None:
         """Formatted level cells parse back to their numeric value; sentinels yield None."""
         assert client._parse_level_cell(" 55 %") == 55.0
         assert client._parse_level_cell("ERROR") is None
         assert client._parse_level_cell("-") is None
+        assert client._parse_level_cell("notanumber %") is None
 
     def test_safe_temp_str_none_controller(self) -> None:
         """A None controller renders as '-'."""
@@ -615,6 +617,24 @@ class TestFormatReportErrorPaths:
         hd._get_nth_temp.side_effect = lambda i: 33.0
         out = client._format_report(ipmi, [("HD", "hd", hd, None)], "x.conf", use_color=False, verbose=True)
         assert "Standby Guard" not in out
+
+    def test_controllers_table_curve_path(self) -> None:
+        """When control_function is set the table uses the curve's endpoints for colour banding."""
+        ipmi = _make_fake_ipmi()
+        cpu = _make_fake_cpu_controller(zones=[0], count=1, temp=42.3)
+        cpu.config.control_function = [[35, 35], [55, 50], [70, 80], [85, 100]]
+        out = client._format_report(ipmi, [("CPU", "cpu", cpu, None)], "x.conf", use_color=False)
+        assert "CPU" in out
+
+    def test_verbose_block_curve_path(self) -> None:
+        """When control_function is set the verbose block derives window from the curve endpoints."""
+        ipmi = _make_fake_ipmi()
+        cpu = _make_fake_cpu_controller(zones=[0], count=1, temp=42.3)
+        cpu.config.control_function = [[35, 35], [85, 100]]
+        cpu.device_names.return_value = ["cpu0"]
+        cpu._get_nth_temp.return_value = 42.3
+        out = client._format_report(ipmi, [("CPU", "cpu", cpu, None)], "x.conf", use_color=False, verbose=True)
+        assert "Window: T=[35..85]C" in out
 
 
 class TestConstructControllers:
@@ -971,7 +991,8 @@ class TestFormatReportFromSnapshot:
         assert client.RED in out
 
     def test_standby_states_shorter_than_devices_truncates(self) -> None:
-        """Defensive: when standby.states is shorter than the devices list, the block truncates to the shorter length."""
+        """Defensive: when standby.states is shorter than the devices list, the block truncates to the shorter length.
+        """
         snap = _sample_snapshot_dict()
         # 4 device names but only 2 states — the verbose block must show only the first 2 disks.
         snap["fan_controllers"][1]["standby_guard"] = {
