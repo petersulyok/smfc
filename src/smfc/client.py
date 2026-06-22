@@ -258,7 +258,7 @@ def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_co
         List[str]: list of output lines
     """
     lines: List[str] = []
-    lines.append(_wrap("Controllers", BOLD, use_color))
+    lines.append(_wrap("Fan controllers", BOLD, use_color))
     header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
     sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6}"
     lines.append(header)
@@ -630,7 +630,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
 
     # Controllers table.
     controllers = snapshot.get("fan_controllers", []) or []
-    lines.append(_wrap("Controllers", BOLD, use_color))
+    lines.append(_wrap("Fan controllers", BOLD, use_color))
     header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
     sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6}"
     lines.append(header)

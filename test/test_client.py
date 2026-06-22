@@ -153,7 +153,7 @@ class TestFormatReport:
         assert "X11SCH-LN4F" in out
         assert "Fan mode" in out
         assert "FULL" in out
-        assert "Controllers" in out
+        assert "Fan controllers" in out
         assert "CPU" in out and "HD" in out
         assert "42.3 C" in out
         assert "34.1 C" in out
@@ -382,7 +382,7 @@ class TestMain:
         captured = capsys.readouterr()
         assert "smfc-client" in captured.out
         assert "BMC" in captured.out
-        assert "Controllers" in captured.out
+        assert "Fan controllers" in captured.out
         assert "CPU" in captured.out
         assert "\x1b[" not in captured.out
 
@@ -761,7 +761,7 @@ class TestFormatReportFromSnapshot:
         assert "FULL" in out
         # The fan-mode line carries the enforced count and reading age (online only).
         assert "enforced 3x" in out
-        assert "Controllers" in out
+        assert "Fan controllers" in out
         assert "42.3 C" in out
         assert "34.1 C" in out
         assert "IPMI zones (live)" in out
