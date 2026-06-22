@@ -1053,7 +1053,7 @@ class TestFormatReportFromSnapshot:
         out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
         # Window and Temp/Level lines render inside the [CPU] block.
         cpu_block = out.split("[CPU]", 1)[1].split("\n\n", 1)[0]
-        assert "Window: T=[30..60]C → L=[35..100]%" in cpu_block
+        assert "Window: T=[30..60]C -> L=[35..100]%" in cpu_block
         assert "Temp:   35.0 C" in cpu_block
         assert "deferred=yes" in cpu_block
 
