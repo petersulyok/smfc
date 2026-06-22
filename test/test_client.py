@@ -703,8 +703,8 @@ class TestFormatReportFromSnapshot:
         snap = _sample_snapshot_dict()
         out = client._format_report_from_snapshot(snap, "/etc/smfc/smfc.conf", use_color=False)
         assert out.startswith("smfc-client 5.4.0\n")
-        assert "    config: /etc/smfc/smfc.conf\n" in out
-        assert "    source: smfc service (live snapshot)\n" in out
+        assert "  config: /etc/smfc/smfc.conf\n" in out
+        assert "  source: smfc service (live snapshot)\n" in out
         # Uptime is verbose-only — it must not appear in the non-verbose header.
         assert "uptime:" not in out
         assert "/etc/smfc/smfc.conf" in out
@@ -719,10 +719,10 @@ class TestFormatReportFromSnapshot:
         snap = _sample_snapshot_dict()
         out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
         # Uptime = generated_at - start_time = 86400 s = exactly one day.
-        assert "    uptime: 1d 00:00:00\n" in out
+        assert "  uptime: 1d 00:00:00\n" in out
         # And the rest of the header is still present.
-        assert "    config: x.conf\n" in out
-        assert "    source: smfc service (live snapshot)\n" in out
+        assert "  config: x.conf\n" in out
+        assert "  source: smfc service (live snapshot)\n" in out
         # Verbose BMC: full layout. Manufacturer is back, Platform shows the factory class only
         # (no product repetition).
         assert "Super Micro Computer Inc." in out
@@ -993,7 +993,7 @@ class TestMainOnlinePath:
         rc = client.main(["-c", "/dummy.conf", "-nc"])
         assert rc == EXIT_OK
         captured = capsys.readouterr()
-        assert "    source: smfc service" in captured.out
+        assert "  source: smfc service" in captured.out
         # Online path means none of the standalone construction work happens.
         assert ipmi_ctor.call_count == 0, "Ipmi must not be constructed on the online path"
         assert ctx_ctor.call_count == 0, "pyudev Context must not be constructed on the online path"
@@ -1011,7 +1011,7 @@ class TestMainOnlinePath:
         rc = client.main(["-c", "/dummy.conf", "-nc"])
         assert rc == EXIT_OK
         out = capsys.readouterr().out
-        assert "    source: ipmitool (smfc service is not reachable)" in out
+        assert "  source: ipmitool (smfc service is not reachable)" in out
         assert "smfc-client" in out
 
     def test_standalone_flag_forces_offline(self, mocker: MockerFixture,
@@ -1027,7 +1027,7 @@ class TestMainOnlinePath:
         rc = client.main(["-c", "/dummy.conf", "-nc", "--standalone"])
         assert rc == EXIT_OK
         out = capsys.readouterr().out
-        assert "    source: ipmitool (smfc service is not reachable)" in out
+        assert "  source: ipmitool (smfc service is not reachable)" in out
         assert try_fetch.call_count == 0, "_try_fetch_snapshot must not be called when --standalone is passed"
 
 

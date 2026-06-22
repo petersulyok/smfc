@@ -376,7 +376,7 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     lines: List[str] = []
     banner = _wrap(f"smfc-client {pkg_version}", BOLD, use_color)
     lines.append(banner)
-    lines.append(_wrap(f"    config: {config_path}", DIM, use_color))
+    lines.append(_wrap(f"  config: {config_path}", DIM, use_color))
     lines.append(_format_source_line(online=False, use_color=use_color))
     lines.append("")
 
@@ -493,7 +493,7 @@ def _format_source_line(online: bool, use_color: bool) -> str:
         str: the formatted line (without trailing newline).
     """
     label = "smfc service (live snapshot)" if online else "ipmitool (smfc service is not reachable)"
-    return _wrap(f"    source: {label}", DIM, use_color)
+    return _wrap(f"  source: {label}", DIM, use_color)
 
 
 def _format_uptime(seconds: float) -> str:
@@ -565,7 +565,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     pkg_version = snapshot.get("smfc_version", version("smfc"))
     banner = _wrap(f"smfc-client {pkg_version}", BOLD, use_color)
     lines.append(banner)
-    lines.append(_wrap(f"    config: {config_path}", DIM, use_color))
+    lines.append(_wrap(f"  config: {config_path}", DIM, use_color))
     lines.append(_format_source_line(online=True, use_color=use_color))
     # Service uptime (online only, verbose only): the daemon tracks start_time; the snapshot
     # carries generated_at. Keep the non-verbose header to just `config:` and `source:` so
@@ -574,7 +574,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
         start_time = float(snapshot.get("start_time", 0.0) or 0.0)
         generated_at = float(snapshot.get("generated_at", 0.0) or 0.0)
         if start_time and generated_at >= start_time:
-            lines.append(_wrap(f"    uptime: {_format_uptime(generated_at - start_time)}", DIM, use_color))
+            lines.append(_wrap(f"  uptime: {_format_uptime(generated_at - start_time)}", DIM, use_color))
     lines.append("")
 
     # BMC section. See the standalone-path comment above for the non-verbose / verbose split:
