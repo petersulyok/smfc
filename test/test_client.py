@@ -704,12 +704,22 @@ class TestFormatReportFromSnapshot:
         assert out.startswith("smfc-client 5.4.0\n")
         assert "    config: /etc/smfc/smfc.conf\n" in out
         assert "    source: smfc service (live snapshot)\n" in out
-        # Uptime = generated_at - start_time = 86400 s = exactly one day.
-        assert "    uptime: 1d 00:00:00\n" in out
+        # Uptime is verbose-only — it must not appear in the non-verbose header.
+        assert "uptime:" not in out
         assert "/etc/smfc/smfc.conf" in out
         assert "BMC" in out
         assert "Super Micro Computer Inc." in out
         assert "Platform      : X11SCH-LN4F (GenericPlatform)" in out
+
+    def test_verbose_header_shows_uptime(self) -> None:
+        """In verbose mode the online-path header additionally renders the service uptime line."""
+        snap = _sample_snapshot_dict()
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        # Uptime = generated_at - start_time = 86400 s = exactly one day.
+        assert "    uptime: 1d 00:00:00\n" in out
+        # And the rest of the header is still present.
+        assert "    config: x.conf\n" in out
+        assert "    source: smfc service (live snapshot)\n" in out
         assert "FULL" in out
         # The fan-mode line carries the enforced count and reading age (online only).
         assert "enforced 3x" in out

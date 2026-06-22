@@ -562,11 +562,14 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     lines.append(banner)
     lines.append(_wrap(f"    config: {config_path}", DIM, use_color))
     lines.append(_format_source_line(online=True, use_color=use_color))
-    # Service uptime (online only): the daemon tracks start_time; the snapshot carries generated_at.
-    start_time = float(snapshot.get("start_time", 0.0) or 0.0)
-    generated_at = float(snapshot.get("generated_at", 0.0) or 0.0)
-    if start_time and generated_at >= start_time:
-        lines.append(_wrap(f"    uptime: {_format_uptime(generated_at - start_time)}", DIM, use_color))
+    # Service uptime (online only, verbose only): the daemon tracks start_time; the snapshot
+    # carries generated_at. Keep the non-verbose header to just `config:` and `source:` so
+    # short reports stay compact, and surface uptime only when the user asks for verbose.
+    if verbose:
+        start_time = float(snapshot.get("start_time", 0.0) or 0.0)
+        generated_at = float(snapshot.get("generated_at", 0.0) or 0.0)
+        if start_time and generated_at >= start_time:
+            lines.append(_wrap(f"    uptime: {_format_uptime(generated_at - start_time)}", DIM, use_color))
     lines.append("")
 
     # BMC section.
