@@ -727,7 +727,7 @@ def _sample_snapshot_dict() -> dict:
         "generated_at": 1716902400.0,
         "start_time": 1716816000.0,
         "fan_mode_enforced_count": 3,
-        "smfc_version": "5.4.0",
+        "smfc_version": "6.0.0",
         "bmc": {
             "manufacturer_name": "Super Micro Computer Inc.",
             "manufacturer_id": 10876,
@@ -774,7 +774,7 @@ class TestFormatReportFromSnapshot:
         """The online-path report emits the Source line and all the standard sections."""
         snap = _sample_snapshot_dict()
         out = client._format_report_from_snapshot(snap, "/etc/smfc/smfc.conf", use_color=False)
-        assert out.startswith("smfc-client 5.4.0\n")
+        assert out.startswith("smfc-client 6.0.0\n")
         assert "  config: /etc/smfc/smfc.conf\n" in out
         assert "  source: smfc service (live snapshot)\n" in out
         # Uptime is verbose-only — it must not appear in the non-verbose header.
@@ -858,7 +858,7 @@ class TestFormatReportFromSnapshot:
         """
         snap = {
             "version": 1, "generated_at": 1716902400.0, "start_time": 1716816000.0,
-            "fan_mode_enforced_count": 0, "smfc_version": "5.4.0",
+            "fan_mode_enforced_count": 0, "smfc_version": "6.0.0",
             "bmc": {"manufacturer_name": "X", "manufacturer_id": 0, "product_name": "Y",
                     "product_id": 0, "firmware_rev": "0", "ipmi_version": "0",
                     "platform_name": "Y", "platform_class": "P"},

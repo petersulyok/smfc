@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        5.4.0
+Version:        6.0.0
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -94,6 +94,17 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Mon Jun 22 2026 Peter Sulyok <peter@sulyok.net> - 6.0.0-1
+- New: Advanced multi-segment user-defined control_function= parameter for
+  arbitrary piecewise-linear fan curves
+- New: Multiple fan curve instances per controller type (e.g. [CPU] + [CPU:1])
+- New: smfc-client console script for a one-shot read-only snapshot of
+  controllers, fan levels, IPMI zones, and standby state
+- New: signed APT and DNF repositories for direct apt/dnf install
+- Changed: configuration parsing centralized in a new Config class
+- Changed: ConstConfig.level validation tightened to [1..100]
+- Changed: NVME polling default lowered from 10 to 2 seconds
+
 * Thu Apr 30 2026 Peter Sulyok <peter@sulyok.net> - 5.4.0-1
 - New: AMD GPU support: gpu_type=amd enables temperature monitoring via rocm-smi
 - New: amd_temp_sensor= and rocm_smi_path= configuration parameters added

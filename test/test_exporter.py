@@ -25,7 +25,7 @@ def _sample_snapshot() -> Dict[str, Any]:
     return {
         "version": 1,
         "generated_at": 1716902400.0,
-        "smfc_version": "5.4.0",
+        "smfc_version": "6.0.0",
         "start_time": 1716902400.0,
         "fan_mode_enforced_count": 2,
         "bmc": {
@@ -121,7 +121,7 @@ class TestPrometheusRenderer:
     def test_up_and_bmc_info(self) -> None:
         """smfc_up carries only the version; BMC identity moves to smfc_bmc_info."""
         out = render_prometheus(_sample_snapshot())
-        assert 'smfc_up{version="5.4.0"} 1' in out
+        assert 'smfc_up{version="6.0.0"} 1' in out
         assert "bmc_product" not in out
         expected = ('smfc_bmc_info{product_name="X11SCH-LN4F",firmware_version="1.74",'
                     'manufacturer_name="Super Micro Computer Inc."} 1')
