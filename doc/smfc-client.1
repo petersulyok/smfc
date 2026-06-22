@@ -1,0 +1,128 @@
+.TH SMFC\-CLIENT 1 smfc\-6.0.0
+.SH NAME
+.B smfc\-client
+\- print a one\-shot snapshot of smfc\-managed fans and temperatures.
+.SH SYNOPSIS
+.B smfc\-client
+[options]
+.SH DESCRIPTION
+.B smfc\-client
+is a read\-only diagnostic tool that prints the current state of all fan controllers managed by
+.BR smfc (1).
+.PP
+When the
+.B [Exporter]
+section is enabled in the configuration file and the smfc service is reachable, the snapshot is
+fetched from the service's
+.I /snapshot
+HTTP endpoint (online mode).
+On any failure \(en connection refused, timeout, or malformed response \(en the tool falls back
+transparently to the standalone mode, which reads sensors directly through
+.BR ipmitool (1)
+and
+.BR smartctl (8).
+.PP
+The output is structured in sections:
+.IP \(bu 2
+.B Banner
+\(en program name, version, config path, and data source.
+.IP \(bu 2
+.B BMC
+\(en product name and current IPMI fan mode
+(with
+.BR \-V :
+manufacturer, firmware revision, IPMI version, and platform class).
+.IP \(bu 2
+.B Fan controllers
+\(en a summary table with one row per enabled controller: section name, type, IPMI zone(s),
+device count, aggregated temperature, and current fan level.
+.IP \(bu 2
+.B Per\-controller blocks
+(with
+.B \-V
+only) \(en one block per non\-CONST controller with the steering window, optional control\-function
+curve, current temperature and level, optional HD standby guard summary, and a per\-device
+temperature list.
+.IP \(bu 2
+.B IPMI zones
+\(en live fan level per zone.
+.PP
+Temperature and level cells are colour\-coded when the output is a terminal (suppressed with
+.BR \-nc ):
+.BR DIM " (below floor), " GREEN " (working in range), " YELLOW " (upper 30% of window), " RED " (at or above ceiling)."
+.SH OPTIONS
+.TP
+.B \-h, \-\-help
+Show a help message and exit.
+.TP
+.BI \-c " FILE" ", \-\-config " FILE
+Configuration file (default:
+.IR /etc/smfc/smfc.conf ).
+.TP
+.B \-s, \-\-sudo
+Run
+.BR ipmitool (1)
+and
+.BR smartctl (8)
+under
+.BR sudo (8).
+Required when the invoking user lacks direct BMC or disk access.
+.TP
+.B \-nc, \-\-no\-color
+Disable ANSI color output even when stdout is a terminal.
+.TP
+.B \-V, \-\-verbose
+Show extended output: additional BMC fields, per\-controller blocks with per\-device temperature
+rows, HD standby guard state, and service uptime (online mode only).
+.TP
+.B \-sa, \-\-standalone
+Bypass the smfc service and read sensors directly via
+.BR ipmitool (1)
+and
+.BR smartctl (8),
+even when the service is reachable.
+.TP
+.B \-v, \-\-version
+Show the program version and exit.
+.SH FILES
+.TP
+.I /etc/smfc/smfc.conf
+Default configuration file.
+.TP
+.I /etc/default/smfc
+Environment file for the smfc systemd unit.
+.TP
+.I /etc/systemd/system/smfc.service
+systemd service unit for smfc.
+.SH EXIT CODES
+.TP
+.B 0
+Successful exit.
+.TP
+.B 6
+Configuration file error (missing, unreadable, or invalid).
+.TP
+.B 8
+IPMI initialization error (ipmitool not found or BMC not accessible).
+.TP
+.B 9
+udev initialization error.
+.SH NOTES
+The standalone mode contacts the BMC directly and may require root privileges or
+.BR sudo (8)
+(\c
+.BR \-s ).
+.PP
+The IPMI BMC initialization timeout in standalone mode is 5 seconds (shorter than the 120 seconds
+used by the smfc service), so the tool returns quickly when the BMC is unreachable.
+.PP
+CONST controllers (fixed fan level, no temperature source) are shown in the Fan controllers table
+but are excluded from the per\-controller verbose blocks.
+.SH SEE ALSO
+.BR smfc (1),
+.BR ipmitool (1),
+.BR smartctl (8),
+.BR systemctl (1)
+.SH COPYRIGHT
+.B smfc\-client
+is Copyright (C) 2020-2026 by Peter Sulyok
