@@ -397,7 +397,7 @@ def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: b
     zones.sort()
     lines.append(_wrap("IPMI zones (live)", BLUE, use_color))
     lines.append(f"  {'Zone':<8}Level")
-    lines.append(f"  {'-' * 6:<8}-----")
+    lines.append(f"  {'-' * 4:<8}-----")
     for z in zones:
         lines.append(f"  {z:<8}{_safe_zone_level(ipmi, z)}")
     return lines
@@ -898,7 +898,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     if zones:
         lines.append(_wrap("IPMI zones (live)", BLUE, use_color))
         lines.append(f"  {'Zone':<8}Level")
-        lines.append(f"  {'-' * 6:<8}-----")
+        lines.append(f"  {'-' * 4:<8}-----")
         for zone_str, info in sorted(zones.items(), key=lambda kv: int(kv[0])):
             level = info.get("applied_level_pct")
             level_fmt = f"{int(level):3d} %" if level is not None else "-"
