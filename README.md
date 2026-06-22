@@ -182,7 +182,7 @@ The simple form maps a single temperature interval `[min_temp..max_temp]` linear
      max_level=100
 ```
 
- <img src="https://github.com/petersulyok/smfc/raw/main/doc/linear_control_function.png" align="center" width="700">
+ <img src="https://github.com/petersulyok/smfc/raw/main/doc/linear_control_function.png" align="center" width="800">
 
 
 The dashed blue line shows the continuous linear ideal between `(min_temp, min_level)` and `(max_temp, max_level)`; the solid red staircase is the digitalized output actually applied to the fan (here with `steps=5`, producing 6 plateaus: one pinned at each endpoint plus four in the interior).
@@ -201,7 +201,7 @@ Each pair is written as `T-L` where `T` is a temperature in °C and `L` is a fan
 
 The `steps=` parameter still applies: it controls how many discrete plateaus the interior of the curve is divided into before being sent to the fan. The two endpoint temperatures are always pinned exactly to their specified levels; the `steps` interior plateaus together with the 2 pinned endpoints produce `steps + 2` plateaus in total.
 
- <img src="https://github.com/petersulyok/smfc/raw/main/doc/advanced_control_function.png" align="center" width="700">
+ <img src="https://github.com/petersulyok/smfc/raw/main/doc/advanced_control_function.png" align="center" width="800">
 
 The dashed blue line shows the continuous piecewise-linear ideal described by `control_function=`; the solid red staircase is the digitalized output actually applied to the fan (here with `steps=5`, producing 7 plateaus: one pinned at each endpoint plus five in the interior).
 
