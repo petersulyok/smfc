@@ -442,8 +442,8 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
     tag = _wrap(f"[{section}]", CYAN, use_color)
     lines.append(f"{tag}  {type_label}  zone(s)={zones_str}  polling={polling:.1f}s  "
                  f"deferred={deferred_str}")
-    lines.append(f"  Window: T=[{temp_min:g}..{temp_max:g}]C -> L=[{level_min}..{level_max}]%")
-    lines.append(f"  Temp:   {last_temp_str}  ->  Level: {last_level_str}")
+    lines.append(f"  Window: T=[{temp_min:g}..{temp_max:g}]C → L=[{level_min}..{level_max}]%")
+    lines.append(f"  Temp:   {last_temp_str}  →  Level: {last_level_str}")
     if standby is not None:
         limit, array_state, standby_count, total = standby
         lines.append(
