@@ -834,13 +834,13 @@ class TestFormatReportFromSnapshot:
         assert client.BOLD in out
         assert client.DIM in out  # Source line is dim
         # Section headers (BMC, Fan controllers, [HD], IPMI zones (live)) are bold-cyan.
-        assert client.CYAN in out
-        # And the section labels appear after the CYAN escape — pin a couple.
-        assert f"{client.CYAN}BMC{client.RESET}" in out
-        assert f"{client.CYAN}Fan controllers{client.RESET}" in out
-        # No-color mode must produce no CYAN escapes at all.
+        assert client.BLUE in out
+        # And the section labels appear after the BLUE escape — pin a couple.
+        assert f"{client.BLUE}BMC{client.RESET}" in out
+        assert f"{client.BLUE}Fan controllers{client.RESET}" in out
+        # No-color mode must produce no BLUE escapes at all.
         plain = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
-        assert client.CYAN not in plain
+        assert client.BLUE not in plain
 
     def test_band_color_paints_temp_and_level_cells(self) -> None:
         """Each controller's Temp/Level cells are painted according to where they sit in the steering window.

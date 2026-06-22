@@ -44,7 +44,7 @@ DIM: str = "\x1b[2m"
 GREEN: str = "\x1b[32m"
 YELLOW: str = "\x1b[33m"   # warm — upper 30 % of a controller's steering window
 RED: str = "\x1b[31m"
-CYAN: str = "\x1b[1;36m"   # bold cyan — section headers (BMC, Fan controllers, blocks, IPMI zones)
+BLUE: str = "\x1b[1;94m"   # bold bright-blue — section headers (BMC, Fan controllers, blocks, IPMI zones)
 RESET: str = "\x1b[0m"
 
 # Where the GREEN→YELLOW transition lands inside a steering window. 0.7 means the upper 30 % of
@@ -323,7 +323,7 @@ def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_co
         List[str]: list of output lines
     """
     lines: List[str] = []
-    lines.append(_wrap("Fan controllers", CYAN, use_color))
+    lines.append(_wrap("Fan controllers", BLUE, use_color))
     header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
     sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6}"
     lines.append(header)
@@ -388,7 +388,7 @@ def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: b
     if not zones:
         return lines
     zones.sort()
-    lines.append(_wrap("IPMI zones (live)", CYAN, use_color))
+    lines.append(_wrap("IPMI zones (live)", BLUE, use_color))
     lines.append(f"  {'Zone':<8}Level")
     lines.append(f"  {'-' * 6:<8}-----")
     for z in zones:
@@ -439,7 +439,7 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
     # Cyan-paint just the [SECTION] tag — it carries the navigational signal. The rest of the
     # header line (type, zones, polling, deferred) stays in default colour so the eye lands on
     # the section name first instead of the whole row.
-    tag = _wrap(f"[{section}]", CYAN, use_color)
+    tag = _wrap(f"[{section}]", BLUE, use_color)
     lines.append(f"{tag}  {type_label}  zone(s)={zones_str}  polling={polling:.1f}s  "
                  f"deferred={deferred_str}")
     lines.append(f"  Window: T=[{temp_min:g}..{temp_max:g}]C → L=[{level_min}..{level_max}]%")
@@ -502,7 +502,7 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     # BMC section. Non-verbose mode shows only Product + Fan mode (the two lines that matter
     # for "is smfc running and on the right hardware?"); --verbose unfolds the full block with
     # Manufacturer / Firmware / IPMI version / Platform (factory class) sandwiched between them.
-    lines.append(_wrap("BMC", CYAN, use_color))
+    lines.append(_wrap("BMC", BLUE, use_color))
     if verbose:
         lines.append(f"  Manufacturer  : {ipmi.bmc_manufacturer_name} ({ipmi.bmc_manufacturer_id})")
     lines.append(f"  Product       : {ipmi.bmc_product_name} ({ipmi.bmc_product_id})")
@@ -720,7 +720,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     # non-verbose shows just Product + Fan mode; verbose adds Manufacturer / Firmware / IPMI
     # version / Platform (factory class only).
     bmc = snapshot.get("bmc", {}) or {}
-    lines.append(_wrap("BMC", CYAN, use_color))
+    lines.append(_wrap("BMC", BLUE, use_color))
     if verbose:
         lines.append(f"  Manufacturer  : {bmc.get('manufacturer_name', '?')} ({bmc.get('manufacturer_id', '?')})")
     lines.append(f"  Product       : {bmc.get('product_name', '?')} ({bmc.get('product_id', '?')})")
@@ -743,7 +743,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
 
     # Controllers table.
     controllers = snapshot.get("fan_controllers", []) or []
-    lines.append(_wrap("Fan controllers", CYAN, use_color))
+    lines.append(_wrap("Fan controllers", BLUE, use_color))
     header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
     sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6}"
     lines.append(header)
@@ -859,7 +859,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
 
     # IPMI zones (live) — applied levels straight from the snapshot.
     if zones:
-        lines.append(_wrap("IPMI zones (live)", CYAN, use_color))
+        lines.append(_wrap("IPMI zones (live)", BLUE, use_color))
         lines.append(f"  {'Zone':<8}Level")
         lines.append(f"  {'-' * 6:<8}-----")
         for zone_str, info in sorted(zones.items(), key=lambda kv: int(kv[0])):
