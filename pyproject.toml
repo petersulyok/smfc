@@ -2,7 +2,7 @@
 name = "smfc"
 description = "Supermicro Fan Control for Linux"
 readme = "README.md"
-version = "5.4.0"
+version = "6.0.0"
 authors = [
     { name = "Peter Sulyok", email = "peter@sulyok.net" }
 ]
@@ -49,6 +49,7 @@ Issues = "https://github.com/petersulyok/smfc/issues"
 
 [project.scripts]
 smfc = "smfc.cmd:main"
+smfc-client = "smfc.client:main"
 
 [tool.uv]
 default-groups = ["dev", "lint"]

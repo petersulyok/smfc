@@ -1,3 +1,27 @@
+smfc (6.0.0) unstable; urgency=medium
+
+  * New: Advanced multi-segment user-defined control_function= parameter for
+    temperature-based fan controllers; arbitrary piecewise-linear fan curves
+    take precedence over the legacy min_temp/max_temp/min_level/max_level.
+  * New: Multiple fan curve instances per controller type (e.g. [CPU] + [CPU:1],
+    [HD] + [HD:1]) with independent fan curves per IPMI zone.
+  * New: smfc-client console script for a one-shot read-only snapshot of
+    controllers, fan levels, IPMI zones, and standby state. Adds --verbose
+    mode with per-controller blocks, four-band Temp/Level colour coding, and
+    an active-curve display.
+  * New: Signed APT and DNF repositories for direct apt/dnf install on
+    Debian/Ubuntu/Proxmox/Mint/Raspberry Pi OS and Fedora/RHEL/Rocky/Alma/
+    CentOS/openSUSE.
+  * Changed: Configuration parsing centralized in a new Config class with
+    per-controller @dataclass instances.
+  * Changed: ConstConfig.level validation tightened to [1..100]; ConstFc
+    special case in shared-zone arbitration removed.
+  * Changed: NVME default polling interval lowered from 10 to 2 seconds.
+  * Changed: Platform auto-detection improved (BMC product name matched by
+    prefix; X9 → GenericX9Platform, everything else → GenericPlatform).
+
+ -- Peter Sulyok <peter@sulyok.net>  Mon, 22 Jun 2026 23:22:16 +0200
+
 smfc (5.4.0) unstable; urgency=medium
 
   * New: AMD GPU support: gpu_type=amd enables temperature monitoring via

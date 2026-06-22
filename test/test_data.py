@@ -436,7 +436,8 @@ class MockedContextGood:
 def create_ipmi_config(command=Config.DV_IPMI_COMMAND, fan_mode_delay=Config.DV_IPMI_FAN_MODE_DELAY,
                        fan_level_delay=Config.DV_IPMI_FAN_LEVEL_DELAY,
                        remote_parameters=Config.DV_IPMI_REMOTE_PARAMETERS,
-                       platform_name=Config.DV_IPMI_PLATFORM_NAME):
+                       platform_name=Config.DV_IPMI_PLATFORM_NAME,
+                       enforce_fan_mode=Config.DV_IPMI_ENFORCE_FAN_MODE):
     """Factory function to create IpmiConfig instances for testing without needing a config file.
 
     Args:
@@ -445,12 +446,14 @@ def create_ipmi_config(command=Config.DV_IPMI_COMMAND, fan_mode_delay=Config.DV_
         fan_level_delay (int): Delay time after execution of IPMI set fan level function (default: 2)
         remote_parameters (str): Remote IPMI parameters (default: "")
         platform_name (str): Platform name (default: "auto")
+        enforce_fan_mode (bool): Re-assert FULL fan mode on BMC drift (default: True)
 
     Returns:
         IpmiConfig: configured IpmiConfig instance
     """
     return IpmiConfig(command=command, fan_mode_delay=fan_mode_delay, fan_level_delay=fan_level_delay,
-                      remote_parameters=remote_parameters, platform_name=platform_name)
+                      remote_parameters=remote_parameters, platform_name=platform_name,
+                      enforce_fan_mode=enforce_fan_mode)
 
 
 def create_cpu_config(section="CPU", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,

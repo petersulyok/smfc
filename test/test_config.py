@@ -193,7 +193,7 @@ class TestConfigStaticMethods:
 
 
 class TestControlFunctionSectionWiring:
-    """Section-level tests for control_function parsing (mutual exclusion, cross-field, defaults)."""
+    """Section-level tests for control_function parsing (legacy-key precedence, cross-field, defaults)."""
 
     @pytest.mark.parametrize(
         "section",
@@ -233,18 +233,17 @@ class TestControlFunctionSectionWiring:
             ("GPU", "min_level", "35"),
         ],
     )
-    def test_mutual_exclusion_with_legacy_keys(self, create_config_file, section: str, legacy_key: str,
-                                               legacy_val: str):
-        """Negative test: setting both control_function and any legacy min/max key in the same section
-        raises ValueError."""
+    def test_legacy_keys_ignored_when_control_function_defined(self, create_config, section: str, legacy_key: str,
+                                                               legacy_val: str):
+        """Positive test: setting both control_function and any legacy min/max key in the same section is
+        accepted; the legacy key is ignored and control_function is used."""
         body = ("[Ipmi]\n[" + section + "]\nenabled = 0\nsteps = 4\n"
                 "control_function = 30-35, 65-100\n"
                 f"{legacy_key} = {legacy_val}\n")
-        path = create_config_file(body)
-        with pytest.raises(ValueError) as exc_info:
-            Config(path)
-        assert "mutually exclusive" in str(exc_info.value), \
-            f"expected mutual-exclusion error, got: {exc_info.value}"
+        cfg = create_config(body)
+        sec_list = {"CPU": cfg.cpu, "HD": cfg.hd, "NVME": cfg.nvme, "GPU": cfg.gpu}[section]
+        assert sec_list[0].control_function == [(30, 35), (65, 100)], \
+            f"control_function parsed despite legacy {legacy_key} present"
 
     def test_cross_field_interior_too_small_for_steps(self, create_config_file):
         """Negative test: interior width (t_last - t_first - 1) < steps raises ValueError."""
@@ -333,6 +332,7 @@ class TestIpmiConfigParsing:
         assert cfg.ipmi.fan_level_delay == Config.DV_IPMI_FAN_LEVEL_DELAY, f"{f}: fan_level_delay default"
         assert cfg.ipmi.remote_parameters == Config.DV_IPMI_REMOTE_PARAMETERS, f"{f}: remote_parameters default"
         assert cfg.ipmi.platform_name == Config.DV_IPMI_PLATFORM_NAME, f"{f}: platform_name default"
+        assert cfg.ipmi.enforce_fan_mode == Config.DV_IPMI_ENFORCE_FAN_MODE, f"{f}: enforce_fan_mode default"
 
     def test_ipmi_custom_values(self, create_config):
         """Positive test: IpmiConfig parses custom values."""
@@ -344,12 +344,30 @@ fan_mode_delay = 5
 fan_level_delay = 1
 remote_parameters = -I lanplus -U admin -P secret -H 192.168.1.100
 platform_name = X11DPH-T
+enforce_fan_mode = false
 """)
         assert cfg.ipmi.command == "/opt/ipmitool", f"{f}: command"
         assert cfg.ipmi.fan_mode_delay == 5, f"{f}: fan_mode_delay"
         assert cfg.ipmi.fan_level_delay == 1, f"{f}: fan_level_delay"
         assert cfg.ipmi.remote_parameters == "-I lanplus -U admin -P secret -H 192.168.1.100", f"{f}: remote_parameters"
         assert cfg.ipmi.platform_name == "X11DPH-T", f"{f}: platform_name"
+        assert cfg.ipmi.enforce_fan_mode is False, f"{f}: enforce_fan_mode"
+
+    @pytest.mark.parametrize(
+        "value, expected, error_str",
+        [
+            ("true", True, "enforce_fan_mode=true p1"),
+            ("True", True, "enforce_fan_mode=True p2"),
+            ("false", False, "enforce_fan_mode=false p3"),
+            ("False", False, "enforce_fan_mode=False p4"),
+            ("yes", True, "enforce_fan_mode=yes p5"),
+            ("no", False, "enforce_fan_mode=no p6"),
+        ],
+    )
+    def test_ipmi_enforce_fan_mode_parsing(self, create_config, value: str, expected: bool, error_str: str):
+        """Positive test: enforce_fan_mode accepts the standard configparser boolean spellings."""
+        cfg = create_config(f"[Ipmi]\nenforce_fan_mode = {value}\n")
+        assert cfg.ipmi.enforce_fan_mode is expected, error_str
 
     @pytest.mark.parametrize(
         "param, value, error_str",
@@ -364,6 +382,52 @@ platform_name = X11DPH-T
         """Negative test: IpmiConfig rejects invalid values."""
         config_path = create_config_file(f"[Ipmi]\n{param} = {value}\n")
         with pytest.raises(ValueError):
+            Config(config_path)
+
+
+class TestExporterConfigParsing:
+    """Unit tests for [Exporter] section parsing."""
+
+    def test_exporter_section_absent_uses_defaults(self, create_config):
+        """When [Exporter] is missing, the parser falls back to documented defaults (disabled, localhost, 9099)."""
+        f = "TestExporterConfigParsing.test_exporter_section_absent_uses_defaults"
+        cfg = create_config("[Ipmi]\n")
+        assert cfg.exporter.enabled is Config.DV_EXPORTER_ENABLED, f"{f}: enabled default"
+        assert cfg.exporter.bind_address == Config.DV_EXPORTER_BIND_ADDRESS, f"{f}: bind_address default"
+        assert cfg.exporter.port == Config.DV_EXPORTER_PORT, f"{f}: port default"
+
+    def test_exporter_custom_values(self, create_config):
+        """[Exporter] with all three keys populated parses correctly."""
+        f = "TestExporterConfigParsing.test_exporter_custom_values"
+        cfg = create_config("""
+[Ipmi]
+[Exporter]
+enabled = true
+bind_address = 0.0.0.0
+port = 8080
+""")
+        assert cfg.exporter.enabled is True, f"{f}: enabled"
+        assert cfg.exporter.bind_address == "0.0.0.0", f"{f}: bind_address"
+        assert cfg.exporter.port == 8080, f"{f}: port"
+
+    def test_exporter_section_present_keys_absent(self, create_config):
+        """An empty [Exporter] section uses defaults — same shape as section absent."""
+        cfg = create_config("[Ipmi]\n[Exporter]\n")
+        assert cfg.exporter.enabled is Config.DV_EXPORTER_ENABLED
+        assert cfg.exporter.bind_address == Config.DV_EXPORTER_BIND_ADDRESS
+        assert cfg.exporter.port == Config.DV_EXPORTER_PORT
+
+    @pytest.mark.parametrize("port", ["0", "-1", "65536", "100000"])
+    def test_exporter_invalid_port_rejected(self, create_config_file, port: str):
+        """Out-of-range port values are rejected with a ValueError at parse time."""
+        config_path = create_config_file(f"[Ipmi]\n[Exporter]\nport = {port}\n")
+        with pytest.raises(ValueError, match="port"):
+            Config(config_path)
+
+    def test_exporter_empty_bind_address_rejected(self, create_config_file):
+        """An explicitly empty bind_address is rejected; users who want defaults should omit the key."""
+        config_path = create_config_file("[Ipmi]\n[Exporter]\nbind_address =   \n")
+        with pytest.raises(ValueError, match="bind_address"):
             Config(config_path)
 
 

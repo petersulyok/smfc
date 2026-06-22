@@ -631,5 +631,70 @@ class TestIpmi:
             my_ipmi.get_fan_level(Ipmi.CPU_ZONE)
         assert cm.type == exception, error_str
 
+    @pytest.mark.parametrize(
+        "in_client, expect_set_manual_called, error_str",
+        [
+            (False, True, "Ipmi.__init__() in_client=False p1"),
+            (True, False, "Ipmi.__init__() in_client=True p2"),
+        ],
+    )
+    def test_init_in_client(self, mocker: MockerFixture, in_client: bool, expect_set_manual_called: bool,
+                            error_str: str) -> None:
+        """Regression test: in_client=True must skip self.platform.set_fan_manual_mode().
+        - mock _exec_ipmitool to return BMC info
+        - mock GenericPlatform.set_fan_manual_mode and observe call count
+        - ASSERT: set_fan_manual_mode called only when in_client=False
+        """
+        my_td = TestData()
+        command = my_td.create_command_file()
+        mocker.patch("builtins.print", MagicMock())
+        mock_ipmi_exec = MagicMock()
+        mock_ipmi_exec.side_effect = [
+            subprocess.CompletedProcess([], returncode=0),
+            subprocess.CompletedProcess([], returncode=0, stdout=BMC_INFO_OUTPUT),
+        ]
+        mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
+        mock_set_manual = MagicMock()
+        mocker.patch("smfc.generic.GenericPlatform.set_fan_manual_mode", mock_set_manual)
+        cfg = create_ipmi_config(command=command)
+        my_log = Log(Log.LOG_NONE, Log.LOG_STDOUT)
+        Ipmi(my_log, cfg, False, in_client=in_client)
+        if expect_set_manual_called:
+            assert mock_set_manual.call_count == 1, error_str
+        else:
+            assert mock_set_manual.call_count == 0, error_str
+        del my_td
+
+    def test_init_bmc_init_timeout(self, mocker: MockerFixture) -> None:
+        """Regression test: bmc_init_timeout overrides the 120 s default.
+        - mock _exec_ipmitool to always raise RuntimeError("ipmitool ...")
+        - mock time.sleep to track elapsed wait time
+        - ASSERT: the BMC-not-ready loop exits after the override timeout, not 120 s
+        """
+        wait_time: float = 0.0
+
+        # pylint: disable=W0613
+        def mocked_ipmi_exec(self, args: List[str]) -> subprocess.CompletedProcess:
+            raise RuntimeError("ipmitool error (1): error.")
+        # pylint: enable=W0613
+
+        def mocked_time_sleep(second: float) -> None:
+            nonlocal wait_time
+            wait_time += second
+
+        my_td = TestData()
+        command = my_td.create_command_file()
+        mocker.patch("builtins.print", MagicMock())
+        mocker.patch("time.sleep", mocked_time_sleep)
+        mocker.patch("smfc.Ipmi._exec_ipmitool", mocked_ipmi_exec)
+        cfg = create_ipmi_config(command=command)
+        my_log = Log(Log.LOG_NONE, Log.LOG_STDOUT)
+        with pytest.raises(RuntimeError):
+            Ipmi(my_log, cfg, False, bmc_init_timeout=10.0)
+        # Loop sleeps in 5 s steps; with timeout=10 it should exit at 10..15 s, far below 120 s.
+        assert wait_time < 20.0, "bmc_init_timeout did not bound the retry loop"
+        assert wait_time >= 10.0, "bmc_init_timeout exited too early"
+        del my_td
+
 
 # End.

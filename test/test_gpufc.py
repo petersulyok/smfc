@@ -85,6 +85,8 @@ class TestGpuFc:
         else:
             assert my_gpufc.config.rocm_smi_path == smi_cmd, error_str
             assert my_gpufc.config.amd_temp_sensor == 0, error_str
+        # device_names() synthesizes gpu<id> labels from gpu_device_ids for the snapshot/exporter path.
+        assert my_gpufc.device_names() == [f"gpu{gid}" for gid in gpu_device_ids], error_str
         del my_td
 
     @pytest.mark.parametrize(

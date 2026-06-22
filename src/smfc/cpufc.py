@@ -3,6 +3,7 @@
 #   smfc package: Supermicro fan control for Linux (home) servers.
 #   smfc.CpuFc() class implementation.
 #
+from typing import List
 from pyudev import Context
 from smfc.fancontroller import FanController
 from smfc.ipmi import Ipmi
@@ -42,6 +43,10 @@ class CpuFc(FanController):
 
         # Initialize FanController class.
         super().__init__(log, ipmi, cfg.section, len(self.hwmon_path))
+
+    def device_names(self) -> List[str]:
+        """Return per-CPU device labels (cpu0, cpu1, ...) matching last_per_device_temps positionally."""
+        return [f"cpu{i}" for i in range(self.count)]
 
 
 # End.

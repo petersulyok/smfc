@@ -242,6 +242,34 @@ class TestFanController:
         assert my_fc.get_temp() == expected, error_str
 
     @pytest.mark.parametrize(
+        "count, temps, error_str",
+        [
+            (1, [38.5], "FanController.get_temp() per-device cache count=1"),
+            (4, [30.0, 32.0, 35.0, 40.0], "FanController.get_temp() per-device cache count=4"),
+        ],
+    )
+    def test_get_temp_caches_per_device(self, mocker: MockerFixture, count: int, temps: List[float],
+                                        error_str: str):
+        """get_temp() always populates self.last_per_device_temps so the snapshot/exporter path can
+        publish per-device readings without re-issuing subprocesses on the request thread."""
+        cfg = create_cpu_config(temp_calc=Config.CALC_AVG)
+        my_fc = FanController.__new__(FanController)
+        my_fc.config = cfg
+        my_fc.count = count
+        mock_temp = MagicMock()
+        mock_temp.side_effect = list(temps)
+        mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
+        my_fc.get_temp()
+        assert my_fc.last_per_device_temps == temps, error_str
+
+    def test_default_device_names(self):
+        """The base FanController.device_names() returns generic ordinal labels.
+        Subclasses (CpuFc, HdFc, NvmeFc, GpuFc) override it with friendly names tested in their own files."""
+        my_fc = FanController.__new__(FanController)
+        my_fc.count = 3
+        assert my_fc.device_names() == ["dev0", "dev1", "dev2"]
+
+    @pytest.mark.parametrize(
         "zones, level, error_str",
         [
             # Single zone 0
@@ -732,22 +760,89 @@ class TestFanController:
         assert all(v == 35 for v in lut[:30]), f"{f}: head padded with l_first"
         assert all(v == 100 for v in lut[33:]), f"{f}: tail padded with l_last"
 
-    def test_print_temp_level_mapping_single_temp_plateau(self, mocker: MockerFixture):
-        """Positive unit test for FanController.print_temp_level_mapping() with a single-temperature plateau.
-        Covers the plateau_start==end branch: lut[31]=68 is a 1-element plateau between lut[30]=35 and lut[32]=100."""
+    def test_print_temp_level_mapping_renders_ascii_chart(self, mocker: MockerFixture):
+        """Positive unit test for FanController.print_temp_level_mapping(): emits an ASCII bar chart with
+        a header, axis frame, X-axis ticks/units, breakpoint markers, and rows tracing the LUT."""
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mocker.patch("smfc.FanController.set_fan_level", MagicMock())
         mocker.patch("smfc.FanController._get_nth_temp", MagicMock(return_value=30.0))
         my_log = Log(Log.LOG_CONFIG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
-        cfg = create_cpu_config(steps=5, sensitivity=1, polling=1, control_function=[(30, 35), (32, 100)])
+        cfg = create_cpu_config(steps=4, sensitivity=1, polling=1,
+                                control_function=[(35, 35), (45, 50), (50, 70), (55, 100)])
         my_fc = FanController.__new__(FanController)
         my_fc.config = cfg
         FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, 1)
-        f = "TestFanController.test_print_temp_level_mapping_single_temp_plateau"
-        printed = " ".join(str(c) for c in mock_print.call_args_list)
-        assert "T=31C -> L=68%" in printed, f"{f}: single-temp plateau should emit T=NNC format"
+        f = "TestFanController.test_print_temp_level_mapping_renders_ascii_chart"
+        lines = [str(c.args[0]) for c in mock_print.call_args_list]
+        printed = "\n".join(lines)
+        assert "Temperature to level mapping:" in printed, f"{f}: chart header present"
+        assert "100% |" in printed and "  0% |" in printed, f"{f}: top and bottom level rows present"
+        assert "(C)" in printed, f"{f}: X-axis temperature unit present"
+        assert "(^ = breakpoint)" in printed, f"{f}: breakpoint legend present"
+        assert "+" + "-" * FanController.CHART_WIDTH + "+" in printed, f"{f}: axis frame is CHART_WIDTH wide"
+        # The 100% row must contain filled cells (the curve reaches 100% at the top breakpoint).
+        top_row = next(ln for ln in lines if "100% |" in ln)
+        assert "#" in top_row, f"{f}: 100% row is filled where the curve peaks"
+        # Every bar row has a fixed inner width of CHART_WIDTH, independent of the temperature range.
+        for ln in lines:
+            if "% |" in ln:
+                inner = ln.split("|")[1]
+                assert len(inner) == FanController.CHART_WIDTH, f"{f}: bar row inner width == CHART_WIDTH"
+
+    def test_print_temp_level_mapping_fixed_width_across_ranges(self, mocker: MockerFixture):
+        """Positive unit test: the chart inner width is fixed (CHART_WIDTH) regardless of the curve's
+        temperature span, so charts from different controllers line up."""
+        mocker.patch("smfc.FanController.set_fan_level", MagicMock())
+        mocker.patch("smfc.FanController._get_nth_temp", MagicMock(return_value=30.0))
+        my_log = Log(Log.LOG_CONFIG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        f = "TestFanController.test_print_temp_level_mapping_fixed_width_across_ranges"
+        widths = set()
+        for min_t, max_t in [(32, 44), (35, 65), (20, 90)]:
+            mock_print = MagicMock()
+            mocker.patch("builtins.print", mock_print)
+            cfg = create_cpu_config(steps=4, sensitivity=1, polling=1,
+                                    min_temp=min_t, max_temp=max_t, min_level=35, max_level=100)
+            my_fc = FanController.__new__(FanController)
+            my_fc.config = cfg
+            FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, 1)
+            top = next(str(c.args[0]) for c in mock_print.call_args_list if "100% |" in str(c.args[0]))
+            widths.add(len(top.split("|")[1]))
+        assert widths == {FanController.CHART_WIDTH}, f"{f}: all ranges render at CHART_WIDTH, got {widths}"
+
+    def test_print_temp_level_mapping_plateau_overflow(self, mocker: MockerFixture):
+        """Positive unit test: when a curve has more plateaus than the chart's bar rows, the extra
+        temperature->level entries continue on lines below the chart axis and none are dropped."""
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mocker.patch("smfc.FanController.set_fan_level", MagicMock())
+        mocker.patch("smfc.FanController._get_nth_temp", MagicMock(return_value=30.0))
+        my_log = Log(Log.LOG_CONFIG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        # steps=15 over 35..65 -> 17 plateaus, exceeding the 11 bar rows (100%..0% in 10% steps).
+        cfg = create_cpu_config(steps=15, sensitivity=2, polling=2,
+                                min_temp=35, max_temp=65, min_level=35, max_level=100)
+        my_fc = FanController.__new__(FanController)
+        my_fc.config = cfg
+        FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, 1)
+        f = "TestFanController.test_print_temp_level_mapping_plateau_overflow"
+        lines = [str(c.args[0]) for c in mock_print.call_args_list]
+        bar_rows = 11
+        total_plateaus = len(my_fc._level_plateaus())  # pylint: disable=protected-access
+        assert total_plateaus > bar_rows, f"{f}: test needs >bar_rows plateaus, got {total_plateaus}"
+        frame_idx = next(i for i, ln in enumerate(lines) if "+" + "-" * FanController.CHART_WIDTH + "+" in ln)
+        # Plateau lines printed after the axis/tick/marker block are the overflow continuation.
+        overflow = [ln for ln in lines[frame_idx + 1:] if "-> L=" in ln]
+        assert len(overflow) == total_plateaus - bar_rows, \
+            f"{f}: overflow count == plateaus - bar_rows ({total_plateaus} - {bar_rows})"
+        # Overflow lines are legend-only: no bar row and no axis frame.
+        for ln in overflow:
+            assert "% |" not in ln and "+--" not in ln, f"{f}: overflow line is legend-only"
+        assert any("-> L=100%" in ln for ln in overflow), f"{f}: final 100% plateau present in overflow"
+        # Nothing dropped: every plateau is listed exactly once across the whole output.
+        assert sum(ln.count("-> L=") for ln in lines) == total_plateaus, f"{f}: all plateaus listed once"
 
     @pytest.mark.parametrize(
         "control_function, expect_new_path, error_str",
@@ -787,7 +882,7 @@ class TestFanController:
         my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         my_ipmi = Ipmi.__new__(Ipmi)
         # 4-point curve; steps=5 -> 7 plateaus.
-        # NOTE: min_temp/max_temp/min_level/max_level are mutually exclusive with control_function in
+        # NOTE: min_temp/max_temp/min_level/max_level are ignored when control_function is defined in
         # Config-driven parsing, but the factory bypasses Config so we just set control_function.
         cfg = create_cpu_config(steps=5, sensitivity=1, polling=1,
                                 control_function=[(30, 35), (50, 40), (60, 90), (65, 100)])

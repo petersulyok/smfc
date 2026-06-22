@@ -65,10 +65,13 @@ class TestLog:
         assert my_log.log_level == level, error_str
         assert my_log.log_output == output, error_str
         if my_log.log_output is Log.LOG_STDOUT:
+            # pylint: disable=comparison-with-callable
             assert my_log.msg == my_log.msg_to_stdout, error_str
         elif my_log.log_output is Log.LOG_STDERR:
+            # pylint: disable=comparison-with-callable
             assert my_log.msg == my_log.msg_to_stderr, error_str
         elif my_log.log_output == Log.LOG_SYSLOG:
+            # pylint: disable=comparison-with-callable
             assert my_log.msg == my_log.msg_to_syslog, error_str
 
     @pytest.mark.parametrize(
@@ -142,6 +145,28 @@ class TestLog:
         - ASSERT: if level_to_str function maps a log level to an invalid string value
         """
         assert Log.level_to_str(level) == level_str, error_str
+
+    @pytest.mark.parametrize(
+        "output, output_str, error_str",
+        [
+            # LOG_STDOUT to "STDOUT"
+            (Log.LOG_STDOUT, "STDOUT", "Log.output_to_str() p1"),
+            # LOG_STDERR to "STDERR"
+            (Log.LOG_STDERR, "STDERR", "Log.output_to_str() p2"),
+            # LOG_SYSLOG to "SYSLOG"
+            (Log.LOG_SYSLOG, "SYSLOG", "Log.output_to_str() p3"),
+            # Invalid output: -1 to "STDOUT"
+            (-1, "STDOUT", "Log.output_to_str() p4"),
+            # Invalid output: 1000 to "STDOUT"
+            (1000, "STDOUT", "Log.output_to_str() p5"),
+        ],
+    )
+    def test_ots(self, output: int, output_str: str, error_str: str) -> None:
+        """Positive unit test for Log.output_to_str() method. It contains the following steps:
+        - call output_to_str() with a specified output
+        - ASSERT: if output_to_str function maps a log output to an invalid string value
+        """
+        assert Log.output_to_str(output) == output_str, error_str
 
     @pytest.mark.parametrize(
         "level, output, msg_level, count, error_str",

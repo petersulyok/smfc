@@ -112,5 +112,10 @@ class GpuFc(FanController):
 
         return self.gpu_temperature[index]
 
+    def device_names(self) -> List[str]:
+        """Return per-GPU device labels (gpu<id> using configured gpu_device_ids)
+        matching last_per_device_temps positionally."""
+        return [f"gpu{gid}" for gid in self.config.gpu_device_ids]
+
 
 # End.

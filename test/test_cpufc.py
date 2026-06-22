@@ -85,6 +85,8 @@ class TestCpuFc:
         assert my_cpufc.config.max_level == max_level, error_str
         assert my_cpufc.config.smoothing == smoothing, error_str
         assert my_cpufc.hwmon_path == my_td.cpu_files, error_str
+        # device_names() synthesizes ordinal cpu0/cpu1/... labels for the snapshot/exporter path.
+        assert my_cpufc.device_names() == [f"cpu{i}" for i in range(count)], error_str
         del my_td
 
     @pytest.mark.parametrize("error_str", [("CpuFc.__init__() p10")])

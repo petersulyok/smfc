@@ -45,11 +45,12 @@ class FanController:
     temp_step: float        # A temperature steps value (C) — legacy mode only, used for logging
     level_step: float       # A fan level step value (0..100%) — legacy mode only, used for logging
     levels_lut: List[int]   # 101-element temperature->level lookup table (index = T in C)
-    last_time: float        # Last system time we polled temperature (timestamp)
-    last_temp: float        # Last measured temperature value (C)
-    last_level: int         # Last configured fan level (0..100%)
-    deferred_apply: bool    # If True, skip IPMI calls (used for zone arbitration)
-    _temp_history: deque    # Circular buffer storing recent temperature readings
+    last_time: float                    # Last system time we polled temperature (timestamp)
+    last_temp: float                    # Last measured (aggregated) temperature value (C)
+    last_per_device_temps: List[float]  # Last per-device temperature readings, one entry per device
+    last_level: int                     # Last configured fan level (0..100%)
+    deferred_apply: bool                # If True, skip IPMI calls (used for zone arbitration)
+    _temp_history: deque                # Circular buffer storing recent temperature readings
 
     def __init__(self, log: Log, ipmi: Ipmi, name: str, count: int) -> None:
         """Initialize the FanController class. Derived classes must set self.config before calling this.
@@ -80,6 +81,7 @@ class FanController:
         self.level_step = (self.config.max_level - self.config.min_level) / self.config.steps
         self.levels_lut = FanController.build_lut(self.config)
         self.last_temp = 0
+        self.last_per_device_temps = []
         self.last_level = 0
         self.last_time = time.monotonic() - (self.config.polling + 1)
         self.deferred_apply = False
@@ -90,18 +92,26 @@ class FanController:
             self.log.msg(Log.LOG_CONFIG, f"{self.name} fan controller was initialized with:")
             self.log.msg(Log.LOG_CONFIG, f"   ipmi zone = {self.config.ipmi_zone}")
             self.log.msg(Log.LOG_CONFIG, f"   count = {self.count}")
-            self.log.msg(Log.LOG_CONFIG, f"   temp_calc = {self.config.temp_calc}")
-            self.log.msg(Log.LOG_CONFIG, f"   steps = {self.config.steps}")
+            temp_calc_str = ("MIN", "AVG", "MAX")[self.config.temp_calc]
+            self.log.msg(Log.LOG_CONFIG, f"   temp_calc = {self.config.temp_calc} ({temp_calc_str})")
             self.log.msg(Log.LOG_CONFIG, f"   sensitivity = {self.config.sensitivity}")
             self.log.msg(Log.LOG_CONFIG, f"   polling = {self.config.polling}")
-            self.log.msg(Log.LOG_CONFIG, f"   min_temp = {self.config.min_temp}")
-            self.log.msg(Log.LOG_CONFIG, f"   max_temp = {self.config.max_temp}")
-            self.log.msg(Log.LOG_CONFIG, f"   min_level = {self.config.min_level}")
-            self.log.msg(Log.LOG_CONFIG, f"   max_level = {self.config.max_level}")
+            # steps is logged just above the curve definition (min/max keys or control_function) because
+            # it controls the digitalization of that curve.
+            self.log.msg(Log.LOG_CONFIG, f"   steps = {self.config.steps}")
+            # The curve is defined either by control_function (which overrides and hides the legacy
+            # min/max keys) or by the legacy min/max keys; log only the one in effect.
+            if self.config.control_function:
+                self.log.msg(Log.LOG_CONFIG, f"   control_function = {self.config.control_function}")
+            else:
+                self.log.msg(Log.LOG_CONFIG, f"   min_temp = {self.config.min_temp}")
+                self.log.msg(Log.LOG_CONFIG, f"   max_temp = {self.config.max_temp}")
+                self.log.msg(Log.LOG_CONFIG, f"   min_level = {self.config.min_level}")
+                self.log.msg(Log.LOG_CONFIG, f"   max_level = {self.config.max_level}")
+            self.print_temp_level_mapping()
             self.log.msg(Log.LOG_CONFIG, f"   smoothing = {self.config.smoothing}")
             if hasattr(self, "hwmon_path"):
                 self.log.msg(Log.LOG_CONFIG, f"   hwmon_path = {[p if p else 'smartctl' for p in self.hwmon_path]}")
-            self.print_temp_level_mapping()
 
     @staticmethod
     def get_hwmon_path(udevc: Context, parent_dev: Device) -> str:
@@ -136,12 +146,16 @@ class FanController:
     def get_temp(self) -> float:
         """Get the aggregated temperature of the controlled entities using the configured calculation method.
 
+        Side effect: refreshes self.last_per_device_temps with the per-device readings, so the
+        snapshot/exporter path can publish them without re-issuing subprocesses.
+
         Returns:
             float: aggregated temperature value (C)
         """
-        if self.count == 1:
-            return self._get_nth_temp(0)
         temps = [self._get_nth_temp(i) for i in range(self.count)]
+        self.last_per_device_temps = temps
+        if self.count == 1:
+            return temps[0]
         if self.config.temp_calc == Config.CALC_MIN:
             result = min(temps)
         elif self.config.temp_calc == Config.CALC_MAX:
@@ -153,6 +167,14 @@ class FanController:
             self.log.msg(Log.LOG_DEBUG,
                          f"{self.name}: per-device temps={[f'{t:.1f}' for t in temps]} {label}={result:.1f}C")
         return result
+
+    def device_names(self) -> List[str]:
+        """Return human-readable device labels matching last_per_device_temps positionally.
+
+        Default implementation returns generic ordinal labels; subclasses override to expose the
+        configured device paths or IDs (e.g. /dev/disk/by-id/... for HD/NVMe, gpu<id> for GPU).
+        """
+        return [f"dev{i}" for i in range(self.count)]
 
     def set_fan_level(self, level: int) -> None:
         """Set the new fan level in all IPMI zones of the controller.
@@ -316,23 +338,79 @@ class FanController:
             self.log.msg(Log.LOG_DEBUG, f"{self.name}: polling skipped "
                          f"(remaining={self.config.polling - (current_time - self.last_time):.1f}s)")
 
+    # ASCII chart geometry constants for print_temp_level_mapping().
+    CHART_PREFIX_WIDTH: int = 6     # Width of the "100% |" row prefix; bars start at this column.
+    CHART_WIDTH: int = 44           # Fixed inner width (chars) of every chart; keeps chart+legend <80 cols.
+
     def print_temp_level_mapping(self) -> None:
-        """Print the temperature->level mapping at LOG_CONFIG level by walking the LUT and emitting
-        one line per plateau (consecutive temperatures sharing the same level)."""
+        """Render the resulting temperature->level curve at LOG_CONFIG level as an ASCII bar chart
+        (Y = fan level in 10% rows, X = temperature). The chart has a fixed inner width of CHART_WIDTH
+        columns regardless of the temperature range, so every controller's chart lines up; the X scale
+        therefore varies per controller and must be read from the axis labels. '#' fills the area under
+        the curve and '^' markers under the X axis flag the breakpoints. The exact temperature->level
+        plateaus are listed to the right of the chart. The curve definition (control_function or legacy
+        min/max keys) is logged separately by __init__."""
+        # Breakpoint temperatures and the curve's first/last knee define the chart's X range.
         if self.config.control_function:
-            self.log.msg(Log.LOG_CONFIG, f"   control_function = {self.config.control_function}")
+            bp_temps = {t for t, _ in self.config.control_function}
+            t_first, t_last = self.config.control_function[0][0], self.config.control_function[-1][0]
         else:
-            self.log.msg(Log.LOG_CONFIG, "   Temperature to level mapping (from legacy min/max keys):")
-        plateau_start = 0
+            t_first, t_last = round(self.config.min_temp), round(self.config.max_temp)
+            bp_temps = {t_first, t_last}
+        lo = max(0, (t_first - 5) // 5 * 5)
+        hi = min(100, (t_last + 9) // 5 * 5)
+        pw, width, span = self.CHART_PREFIX_WIDTH, self.CHART_WIDTH, max(1, hi - lo)
+
+        # Map a temperature (C) to its 0-based chart column.
+        def temp_to_col(temp: float) -> int:
+            return round((temp - lo) / span * (width - 1))
+        # The exact temperature->level plateaus, listed to the right of the chart (T-ranges aligned).
+        plateaus = self._level_plateaus()
+        rng_w = max(len(rng) for rng, _ in plateaus)
+        legend = [f"{rng.ljust(rng_w)} -> L={lvl}%" for rng, lvl in plateaus]
+
+        self.log.msg(Log.LOG_CONFIG, "   Temperature to level mapping:")
+        block_w = pw + width + 1   # width of a full bar row: "100% |" + bars + "|"
+        for i, y in enumerate(range(100, -1, -10)):
+            row = f"{y:3d}% |"
+            for c in range(width):
+                lvl = self.levels_lut[round(lo + c * span / (width - 1))]
+                row += "#" if (lvl >= y or y == 0) else " "
+            row += "|"
+            if i < len(legend):
+                row += "  " + legend[i]     # attach a plateau entry to the right of this bar row
+            self.log.msg(Log.LOG_CONFIG, "   " + row)
+        self.log.msg(Log.LOG_CONFIG, "   " + " " * (pw - 1) + "+" + "-" * width + "+")
+        # X-axis tick labels (every 5 C, skipping any that would overlap) and breakpoint markers.
+        ticks = [" "] * (pw + width + 6)
+        marks = [" "] * (pw + width + 6)
+        last_label_end = -1
+        for t in range(lo, hi + 1, 5):
+            col = pw + temp_to_col(t)
+            if col > last_label_end:
+                for j, ch in enumerate(str(t)):
+                    ticks[col + j] = ch
+                last_label_end = col + len(str(t))
+        for t in bp_temps:
+            marks[pw + temp_to_col(t)] = "^"
+        self.log.msg(Log.LOG_CONFIG, "   " + "".join(ticks).rstrip() + "  (C)")
+        self.log.msg(Log.LOG_CONFIG, "   " + "".join(marks).rstrip() + "   (^ = breakpoint)")
+        # Any plateaus beyond the chart's bar rows continue under the legend column.
+        for entry in legend[len(range(100, -1, -10)):]:
+            self.log.msg(Log.LOG_CONFIG, "   " + " " * block_w + "  " + entry)
+
+    def _level_plateaus(self) -> List[Tuple[str, int]]:
+        """Walk levels_lut and return one (temperature-range string, level) tuple per plateau
+        (consecutive temperatures sharing the same fan level), in ascending temperature order."""
+        plateaus: List[Tuple[str, int]] = []
+        start = 0
         for t in range(1, 102):
-            if t == 101 or self.levels_lut[t] != self.levels_lut[plateau_start]:
+            if t == 101 or self.levels_lut[t] != self.levels_lut[start]:
                 end = t - 1
-                lvl = self.levels_lut[plateau_start]
-                if plateau_start == end:
-                    self.log.msg(Log.LOG_CONFIG, f"   T={plateau_start}C -> L={lvl}%")
-                else:
-                    self.log.msg(Log.LOG_CONFIG, f"   T=[{plateau_start}..{end}]C -> L={lvl}%")
-                plateau_start = t
+                rng = f"T={start}C" if start == end else f"T=[{start}..{end}]C"
+                plateaus.append((rng, self.levels_lut[start]))
+                start = t
+        return plateaus
 
 
 # End.

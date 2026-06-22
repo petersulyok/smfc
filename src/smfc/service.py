@@ -7,11 +7,12 @@ import atexit
 import os
 import sys
 import time
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 from importlib.metadata import version
 from argparse import ArgumentParser, Namespace
 from pyudev import Context
 from smfc.constfc import ConstFc
+from smfc.exporter import Exporter
 from smfc.fancontroller import FanController
 from smfc.gpufc import GpuFc
 from smfc.cpufc import CpuFc
@@ -20,6 +21,7 @@ from smfc.nvmefc import NvmeFc
 from smfc.ipmi import Ipmi
 from smfc.log import Log
 from smfc.config import Config
+from smfc.snapshot import build_snapshot
 
 
 class Service:
@@ -35,10 +37,21 @@ class Service:
     applied_levels: Dict[int, int]                             # Cache of last applied fan levels per IPMI zone
     shared_zones: Set[int]                                     # Set of IPMI zone IDs shared between controllers
     last_desired: List[Tuple[str, List[int], int, float]]      # Cache of last desired levels for change detection
+    last_fan_mode: int                                         # Last observed BMC fan mode (from _check_fan_mode)
+    last_fan_mode_at: float                                    # monotonic() timestamp of last_fan_mode
+    start_time: float                                          # Unix wall-clock start time of the service
+    fan_mode_enforced_count: int                               # Count of detected drift-from-FULL corrections
+    exporter: Optional[Exporter]                               # HTTP exporter (None when disabled or bind failed)
 
     def exit_func(self) -> None:
         """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
         all fans back to the default speed 100% to avoid overheating while `smfc` is not running."""
+        # Stop the exporter first so no /snapshot request can race with the BMC reset below.
+        if getattr(self, "exporter", None) is not None:
+            try:
+                self.exporter.stop()
+            except Exception:  # pylint: disable=broad-except
+                pass
         # Configure fans.
         if hasattr(self, "ipmi"):
             self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
@@ -179,6 +192,67 @@ class Service:
                 shared.add(zone)
         return shared
 
+    def _check_fan_mode(self) -> None:
+        """Read the current BMC fan mode, cache it, and react to drift away from FULL.
+
+        When `enforce_fan_mode` is enabled (default), drift away from FULL is auto-corrected:
+        re-assert FULL and re-apply all cached per-zone levels (some BMC firmwares reset zone
+        levels when the mode changes). When disabled, drift triggers a clean exit with code 11.
+        """
+        try:
+            mode = self.ipmi.get_fan_mode()
+        except (RuntimeError, ValueError) as e:
+            # Transient BMC error: log and skip this cycle. Don't exit — the
+            # control loop is the recovery mechanism for transient errors.
+            self.log.msg(Log.LOG_ERROR, f"Fan mode read failed: {e}")
+            return
+
+        self.last_fan_mode = mode
+        self.last_fan_mode_at = time.monotonic()
+
+        if mode == Ipmi.FULL_MODE:
+            return
+
+        mode_name = Ipmi.get_fan_mode_name(mode)
+        if not self.config.ipmi.enforce_fan_mode:
+            self.log.msg(Log.LOG_ERROR,
+                         f"BMC fan mode drifted from FULL to {mode_name}; "
+                         f"enforce_fan_mode is disabled, smfc exiting.")
+            sys.exit(11)
+
+        self.fan_mode_enforced_count += 1
+        self.log.msg(Log.LOG_INFO,
+                     f"BMC fan mode drifted from FULL to {mode_name}; restoring FULL.")
+        try:
+            self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
+            self.last_fan_mode = Ipmi.FULL_MODE
+            self.last_fan_mode_at = time.monotonic()
+            for zone, level in self.applied_levels.items():
+                self.ipmi.set_fan_level(zone, level)
+        except (RuntimeError, ValueError) as e:
+            # Recovery itself failed transiently; the next loop iteration will try again.
+            self.log.msg(Log.LOG_ERROR, f"Fan mode recovery failed: {e}")
+
+    def _start_exporter(self) -> None:
+        """Build and start the HTTP exporter when [Exporter] enabled=true; tolerate bind failures.
+
+        Stores the live `Exporter` on `self.exporter`, or `None` if disabled / failed to bind.
+        """
+        self.exporter = None
+        if not self.config.exporter.enabled:
+            return
+        try:
+            self.exporter = Exporter(
+                log=self.log,
+                bind_address=self.config.exporter.bind_address,
+                port=self.config.exporter.port,
+                snapshot_fn=lambda: build_snapshot(self),
+            )
+            self.exporter.start()
+        except OSError as e:
+            self.log.msg(Log.LOG_ERROR, f"Exporter failed to start ({e}); continuing without it.")
+            self.exporter = None
+
     @staticmethod
     def _parse_args() -> Namespace:
         """Parse command-line arguments.
@@ -211,8 +285,8 @@ class Service:
         8 - IPMI initialization error
         9 - udev initialization error
         10 - none of the fan controllers is enabled
+        11 - fan mode changed from FULL
         """
-        old_mode: int               # Old IPMI fan mode
 
         # Parse command line arguments.
         parsed_results = self._parse_args()
@@ -223,6 +297,10 @@ class Service:
 
         # Store `sudo` option.
         self.sudo = parsed_results.s
+
+        # Record service start time and reset the fan-mode enforcement counter (exposed via /metrics).
+        self.start_time = time.time()
+        self.fan_mode_enforced_count = 0
 
         # Create a Log class instance (in theory, this cannot fail).
         try:
@@ -237,9 +315,11 @@ class Service:
             self.log.msg(Log.LOG_CONFIG, "Command line arguments:")
             self.log.msg(Log.LOG_CONFIG, f"   original arguments: {' '.join(sys.argv[:])}")
             self.log.msg(Log.LOG_CONFIG, f"   parsed config file = {parsed_results.config_file}")
+            level_str = Log.level_to_str(self.log.log_level)
+            output_str = Log.output_to_str(self.log.log_output)
             self.log.msg(Log.LOG_CONFIG, "Logging was initialized with:")
-            self.log.msg(Log.LOG_CONFIG, f"   log_level = {self.log.log_level}")
-            self.log.msg(Log.LOG_CONFIG, f"   log_output = {self.log.log_output}")
+            self.log.msg(Log.LOG_CONFIG, f"   log_level = {self.log.log_level} ({level_str})")
+            self.log.msg(Log.LOG_CONFIG, f"   log_output = {self.log.log_output} ({output_str})")
 
         # Parse and load configuration file.
         try:
@@ -259,18 +339,28 @@ class Service:
         # Create an Ipmi class instance.
         try:
             self.ipmi = Ipmi(self.log, self.config.ipmi, self.sudo)
-            old_mode = self.ipmi.get_fan_mode()
+            self.last_fan_mode = self.ipmi.get_fan_mode()
+            self.last_fan_mode_at = time.monotonic()
         except (ValueError, FileNotFoundError, RuntimeError) as e:
             self.log.msg(Log.LOG_ERROR, f"{e}.")
             sys.exit(8)
         # Log the old fan mode and zone levels in DEBUG log mode.
         if self.log.log_level >= Log.LOG_DEBUG:
-            self.log.msg(Log.LOG_DEBUG, f"Old IPMI fan mode = {self.ipmi.get_fan_mode_name(old_mode)} ({old_mode})")
-            self.log.msg(Log.LOG_DEBUG, f"Old CPU zone (0) level = {self.ipmi.get_fan_level(Ipmi.CPU_ZONE)}%")
-            self.log.msg(Log.LOG_DEBUG, f"Old HD zone (1) level = {self.ipmi.get_fan_level(Ipmi.HD_ZONE)}%")
-        #  Set the FULL IPMI fan mode if it is not the current fan mode.
-        if old_mode != Ipmi.FULL_MODE:
+            self.log.msg(Log.LOG_DEBUG, f"Old IPMI fan mode = "
+                                        f"{self.ipmi.get_fan_mode_name(self.last_fan_mode)} ({self.last_fan_mode})")
+            configured_zones: Set[int] = set()
+            for cfg_list in (self.config.cpu, self.config.hd, self.config.nvme,
+                             self.config.gpu, self.config.const):
+                for cfg in cfg_list:
+                    if cfg.enabled:
+                        configured_zones.update(cfg.ipmi_zone)
+            for zone in sorted(configured_zones):
+                self.log.msg(Log.LOG_DEBUG, f"Old level in IPMI zone {zone} = {self.ipmi.get_fan_level(zone)}%")
+        # Set the FULL IPMI fan mode if it is not the current fan mode, and update the cache.
+        if self.last_fan_mode != Ipmi.FULL_MODE:
             self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
+            self.last_fan_mode = Ipmi.FULL_MODE
+            self.last_fan_mode_at = time.monotonic()
             self.log.msg(Log.LOG_DEBUG, f"New IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}")
 
         # Initialize connection to udev database
@@ -328,12 +418,22 @@ class Service:
         wait = min(fc.config.polling for fc in self.controllers) / 2
         self.log.msg(Log.LOG_DEBUG, f"Main loop sleep time = {wait} sec")
 
+        # Start the HTTP exporter if enabled (smfc-client + Prometheus). Bind failure is logged
+        # and the daemon continues — fan-control behavior must not be gated on the listener.
+        self._start_exporter()
+
         # Main execution loop.
         while True:
             for fc in self.controllers:
                 fc.run()
+                # Record applied levels for non-deferred controllers so every zone shows up in the
+                # snapshot. Deferred controllers (shared zones) are recorded by _apply_fan_levels().
+                if not fc.deferred_apply:
+                    for zone in fc.config.ipmi_zone:
+                        self.applied_levels[zone] = fc.last_level
             if self.shared_zones:
                 self._apply_fan_levels()
+            self._check_fan_mode()
             time.sleep(wait)
 
 

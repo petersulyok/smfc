@@ -17,6 +17,7 @@ class IpmiConfig:
     fan_level_delay: int    # Delay time after execution of IPMI set fan level function (sec)
     remote_parameters: str  # Remote IPMI parameters (e.g. "-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1")
     platform_name: str      # Platform name (from config or "auto" for auto-detection)
+    enforce_fan_mode: bool  # Re-assert FULL fan mode if BMC drifts (default: True; False = exit on drift)
 
 
 @dataclass
@@ -111,6 +112,14 @@ class ConstConfig:
     level: int              # Constant fan level (0..100%)
 
 
+@dataclass
+class ExporterConfig:
+    """Configuration for the smfc HTTP exporter (smfc-client IPC + Prometheus)."""
+    enabled: bool           # Whether to start the HTTP exporter on Service.run()
+    bind_address: str       # IP to bind to ("127.0.0.1", "0.0.0.0", LAN IP, or IPv6)
+    port: int               # TCP port (1..65535)
+
+
 class Config:
     """Centralized configuration class that parses the INI file and produces typed dataclass instances."""
 
@@ -121,6 +130,7 @@ class Config:
     CS_NVME: str = "NVME"       # [NVME] section name
     CS_GPU: str = "GPU"         # [GPU] section name
     CS_CONST: str = "CONST"     # [CONST] section name
+    CS_EXPORTER: str = "Exporter"   # [Exporter] section name
 
     # Shared variable names (common across multiple controller types)
     CV_ENABLED: str = "enabled"             # Fan controller enabled flag
@@ -142,6 +152,7 @@ class Config:
     CV_IPMI_FAN_LEVEL_DELAY: str = "fan_level_delay"        # Delay after set fan level
     CV_IPMI_REMOTE_PARAMETERS: str = "remote_parameters"    # Remote IPMI parameters
     CV_IPMI_PLATFORM_NAME: str = "platform_name"            # Platform name or "auto"
+    CV_IPMI_ENFORCE_FAN_MODE: str = "enforce_fan_mode"      # Re-assert FULL on BMC drift
 
     # [HD] section variable names
     CV_HD_NAMES: str = "hd_names"                            # HD device names
@@ -168,6 +179,11 @@ class Config:
     # [CONST] section variable names
     CV_CONST_LEVEL: str = "level"   # Constant fan level
 
+    # [Exporter] section variable names
+    CV_EXPORTER_ENABLED: str = "enabled"            # Enable HTTP exporter
+    CV_EXPORTER_BIND_ADDRESS: str = "bind_address"  # IP to bind on
+    CV_EXPORTER_PORT: str = "port"                  # TCP port
+
     # Constant values for temperature calculation
     CALC_MIN: int = 0   # Use minimum temperature
     CALC_AVG: int = 1   # Use average temperature
@@ -183,6 +199,7 @@ class Config:
     DV_IPMI_FAN_LEVEL_DELAY: int = 2
     DV_IPMI_REMOTE_PARAMETERS: str = ""
     DV_IPMI_PLATFORM_NAME: str = "auto"
+    DV_IPMI_ENFORCE_FAN_MODE: bool = True
 
     # Default values — [CPU] section
     DV_CPU_STEPS: int = 6
@@ -235,6 +252,11 @@ class Config:
     DV_CONST_POLLING: float = 30.0
     DV_CONST_LEVEL: int = 50
 
+    # Default values — [Exporter] section
+    DV_EXPORTER_ENABLED: bool = False
+    DV_EXPORTER_BIND_ADDRESS: str = "127.0.0.1"
+    DV_EXPORTER_PORT: int = 9099
+
     # Parsed configuration dataclasses
     ipmi: IpmiConfig            # IPMI configuration
     cpu: List[CpuConfig]        # List of CPU fan controller configurations
@@ -242,6 +264,7 @@ class Config:
     nvme: List[NvmeConfig]      # List of NVME fan controller configurations
     gpu: List[GpuConfig]        # List of GPU fan controller configurations
     const: List[ConstConfig]    # List of CONST fan controller configurations
+    exporter: ExporterConfig    # HTTP exporter configuration
 
     def __init__(self, path: str) -> None:
         """Initialize the Config class by reading and parsing the INI file.
@@ -265,6 +288,7 @@ class Config:
         self._validate_no_duplicate_zones(self.gpu)
         self.const = self._parse_const_sections(parser)
         self._validate_no_duplicate_zones(self.const)
+        self.exporter = self._parse_exporter(parser)
 
     @staticmethod
     def _get_sections(parser: ConfigParser, base_name: str) -> List[str]:
@@ -389,11 +413,42 @@ class Config:
             fan_level_delay=fan_level_delay,
             remote_parameters=parser[s].get(self.CV_IPMI_REMOTE_PARAMETERS, fallback=self.DV_IPMI_REMOTE_PARAMETERS),
             platform_name=parser[s].get(self.CV_IPMI_PLATFORM_NAME, fallback=self.DV_IPMI_PLATFORM_NAME),
+            enforce_fan_mode=parser[s].getboolean(self.CV_IPMI_ENFORCE_FAN_MODE,
+                                                  fallback=self.DV_IPMI_ENFORCE_FAN_MODE),
         )
 
+    def _parse_exporter(self, parser: ConfigParser) -> ExporterConfig:
+        """Parse [Exporter] section. The section is optional; defaults are used when absent.
+
+        Args:
+            parser (ConfigParser): configuration parser
+
+        Returns:
+            ExporterConfig: parsed exporter configuration
+
+        Raises:
+            ValueError: invalid configuration parameters (e.g. port out of range)
+        """
+        s = self.CS_EXPORTER
+        if s not in parser:
+            return ExporterConfig(
+                enabled=self.DV_EXPORTER_ENABLED,
+                bind_address=self.DV_EXPORTER_BIND_ADDRESS,
+                port=self.DV_EXPORTER_PORT,
+            )
+        enabled = parser[s].getboolean(self.CV_EXPORTER_ENABLED, fallback=self.DV_EXPORTER_ENABLED)
+        bind_address = parser[s].get(self.CV_EXPORTER_BIND_ADDRESS, self.DV_EXPORTER_BIND_ADDRESS).strip()
+        if not bind_address:
+            raise ValueError(f"Empty {self.CV_EXPORTER_BIND_ADDRESS}= parameter")
+        port = parser[s].getint(self.CV_EXPORTER_PORT, fallback=self.DV_EXPORTER_PORT)
+        if not 1 <= port <= 65535:
+            raise ValueError(f"Invalid {self.CV_EXPORTER_PORT}= parameter ({port}); must be in 1..65535")
+        return ExporterConfig(enabled=enabled, bind_address=bind_address, port=port)
+
     def _read_control_function(self, parser: ConfigParser, section: str, steps: int) -> List[Tuple[int, int]]:
-        """Read control_function from a section, enforcing mutual exclusion with legacy min/max keys
-        and the cross-field constraint with `steps` (interior digitalization requires t_n - t_1 - 1 >= steps).
+        """Read control_function from a section and the cross-field constraint with `steps`
+        (interior digitalization requires t_n - t_1 - 1 >= steps). When control_function is defined,
+        the legacy min/max keys are ignored (control_function takes precedence).
         Args:
             parser (ConfigParser): configuration parser
             section (str): section name
@@ -401,15 +456,11 @@ class Config:
         Returns:
             List[Tuple[int, int]]: parsed breakpoints, or [] when control_function is absent
         Raises:
-            ValueError: mutual-exclusion violation, parse error, or cross-field violation
+            ValueError: parse error or cross-field violation
         """
         raw = parser[section].get(self.CV_CONTROL_FUNCTION, fallback="").strip()
         if not raw:
             return []
-        legacy_keys = (self.CV_MIN_TEMP, self.CV_MAX_TEMP, self.CV_MIN_LEVEL, self.CV_MAX_LEVEL)
-        if any(parser.has_option(section, k) for k in legacy_keys):
-            raise ValueError(f"[{section}] {self.CV_CONTROL_FUNCTION} is mutually exclusive with "
-                             f"{'/'.join(legacy_keys)}")
         pairs = self.parse_control_function(raw)
         interior = pairs[-1][0] - pairs[0][0] - 1
         if interior < steps:
@@ -642,24 +693,28 @@ class Config:
             raise ValueError(f"[{section}] invalid value: {self.CV_TEMP_CALC} ({cfg.temp_calc}).")
         if cfg.steps <= 0:
             raise ValueError(f"[{section}] invalid value: {self.CV_STEPS} <= 0")
-        if cfg.max_level > cfg.min_level and cfg.steps > cfg.max_level - cfg.min_level:
-            raise ValueError(f"[{section}] invalid value: {self.CV_STEPS} > {self.CV_MAX_LEVEL} - {self.CV_MIN_LEVEL}")
         if cfg.sensitivity <= 0:
             raise ValueError(f"[{section}] invalid value: {self.CV_SENSITIVITY} <= 0")
         if cfg.polling < 0:
             raise ValueError(f"[{section}] {self.CV_POLLING} < 0")
-        if cfg.min_temp < 0:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MIN_TEMP} < 0")
-        if cfg.max_temp > 200:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} > 200")
-        if cfg.max_temp < cfg.min_temp:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} < {self.CV_MIN_TEMP}")
-        if cfg.min_level < 0:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MIN_LEVEL} < 0")
-        if cfg.max_level > 100:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} > 100")
-        if cfg.max_level < cfg.min_level:
-            raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} < {self.CV_MIN_LEVEL}")
+        # The legacy min/max keys are only used in legacy mode; they are ignored (and not validated)
+        # when control_function is defined.
+        if not cfg.control_function:
+            if cfg.max_level > cfg.min_level and cfg.steps > cfg.max_level - cfg.min_level:
+                raise ValueError(f"[{section}] invalid value: {self.CV_STEPS} > {self.CV_MAX_LEVEL} - "
+                                 f"{self.CV_MIN_LEVEL}")
+            if cfg.min_temp < 0:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MIN_TEMP} < 0")
+            if cfg.max_temp > 200:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} > 200")
+            if cfg.max_temp < cfg.min_temp:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MAX_TEMP} < {self.CV_MIN_TEMP}")
+            if cfg.min_level < 0:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MIN_LEVEL} < 0")
+            if cfg.max_level > 100:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} > 100")
+            if cfg.max_level < cfg.min_level:
+                raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} < {self.CV_MIN_LEVEL}")
         if cfg.smoothing < 1:
             raise ValueError(f"[{section}] invalid value: {self.CV_SMOOTHING} < 1")
 

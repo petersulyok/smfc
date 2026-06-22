@@ -13,7 +13,7 @@ Supermicro fan control for Linux (home) servers.
 This is a `systemd service` running on Linux that can control fans with the help of IPMI on Supermicro X10-X13/H10-H13 (and some X9) motherboards.
 
 ### 1. Prerequisites
- - a Supermicro motherboard with ASPEED AST2400/2500/2600 chip
+ - a Supermicro motherboard with IPMI 2.0 (ASPEED AST2400/2500/2600 chip)
  - Python 3.10-3.14
  - a Linux distribution with:
    - `systemd` and `bash`
@@ -30,7 +30,7 @@ This is a `systemd service` running on Linux that can control fans with the help
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`)
  4. Install `smfc` service or run it in docker (see [chapter 9.](https://github.com/petersulyok/smfc?tab=readme-ov-file#9-installation-and-uninstallation) for more details)
- 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapter 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration-file) for more details).
+ 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapter 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration) for more details).
  6. Start `smfc` service (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc) for more details)
  7. Check results in system log
  8. Leave feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
@@ -59,6 +59,9 @@ Key features:
  - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13) and edge cases (X10QBi)
  - Remote IPMI access via `remote_parameters=` for VM setups (e.g. TrueNAS on Proxmox with PCI passthrough)
  - Distributed as a `systemd` service, Docker image, DEB/RPM package, or PyPI package
+ - Companion `smfc-client` tool showing a live read-only snapshot of controllers, fan levels, IPMI zones, and standby state
+ - Optional HTTP exporter with Prometheus `/metrics` and JSON `/snapshot` endpoints (stdlib-only, Grafana-ready)
+ - Automatic FULL-mode enforcement that detects and corrects BMC fan-mode drift
  - Safe shutdown: all fans are set back to 100% speed at service termination
 
 #### 1.1 IPMI zones
@@ -85,7 +88,7 @@ In `smfc`, the following fan controllers are implemented:
 | CONST          | None                    | Constant fan level can be specified in `[CONST] level=` parameter     | 1 (Peripheral zone) |
 
 These fan controllers can be enabled and disabled independently. They can be used in a free combination with one or more IPMI zones. Multiple fan controllers
-can share the same IPMI zone -- `smfc` will automatically apply the **highest** fan level requested by any controller in that zone (see [chapter 1.3](#13-shared-ipmi-zone-arbitration) for details).
+can share the same IPMI zone -- `smfc` will automatically apply the **highest** fan level requested by any controller in that zone (see [chapter 1.3](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#13-shared-ipmi-zone-arbitration) for details).
 _CONST fan controller_ is an exception here, it does not require a temperature source, it can provide a constant fan level for one or more IPMI zones.
 In `smfc` configuration file each fan controller has an individual section.
 
@@ -163,20 +166,20 @@ Three naming styles are supported and can be freely mixed:
 
 The suffix number after `:` is used only for ordering and logging — it has no relationship to the `ipmi_zone=` value inside the section. Each instance is a complete, independent fan controller with its own full set of parameters, sharing only the physical temperature source.
 
-Multiple instances on the same IPMI zone participate in the shared zone arbitration described in [chapter 1.3](#13-shared-ipmi-zone-arbitration).
+Multiple instances on the same IPMI zone participate in the shared zone arbitration described in [chapter 1.3](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#13-shared-ipmi-zone-arbitration).
 
 ### 2. User-defined control function
-Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval. Two forms are supported in each temperature-driven section: a **simple linear** mapping (chapter 2.1) or an **advanced multi-segment** piecewise-linear curve (chapter 2.2). The two forms are mutually exclusive within the same section.
+Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval. Two forms are supported in each temperature-driven section: a **simple linear** mapping (chapter 2.1) or an **advanced multi-segment** piecewise-linear curve (chapter 2.2). When both are present in the same section, `control_function=` takes precedence and the `min_temp/max_temp/min_level/max_level` keys are ignored.
 
 #### 2.1 Linear user-defined function
 The simple form maps a single temperature interval `[min_temp..max_temp]` linearly to a single fan-level interval `[min_level..max_level]`, divided into discrete plateaus by the `steps=` parameter:
 
 ```ini
+     steps=5
      min_temp=30
      max_temp=65
      min_level=35
      max_level=100
-     steps=5
 ```
 
  <img src="https://github.com/petersulyok/smfc/raw/main/doc/linear_control_function.png" align="center" width="500">
@@ -194,7 +197,7 @@ steps=5
 control_function = 30-35, 50-40, 60-90, 65-100
 ```
 
-Each pair is written as `T-L` where `T` is a temperature in °C and `L` is a fan level in %. At least two pairs are required, temperatures must be strictly ascending, and all values must be in the range `[0..100]`. When `control_function=` is present in a section it overrides `min_temp=`, `max_temp=`, `min_level=`, and `max_level=` — the two forms are mutually exclusive.
+Each pair is written as `T-L` where `T` is a temperature in °C and `L` is a fan level in %. At least two pairs are required, temperatures must be strictly ascending, and all values must be in the range `[0..100]`. When `control_function=` is present in a section it takes precedence over `min_temp=`, `max_temp=`, `min_level=`, and `max_level=` — those keys are ignored (and not validated). The ignored state is reported at `CONFIG` log level.
 
 The `steps=` parameter still applies: it controls how many discrete plateaus the interior of the curve is divided into before being sent to the fan. The two endpoint temperatures are always pinned exactly to their specified levels; the `steps` interior plateaus together with the 2 pinned endpoints produce `steps + 2` plateaus in total.
 
@@ -265,7 +268,7 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 
 | `platform_name=` parameter | Platform                                     | Notes                                                                                            |
 |----------------------------|----------------------------------------------|--------------------------------------------------------------------------------------------------|
-| `auto`                     | automatic discovery based on BMC information | Default behaviour                                                                                |
+| `auto`                     | automatic discovery based on BMC information | Reads product name from IPMI; selects `X10QBi` if the name is `X10QBi`, `genericx9` if the name starts with `X9`, otherwise falls back to `generic` |
 | `generic`                  | Generic X10-X13/H10-H13 Supermicro boards    | Uses standard Supermicro IPMI raw commands                                                       |
 | `genericx9`                | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                  |
 | `X10QBi`                   | Supermicro X10QBi motherboard                | Nuvoton NCT7904D fan controller, 4 fan zones (0x10-0x13), see [issue #69](https://github.com/petersulyok/smfc/issues/69) and [PR #97](https://github.com/petersulyok/smfc/pull/97) |
@@ -273,7 +276,7 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 With this abstraction layer, new Supermicro motherboards can also be added to `smfc` with a good understanding of their IPMI raw commands and fan control logic.
 
 Some X9 motherboards are supported (since `smfc v5.2.0`) via the `genericx9` platform, provided they support the specific IPMI raw commands used for fan control. There is 
-no auto-detection for X9 boards, so you must set `platform_name=genericx9` in the configuration file.
+no auto-detection for X9 boards, so you must set `platform_name=genericx9` in the configuration file. The `X10QBi` platform is auto-detected when the BMC product name is exactly `X10QBi`.
 
 For the newer X14/H14 motherboards, compatibility is still being investigated. There are some issues ([#98](https://github.com/petersulyok/smfc/issues/98)) and discussions ([#92](https://github.com/petersulyok/smfc/discussions/92), [#106](https://github.com/petersulyok/smfc/discussions/106)) about this to get better understanding.
 
@@ -306,6 +309,8 @@ Like many other utilities (created by NAS and home server community), `smfc` als
    1. initially configured to full speed (100%)
    2. then their speed can be safely configured in `[Lower Critical, Upper Critical]` interval
    3. if any fan speed oversteps either `Lower Critical` or `Upper Critical` threshold then IPMI will generate an _assertion event_ and will set all fan speeds back to 100% in the zone
+
+If something else flips the BMC out of FULL mode while `smfc` is running (the BMC web UI, an external `ipmitool` invocation, a firmware quirk), `smfc` keeps issuing per-zone level commands but the BMC may apply its own profile instead — fans run at unintended speeds without any visible error in the log. To detect and react to this, `smfc` checks the BMC fan mode every loop iteration. The default `[Ipmi] enforce_fan_mode=true` logs the drift and re-asserts FULL plus all per-zone levels (some BMC firmwares reset zone levels when the mode changes); set it to `false` to make the service exit with code 11 instead, letting systemd restart the unit.
 
 Please also consider the fact that **fans are mechanical devices, their rotational speed is not stable** (it could be fluctuating). To avoid IPMI's assertion mechanism described here please follow the next steps: 
 
@@ -443,7 +448,7 @@ Add the repository and install:
 ```bash
 curl -fsSL https://petersulyok.github.io/smfc-deb/smfc-repo.gpg \
   | sudo gpg --dearmor -o /etc/apt/keyrings/smfc-repo.gpg
-echo "deb [signed-by=/etc/apt/keyrings/smfc-repo.gpg] https://petersulyok.github.io/smfc-deb stable main" \
+echo "deb [arch=amd64,arm64 signed-by=/etc/apt/keyrings/smfc-repo.gpg] https://petersulyok.github.io/smfc-deb stable main" \
   | sudo tee /etc/apt/sources.list.d/smfc.list
 sudo apt update && sudo apt install smfc
 ```
@@ -458,6 +463,8 @@ sudo rm /etc/apt/sources.list.d/smfc.list /etc/apt/keyrings/smfc-repo.gpg
 ```
 
 Compatible with Debian 12+, Ubuntu 22.04+. See the [smfc-deb README](https://github.com/petersulyok/smfc-deb) for the full distribution list. The package installs the same files as the manual installation (service unit, configuration, man page, sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](PACKAGES.md) for build-from-source instructions.
+The DEB package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc)); from then on it starts automatically on every boot.
+
 
 #### 9.2. RPM package installation
 Pre-built `.rpm` packages are available from the [smfc-rpm DNF repository](https://github.com/petersulyok/smfc-rpm), hosted on GitHub Pages and signed with a dedicated GPG key.
@@ -481,6 +488,7 @@ sudo rm /etc/yum.repos.d/smfc.repo
 ```
 
 Compatible with Fedora 39+, RHEL/Rocky/AlmaLinux 9+ (with EPEL), CentOS Stream 9+, openSUSE Leap 15.5+. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for the full distribution list. The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](PACKAGES.md) for build-from-source instructions.
+The RPM package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc)); from then on it starts automatically on every boot.
 
 #### 9.3. Docker installation
 `smfc` is also available as a docker image, see more details in [Docker.md](docker/Docker.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting.
@@ -570,8 +578,8 @@ curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main
 
 The script removes the installed `smfc` files and the Python package.
 
-### 10. Configuration file
-After successful installation, create/edit your new configuration file. If you just upgraded to a new `smfc` version, you can preserve the existing one. 
+### 10. Configuration
+After successful installation, create/edit your new configuration file. Its default location is `/etc/smfc/smfc.conf` (and command line options live in `/etc/default/smfc`). If you just upgraded to a new `smfc` version, you can preserve the existing one. 
 
 #### 10.1 Right strategy to create your configuration file
 You have to think over and answer the following questions:
@@ -611,6 +619,10 @@ fan_level_delay=2
 #  genericx9  - Generic Supermicro X9 platform
 #  X10QBi     - Supermicro X10QBi platform
 platform_name=auto
+# Re-assert FULL fan mode if the BMC drifts away from it (bool, default=true)
+# When true, the service logs the drift and restores FULL plus all per-zone levels.
+# When false, the service exits with code 11 on drift.
+enforce_fan_mode=true
 
 
 # CPU fan controller: works based on CPU(s) temperature.
@@ -775,6 +787,17 @@ ipmi_zone=1
 polling=30
 # Constant fan level (int, %, default=50)
 level=50
+
+
+# HTTP exporter: serves /snapshot (JSON for smfc-client) and /metrics (Prometheus text format).
+[Exporter]
+# Enable the HTTP exporter (bool, default=false)
+enabled=false
+# IP to bind on (str, default=127.0.0.1)
+# Use 127.0.0.1 for local-only access; use 0.0.0.0 or a specific LAN IP for remote Prometheus.
+bind_address=127.0.0.1
+# TCP port (int, 1..65535, default=9099)
+port=9099
 ```
 
 Important notes:
@@ -782,8 +805,8 @@ Important notes:
 2. `[HD] hd_names=` is a compulsory parameter for HD fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent and could change after a reboot!
 3. `[NVME] nvme_names=` is a compulsory parameter for NVME fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/nvme0n1` form is not persistent and could change after a reboot!
 4. `[CPU] / [HD] / [NVME] min_level= / max_level=` should be configured in alignment with threshold configuration (see more details in [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)). Be patient, several refinement cycles could happen.
-5. `[CPU] / [HD] / [NVME] / [GPU] control_function=` defines an advanced multi-segment user-defined control function as a list of `temp-level` value pairs (at least 2 pairs, temperatures strictly ascending). When specified, it overrides the linear `min_temp/max_temp/min_level/max_level` form. See [chapter 2.2](#22-advanced-multi-segment-user-defined-control-function) for details.
-6. Multiple instances of the same fan controller can be created using numbered section names (e.g. `[CPU:0]`, `[CPU:1]`). Each instance has its own full set of parameters and can be assigned to a different IPMI zone with a different fan curve. Two enabled instances of the same type must not share the same IPMI zone. See [chapter 1.4](#14-multiple-fan-curves-per-ipmi-zone) for details.
+5. `[CPU] / [HD] / [NVME] / [GPU] control_function=` defines an advanced multi-segment user-defined control function as a list of `temp-level` value pairs (at least 2 pairs, temperatures strictly ascending). When specified, it overrides the linear `min_temp/max_temp/min_level/max_level` form. See [chapter 2.2](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#22-advanced-multi-segment-user-defined-control-function) for details.
+6. Multiple instances of the same fan controller can be created using numbered section names (e.g. `[CPU:0]`, `[CPU:1]`). Each instance has its own full set of parameters and can be assigned to a different IPMI zone with a different fan curve. Two enabled instances of the same type must not share the same IPMI zone. See [chapter 1.4](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#14-multiple-fan-curves-per-ipmi-zone) for details.
 7. Several sample configuration files are provided in `./config/samples` folder.
 8. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
 
@@ -851,7 +874,174 @@ With the help of command `journalctl` you can check logs easily. For example:
 
 		journalctl -b -u smfc
 
-### 13. FAQ
+### 13. Remote monitoring (HTTP exporter)
+For users who want a quick view of the daemon's live state — what each controller "sees", what fan level is applied to each IPMI zone, which disks are in standby — `smfc` can run a small HTTP exporter alongside the main control loop. The exporter serves two routes on the same port:
+
+- `/snapshot` — JSON, consumed by [`smfc-client`](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#14-smfc-client) and easy to script against with `curl | jq`.
+- `/metrics` — Prometheus text format, scrapeable by Prometheus (no third-party Python deps).
+
+The exporter is **disabled by default** — opt in via the `[Exporter]` section:
+
+```ini
+[Exporter]
+enabled=true
+bind_address=127.0.0.1   # change to 0.0.0.0 (or a specific LAN IP) when Prometheus runs elsewhere
+port=9099
+```
+
+`smfc-client` automatically uses the exporter's `/snapshot` when it's enabled, which is dramatically faster than the standalone path because it avoids spawning ~10 ipmitool / smartctl subprocesses per invocation. Pass `--standalone` to bypass the exporter for diagnostics.
+
+**Verifying the routes locally:**
+
+```bash
+curl -s http://127.0.0.1:9099/snapshot | jq .
+curl -s http://127.0.0.1:9099/metrics
+curl -s http://127.0.0.1:9099/healthz   # always 200 "ok" while the exporter is running
+```
+
+**Example Prometheus scrape job** (the typical homelab setup is Prometheus running in Docker inside an LXC on a different host than smfc itself — point it at the host running `smfc.service`):
+
+```yaml
+scrape_configs:
+  - job_name: smfc
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['<smfc-host-or-ip>:9099']
+```
+
+Notes:
+- Metrics include `smfc_temperature_celsius`, `smfc_controller_level_percent`, `smfc_fan_level_percent`, `smfc_controller_zone`, `smfc_disk_standby`, the `smfc_fan_mode_enforced_total` counter, and an `smfc_up{version="..."} 1` sentinel (BMC identity is in `smfc_bmc_info`). Each controller's static steering window is exported as `smfc_controller_temperature_min_celsius` / `_max_celsius` and `smfc_controller_level_min_percent` / `_max_percent`, so a dashboard can colour each controller by its position within its own configured range.
+- The exporter uses only Python's stdlib (`http.server`, `urllib`, `json`). No `prometheus_client` package is required.
+- A bind failure (e.g. port already in use) is logged but does **not** stop the fan-control loop — fan control is the priority.
+- All data is served from the daemon's already-cached state. The request handler issues no `ipmitool` or `smartctl` subprocesses, so a Prometheus scrape can never wake disks the daemon has put to sleep.
+
+### 14. smfc-client
+`smfc-client` is a separate console script (installed alongside the `smfc` service) that prints a **one-shot, read-only snapshot** of what `smfc` sees: BMC information, the current IPMI fan mode, every enabled fan controller with its temperature and applied fan level, the live per-zone levels, and the *Standby Guard* state for HD arrays. It never changes fan state and does not require the `smfc` service to be running. Use it to verify your configuration is doing the right thing without grepping through the system log.
+
+> `smfc-client` is shipped with `smfc v6.0.0` and later — it is not available on `smfc v5.x` and earlier releases.
+
+It reads the **same configuration file** as the service (`/etc/smfc/smfc.conf` by default), so it always reports on the same controllers and zones the service manages. There are two data sources, selected automatically:
+
+- **Online (via the service):** if the `[Exporter]` section is enabled in the configuration (see [chapter 13.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#13-remote-monitoring-http-exporter)), `smfc-client` fetches the `/snapshot` JSON from the running service. This is dramatically faster because it serves already-cached state and spawns no `ipmitool`/`smartctl` subprocesses (so it can never wake disks the daemon has put to sleep).
+- **Offline (standalone):** if the exporter is disabled, unreachable, or `--standalone` is given, `smfc-client` reads the BMC and disks directly via `ipmitool`/hwmon/`smartctl`. This path typically needs root, so run it with `sudo smfc-client -s`.
+
+The first lines of the output state which source was used: `source: smfc service (live snapshot)` online, or `source: ipmitool (smfc service is not reachable)` offline (it says "not reachable" rather than "not running" because offline mode is also reached when the exporter is simply disabled or `--standalone` is passed). The online report additionally shows the service `uptime` (verbose only) and annotates the fan-mode line with how many times FULL mode was re-enforced and how old the reading is; the offline report reads the IPMI fan mode live and warns if the BMC is not in FULL mode.
+
+The report has two modes:
+
+- **Default** is a compact summary: just enough to confirm "is smfc running and on the right hardware?" — the BMC's Product line + Fan mode, the Fan controllers table, and the live IPMI zone levels.
+- **`--verbose` (`-V`)** unfolds the full picture: the complete BMC fingerprint, the service uptime, and a per-controller block below the Fan controllers table showing the steering window (`[temp_min..temp_max]C → [level_min..level_max]%`), the active LUT (a `Curve:` line for controllers configured with `control_function=...`), the per-device temperatures, and the *Standby Guard* status folded into the HD block.
+
+When stdout is a terminal and `--no-color` is not set, the report is **colourised**:
+
+- Section headers (`BMC`, `Fan controllers`, `[CPU]`/`[HD]`/`[NVME]`/`[GPU]`, `IPMI zones (live)`) render in bold bright-blue.
+- Each `Temp` and `Level` cell is banded against the controller's own steering window: **DIM** below the floor (idle), **GREEN** in the lower 70 % (working), **YELLOW** in the upper 30 % (warm — fans ramping), **RED** at or above the ceiling (curve maxed out). The per-device temperatures inside the verbose `Device` list use the same banding against the parent controller's window — handy for spotting a single hot disk dragging the aggregate up.
+- HD per-disk state cells show `STANDBY` in dim grey and `ACTIVE` in green.
+- The fan-mode line shows `FULL` in green and any other mode in red, accompanied by a warning.
+
+#### 14.1. Command-line parameters
+
+| Flag      | Long form       | Argument | Default               | Description                                                                          |
+|-----------|-----------------|----------|-----------------------|--------------------------------------------------------------------------------------|
+| `-c FILE` | `--config FILE` | path     | `/etc/smfc/smfc.conf` | Configuration file to read (same format the service uses).                           |
+| `-s`      | `--sudo`        | —        | off                   | Run `ipmitool` and `smartctl` via `sudo`. Required on the standalone path as non-root. |
+| `-V`      | `--verbose`     | —        | off                   | Expand each enabled fan controller into a per-controller block with window, curve, devices, and standby state. |
+| `-nc`     | `--no-color`    | —        | auto                  | Disable ANSI colors. Colors auto-disable when stdout is not a terminal.              |
+| `-sa`     | `--standalone`  | —        | off                   | Bypass the service exporter and read sensors directly.                               |
+| `-v`      | `--version`     | —        | —                     | Print `smfc-client X.Y.Z` and exit.                                                  |
+| `-h`      | `--help`        | —        | —                     | Show help and exit.                                                                  |
+
+Exit codes: `0` = snapshot printed (per-controller errors are non-fatal), `6` = configuration file missing or invalid, `8` = IPMI/BMC error (e.g. `ipmitool` not found or permission denied), `9` = udev unavailable.
+
+#### 14.2. Sample output
+
+Default (non-verbose) — the at-a-glance summary:
+
+```
+smfc-client 6.0.0
+  config: /etc/smfc/smfc.conf
+  source: smfc service (live snapshot)
+
+BMC
+  Product       : X11SCH-LN4F (6929)
+  Fan mode      : FULL (1)  (enforced 0x, read 0.3s ago)
+
+Fan controllers
+  Section   Type    Zones     Devices  Temp      Level
+  -------   -----   -----     -------  ------    -----
+  CPU       cpu     [0]       1        51.0 C     47 %
+  HD        hd      [1]       4        39.0 C     45 %
+  CONST     const   [2]       -        -          50 %
+
+IPMI zones (live)
+  Zone    Level
+  ----    -----
+  0        47 %
+  1        45 %
+  2        50 %
+```
+
+With `--verbose` (`-V`) the full report expands the BMC fingerprint, adds the service `uptime`, and emits one block per enabled fan controller with its steering window, active curve (when a `control_function` is configured), and per-device temperatures. The HD controller's `Standby Guard` line is folded into its block; CONST controllers stay in the Fan controllers table but don't get their own block (no devices, no curve):
+
+```
+smfc-client 6.0.0
+  config: /etc/smfc/smfc.conf
+  source: smfc service (live snapshot)
+  uptime: 1d 00:00:00
+
+BMC
+  Manufacturer  : Super Micro Computer Inc. (10876)
+  Product       : X11SCH-LN4F (6929)
+  Firmware      : 1.74
+  IPMI version  : 2.0
+  Platform      : GenericPlatform
+  Fan mode      : FULL (1)  (enforced 0x, read 0.3s ago)
+
+Fan controllers
+  Section   Type    Zones     Devices  Temp      Level
+  -------   -----   -----     -------  ------    -----
+  CPU       cpu     [0]       1        51.0 C     47 %
+  HD        hd      [1]       4        39.0 C     45 %
+  CONST     const   [2]       -        -          50 %
+
+[CPU]  cpu  zone(s)=[0]  shared=no  polling=2.0s
+  Window: T=[35..75]C → L=[35..100]%
+  Curve:  35→35, 55→50, 70→80, 75→100
+  Temp:   51.0 C  →  Level:  47 %
+  Device  Temp
+  ------  ------
+  cpu0    51.0 C
+
+[HD]  hd  zone(s)=[1]  shared=no  polling=960.0s
+  Window: T=[35..48]C → L=[35..100]%
+  Temp:   39.0 C  →  Level:  45 %
+  Standby Guard: enabled (limit=2)  Array: SAAA  (1/4 standby)
+  Device                              Temp      State
+  ----------------------------------  ------    -------
+  ata-WDC_WD120EFAX-68UNTN0_99GMFQVW  36.0 C    STANDBY
+  ata-WDC_WD120EFAX-68UNTN0_ASWRX1X8  38.0 C    ACTIVE
+  ata-WDC_WD120EFAX-68UNTN0_F9ZAPZG7  39.0 C    ACTIVE
+  ata-WDC_WD120EFAX-68UNTN0_MPZ04PTK  39.0 C    ACTIVE
+
+IPMI zones (live)
+  Zone    Level
+  ----    -----
+  0        47 %
+  1        45 %
+  2        50 %
+```
+
+A few things to notice in the verbose block:
+
+- **`shared=yes/no`** tells you whether another controller is currently driving this row's IPMI zone (zone arbitration). When `yes`, this controller's request was deferred to the other one; useful for spotting a CPU and an NVMe sharing zone 0 where one drags the other up or down.
+- **`Window:` and `Curve:`** describe the active steering curve. When a `control_function=...` is configured, `Window:` shows the curve's actual `[temp_min..temp_max] → [level_min..level_max]` envelope (not the legacy `min_temp/max_temp` keys, which the runtime ignores in this mode), and `Curve:` lists the breakpoint pairs directly. Controllers without a `control_function` (legacy linear mode) skip the `Curve:` line — the `Window:` already says everything.
+- **`Temp: X → Level: Y`** is the aggregated temperature the curve was evaluated against and the resulting level that ended up on the BMC. With colours on, both cells carry the band colour against the same window — at a glance you see whether the controller is idle, working, ramping, or maxed out.
+- **Device names** for HD and NVMe controllers are shown as the path basename (e.g. `ata-WDC_WD120EFAX-68UNTN0_99GMFQVW` instead of `/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_99GMFQVW`) so per-disk rows stay scannable. The snapshot JSON and Prometheus labels still carry the full stable-id paths.
+- **`Standby Guard`** appears as a single line inside the `[HD]` block when the feature is enabled; the per-disk `STANDBY`/`ACTIVE` annotation lives in the right-most column of that block's device table. Disks in standby render in dim grey because the temperature reading is stale (smartctl is skipped while a disk sleeps).
+
+Each fan controller is constructed independently, so a single failing controller (e.g. a missing GPU tool or a non-existent disk) shows an `ERROR` row in the Fan controllers table while the rest of the report still renders.
+
+### 15. FAQ
 
 ### Q: My fans are spinning up and loud. What's wrong?
 Most probably, there was an assertion (i.e., the rotational speed of a fan went above or below an IPMI threshold) and IPMI switched back that zone to full rotational speed.
@@ -888,7 +1078,7 @@ The configuration is the following:
  - 4 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN3, FAN4) in IPMI CPU zone
  - 2 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) on an Y-adapter + [Noctua NF-A14 PWM](https://noctua.at/en/products/fan/nf-a14-pwm) fans (FANA, FANB) in IPMI HD zone
 
-### 14. References
+### 16. References
 Further readings:
 
 #### Supermicro
