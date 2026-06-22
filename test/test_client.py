@@ -518,8 +518,8 @@ class TestSafeHelpers:
     def test_display_device_name_strips_hd_path(self) -> None:
         """HD device paths render as the basename — /dev/disk/by-id/... is too noisy in the verbose list."""
         assert client._display_device_name(
-            "/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_2AH1BHVY", "hd"
-        ) == "ata-WDC_WD120EFAX-68UNTN0_2AH1BHVY"
+            "/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_99GMFQVW", "hd"
+        ) == "ata-WDC_WD120EFAX-68UNTN0_99GMFQVW"
         assert client._display_device_name("/dev/sda", "hd") == "sda"
 
     def test_display_device_name_strips_nvme_path(self) -> None:

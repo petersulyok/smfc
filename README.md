@@ -1016,10 +1016,10 @@ Fan controllers
   Standby Guard: enabled (limit=2)  Array: SAAA  (1/4 standby)
   Device                              Temp      State
   ----------------------------------  ------    -------
-  ata-WDC_WD120EFAX-68UNTN0_2AH1BHVY  36.0 C    STANDBY
-  ata-WDC_WD120EFAX-68UNTN0_8CH7T81E  38.0 C    ACTIVE
-  ata-WDC_WD120EFAX-68UNTN0_8CHUDDRE  39.0 C    ACTIVE
-  ata-WDC_WD120EFAX-68UNTN0_8CHUGGZE  39.0 C    ACTIVE
+  ata-WDC_WD120EFAX-68UNTN0_99GMFQVW  36.0 C    STANDBY
+  ata-WDC_WD120EFAX-68UNTN0_ASWRX1X8  38.0 C    ACTIVE
+  ata-WDC_WD120EFAX-68UNTN0_F9ZAPZG7  39.0 C    ACTIVE
+  ata-WDC_WD120EFAX-68UNTN0_MPZ04PTK  39.0 C    ACTIVE
 
 IPMI zones (live)
   Zone    Level
@@ -1034,7 +1034,7 @@ A few things to notice in the verbose block:
 - **`shared=yes/no`** tells you whether another controller is currently driving this row's IPMI zone (zone arbitration). When `yes`, this controller's request was deferred to the other one; useful for spotting a CPU and an NVMe sharing zone 0 where one drags the other up or down.
 - **`Window:` and `Curve:`** describe the active steering curve. When a `control_function=...` is configured, `Window:` shows the curve's actual `[temp_min..temp_max] → [level_min..level_max]` envelope (not the legacy `min_temp/max_temp` keys, which the runtime ignores in this mode), and `Curve:` lists the breakpoint pairs directly. Controllers without a `control_function` (legacy linear mode) skip the `Curve:` line — the `Window:` already says everything.
 - **`Temp: X → Level: Y`** is the aggregated temperature the curve was evaluated against and the resulting level that ended up on the BMC. With colours on, both cells carry the band colour against the same window — at a glance you see whether the controller is idle, working, ramping, or maxed out.
-- **Device names** for HD and NVMe controllers are shown as the path basename (e.g. `ata-WDC_WD120EFAX-68UNTN0_2AH1BHVY` instead of `/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_2AH1BHVY`) so per-disk rows stay scannable. The snapshot JSON and Prometheus labels still carry the full stable-id paths.
+- **Device names** for HD and NVMe controllers are shown as the path basename (e.g. `ata-WDC_WD120EFAX-68UNTN0_99GMFQVW` instead of `/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_99GMFQVW`) so per-disk rows stay scannable. The snapshot JSON and Prometheus labels still carry the full stable-id paths.
 - **`Standby Guard`** appears as a single line inside the `[HD]` block when the feature is enabled; the per-disk `STANDBY`/`ACTIVE` annotation lives in the right-most column of that block's device table. Disks in standby render in dim grey because the temperature reading is stale (smartctl is skipped while a disk sleeps).
 
 Each fan controller is constructed independently, so a single failing controller (e.g. a missing GPU tool or a non-existent disk) shows an `ERROR` row in the Fan controllers table while the rest of the report still renders. See [SMFC_CLIENT.md](SMFC_CLIENT.md) for the full design history and [CLIENT_SERVER.md](CLIENT_SERVER.md) for the request-thread contract that keeps the online path subprocess-free.
