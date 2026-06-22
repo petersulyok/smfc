@@ -795,6 +795,14 @@ class TestFormatReportFromSnapshot:
         assert "\x1b[" in out
         assert client.BOLD in out
         assert client.DIM in out  # Source line is dim
+        # Section headers (BMC, Fan controllers, [HD], IPMI zones (live)) are bold-cyan.
+        assert client.CYAN in out
+        # And the section labels appear after the CYAN escape — pin a couple.
+        assert f"{client.CYAN}BMC{client.RESET}" in out
+        assert f"{client.CYAN}Fan controllers{client.RESET}" in out
+        # No-color mode must produce no CYAN escapes at all.
+        plain = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
+        assert client.CYAN not in plain
 
     def test_const_controller_shows_target_level(self) -> None:
         """A ConstFc entry's row shows the configured target level (the Status column was removed)."""
