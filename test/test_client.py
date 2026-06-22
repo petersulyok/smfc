@@ -95,22 +95,26 @@ class TestParseArgs:
         assert args.sudo is False
         assert args.no_color is False
         assert args.verbose is False
+        assert args.standalone is False
 
     def test_short_flags(self) -> None:
         """All short flags map to the right destinations."""
-        args = client._parse_args(["-c", "/tmp/foo.conf", "-s", "-nc", "-V"])
+        args = client._parse_args(["-c", "/tmp/foo.conf", "-s", "-nc", "-V", "-sa"])
         assert args.config_file == "/tmp/foo.conf"
         assert args.sudo is True
         assert args.no_color is True
         assert args.verbose is True
+        assert args.standalone is True
 
     def test_long_flags(self) -> None:
         """Long-form flags map to the right destinations."""
-        args = client._parse_args(["--config", "/tmp/bar.conf", "--sudo", "--no-color", "--verbose"])
+        args = client._parse_args(["--config", "/tmp/bar.conf", "--sudo", "--no-color",
+                                   "--verbose", "--standalone"])
         assert args.config_file == "/tmp/bar.conf"
         assert args.sudo is True
         assert args.no_color is True
         assert args.verbose is True
+        assert args.standalone is True
 
 
 class TestUseColor:

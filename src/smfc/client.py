@@ -77,7 +77,7 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         dest="no_color", help="disable ANSI colors in output")
     parser.add_argument("-V", "--verbose", action="store_true", default=False,
                         help="show per-device temperatures")
-    parser.add_argument("--standalone", action="store_true", default=False, dest="standalone",
+    parser.add_argument("-sa", "--standalone", action="store_true", default=False, dest="standalone",
                         help="bypass the smfc service and read sensors directly")
     parser.add_argument("-v", "--version", action="version", version="%(prog)s " + version("smfc"))
     return parser.parse_args(argv)

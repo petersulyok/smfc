@@ -947,7 +947,7 @@ When stdout is a terminal and `--no-color` is not set, the report is **colourise
 | `-s`      | `--sudo`        | —        | off                   | Run `ipmitool` and `smartctl` via `sudo`. Required on the standalone path as non-root. |
 | `-V`      | `--verbose`     | —        | off                   | Expand each enabled fan controller into a per-controller block with window, curve, devices, and standby state. |
 | `-nc`     | `--no-color`    | —        | auto                  | Disable ANSI colors. Colors auto-disable when stdout is not a terminal.              |
-|           | `--standalone`  | —        | off                   | Bypass the service exporter and read sensors directly.                               |
+| `-sa`     | `--standalone`  | —        | off                   | Bypass the service exporter and read sensors directly.                               |
 | `-v`      | `--version`     | —        | —                     | Print `smfc-client X.Y.Z` and exit.                                                  |
 | `-h`      | `--help`        | —        | —                     | Show help and exit.                                                                  |
 
