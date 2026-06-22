@@ -38,8 +38,14 @@ flowchart LR
         Service -.-> Log
         FC -.-> Log
         Ipmi -.-> Log
+        Service -- cached state --> Snapshot[build_snapshot]
+        Snapshot --> Exporter[Exporter\nHTTP server]
     end
     Ipmi --> IT[ipmitool] --> BMC --> Fans([fans])
+    Exporter -- /snapshot --> Client[smfc-client]
+    Exporter -- /metrics --> Prom([Prometheus])
+    Client -- standalone path --> Ipmi
+    Client -- standalone path --> FC
 ```
 
 ---
@@ -64,7 +70,10 @@ src/smfc/
 ├── hdfc.py               HdFc  — SATA/SAS HDD/SSD source (+ Standby Guard)
 ├── nvmefc.py             NvmeFc — NVMe HWMON source
 ├── gpufc.py              GpuFc  — Nvidia/AMD GPU source via SMI tools
-└── constfc.py            ConstFc — constant-level controller (no temp source)
+├── constfc.py            ConstFc — constant-level controller (no temp source)
+├── snapshot.py           build_snapshot() — serialize live service state to JSON
+├── exporter.py           Exporter — HTTP server for /snapshot, /metrics, /healthz
+└── client.py             smfc-client — one-shot status report (online or standalone)
 ```
 
 Files installed but not part of the Python package:
@@ -86,18 +95,33 @@ classDiagram
         +Config config
         +Log log
         +Ipmi ipmi
+        +Exporter exporter
         +controllers[]
         +applied_levels
         +shared_zones
+        +start_time
+        +last_fan_mode
+        +fan_mode_enforced_count
         +run()
     }
     class Config {
         +IpmiConfig ipmi
+        +ExporterConfig exporter
         +CpuConfig[] cpu
         +HdConfig[] hd
         +NvmeConfig[] nvme
         +GpuConfig[] gpu
         +ConstConfig[] const
+    }
+    class ExporterConfig {
+        +enabled
+        +bind_address
+        +port
+    }
+    class Exporter {
+        +start()
+        +stop()
+        +bound_address()
     }
     class Log
     class Ipmi {
@@ -126,12 +150,14 @@ classDiagram
         +run()
     }
 
-    Service o--> Config       : owns
-    Service o--> Log          : owns
-    Service o--> Ipmi         : owns
+    Service o--> Config            : owns
+    Service o--> Log               : owns
+    Service o--> Ipmi              : owns
+    Service o--> Exporter          : owns (optional)
     Service o--> "*" FanController : owns
     Service o--> "*" ConstFc       : owns
-    Ipmi o--> Platform        : owns
+    Config o--> ExporterConfig     : owns
+    Ipmi o--> Platform             : owns
     Platform <|-- GenericPlatform
     Platform <|-- GenericX9Platform
     Platform <|-- X10QBi
@@ -196,7 +222,7 @@ Validation policy:
   loop starts.
 
 `parse_control_function()` handles the advanced `control_function=` syntax
-(see §10.2). When the key is absent `_read_control_function()` returns an
+(see §11.2). When the key is absent `_read_control_function()` returns an
 empty list and `config.control_function` stays empty; `FanController.build_lut()`
 then falls back to `create_legacy_lut()` and reads `min_temp` / `max_temp` /
 `min_level` / `max_level` directly. When `control_function=` is present it takes
@@ -331,7 +357,7 @@ The mapping temperature → fan level is represented at runtime as a
 `FanController.build_lut(config)`. The index is the integer temperature in °C
 (0–100); the value is the fan level in % (0–100).
 
-Two configuration styles feed into the same LUT (see §10.2 for the full
+Two configuration styles feed into the same LUT (see §11.2 for the full
 algorithm):
 
 - **Legacy** (`min_temp` / `max_temp` / `min_level` / `max_level`): produces a
@@ -611,9 +637,160 @@ for), and it does not apply to *disabled* sections.
 
 ---
 
-## 10. Special features
+## 10. Exporter and smfc-client
 
-### 10.1 Standby Guard (`HdFc.run_standby_guard`)
+### 10.1 Snapshot (`snapshot.py`)
+
+`build_snapshot(service)` is the single serialization point for live service
+state. It is called by two consumers:
+
+- the HTTP exporter's `/snapshot` handler (on every GET request), and
+- the `/metrics` handler (indirectly via `render_prometheus`).
+
+The function reads **only already-cached attributes** on the `Service`,
+its `controllers` list, and the `Ipmi` instance. It issues no subprocesses
+(`ipmitool`, `smartctl`, `*-smi`) and holds no lock — this is intentional:
+the GIL plus Python's reference-counting make attribute reads from a daemon
+thread safe against the main loop without an explicit mutex. The price is that
+a snapshot might capture state from two different loop iterations when taken
+exactly at a boundary, but the resulting "stale by one tick" inaccuracy is
+acceptable for a monitoring tool.
+
+Top-level snapshot keys:
+
+| Key | Type | Description |
+|---|---|---|
+| `version` | `int` | Schema version (`SNAPSHOT_SCHEMA_VERSION = 1`) |
+| `generated_at` | `float` | Unix timestamp when the snapshot was taken |
+| `smfc_version` | `str` | Installed `smfc` package version |
+| `start_time` | `float` | Unix timestamp when `Service.run()` started |
+| `fan_mode_enforced_count` | `int` | Times FULL mode was re-asserted after BMC drift |
+| `bmc` | `dict` | BMC identity (manufacturer, product, firmware, platform) |
+| `fan_mode` | `dict` | Last observed fan mode id, name, and age in seconds |
+| `fan_controllers` | `list` | One entry per controller (see below) |
+| `zones` | `dict` | Zone → `{"applied_level_pct": N}` after arbitration |
+
+Per-controller entry fields of note:
+
+- `temp_min_c` / `temp_max_c` / `level_min_pct` / `level_max_pct` — always
+  derived from the **active** steering envelope: the curve's first/last pair
+  when `control_function` is set, otherwise the legacy `min_*` / `max_*`
+  config keys. This keeps smfc-client's colour-banding consistent with the
+  LUT the service actually uses.
+- `control_function` — raw breakpoint list (`[[T, L], …]`), empty list in
+  legacy mode. smfc-client renders this as the `Curve:` line in verbose mode.
+- `devices` — per-device `{"name": …, "temp_c": …}` list; populated from
+  `controller.device_names()` and `controller.last_per_device_temps`.
+- `standby_guard` — HD-only; `{"enabled": true, "limit": N, "states": […],
+  "array_state": "AAAS", "standby_count": N}`.
+
+### 10.2 HTTP Exporter (`exporter.py`)
+
+`Exporter` owns a `_ExporterServer` (a `ThreadingMixIn + HTTPServer`) and a
+daemon thread running `serve_forever()`. Fan control is **never gated on HTTP**:
+a bind failure is logged and the service continues without the exporter.
+
+Endpoints:
+
+| Path | Method | Response | Description |
+|---|---|---|---|
+| `/snapshot` | GET | `application/json` | Full snapshot dict from `build_snapshot()` |
+| `/metrics` | GET | `text/plain; version=0.0.4` | Prometheus exposition format from `render_prometheus()` |
+| `/healthz` | GET | `text/plain` | `ok\n` — liveness probe, no snapshot required |
+| anything else | GET | 404 | |
+
+`render_prometheus(snapshot)` translates the snapshot dict into Prometheus
+gauge metrics. Each metric family is preceded by a `# HELP` and `# TYPE`
+header. Label values are escaped per the exposition format spec
+(`_escape_label_value`). Key metric families:
+
+| Metric | Labels | Description |
+|---|---|---|
+| `smfc_up` | `version` | Liveness sentinel (value always 1) |
+| `smfc_start_time_seconds` | — | Unix start time (dashboards compute uptime) |
+| `smfc_bmc_info` | `product_name, firmware_version, manufacturer_name` | BMC identity (value always 1) |
+| `smfc_fan_mode_enforced_total` | — | Counter of FULL-mode re-assertions |
+| `smfc_controller_zone` | `section, type, zone` | Controller-to-zone mapping (value always 1) |
+| `smfc_temperature_celsius` | `section, type, zone` | Per-controller aggregated temperature |
+| `smfc_device_temperature_celsius` | `section, type, device` | Per-device individual temperature |
+| `smfc_controller_level_percent` | `section, type, zone` | Fan level requested by controller |
+| `smfc_controller_temperature_min_celsius` | `section, type, zone` | Steering window floor |
+| `smfc_controller_temperature_max_celsius` | `section, type, zone` | Steering window ceiling |
+| `smfc_controller_level_min_percent` | `section, type, zone` | Level window floor |
+| `smfc_controller_level_max_percent` | `section, type, zone` | Level window ceiling |
+| `smfc_fan_level_percent` | `zone` | Applied level per zone after arbitration |
+| `smfc_disk_standby` | `section, device` | Disk standby state (1=standby, 0=active); HD with standby guard only |
+
+The `_ExporterHandler` subclasses `BaseHTTPRequestHandler`. Handler exceptions
+are caught, logged at ERROR level, and answered with HTTP 500 so a faulty
+handler never crashes the daemon thread.
+
+### 10.3 smfc-client (`client.py`)
+
+`smfc-client` is a read-only console script that prints a one-shot snapshot
+of smfc-managed state. It has two operating modes, selected automatically:
+
+```mermaid
+flowchart TD
+    A[smfc-client starts] --> B[Parse config file]
+    B --> C{--standalone?}
+    C -- no --> D{exporter.enabled in config?}
+    D -- yes --> E[_try_fetch_snapshot\nHTTP GET /snapshot]
+    E --> F{success?}
+    F -- yes --> G[_format_report_from_snapshot\nonline path]
+    F -- no --> H[_format_report\nstandalone path]
+    D -- no --> H
+    C -- yes --> H
+    H --> I[_construct_controllers\ndirect sensor reads]
+    I --> J[_format_report\nformat output]
+    G --> K[print + exit 0]
+    J --> K
+```
+
+**Online path** (`_format_report_from_snapshot`): fetches `/snapshot` from the
+running smfc service. No subprocesses, no IPMI calls. The data source line in
+the report reads `source: smfc service (live snapshot)`. A 1-second timeout
+guards the fetch; any failure falls back to the standalone path.
+
+**Standalone path** (`_format_report`): constructs fan controllers directly
+(same classes as the service), reads temperatures live, and queries IPMI for
+fan levels and fan mode. Slower than the online path and requires access to
+`ipmitool` (and optionally `sudo`). The data source line reads
+`source: standalone (direct read)`.
+
+Both paths produce the same output structure:
+
+1. **Banner** — `smfc-client <version>`, config path, data source line.
+2. **BMC block** — product name, fan mode. Verbose adds manufacturer, firmware,
+   IPMI version, platform class.
+3. **Fan controllers table** — one row per controller: Section, Type, Zones,
+   Devices, Temp, Level. ANSI colour-banding (DIM/GREEN/YELLOW/RED) is applied
+   to Temp and Level cells against the controller's own steering window.
+4. **Verbose per-controller blocks** (with `--verbose`) — Window line
+   (`T=[min..max]C → L=[min..max]%`), optional Curve line for advanced
+   control functions, current Temp/Level, optional Standby Guard line (HD),
+   indented per-device temperature list.
+5. **IPMI zones (live)** table — zone-to-applied-level mapping (standalone
+   path reads live; online path uses the snapshot's `zones` section).
+
+CLI flags:
+
+| Flag | Short | Default | Effect |
+|---|---|---|---|
+| `--config FILE` | `-c` | `/etc/smfc/smfc.conf` | Configuration file path |
+| `--sudo` | `-s` | off | Prefix `ipmitool`/`smartctl` with `sudo` |
+| `--no-color` | `-nc` | off | Disable ANSI colours |
+| `--verbose` | `-V` | off | Show per-device temperatures and verbose BMC/controller blocks |
+| `--standalone` | `-sa` | off | Force standalone path even when exporter is reachable |
+
+Exit codes mirror the service: `0`=ok, `6`=config error, `8`=IPMI error,
+`9`=udev error.
+
+---
+
+## 11. Special features
+
+### 11.1 Standby Guard (`HdFc.run_standby_guard`)
 
 Optional, opt-in feature for RAID arrays of SATA disks. Goal: when *enough*
 disks in the array have spun down to STANDBY, force the remaining ones down
@@ -632,7 +809,7 @@ poll. It:
 
 Disabled automatically when `count == 1`.
 
-### 10.2 Piecewise-linear control function (`control_function=`)
+### 11.2 Piecewise-linear control function (`control_function=`)
 
 `FanController.build_lut(config)` is the single dispatch point that produces
 the 101-element `levels_lut` for any controller at startup:
@@ -691,7 +868,7 @@ When `control_function=` is defined, any `min_temp=` / `max_temp=` / `min_level=
 
 ---
 
-## 11. Execution-order summary
+## 12. Execution-order summary
 
 ```
 main()                                          (cmd.py)
@@ -714,16 +891,20 @@ main()                                          (cmd.py)
     ├── for cfg in config.cpu / hd / nvme / gpu / const if cfg.enabled:
     │     instantiate fan controller (calls get_temp once)
     ├── _check_shared_zones()                   — mark deferred_apply
+    ├── _start_exporter()                       — Exporter(bind_addr, port, snapshot_fn)
+    │     └── Exporter.start()                  — bind socket, spawn daemon thread
     └── loop forever:
         ├── fc.run() for each fc
         │     └── may emit ipmitool raw via Ipmi.set_*_fan_level(s)
         ├── _apply_fan_levels() (if shared_zones)
         └── time.sleep(wait)
+            └── [exporter thread] GET /snapshot → build_snapshot(service)
+                                  GET /metrics  → render_prometheus(snapshot)
 ```
 
 ---
 
-## 12. Data flow per cooling iteration (sequence)
+## 13. Data flow per cooling iteration (sequence)
 
 ```mermaid
 sequenceDiagram
@@ -762,19 +943,19 @@ sequenceDiagram
 
 ---
 
-## 13. Special architectural considerations
+## 14. Special architectural considerations
 
 Non-obvious behaviors and design choices not covered elsewhere in this
 document.
 
-### 13.1 No locking around BMC access
+### 14.1 No locking around BMC access
 
 There is only one thread, so this is safe today. If anyone introduces
 concurrency in the future, *every* `Ipmi` method assumes it is the sole
 caller — the `time.sleep(fan_level_delay)` after each write is the only
 synchronization with the BMC and is not thread-safe.
 
-### 13.2 GPU SMI calls are batched across indices
+### 14.2 GPU SMI calls are batched across indices
 
 `GpuFc._get_nth_temp(i)` runs `nvidia-smi`/`rocm-smi` once per `polling`
 interval and caches the *full* per-GPU temperature list. The `i` argument
@@ -782,7 +963,7 @@ just indexes into that cache. This is why GPU polling is per-controller,
 not per-device — and why the SMI tool is invoked only once even when
 monitoring multiple GPUs.
 
-### 13.3 First-poll behavior
+### 14.3 First-poll behavior
 
 `last_time = monotonic() - (polling + 1)` in the base controller
 constructor: this forces the first `run()` call to actually poll, regardless
@@ -790,7 +971,7 @@ of how soon after startup it happens. Without this, the first iteration
 would be a no-op and the fans would sit at the BMC's default level until
 the first elapsed polling interval.
 
-### 13.4 `last_level == 0` is treated as "not initialized"
+### 14.4 `last_level == 0` is treated as "not initialized"
 
 `Service._collect_desired_levels` filters out controllers with
 `last_level <= 0`, meaning a brand-new controller that hasn't completed a
@@ -800,11 +981,11 @@ the first iteration.
 
 ---
 
-## 14. Release and distribution
+## 15. Release and distribution
 
 `smfc` ships across three coordinated GitHub repositories. Source lives in the main repo; signed APT and DNF repositories are hosted as separate repos so that build state, GPG signing material, and accumulated package metadata stay out of the source tree.
 
-### 14.1 Three-repository architecture
+### 15.1 Three-repository architecture
 
 | Repository | Role | Branch layout |
 |---|---|---|
@@ -814,7 +995,7 @@ the first iteration.
 
 Both `smfc-deb` and `smfc-rpm` use the `gh-pages` branch as the GitHub Pages source, exposing the repository at `https://petersulyok.github.io/smfc-deb/` and `https://petersulyok.github.io/smfc-rpm/` respectively.
 
-### 14.2 Release trigger flow
+### 15.2 Release trigger flow
 
 ```mermaid
 flowchart LR
@@ -843,7 +1024,7 @@ Sequence on release:
 
 Cross-repo dispatch requires the `PACKAGE_REPO_DISPATCH_TOKEN` secret in `smfc` — a fine-grained PAT with `Contents: Read and write` on both `smfc-deb` and `smfc-rpm`. The default `GITHUB_TOKEN` cannot dispatch across repositories.
 
-### 14.3 Package repository workflows
+### 15.3 Package repository workflows
 
 | Aspect | `smfc-deb/publish-deb.yml` | `smfc-rpm/publish-rpm.yml` |
 |---|---|---|
@@ -857,7 +1038,7 @@ Cross-repo dispatch requires the `PACKAGE_REPO_DISPATCH_TOKEN` secret in `smfc` 
 
 For users who need a specific historical version, the corresponding `.deb` / `.rpm` remains downloadable from the GitHub release page even after the APT repo has moved on to a newer release.
 
-### 14.4 Signing and trust model
+### 15.4 Signing and trust model
 
 A single dedicated GPG key (RSA 4096, 5-year expiry) signs both repositories. The key is **independent of the project maintainer's personal key**, generated specifically for package signing.
 
@@ -871,7 +1052,7 @@ The signing key never lives in the `smfc` source repository or in `smfc/packages
 
 ---
 
-## 15. Where to look next
+## 16. Where to look next
 
 - `test/test_*.py` — unit tests structured per source file; the
   `MockDevices` / `factory_mockdevice` helpers in `test/test_data.py`

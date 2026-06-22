@@ -98,7 +98,7 @@ In `smfc`, a temperature-driven fan controller implements the following control 
  2. it calculates a new fan level based on the user-defined control function and the temperature value
  3. the service applies the fan level for the IPMI zone(s) with IPMI commands (i.e. `ipmitool`)
 
-<img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="600">
+<img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="700">
 
 If the temperature source has multiple instances (e.g. multiple CPUs, HDDs, NVMEs or GPUs) then the user can configure a calculation method (i.e. minimum, average, maximum) for the calculation of the final temperature value (see `temp_calc=` parameter).
 
@@ -182,7 +182,7 @@ The simple form maps a single temperature interval `[min_temp..max_temp]` linear
      max_level=100
 ```
 
- <img src="https://github.com/petersulyok/smfc/raw/main/doc/linear_control_function.png" align="center" width="500">
+ <img src="https://github.com/petersulyok/smfc/raw/main/doc/linear_control_function.png" align="center" width="700">
 
 
 The dashed blue line shows the continuous linear ideal between `(min_temp, min_level)` and `(max_temp, max_level)`; the solid red staircase is the digitalized output actually applied to the fan (here with `steps=5`, producing 6 plateaus: one pinned at each endpoint plus four in the interior).
@@ -201,7 +201,7 @@ Each pair is written as `T-L` where `T` is a temperature in °C and `L` is a fan
 
 The `steps=` parameter still applies: it controls how many discrete plateaus the interior of the curve is divided into before being sent to the fan. The two endpoint temperatures are always pinned exactly to their specified levels; the `steps` interior plateaus together with the 2 pinned endpoints produce `steps + 2` plateaus in total.
 
- <img src="https://github.com/petersulyok/smfc/raw/main/doc/advanced_control_function.png" align="center" width="600">
+ <img src="https://github.com/petersulyok/smfc/raw/main/doc/advanced_control_function.png" align="center" width="700">
 
 The dashed blue line shows the continuous piecewise-linear ideal described by `control_function=`; the solid red staircase is the digitalized output actually applied to the fan (here with `steps=5`, producing 7 plateaus: one pinned at each endpoint plus five in the interior).
 
