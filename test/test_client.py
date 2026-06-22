@@ -238,10 +238,11 @@ class TestFormatReport:
         hd._get_nth_temp.side_effect = lambda i: [33.0, 34.5][i]
         entries = [("HD", "hd", hd, None)]
         out = client._format_report(ipmi, entries, "x.conf", use_color=False, verbose=True)
-        # Verbose mode emits a per-controller block: header, window, current, devices.
+        # Verbose mode emits a per-controller block: header, window, current, then a Device table.
         assert "[HD]" in out
         assert "Window:" in out
-        assert "Devices:" in out
+        assert "  Device" in out          # column header at 2-space indent
+        assert "  ------" in out          # dashed separator under the headers
         # HD names render as basename only — /dev/ prefix is stripped.
         assert "  sda" in out
         assert "33.0 C" in out
@@ -1076,7 +1077,8 @@ class TestFormatReportFromSnapshot:
         HD block (standby enabled) has Device/Temp/State; CPU (no standby) has Device/Temp only.
         The 'Temp' header column must start at the same character offset as the temperature
         value on the data row beneath it, and the 'State' header (when present) must align with
-        the STANDBY/ACTIVE cell.
+        the STANDBY/ACTIVE cell. A dashed separator sits between the header and the first data
+        row, so the comparison must skip that line.
         """
         snap = _sample_snapshot_dict()
         out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
@@ -1085,8 +1087,10 @@ class TestFormatReportFromSnapshot:
         hd_lines = hd_block.splitlines()
         hd_header_idx = next(i for i, l in enumerate(hd_lines) if l.lstrip().startswith("Device "))
         hd_header = hd_lines[hd_header_idx]
-        hd_first_row = hd_lines[hd_header_idx + 1]  # /dev/sda → "sda" with temp 33.0 C
+        hd_separator = hd_lines[hd_header_idx + 1]
+        hd_first_row = hd_lines[hd_header_idx + 2]  # /dev/sda → "sda" with temp 33.0 C
         assert "Device" in hd_header and "Temp" in hd_header and "State" in hd_header
+        assert hd_separator.lstrip().startswith("-")  # dashed separator under the headers
         assert hd_header.index("Temp") == hd_first_row.index("33.0 C")
         assert hd_header.index("State") == hd_first_row.index("ACTIVE")
         # CPU block (two columns: Device / Temp).
@@ -1094,8 +1098,10 @@ class TestFormatReportFromSnapshot:
         cpu_lines = cpu_block.splitlines()
         cpu_header_idx = next(i for i, l in enumerate(cpu_lines) if l.lstrip().startswith("Device "))
         cpu_header = cpu_lines[cpu_header_idx]
-        cpu_row = cpu_lines[cpu_header_idx + 1]
+        cpu_separator = cpu_lines[cpu_header_idx + 1]
+        cpu_row = cpu_lines[cpu_header_idx + 2]
         assert "Device" in cpu_header and "Temp" in cpu_header and "State" not in cpu_header
+        assert cpu_separator.lstrip().startswith("-")
         assert cpu_header.index("Temp") == cpu_row.index("42.3 C")
 
 

@@ -454,14 +454,16 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
         has_state = any(d[2] is not None for d in devices)
         name_w = max(len("Device"), max(len(d[0]) for d in devices))
         temp_w = 10  # matches the data-row format string below
-        # The Devices subsection: a 'Devices:' lead-in, then column headers aligned to the data
-        # rows (same 4-space indent, same column widths). 'State' is only shown for HD with
-        # standby guard enabled — the data rows decide that with has_state.
-        lines.append("  Devices:")
+        state_w = len("State")
+        # Devices subsection: column headers at the same 2-space indent as every other level-1
+        # row (Window:, Temp:, Standby Guard:), a dashed separator beneath, then the data rows.
+        # 'State' is only shown for HD with standby guard enabled — has_state decides.
         if has_state:
-            lines.append(f"    {'Device':<{name_w + 2}}{'Temp':<{temp_w}}State")
+            lines.append(f"  {'Device':<{name_w + 2}}{'Temp':<{temp_w}}State")
+            lines.append(f"  {'-' * name_w:<{name_w + 2}}{'-' * (temp_w - 2):<{temp_w}}{'-' * state_w}")
         else:
-            lines.append(f"    {'Device':<{name_w + 2}}Temp")
+            lines.append(f"  {'Device':<{name_w + 2}}Temp")
+            lines.append(f"  {'-' * name_w:<{name_w + 2}}{'-' * (temp_w - 2)}")
         for name, temp_str, state_str, temp_color in devices:
             # Pad the visible temp_str to the column width, THEN wrap colour. ANSI escapes are
             # zero-width on screen but real characters in the string, so colouring before padding
@@ -473,9 +475,9 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
                     state_cell = _wrap("STANDBY", DIM, use_color)
                 elif state_cell == "ACTIVE":
                     state_cell = _wrap("ACTIVE", GREEN, use_color)
-                lines.append(f"    {name:<{name_w + 2}}{temp_cell}{state_cell}")
+                lines.append(f"  {name:<{name_w + 2}}{temp_cell}{state_cell}")
             else:
-                lines.append(f"    {name:<{name_w + 2}}{temp_cell}")
+                lines.append(f"  {name:<{name_w + 2}}{temp_cell}")
     return lines
 
 
