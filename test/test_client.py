@@ -200,7 +200,9 @@ class TestFormatReport:
         # The standby line is folded into the [HD] block, not a free-standing section.
         hd_block = out.split("[HD]", 1)[1]
         assert "Standby Guard" in hd_block.split("\n\n", 1)[0]
-        assert "/dev/sda" in out
+        # HD device names render as the basename only (full /dev/disk/by-id/... paths get stripped).
+        assert "  sda" in out
+        assert "/dev/sda" not in out
         assert "ACTIVE" in out
         assert "STANDBY" in out
         assert "AASS" in out
@@ -240,10 +242,12 @@ class TestFormatReport:
         assert "[HD]" in out
         assert "Window:" in out
         assert "Devices:" in out
-        assert "/dev/sda" in out
+        # HD names render as basename only — /dev/ prefix is stripped.
+        assert "  sda" in out
         assert "33.0 C" in out
-        assert "/dev/sdb" in out
+        assert "  sdb" in out
         assert "34.5 C" in out
+        assert "/dev/sda" not in out
 
     def test_devices_section_per_device_error_isolated(self) -> None:
         """A single failing _get_nth_temp() call renders 'ERROR' for that row but does not break the table."""
@@ -283,7 +287,9 @@ class TestFormatReport:
         hd._get_nth_temp.side_effect = lambda i: 33.0
         entries = [("CPU", "cpu", cpu, None), ("HD", "hd", hd, None)]
         out = client._format_report(ipmi, entries, "x.conf", use_color=False, verbose=True)
-        assert "/dev/sda" in out
+        # HD name renders as basename only.
+        assert "  sda" in out
+        assert "/dev/sda" not in out
         # cpu0 must NOT appear because device_names() raised for the CPU controller.
         assert "cpu0" not in out
 
@@ -470,6 +476,26 @@ class TestSafeHelpers:
         controller._get_nth_temp.side_effect = RuntimeError("smartctl failed")
         assert client._safe_nth_temp_str(controller, 0) == "ERROR"
 
+    def test_display_device_name_strips_hd_path(self) -> None:
+        """HD device paths render as the basename — /dev/disk/by-id/... is too noisy in the verbose list."""
+        assert client._display_device_name(
+            "/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_2AH1BHVY", "hd"
+        ) == "ata-WDC_WD120EFAX-68UNTN0_2AH1BHVY"
+        assert client._display_device_name("/dev/sda", "hd") == "sda"
+
+    def test_display_device_name_strips_nvme_path(self) -> None:
+        """NVMe device paths also get stripped to the basename."""
+        assert client._display_device_name(
+            "/dev/disk/by-id/nvme-CT4000P3PSSD8_2336E8740474", "nvme"
+        ) == "nvme-CT4000P3PSSD8_2336E8740474"
+
+    def test_display_device_name_preserves_cpu_and_gpu_labels(self) -> None:
+        """CPU/GPU labels are synthesized ordinals (cpu0, gpu0) — they must not be touched."""
+        assert client._display_device_name("cpu0", "cpu") == "cpu0"
+        assert client._display_device_name("gpu0", "gpu") == "gpu0"
+        # Empty / non-disk strings are returned as-is for HD/NVMe too.
+        assert client._display_device_name("", "hd") == ""
+
     def test_format_uptime_under_one_day(self) -> None:
         """Sub-day durations omit the day field entirely (HH:MM:SS form)."""
         assert client._format_uptime(3661.0) == "01:01:01"
@@ -501,12 +527,14 @@ class TestFormatReportErrorPaths:
         hd.device_names.return_value = ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"]
         hd._get_nth_temp.side_effect = lambda i: 33.0 + i
         out = client._format_report(ipmi, [("HD", "hd", hd, None)], "x.conf", use_color=False, verbose=True)
-        assert "/dev/sda" in out
-        assert "/dev/sdb" in out
+        # Device names render as the basename — full /dev/ paths get stripped for HD/NVMe.
+        assert "  sda" in out
+        assert "  sdb" in out
         # Devices beyond the standby_states length still render in the block (they just have no state),
         # but in the new layout the device list is keyed by device_names(), so all four appear.
-        assert "/dev/sdc" in out
-        assert "/dev/sdd" in out
+        assert "  sdc" in out
+        assert "  sdd" in out
+        assert "/dev/sda" not in out
         # The Standby Guard line carries the truncated state string.
         assert "Standby Guard" in out
 
@@ -519,7 +547,8 @@ class TestFormatReportErrorPaths:
         hd._get_nth_temp.side_effect = lambda i: 33.0
         hd.get_standby_state_str.side_effect = RuntimeError("boom")
         out = client._format_report(ipmi, [("HD", "hd", hd, None)], "x.conf", use_color=False, verbose=True)
-        assert "/dev/sda" in out
+        assert "  sda" in out
+        assert "/dev/sda" not in out
         # The Standby Guard summary line is omitted when get_standby_state_str() raises.
         assert "Standby Guard" not in out
 
@@ -745,7 +774,8 @@ class TestFormatReportFromSnapshot:
         # The standby line lives inside the [HD] block (before the next blank line).
         hd_block = out.split("[HD]", 1)[1].split("\n\n", 1)[0]
         assert "Standby Guard" in hd_block
-        assert "/dev/sda" in out
+        assert "  sda" in out
+        assert "/dev/sda" not in out
         assert "ACTIVE" in out
         assert "STANDBY" in out
         assert "AASS" in out
@@ -798,11 +828,13 @@ class TestFormatReportFromSnapshot:
             "array_state": "AA", "standby_count": 0,
         }
         out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
-        assert "/dev/sda" in out
-        assert "/dev/sdb" in out
+        # Device names render as the basename — full /dev/ paths get stripped for HD/NVMe.
+        assert "  sda" in out
+        assert "  sdb" in out
         # Devices beyond the states length are not rendered.
-        assert "/dev/sdc" not in out
-        assert "/dev/sdd" not in out
+        assert "  sdc" not in out
+        assert "  sdd" not in out
+        assert "/dev/sda" not in out
 
     def test_no_devices_section_without_verbose(self) -> None:
         """Without verbose=True the per-controller blocks are not rendered (default behaviour unchanged)."""
@@ -822,13 +854,14 @@ class TestFormatReportFromSnapshot:
         # Both non-CONST controllers got their own verbose block.
         assert "[CPU]" in out
         assert "[HD]" in out
-        # CPU + every disk should appear with the cached per-device temperature.
+        # CPU labels (cpu0) keep their bare name; HD names render as the basename only.
         assert "cpu0" in out
         assert "42.3 C" in out
-        for name, temp in [("/dev/sda", "33.0 C"), ("/dev/sdb", "34.5 C"),
-                           ("/dev/sdc", "36.1 C"), ("/dev/sdd", "39.0 C")]:
-            assert name in out
+        for basename, temp in [("sda", "33.0 C"), ("sdb", "34.5 C"),
+                               ("sdc", "36.1 C"), ("sdd", "39.0 C")]:
+            assert f"  {basename}" in out
             assert temp in out
+        assert "/dev/sda" not in out
 
     def test_devices_section_skips_const_online(self) -> None:
         """CONST controllers stay in the Controllers table but never get their own verbose block."""

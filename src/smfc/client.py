@@ -5,6 +5,7 @@
 #
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -211,6 +212,26 @@ def _safe_nth_temp_str(controller: Union[FanController, None], index: int) -> st
         return f"{controller._get_nth_temp(index):.1f} C"
     except Exception:  # pylint: disable=broad-except
         return "ERROR"
+
+
+def _display_device_name(name: str, type_label: str) -> str:
+    """Shorten a device name for verbose display.
+
+    HD and NVMe controllers store full /dev/disk/by-id/... paths to keep udev mappings stable
+    across reboots; that's useful in config but noisy in the verbose block where every row
+    repeats the same prefix. Strip to the basename for these two types so the per-device list
+    stays scannable. CPU/GPU (and CONST) keep their synthesized labels unchanged.
+
+    Args:
+        name (str): the raw device name (path or label)
+        type_label (str): controller type ("hd" / "nvme" / "cpu" / "gpu" / "const")
+
+    Returns:
+        str: display-friendly name
+    """
+    if type_label in ("hd", "nvme") and name:
+        return os.path.basename(name)
+    return name
 
 
 def _safe_zone_level(ipmi: Ipmi, zone: int) -> str:
@@ -437,7 +458,7 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
                 state_str: Optional[str] = None
                 if states and i < len(states):
                     state_str = "STANDBY" if states[i] else "ACTIVE"
-                device_rows.append((name, temp_str, state_str))
+                device_rows.append((_display_device_name(name, type_label), temp_str, state_str))
             # Standby Guard summary line (HD only, when enabled and we have a usable state string).
             standby: Optional[Tuple[int, str, int, int]] = None
             if (type_label == "hd" and getattr(cfg, "standby_guard_enabled", False)
@@ -655,7 +676,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
                 state_str: Optional[str] = None
                 if states and i < len(states):
                     state_str = "STANDBY" if states[i] else "ACTIVE"
-                device_rows.append((name, temp_str, state_str))
+                device_rows.append((_display_device_name(name, type_label), temp_str, state_str))
             # Standby Guard summary line (HD with standby_guard.enabled=True only).
             standby: Optional[Tuple[int, str, int, int]] = None
             if type_label == "hd" and sb.get("enabled"):
