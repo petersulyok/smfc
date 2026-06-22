@@ -443,7 +443,45 @@ class TestUseColorEdgeCases:
 
 
 class TestSafeHelpers:
-    """Cover _safe_temp_str() and _safe_zone_level()."""
+    """Cover _safe_temp_str(), _safe_zone_level(), _band_color(), _parse_*_cell()."""
+
+    def test_band_color_below_floor_is_dim(self) -> None:
+        """A value below the floor of the steering window paints DIM (idle)."""
+        assert client._band_color(28.0, 35.0, 48.0) == client.DIM
+
+    def test_band_color_in_range_is_green(self) -> None:
+        """A value in the lower 70 % of the steering window paints GREEN (working)."""
+        # 35 + 0.4*(48-35) = 40.2 → 40 % through window → GREEN
+        assert client._band_color(40.0, 35.0, 48.0) == client.GREEN
+
+    def test_band_color_upper_30_is_yellow(self) -> None:
+        """A value in the upper 30 % of the steering window paints YELLOW (warm)."""
+        # 35 + 0.85*(48-35) = 46.05 → 85 % through window → YELLOW
+        assert client._band_color(46.0, 35.0, 48.0) == client.YELLOW
+
+    def test_band_color_above_ceiling_is_red(self) -> None:
+        """A value at or above the ceiling paints RED (at/over the curve max)."""
+        assert client._band_color(48.0, 35.0, 48.0) == client.RED
+        assert client._band_color(60.0, 35.0, 48.0) == client.RED
+
+    def test_band_color_degenerate_window_returns_empty(self) -> None:
+        """A degenerate window (hi <= lo) returns '' so the caller renders default colour."""
+        # CONST controllers have level_min == level_max — the band logic has nothing to do.
+        assert client._band_color(50.0, 50.0, 50.0) == ""
+        assert client._band_color(50.0, 60.0, 40.0) == ""  # inverted
+
+    def test_parse_temp_cell(self) -> None:
+        """Formatted temp cells parse back to their numeric value; sentinels yield None."""
+        assert client._parse_temp_cell("42.3 C") == 42.3
+        assert client._parse_temp_cell("ERROR") is None
+        assert client._parse_temp_cell("-") is None
+        assert client._parse_temp_cell("") is None
+
+    def test_parse_level_cell(self) -> None:
+        """Formatted level cells parse back to their numeric value; sentinels yield None."""
+        assert client._parse_level_cell(" 55 %") == 55.0
+        assert client._parse_level_cell("ERROR") is None
+        assert client._parse_level_cell("-") is None
 
     def test_safe_temp_str_none_controller(self) -> None:
         """A None controller renders as '-'."""
@@ -803,6 +841,106 @@ class TestFormatReportFromSnapshot:
         # No-color mode must produce no CYAN escapes at all.
         plain = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
         assert client.CYAN not in plain
+
+    def test_band_color_paints_temp_and_level_cells(self) -> None:
+        """Each controller's Temp/Level cells are painted according to where they sit in the steering window.
+
+        Snapshot has four controllers, one per band:
+          CPU  at 40 C in [30..60] → 33% through → GREEN
+          HD   at 31 C below floor [35..48]      → DIM (level still in lower 70% → GREEN)
+          NVME at 60 C in [38..65] → 81% through → YELLOW
+          GPU  at 90 C above ceiling [35..85]    → RED
+        """
+        snap = {
+            "version": 1, "generated_at": 1716902400.0, "start_time": 1716816000.0,
+            "fan_mode_enforced_count": 0, "smfc_version": "5.4.0",
+            "bmc": {"manufacturer_name": "X", "manufacturer_id": 0, "product_name": "Y",
+                    "product_id": 0, "firmware_rev": "0", "ipmi_version": "0",
+                    "platform_name": "Y", "platform_class": "P"},
+            "fan_mode": {"id": 1, "name": "FULL", "age_s": 0.0},
+            "fan_controllers": [
+                {"section": "CPU", "type": "cpu", "enabled": True, "ipmi_zones": [0],
+                 "device_count": 1, "polling": 2.0, "deferred_apply": False,
+                 "last_temp_c": 40.0, "last_level_pct": 50,
+                 "temp_min_c": 30.0, "temp_max_c": 60.0,
+                 "level_min_pct": 35, "level_max_pct": 100,
+                 "devices": [{"name": "cpu0", "temp_c": 40.0}]},
+                {"section": "HD", "type": "hd", "enabled": True, "ipmi_zones": [1],
+                 "device_count": 1, "polling": 10.0, "deferred_apply": False,
+                 "last_temp_c": 31.0, "last_level_pct": 35,
+                 "temp_min_c": 35.0, "temp_max_c": 48.0,
+                 "level_min_pct": 35, "level_max_pct": 100,
+                 "devices": [{"name": "/dev/sda", "temp_c": 31.0}],
+                 "standby_guard": {"enabled": False}},
+                {"section": "NVME", "type": "nvme", "enabled": True, "ipmi_zones": [2],
+                 "device_count": 1, "polling": 2.0, "deferred_apply": False,
+                 "last_temp_c": 60.0, "last_level_pct": 85,
+                 "temp_min_c": 38.0, "temp_max_c": 65.0,
+                 "level_min_pct": 35, "level_max_pct": 100,
+                 "devices": [{"name": "/dev/nvme0n1", "temp_c": 60.0}]},
+                {"section": "GPU", "type": "gpu", "enabled": True, "ipmi_zones": [3],
+                 "device_count": 1, "polling": 2.0, "deferred_apply": False,
+                 "last_temp_c": 90.0, "last_level_pct": 100,
+                 "temp_min_c": 35.0, "temp_max_c": 85.0,
+                 "level_min_pct": 35, "level_max_pct": 100,
+                 "devices": [{"name": "gpu0", "temp_c": 90.0}]},
+            ],
+            "zones": {"0": {"applied_level_pct": 50}, "1": {"applied_level_pct": 35},
+                      "2": {"applied_level_pct": 85}, "3": {"applied_level_pct": 100}},
+        }
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=True)
+        # The Fan controllers table row for each band carries the expected colour around the temp.
+        cpu_row = [l for l in out.splitlines() if l.lstrip().startswith("CPU ")][0]
+        hd_row = [l for l in out.splitlines() if l.lstrip().startswith("HD ")][0]
+        nvme_row = [l for l in out.splitlines() if l.lstrip().startswith("NVME ")][0]
+        gpu_row = [l for l in out.splitlines() if l.lstrip().startswith("GPU ")][0]
+        assert client.GREEN in cpu_row and "40.0 C" in cpu_row
+        assert client.DIM in hd_row and "31.0 C" in hd_row
+        assert client.YELLOW in nvme_row and "60.0 C" in nvme_row
+        assert client.RED in gpu_row and "90.0 C" in gpu_row
+
+    def test_band_color_standby_disks_render_dim(self) -> None:
+        """Per-device temps for STANDBY disks render DIM regardless of where they sit in the window.
+
+        Two HD disks: one at 28 C (below floor — already DIM), one at 46 C (would be YELLOW if
+        ACTIVE). Both are in STANDBY, so both must paint DIM.
+        """
+        snap = _sample_snapshot_dict()
+        # Override states so both disks are STANDBY.
+        snap["fan_controllers"][1]["standby_guard"] = {
+            "enabled": True, "limit": 1, "states": [True, True, False, False],
+            "array_state": "SSAA", "standby_count": 2,
+        }
+        # Override one disk to be in YELLOW range (upper 30 %) when ACTIVE — to prove standby wins.
+        snap["fan_controllers"][1]["devices"][1]["temp_c"] = 46.0
+        snap["fan_controllers"][1]["temp_min_c"] = 35.0
+        snap["fan_controllers"][1]["temp_max_c"] = 48.0
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=True, verbose=True)
+        # Find the HD block's first two device rows (the standby ones).
+        hd_block = out.split("[HD]", 1)[1].split("\n\n", 1)[0]
+        sda_row = [l for l in hd_block.splitlines() if l.lstrip().startswith("sda ")][0]
+        sdb_row = [l for l in hd_block.splitlines() if l.lstrip().startswith("sdb ")][0]
+        # Both rows paint DIM (the standby override), not YELLOW or anything else.
+        assert client.DIM in sda_row
+        assert client.DIM in sdb_row
+        assert client.YELLOW not in sdb_row  # 46 C would be YELLOW if ACTIVE — confirm override wins
+
+    def test_band_color_const_level_uncoloured(self) -> None:
+        """CONST controllers (level_min == level_max, no temp window) leave their Level cell uncoloured."""
+        snap = _sample_snapshot_dict()
+        snap["fan_controllers"].append({
+            "section": "CONST", "type": "const", "enabled": True, "ipmi_zones": [9],
+            "device_count": 0, "polling": 30.0, "deferred_apply": False,
+            "last_temp_c": 0.0, "last_level_pct": 60, "target_level_pct": 60,
+            "level_min_pct": 60, "level_max_pct": 60,
+        })
+        snap["zones"]["9"] = {"applied_level_pct": 60}
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=True)
+        const_row = [l for l in out.splitlines() if l.lstrip().startswith("CONST ")][0]
+        # CONST level cell carries no band escape — neither DIM/GREEN/YELLOW/RED appears in it
+        # (other than the leading "  CONST" which is plain text).
+        for color in (client.DIM, client.GREEN, client.YELLOW, client.RED):
+            assert color not in const_row
 
     def test_const_controller_shows_target_level(self) -> None:
         """A ConstFc entry's row shows the configured target level (the Status column was removed)."""

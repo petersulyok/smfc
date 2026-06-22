@@ -42,9 +42,14 @@ DEFAULT_CONFIG_PATH: str = "/etc/smfc/smfc.conf"
 BOLD: str = "\x1b[1m"
 DIM: str = "\x1b[2m"
 GREEN: str = "\x1b[32m"
+YELLOW: str = "\x1b[33m"   # warm — upper 30 % of a controller's steering window
 RED: str = "\x1b[31m"
 CYAN: str = "\x1b[1;36m"   # bold cyan — section headers (BMC, Fan controllers, blocks, IPMI zones)
 RESET: str = "\x1b[0m"
+
+# Where the GREEN→YELLOW transition lands inside a steering window. 0.7 means the upper 30 % of
+# the window is YELLOW ("warm, fans ramping"); below the threshold is GREEN ("working in range").
+BAND_WARN_FRACTION: float = 0.7
 
 # Type alias for a controller entry: (section_name, type_label, controller_or_None, error_or_None).
 ControllerEntry = Tuple[str, str, Optional[Union[FanController, ConstFc]], Optional[str]]
@@ -235,6 +240,65 @@ def _display_device_name(name: str, type_label: str) -> str:
     return name
 
 
+def _band_color(value: float, lo: float, hi: float) -> str:
+    """Return the ANSI escape for `value`'s band inside the steering window [lo, hi].
+
+    Four bands, applied uniformly to temps and levels:
+      - value <  lo                            → DIM    (below floor — idle)
+      - lo <= value < lo + 0.7*(hi - lo)       → GREEN  (working in range)
+      - upper 30 % of the window               → YELLOW (warm — fans ramping)
+      - value >= hi                            → RED    (at/over ceiling — no headroom)
+
+    Returns an empty string when the window is degenerate (hi <= lo) — callers render the
+    default colour in that case. CONST controllers (level_min == level_max, no temp window)
+    fall into this path on purpose, since they have no curve to be hot or cold against.
+
+    Args:
+        value (float): the metric to band (temperature C or level %)
+        lo (float):    the configured floor of the window
+        hi (float):    the configured ceiling of the window
+
+    Returns:
+        str: ANSI escape (DIM/GREEN/YELLOW/RED) or "" when the window is degenerate.
+    """
+    if hi <= lo:
+        return ""
+    if value < lo:
+        return DIM
+    if value >= hi:
+        return RED
+    if (value - lo) / (hi - lo) >= BAND_WARN_FRACTION:
+        return YELLOW
+    return GREEN
+
+
+def _parse_temp_cell(cell: str) -> Optional[float]:
+    """Parse a formatted temperature cell back to its numeric value.
+
+    Cells render as e.g. "42.3 C", "-", "ERROR". Returns None for the non-numeric cases so
+    callers can decide whether to skip colouring rather than band a sentinel.
+    """
+    if not cell or cell in ("-", "ERROR"):
+        return None
+    try:
+        return float(cell.split()[0])
+    except (ValueError, IndexError):
+        return None
+
+
+def _parse_level_cell(cell: str) -> Optional[float]:
+    """Parse a formatted level cell back to its numeric value (mirror of _parse_temp_cell).
+
+    Cells render as e.g. " 55 %", "-", "ERROR". Returns None for non-numeric cases.
+    """
+    if not cell or cell in ("-", "ERROR"):
+        return None
+    try:
+        return float(cell.split()[0])
+    except (ValueError, IndexError):
+        return None
+
+
 def _safe_zone_level(ipmi: Ipmi, zone: int) -> str:
     """Read the current fan level for an IPMI zone, returning a friendly string on failure.
     Args:
@@ -277,13 +341,30 @@ def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_co
             devices_str = "-"
             temp_str = "-"
             level_str = f"{controller.config.level:3d} %"
+            temp_cell = f"{temp_str:<10}"
+            level_cell = level_str
         else:
             devices_str = str(count) if count is not None else "-"
             temp_str = _safe_temp_str(controller, type_label)
             # Level: use the first zone (controllers usually own a single zone or share).
             first_zone = controller.config.ipmi_zone[0] if controller.config.ipmi_zone else None
             level_str = _safe_zone_level(ipmi, first_zone) if first_zone is not None else "-"
-        lines.append(f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_str:<10}{level_str}")
+            # Pad first, THEN colour: ANSI escapes are zero-width on screen but real characters
+            # in the string, so colouring before padding tears the table's grid. Parse the
+            # *already-fetched* string back to a number for banding so we don't double the
+            # ipmitool / smartctl call count just to colour the cell.
+            temp_cell = f"{temp_str:<10}"
+            level_cell = level_str
+            cfg = controller.config
+            t_now = _parse_temp_cell(temp_str)
+            if t_now is not None:
+                temp_cell = _wrap(temp_cell, _band_color(t_now, float(cfg.min_temp), float(cfg.max_temp)),
+                                  use_color)
+            l_now = _parse_level_cell(level_str)
+            if l_now is not None:
+                level_cell = _wrap(level_cell, _band_color(l_now, float(cfg.min_level), float(cfg.max_level)),
+                                   use_color)
+        lines.append(f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_cell}{level_cell}")
     return lines
 
 
@@ -318,7 +399,7 @@ def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: b
 def _format_controller_block(section: str, type_label: str, zones: List[int], polling: float, deferred: bool,
                              temp_min: float, temp_max: float, level_min: int, level_max: int,
                              last_temp_str: str, last_level_str: str,
-                             devices: List[Tuple[str, str, Optional[str]]],
+                             devices: List[Tuple[str, str, Optional[str], str]],
                              standby: Optional[Tuple[int, str, int, int]],
                              use_color: bool) -> List[str]:
     """Format a single fan controller's verbose block (Proposal A).
@@ -340,7 +421,11 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
         level_max (int): configured level window ceiling (%)
         last_temp_str (str): pre-formatted current temperature (e.g. "35.0 C", "ERROR")
         last_level_str (str): pre-formatted current level (e.g. "35 %", "ERROR")
-        devices (List[Tuple[str, str, Optional[str]]]): per-device rows (name, temp_str, state_str_or_None)
+        devices (List[Tuple[str, str, Optional[str], str]]): per-device rows
+            (name, temp_str, state_str_or_None, temp_color_escape_or_empty). The temp colour
+            arrives separately from temp_str so the formatter can pad the *visible* temp_str
+            to the Temp-column width and wrap colour around the padded result — ANSI escapes
+            are otherwise zero-width and would break alignment.
         standby (Optional[Tuple[int, str, int, int]]): HD standby guard info as
             (limit, array_state, standby_count, total) or None
         use_color (bool): whether to emit ANSI colors
@@ -377,16 +462,20 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
             lines.append(f"    {'Device':<{name_w + 2}}{'Temp':<{temp_w}}State")
         else:
             lines.append(f"    {'Device':<{name_w + 2}}Temp")
-        for name, temp_str, state_str in devices:
+        for name, temp_str, state_str, temp_color in devices:
+            # Pad the visible temp_str to the column width, THEN wrap colour. ANSI escapes are
+            # zero-width on screen but real characters in the string, so colouring before padding
+            # over-pads and tears the grid.
+            temp_cell = _wrap(f"{temp_str:<{temp_w}}", temp_color, use_color)
             if has_state:
                 state_cell = state_str if state_str is not None else ""
                 if state_cell == "STANDBY":
                     state_cell = _wrap("STANDBY", DIM, use_color)
                 elif state_cell == "ACTIVE":
                     state_cell = _wrap("ACTIVE", GREEN, use_color)
-                lines.append(f"    {name:<{name_w + 2}}{temp_str:<{temp_w}}{state_cell}")
+                lines.append(f"    {name:<{name_w + 2}}{temp_cell}{state_cell}")
             else:
-                lines.append(f"    {name:<{name_w + 2}}{temp_str}")
+                lines.append(f"    {name:<{name_w + 2}}{temp_cell}")
     return lines
 
 
@@ -458,16 +547,25 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
                 names = []
             # Build per-device rows. For HDs with standby guard enabled, fold the per-disk
             # STANDBY/ACTIVE annotation into the row's third element. CONST is filtered above.
+            # The 4th tuple slot carries the temp colour: standby disks render DIM (stale read),
+            # everything else gets banded against the controller's own steering window.
             states: List[bool] = []
             if type_label == "hd" and getattr(cfg, "standby_guard_enabled", False):
                 states = list(getattr(controller, "standby_array_states", None) or [])
-            device_rows: List[Tuple[str, str, Optional[str]]] = []
+            dev_t_min = float(getattr(cfg, "min_temp", 0.0))
+            dev_t_max = float(getattr(cfg, "max_temp", 0.0))
+            device_rows: List[Tuple[str, str, Optional[str], str]] = []
             for i, name in enumerate(names):
                 temp_str = _safe_nth_temp_str(controller, i)
                 state_str: Optional[str] = None
                 if states and i < len(states):
                     state_str = "STANDBY" if states[i] else "ACTIVE"
-                device_rows.append((_display_device_name(name, type_label), temp_str, state_str))
+                if state_str == "STANDBY":
+                    temp_color = DIM
+                else:
+                    t_dev = _parse_temp_cell(temp_str)
+                    temp_color = _band_color(t_dev, dev_t_min, dev_t_max) if t_dev is not None else ""
+                device_rows.append((_display_device_name(name, type_label), temp_str, state_str, temp_color))
             # Standby Guard summary line (HD only, when enabled and we have a usable state string).
             standby: Optional[Tuple[int, str, int, int]] = None
             if (type_label == "hd" and getattr(cfg, "standby_guard_enabled", False)
@@ -480,10 +578,21 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
                     standby = None
             # Aggregated current temperature/level — use the same helpers as the Controllers table
             # so the block stays consistent with the row above it on the standalone path (where
-            # the controller loop hasn't run so last_temp/last_level aren't populated).
+            # the controller loop hasn't run so last_temp/last_level aren't populated). Band the
+            # result against the controller's window using the *parsed* numeric to avoid a second
+            # ipmitool / smartctl call per row.
             last_temp_str = _safe_temp_str(controller, type_label)
             first_zone = cfg.ipmi_zone[0] if cfg.ipmi_zone else None
             last_level_str = _safe_zone_level(ipmi, first_zone) if first_zone is not None else "-"
+            t_now = _parse_temp_cell(last_temp_str)
+            if t_now is not None:
+                last_temp_str = _wrap(last_temp_str, _band_color(t_now, dev_t_min, dev_t_max), use_color)
+            l_now = _parse_level_cell(last_level_str)
+            if l_now is not None:
+                last_level_str = _wrap(last_level_str,
+                                       _band_color(l_now, float(getattr(cfg, "min_level", 0)),
+                                                   float(getattr(cfg, "max_level", 0))),
+                                       use_color)
             block = _format_controller_block(
                 section=section,
                 type_label=type_label,
@@ -656,7 +765,22 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             zone_info = zones.get(str(first_zone), {}) if first_zone is not None else {}
             level = zone_info.get("applied_level_pct")
             level_str = f"{int(level):3d} %" if level is not None else f"{int(c.get('last_level_pct', 0)):3d} %"
-        lines.append(f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_str:<10}{level_str}")
+        # Pre-pad temp / level to their column widths, THEN wrap colour around the result so the
+        # invisible ANSI escapes don't disturb the table's character grid. CONST has no curve, so
+        # `_band_color` returns "" (no escape) and the cell renders in default colour.
+        temp_cell = f"{temp_str:<10}"
+        level_cell = level_str
+        if type_label != "const":
+            t_min = float(c.get("temp_min_c", 0.0))
+            t_max = float(c.get("temp_max_c", 0.0))
+            l_min = int(c.get("level_min_pct", 0))
+            l_max = int(c.get("level_max_pct", 0))
+            temp_cell = _wrap(temp_cell, _band_color(float(c.get("last_temp_c", 0.0)), t_min, t_max),
+                              use_color)
+            level_int = int(level) if level is not None else int(c.get("last_level_pct", 0))
+            level_cell = _wrap(level_cell, _band_color(float(level_int), float(l_min), float(l_max)),
+                               use_color)
+        lines.append(f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_cell}{level_cell}")
     lines.append("")
 
     # Per-controller verbose blocks (Proposal A). All fields are already in the snapshot, so
@@ -678,14 +802,21 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             # snapshot doesn't surface phantom rows (matches the standalone path's behaviour).
             if states:
                 devices = devices[:len(states)]
-            device_rows: List[Tuple[str, str, Optional[str]]] = []
+            # Per-device temp colour uses the parent controller's steering window — that's the
+            # only honest baseline (an HD at 38 C is hot, a CPU at 38 C is cold). Standby disks
+            # render DIM regardless: the reading is stale and the disk isn't contributing.
+            dev_t_min = float(c.get("temp_min_c", 0.0))
+            dev_t_max = float(c.get("temp_max_c", 0.0))
+            device_rows: List[Tuple[str, str, Optional[str], str]] = []
             for i, d in enumerate(devices):
                 name = str(d.get("name", ""))
-                temp_str = f"{float(d.get('temp_c', 0.0)):.1f} C"
+                t_dev = float(d.get("temp_c", 0.0))
+                temp_str = f"{t_dev:.1f} C"
                 state_str: Optional[str] = None
                 if states and i < len(states):
                     state_str = "STANDBY" if states[i] else "ACTIVE"
-                device_rows.append((_display_device_name(name, type_label), temp_str, state_str))
+                temp_color = DIM if state_str == "STANDBY" else _band_color(t_dev, dev_t_min, dev_t_max)
+                device_rows.append((_display_device_name(name, type_label), temp_str, state_str, temp_color))
             # Standby Guard summary line (HD with standby_guard.enabled=True only).
             standby: Optional[Tuple[int, str, int, int]] = None
             if type_label == "hd" and sb.get("enabled"):
@@ -694,24 +825,29 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
                 standby = (int(sb.get("limit", 1)), arr_str, standby_count, len(states))
             # Current temp/level — pulled from the snapshot's cached aggregates, with the live
             # zone level taking precedence (matches the Controllers table's level cell).
-            last_temp_str = f"{float(c.get('last_temp_c', 0.0)):.1f} C"
+            t_now = float(c.get("last_temp_c", 0.0))
+            t_min = float(c.get("temp_min_c", 0.0))
+            t_max = float(c.get("temp_max_c", 0.0))
+            l_min = int(c.get("level_min_pct", 0))
+            l_max = int(c.get("level_max_pct", 0))
+            last_temp_str = _wrap(f"{t_now:.1f} C", _band_color(t_now, t_min, t_max), use_color)
             first_zone = ipmi_zones[0] if ipmi_zones else None
             zone_info = zones.get(str(first_zone), {}) if first_zone is not None else {}
             level = zone_info.get("applied_level_pct")
-            if level is not None:
-                last_level_str = f"{int(level):3d} %"
-            else:
-                last_level_str = f"{int(c.get('last_level_pct', 0)):3d} %"
+            level_int = int(level) if level is not None else int(c.get("last_level_pct", 0))
+            last_level_str = _wrap(f"{level_int:3d} %",
+                                   _band_color(float(level_int), float(l_min), float(l_max)),
+                                   use_color)
             block = _format_controller_block(
                 section=section,
                 type_label=type_label,
                 zones=ipmi_zones,
                 polling=float(c.get("polling", 0.0)),
                 deferred=bool(c.get("deferred_apply", False)),
-                temp_min=float(c.get("temp_min_c", 0.0)),
-                temp_max=float(c.get("temp_max_c", 0.0)),
-                level_min=int(c.get("level_min_pct", 0)),
-                level_max=int(c.get("level_max_pct", 0)),
+                temp_min=t_min,
+                temp_max=t_max,
+                level_min=l_min,
+                level_max=l_max,
                 last_temp_str=last_temp_str,
                 last_level_str=last_level_str,
                 devices=device_rows,
