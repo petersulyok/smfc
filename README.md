@@ -1039,7 +1039,7 @@ A few things to notice in the verbose block:
 - **Device names** for HD and NVMe controllers are shown as the path basename (e.g. `ata-WDC_WD120EFAX-68UNTN0_99GMFQVW` instead of `/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_99GMFQVW`) so per-disk rows stay scannable. The snapshot JSON and Prometheus labels still carry the full stable-id paths.
 - **`Standby Guard`** appears as a single line inside the `[HD]` block when the feature is enabled; the per-disk `STANDBY`/`ACTIVE` annotation lives in the right-most column of that block's device table. Disks in standby render in dim grey because the temperature reading is stale (smartctl is skipped while a disk sleeps).
 
-Each fan controller is constructed independently, so a single failing controller (e.g. a missing GPU tool or a non-existent disk) shows an `ERROR` row in the Fan controllers table while the rest of the report still renders. See [SMFC_CLIENT.md](SMFC_CLIENT.md) for the full design history and [CLIENT_SERVER.md](CLIENT_SERVER.md) for the request-thread contract that keeps the online path subprocess-free.
+Each fan controller is constructed independently, so a single failing controller (e.g. a missing GPU tool or a non-existent disk) shows an `ERROR` row in the Fan controllers table while the rest of the report still renders.
 
 ### 15. FAQ
 
