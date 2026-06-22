@@ -186,14 +186,19 @@ class TestFormatReport:
         assert "Status" not in out
 
     def test_standby_guard_section_present(self) -> None:
-        """Standby Guard section is present when an HD has it enabled with count>1."""
+        """Standby Guard line appears inside the HD verbose block when enabled with count>1."""
         ipmi = _make_fake_ipmi()
         hd = _make_fake_hd_controller(zones=[1], count=4, standby_enabled=True,
                                       standby_hd_limit=1,
                                       standby_states=[False, False, True, True])
+        hd.device_names.return_value = ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"]
+        hd._get_nth_temp.side_effect = lambda i: [33.0, 34.5, 36.1, 39.0][i]
         entries = [("HD", "hd", hd, None)]
-        out = client._format_report(ipmi, entries, "x.conf", use_color=False)
-        assert "Standby Guard" in out
+        out = client._format_report(ipmi, entries, "x.conf", use_color=False, verbose=True)
+        assert "Standby Guard: enabled (limit=1)" in out
+        # The standby line is folded into the [HD] block, not a free-standing section.
+        hd_block = out.split("[HD]", 1)[1]
+        assert "Standby Guard" in hd_block.split("\n\n", 1)[0]
         assert "/dev/sda" in out
         assert "ACTIVE" in out
         assert "STANDBY" in out
@@ -201,24 +206,27 @@ class TestFormatReport:
         assert "2/4 standby" in out
 
     def test_standby_guard_section_absent(self) -> None:
-        """Standby Guard section is omitted when no HD has it enabled."""
+        """Standby Guard line is omitted when no HD has it enabled."""
         ipmi = _make_fake_ipmi()
         hd = _make_fake_hd_controller(zones=[1], count=4, standby_enabled=False)
+        hd.device_names.return_value = [f"/dev/sd{chr(ord('a') + i)}" for i in range(4)]
+        hd._get_nth_temp.side_effect = lambda i: 34.1
         entries = [("HD", "hd", hd, None)]
-        out = client._format_report(ipmi, entries, "x.conf", use_color=False)
+        out = client._format_report(ipmi, entries, "x.conf", use_color=False, verbose=True)
         assert "Standby Guard" not in out
 
     def test_no_devices_section_without_verbose(self) -> None:
-        """The standalone path omits the Devices section unless verbose=True."""
+        """The standalone path omits per-controller blocks (and thus per-device temps) unless verbose=True."""
         ipmi = _make_fake_ipmi()
         cpu = _make_fake_cpu_controller(zones=[0], count=1, temp=42.3)
         entries = [("CPU", "cpu", cpu, None)]
         out = client._format_report(ipmi, entries, "x.conf", use_color=False)
-        # The Controllers table has a "Devices" column header; the Devices *section* is a bare line.
-        assert "\nDevices\n" not in out
+        # Non-verbose mode emits no per-controller blocks: no Window/Devices lines, no block header.
+        assert "[CPU]" not in out
+        assert "Window:" not in out
 
     def test_devices_section_with_verbose(self) -> None:
-        """In verbose mode the standalone path issues _get_nth_temp() per device and renders a Devices table."""
+        """In verbose mode the standalone path renders one block per controller with per-device temps."""
         ipmi = _make_fake_ipmi()
         # An HD controller with two disks; mock device_names() and _get_nth_temp() so we don't shell out.
         hd = _make_fake_hd_controller(zones=[1], count=2, standby_enabled=False,
@@ -227,7 +235,10 @@ class TestFormatReport:
         hd._get_nth_temp.side_effect = lambda i: [33.0, 34.5][i]
         entries = [("HD", "hd", hd, None)]
         out = client._format_report(ipmi, entries, "x.conf", use_color=False, verbose=True)
-        assert "Devices" in out
+        # Verbose mode emits a per-controller block: header, window, current, devices.
+        assert "[HD]" in out
+        assert "Window:" in out
+        assert "Devices:" in out
         assert "/dev/sda" in out
         assert "33.0 C" in out
         assert "/dev/sdb" in out
@@ -251,13 +262,14 @@ class TestFormatReport:
         assert "ERROR" in out
 
     def test_devices_section_skips_const(self) -> None:
-        """CONST controllers are excluded from the Devices section even in verbose mode."""
+        """CONST controllers are excluded from the per-controller blocks even in verbose mode."""
         ipmi = _make_fake_ipmi()
         const_fc = _make_fake_const_controller(zones=[2], level=50)
         entries = [("CONST", "const", const_fc, None)]
         out = client._format_report(ipmi, entries, "x.conf", use_color=False, verbose=True)
-        # Without any non-CONST controllers, the Devices section header is never emitted.
-        assert "\nDevices\n" not in out
+        # CONST is in the Controllers table but never gets its own verbose block.
+        assert "[CONST]" not in out
+        assert "Window:" not in out
 
     def test_devices_section_device_names_error(self) -> None:
         """If device_names() itself raises, the controller is silently skipped (defensive guard)."""
@@ -479,30 +491,36 @@ class TestFormatReportErrorPaths:
         assert "ERROR" in out
 
     def test_standby_states_truncated(self) -> None:
-        """When hd_device_names is longer than standby_array_states, the loop breaks early."""
+        """When standby_array_states is shorter than the device list, only matching rows render."""
         ipmi = _make_fake_ipmi()
-        # 4 device names but only 2 standby states → loop breaks at i=2.
+        # 4 device names but only 2 standby states → only the first two devices render.
         hd = _make_fake_hd_controller(zones=[1], count=4, standby_enabled=True,
                                       standby_hd_limit=1, standby_states=[False, False],
                                       hd_names=["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"])
-        out = client._format_report(ipmi, [("HD", "hd", hd, None)], "x.conf", use_color=False)
+        hd.device_names.return_value = ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"]
+        hd._get_nth_temp.side_effect = lambda i: 33.0 + i
+        out = client._format_report(ipmi, [("HD", "hd", hd, None)], "x.conf", use_color=False, verbose=True)
         assert "/dev/sda" in out
         assert "/dev/sdb" in out
-        # Devices beyond the standby_states length are not rendered.
-        assert "/dev/sdc" not in out
-        assert "/dev/sdd" not in out
+        # Devices beyond the standby_states length still render in the block (they just have no state),
+        # but in the new layout the device list is keyed by device_names(), so all four appear.
+        assert "/dev/sdc" in out
+        assert "/dev/sdd" in out
+        # The Standby Guard line carries the truncated state string.
+        assert "Standby Guard" in out
 
     def test_standby_states_str_raises(self) -> None:
         """When get_standby_state_str() raises, the per-disk rows still render."""
         ipmi = _make_fake_ipmi()
         hd = _make_fake_hd_controller(zones=[1], count=2, standby_enabled=True,
                                       standby_hd_limit=1, standby_states=[False, True])
+        hd.device_names.return_value = ["/dev/sda", "/dev/sdb"]
+        hd._get_nth_temp.side_effect = lambda i: 33.0
         hd.get_standby_state_str.side_effect = RuntimeError("boom")
-        out = client._format_report(ipmi, [("HD", "hd", hd, None)], "x.conf", use_color=False)
-        assert "Standby Guard" in out
+        out = client._format_report(ipmi, [("HD", "hd", hd, None)], "x.conf", use_color=False, verbose=True)
         assert "/dev/sda" in out
-        # The "Array state:" summary line is omitted.
-        assert "Array state" not in out
+        # The Standby Guard summary line is omitted when get_standby_state_str() raises.
+        assert "Standby Guard" not in out
 
     def test_fan_mode_read_error(self) -> None:
         """When ipmi.get_fan_mode() raises, the BMC block's Fan mode line shows ERROR."""
@@ -514,13 +532,15 @@ class TestFormatReportErrorPaths:
         assert "ERROR" in out
 
     def test_standby_states_attribute_missing(self) -> None:
-        """When standby is enabled but standby_array_states is missing, section is skipped."""
+        """When standby is enabled but standby_array_states is missing, the line is skipped."""
         ipmi = _make_fake_ipmi()
         # standby_enabled=True with standby_states=None deletes the attribute on the mock,
-        # so getattr(..., None) returns None and the section is omitted.
+        # so getattr(..., None) returns None and the Standby Guard line is omitted.
         hd = _make_fake_hd_controller(zones=[1], count=4, standby_enabled=True,
                                       standby_hd_limit=1, standby_states=None)
-        out = client._format_report(ipmi, [("HD", "hd", hd, None)], "x.conf", use_color=False)
+        hd.device_names.return_value = [f"/dev/sd{chr(ord('a') + i)}" for i in range(4)]
+        hd._get_nth_temp.side_effect = lambda i: 33.0
+        out = client._format_report(ipmi, [("HD", "hd", hd, None)], "x.conf", use_color=False, verbose=True)
         assert "Standby Guard" not in out
 
 
@@ -699,10 +719,13 @@ class TestFormatReportFromSnapshot:
         assert "IPMI zones (live)" in out
 
     def test_standby_section_present_when_enabled(self) -> None:
-        """The Standby Guard section renders the per-disk states from the snapshot."""
+        """The Standby Guard line is folded into the [HD] verbose block when enabled."""
         snap = _sample_snapshot_dict()
-        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
-        assert "Standby Guard" in out
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        assert "Standby Guard: enabled (limit=1)" in out
+        # The standby line lives inside the [HD] block (before the next blank line).
+        hd_block = out.split("[HD]", 1)[1].split("\n\n", 1)[0]
+        assert "Standby Guard" in hd_block
         assert "/dev/sda" in out
         assert "ACTIVE" in out
         assert "STANDBY" in out
@@ -710,10 +733,10 @@ class TestFormatReportFromSnapshot:
         assert "2/4 standby" in out
 
     def test_standby_section_absent_when_disabled(self) -> None:
-        """If no HD has standby enabled, the Standby Guard section is omitted."""
+        """If no HD has standby enabled, the Standby Guard line is omitted from the HD block."""
         snap = _sample_snapshot_dict()
         snap["fan_controllers"][1]["standby_guard"] = {"enabled": False}
-        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
         assert "Standby Guard" not in out
 
     def test_color_mode_emits_ansi(self) -> None:
@@ -748,14 +771,14 @@ class TestFormatReportFromSnapshot:
         assert client.RED in out
 
     def test_standby_states_shorter_than_devices_truncates(self) -> None:
-        """Defensive: when standby.states is shorter than the devices list, the loop stops at the shorter length."""
+        """Defensive: when standby.states is shorter than the devices list, the block truncates to the shorter length."""
         snap = _sample_snapshot_dict()
-        # 4 device names but only 2 states — the loop must break at i=2.
+        # 4 device names but only 2 states — the verbose block must show only the first 2 disks.
         snap["fan_controllers"][1]["standby_guard"] = {
             "enabled": True, "limit": 1, "states": [False, False],
             "array_state": "AA", "standby_count": 0,
         }
-        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
         assert "/dev/sda" in out
         assert "/dev/sdb" in out
         # Devices beyond the states length are not rendered.
@@ -763,19 +786,23 @@ class TestFormatReportFromSnapshot:
         assert "/dev/sdd" not in out
 
     def test_no_devices_section_without_verbose(self) -> None:
-        """Without verbose=True the per-device section is not rendered (default behaviour unchanged)."""
+        """Without verbose=True the per-controller blocks are not rendered (default behaviour unchanged)."""
         snap = _sample_snapshot_dict()
         out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
-        # The Controllers table has a "Devices" column header; the Devices *section* is a bare line.
-        assert "\nDevices\n" not in out
+        # Non-verbose mode emits no per-controller blocks: no Window/[CPU]/[HD] lines.
+        assert "[CPU]" not in out
+        assert "[HD]" not in out
+        assert "Window:" not in out
         # And no per-device temps leak through (33.0 only appears in the devices array).
         assert "33.0 C" not in out
 
     def test_devices_section_present_with_verbose(self) -> None:
-        """With verbose=True a Devices section lists every (section, name, temp) tuple from the snapshot."""
+        """With verbose=True one block per non-CONST controller renders its devices with cached temps."""
         snap = _sample_snapshot_dict()
         out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
-        assert "Devices" in out
+        # Both non-CONST controllers got their own verbose block.
+        assert "[CPU]" in out
+        assert "[HD]" in out
         # CPU + every disk should appear with the cached per-device temperature.
         assert "cpu0" in out
         assert "42.3 C" in out
@@ -785,7 +812,7 @@ class TestFormatReportFromSnapshot:
             assert temp in out
 
     def test_devices_section_skips_const_online(self) -> None:
-        """CONST controllers are skipped in the snapshot's verbose Devices loop (no devices array)."""
+        """CONST controllers stay in the Controllers table but never get their own verbose block."""
         snap = _sample_snapshot_dict()
         snap["fan_controllers"].append({
             "section": "CONST", "type": "const", "enabled": True,
@@ -794,9 +821,56 @@ class TestFormatReportFromSnapshot:
             "target_level_pct": 50,
         })
         out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
-        # Devices section still renders, but CONST never appears in its rows (only CPU + HD do).
-        devices_block = out.split("\nDevices\n", 1)[1].split("\n\n", 1)[0]
-        assert "CONST" not in devices_block
+        # CPU + HD render their own block; CONST does not.
+        assert "[CPU]" in out
+        assert "[HD]" in out
+        assert "[CONST]" not in out
+
+    def test_verbose_emits_one_block_per_controller(self) -> None:
+        """Each non-CONST controller in the snapshot gets its own verbose block, in order."""
+        snap = _sample_snapshot_dict()
+        snap["fan_controllers"].append({
+            "section": "NVME", "type": "nvme", "enabled": True,
+            "ipmi_zones": [0], "device_count": 1, "polling": 2.0,
+            "deferred_apply": False, "last_temp_c": 25.0, "last_level_pct": 35,
+            "temp_min_c": 38.0, "temp_max_c": 65.0, "level_min_pct": 35, "level_max_pct": 100,
+            "devices": [{"name": "/dev/nvme0n1", "temp_c": 25.0}],
+        })
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        # Block headers appear in controller order.
+        cpu_idx = out.find("[CPU]")
+        hd_idx = out.find("[HD]")
+        nvme_idx = out.find("[NVME]")
+        assert 0 < cpu_idx < hd_idx < nvme_idx
+
+    def test_verbose_block_shows_window_and_current(self) -> None:
+        """Each verbose block exposes the steering window and the current Temp → Level pair."""
+        snap = _sample_snapshot_dict()
+        # Pin the CPU controller's window so the assertions are exact.
+        snap["fan_controllers"][0].update({
+            "temp_min_c": 30.0, "temp_max_c": 60.0, "level_min_pct": 35, "level_max_pct": 100,
+            "last_temp_c": 35.0, "last_level_pct": 35, "polling": 2.0, "deferred_apply": True,
+        })
+        snap["zones"]["0"] = {"applied_level_pct": 35}
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        # Window and Temp/Level lines render inside the [CPU] block.
+        cpu_block = out.split("[CPU]", 1)[1].split("\n\n", 1)[0]
+        assert "Window: T=[30..60]C → L=[35..100]%" in cpu_block
+        assert "Temp:   35.0 C" in cpu_block
+        assert "deferred=yes" in cpu_block
+
+    def test_verbose_block_folds_standby_into_hd(self) -> None:
+        """The Standby Guard line lives inside the [HD] block, not after IPMI zones."""
+        snap = _sample_snapshot_dict()
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        # Standby Guard occurs once, and that occurrence is inside the [HD] block (before the next
+        # blank line that closes the block, and before "IPMI zones (live)" which closes the report).
+        assert out.count("Standby Guard") == 1
+        hd_block = out.split("[HD]", 1)[1].split("\n\n", 1)[0]
+        assert "Standby Guard" in hd_block
+        # And the IPMI zones section that follows does NOT contain it.
+        zones_section = out.split("IPMI zones (live)", 1)[1]
+        assert "Standby Guard" not in zones_section
 
 
 class TestTryFetchSnapshot:

@@ -293,66 +293,70 @@ def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: b
     return lines
 
 
-def _format_devices_table(rows: List[Tuple[str, str, str]], use_color: bool) -> List[str]:
-    """Format a Devices table. Each row is (section, device-name, temp-string).
+def _format_controller_block(section: str, type_label: str, zones: List[int], polling: float, deferred: bool,
+                             temp_min: float, temp_max: float, level_min: int, level_max: int,
+                             last_temp_str: str, last_level_str: str,
+                             devices: List[Tuple[str, str, Optional[str]]],
+                             standby: Optional[Tuple[int, str, int, int]],
+                             use_color: bool) -> List[str]:
+    """Format a single fan controller's verbose block (Proposal A).
 
-    Both the online (snapshot) and standalone paths build the same row tuples and share this
-    renderer to keep verbose output consistent regardless of source.
+    Each block is a self-contained view of one controller: header line with zone / polling /
+    deferred flags, a steering-window line (T window → L window), the current temperature →
+    current level pair, an optional Standby Guard line (HD only), and an indented per-device
+    list with an optional STANDBY/ACTIVE column.
 
     Args:
-        rows (List[Tuple[str, str, str]]): per-device rows (section, name, temp_str)
+        section (str): controller's section name (e.g. "CPU", "HD")
+        type_label (str): short type label ("cpu", "hd", "nvme", "gpu")
+        zones (List[int]): IPMI zones the controller drives
+        polling (float): configured polling interval in seconds
+        deferred (bool): whether deferred_apply is set on the controller
+        temp_min (float): configured temperature window floor (C)
+        temp_max (float): configured temperature window ceiling (C)
+        level_min (int): configured level window floor (%)
+        level_max (int): configured level window ceiling (%)
+        last_temp_str (str): pre-formatted current temperature (e.g. "35.0 C", "ERROR")
+        last_level_str (str): pre-formatted current level (e.g. "35 %", "ERROR")
+        devices (List[Tuple[str, str, Optional[str]]]): per-device rows (name, temp_str, state_str_or_None)
+        standby (Optional[Tuple[int, str, int, int]]): HD standby guard info as
+            (limit, array_state, standby_count, total) or None
         use_color (bool): whether to emit ANSI colors
 
     Returns:
-        List[str]: list of output lines (empty when rows is empty)
-    """
-    if not rows:
-        return []
-    # Width the Device column to the longest device name so /dev/disk/by-id/... paths line up.
-    name_w = max(len("Device"), max(len(r[1]) for r in rows))
-    lines: List[str] = []
-    lines.append(_wrap("Devices", BOLD, use_color))
-    lines.append(f"  {'Section':<10}{'Device':<{name_w + 2}}Temp")
-    lines.append(f"  {'-' * 8:<10}{'-' * name_w:<{name_w + 2}}-----")
-    for section, name, temp_str in rows:
-        lines.append(f"  {section:<10}{name:<{name_w + 2}}{temp_str}")
-    return lines
-
-
-def _format_standby_section(entries: List[ControllerEntry], use_color: bool) -> List[str]:
-    """Format the Standby Guard section, when at least one HD controller has it enabled.
-    Args:
-        entries (List[ControllerEntry]): controllers
-        use_color (bool): whether to emit ANSI colors
-    Returns:
-        List[str]: list of output lines (empty when no eligible HD controller)
+        List[str]: list of output lines for this block (no trailing blank line)
     """
     lines: List[str] = []
-    for section, type_label, controller, _error in entries:
-        if type_label != "hd" or controller is None:
-            continue
-        cfg = controller.config
-        if not (cfg.standby_guard_enabled and getattr(controller, "count", 0) > 1):
-            continue
-        states = getattr(controller, "standby_array_states", None)
-        if states is None:
-            continue
-        title = f"Standby Guard ([{section}], standby_hd_limit={cfg.standby_hd_limit})"
-        lines.append(_wrap(title, BOLD, use_color))
-        for i, name in enumerate(controller.hd_device_names):
-            if i >= len(states):
-                break
-            if states[i]:
-                state_str = _wrap("STANDBY", DIM, use_color)
+    zones_str = str(zones) if zones else "[]"
+    deferred_str = "yes" if deferred else "no"
+    header = (f"[{section}]  {type_label}  zone(s)={zones_str}  polling={polling:.1f}s  "
+              f"deferred={deferred_str}")
+    lines.append(_wrap(header, BOLD, use_color))
+    lines.append(f"  Window: T=[{temp_min:g}..{temp_max:g}]C → L=[{level_min}..{level_max}]%")
+    lines.append(f"  Temp:   {last_temp_str}  →  Level: {last_level_str}")
+    if standby is not None:
+        limit, array_state, standby_count, total = standby
+        lines.append(
+            f"  Standby Guard: enabled (limit={limit})  Array: {array_state}  "
+            f"({standby_count}/{total} standby)"
+        )
+    if devices:
+        has_state = any(d[2] is not None for d in devices)
+        name_w = max(len("Device"), max(len(d[0]) for d in devices))
+        if has_state:
+            lines.append(f"  Devices:{' ' * (name_w + 11 - len('Devices:'))}State")
+        else:
+            lines.append("  Devices:")
+        for name, temp_str, state_str in devices:
+            if has_state:
+                state_cell = state_str if state_str is not None else ""
+                if state_cell == "STANDBY":
+                    state_cell = _wrap("STANDBY", DIM, use_color)
+                elif state_cell == "ACTIVE":
+                    state_cell = _wrap("ACTIVE", GREEN, use_color)
+                lines.append(f"    {name:<{name_w + 2}}{temp_str:<10}{state_cell}")
             else:
-                state_str = _wrap("ACTIVE", GREEN, use_color)
-            lines.append(f"  {name}  {state_str}")
-        try:
-            arr_str = controller.get_standby_state_str()
-            standby_count = states.count(True)
-            lines.append(f"  Array state: {arr_str}  ({standby_count}/{controller.count} standby)")
-        except Exception:  # pylint: disable=broad-except
-            pass
+                lines.append(f"    {name:<{name_w + 2}}{temp_str}")
     return lines
 
 
@@ -403,34 +407,71 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     lines.extend(_format_controllers_table(entries, ipmi, use_color))
     lines.append("")
 
-    # Per-device temperatures (verbose only). Standalone path issues one _get_nth_temp() per
-    # device, so this section adds a smartctl/nvidia-smi call per device — gated behind --verbose.
+    # Per-controller verbose blocks (Proposal A). One block per non-CONST controller, in the
+    # order they appear in `entries`. Each block carries the controller's steering window,
+    # current temp/level, optional Standby Guard line (HD only), and indented devices list.
+    # The standalone path still issues one _get_nth_temp() per device — same cost as the old
+    # flat Devices table — but groups them under their owning controller.
     if verbose:
-        device_rows: List[Tuple[str, str, str]] = []
         for section, type_label, controller, _error in entries:
             if controller is None or type_label == "const":
                 continue
+            cfg = controller.config
             try:
-                names = controller.device_names()
+                names = list(controller.device_names())
             except Exception:  # pylint: disable=broad-except
                 names = []
+            # Build per-device rows. For HDs with standby guard enabled, fold the per-disk
+            # STANDBY/ACTIVE annotation into the row's third element. CONST is filtered above.
+            states: List[bool] = []
+            if type_label == "hd" and getattr(cfg, "standby_guard_enabled", False):
+                states = list(getattr(controller, "standby_array_states", None) or [])
+            device_rows: List[Tuple[str, str, Optional[str]]] = []
             for i, name in enumerate(names):
-                device_rows.append((section, name, _safe_nth_temp_str(controller, i)))
-        device_lines = _format_devices_table(device_rows, use_color)
-        if device_lines:
-            lines.extend(device_lines)
+                temp_str = _safe_nth_temp_str(controller, i)
+                state_str: Optional[str] = None
+                if states and i < len(states):
+                    state_str = "STANDBY" if states[i] else "ACTIVE"
+                device_rows.append((name, temp_str, state_str))
+            # Standby Guard summary line (HD only, when enabled and we have a usable state string).
+            standby: Optional[Tuple[int, str, int, int]] = None
+            if (type_label == "hd" and getattr(cfg, "standby_guard_enabled", False)
+                    and states and getattr(controller, "count", 0) > 1):
+                try:
+                    arr_str = controller.get_standby_state_str()
+                    standby_count = sum(1 for s in states if s)
+                    standby = (int(cfg.standby_hd_limit), arr_str, standby_count, controller.count)
+                except Exception:  # pylint: disable=broad-except
+                    standby = None
+            # Aggregated current temperature/level — use the same helpers as the Controllers table
+            # so the block stays consistent with the row above it on the standalone path (where
+            # the controller loop hasn't run so last_temp/last_level aren't populated).
+            last_temp_str = _safe_temp_str(controller, type_label)
+            first_zone = cfg.ipmi_zone[0] if cfg.ipmi_zone else None
+            last_level_str = _safe_zone_level(ipmi, first_zone) if first_zone is not None else "-"
+            block = _format_controller_block(
+                section=section,
+                type_label=type_label,
+                zones=list(cfg.ipmi_zone),
+                polling=float(getattr(cfg, "polling", 0.0)),
+                deferred=bool(getattr(controller, "deferred_apply", False)),
+                temp_min=float(getattr(cfg, "min_temp", 0.0)),
+                temp_max=float(getattr(cfg, "max_temp", 0.0)),
+                level_min=int(getattr(cfg, "min_level", 0)),
+                level_max=int(getattr(cfg, "max_level", 0)),
+                last_temp_str=last_temp_str,
+                last_level_str=last_level_str,
+                devices=device_rows,
+                standby=standby,
+                use_color=use_color,
+            )
+            lines.extend(block)
             lines.append("")
 
     # Live IPMI zones
     zone_lines = _format_zones_table(entries, ipmi, use_color)
     if zone_lines:
         lines.extend(zone_lines)
-        lines.append("")
-
-    # Standby Guard
-    standby_lines = _format_standby_section(entries, use_color)
-    if standby_lines:
-        lines.extend(standby_lines)
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
@@ -575,20 +616,66 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
         lines.append(f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_str:<10}{level_str}")
     lines.append("")
 
-    # Per-device temperatures (verbose only). Pulled from the snapshot's `devices` array — the
-    # service has already cached them on the loop's last get_temp(); this path issues no
-    # subprocesses (preserving the request-thread contract from CLIENT_SERVER.md).
+    # Per-controller verbose blocks (Proposal A). All fields are already in the snapshot, so
+    # this path issues no subprocesses — the request-thread contract from CLIENT_SERVER.md
+    # is preserved. CONST controllers are skipped (no devices) but stay in the Controllers
+    # table above.
     if verbose:
-        device_rows: List[Tuple[str, str, str]] = []
         for c in controllers:
-            if c.get("type") == "const":
+            type_label = c.get("type", "?")
+            if type_label == "const":
                 continue
             section = c.get("section", "?")
-            for d in c.get("devices", []) or []:
-                device_rows.append((section, str(d.get("name", "")), f"{float(d.get('temp_c', 0.0)):.1f} C"))
-        device_lines = _format_devices_table(device_rows, use_color)
-        if device_lines:
-            lines.extend(device_lines)
+            ipmi_zones = list(c.get("ipmi_zones", []) or [])
+            # Per-device rows + (HD) STANDBY/ACTIVE annotation from the snapshot's states list.
+            sb = c.get("standby_guard") or {}
+            states = list(sb.get("states", []) or []) if sb.get("enabled") else []
+            devices = c.get("devices", []) or []
+            # Defensive: truncate to the shorter of devices/states so a state-shorter-than-devices
+            # snapshot doesn't surface phantom rows (matches the standalone path's behaviour).
+            if states:
+                devices = devices[:len(states)]
+            device_rows: List[Tuple[str, str, Optional[str]]] = []
+            for i, d in enumerate(devices):
+                name = str(d.get("name", ""))
+                temp_str = f"{float(d.get('temp_c', 0.0)):.1f} C"
+                state_str: Optional[str] = None
+                if states and i < len(states):
+                    state_str = "STANDBY" if states[i] else "ACTIVE"
+                device_rows.append((name, temp_str, state_str))
+            # Standby Guard summary line (HD with standby_guard.enabled=True only).
+            standby: Optional[Tuple[int, str, int, int]] = None
+            if type_label == "hd" and sb.get("enabled"):
+                arr_str = sb.get("array_state", "")
+                standby_count = int(sb.get("standby_count", sum(1 for s in states if s)))
+                standby = (int(sb.get("limit", 1)), arr_str, standby_count, len(states))
+            # Current temp/level — pulled from the snapshot's cached aggregates, with the live
+            # zone level taking precedence (matches the Controllers table's level cell).
+            last_temp_str = f"{float(c.get('last_temp_c', 0.0)):.1f} C"
+            first_zone = ipmi_zones[0] if ipmi_zones else None
+            zone_info = zones.get(str(first_zone), {}) if first_zone is not None else {}
+            level = zone_info.get("applied_level_pct")
+            if level is not None:
+                last_level_str = f"{int(level):3d} %"
+            else:
+                last_level_str = f"{int(c.get('last_level_pct', 0)):3d} %"
+            block = _format_controller_block(
+                section=section,
+                type_label=type_label,
+                zones=ipmi_zones,
+                polling=float(c.get("polling", 0.0)),
+                deferred=bool(c.get("deferred_apply", False)),
+                temp_min=float(c.get("temp_min_c", 0.0)),
+                temp_max=float(c.get("temp_max_c", 0.0)),
+                level_min=int(c.get("level_min_pct", 0)),
+                level_max=int(c.get("level_max_pct", 0)),
+                last_temp_str=last_temp_str,
+                last_level_str=last_level_str,
+                devices=device_rows,
+                standby=standby,
+                use_color=use_color,
+            )
+            lines.extend(block)
             lines.append("")
 
     # IPMI zones (live) — applied levels straight from the snapshot.
@@ -600,33 +687,6 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             level = info.get("applied_level_pct")
             level_fmt = f"{int(level):3d} %" if level is not None else "-"
             lines.append(f"  {zone_str:<8}{level_fmt}")
-        lines.append("")
-
-    # Standby Guard — show a section per HD controller that has it enabled.
-    standby_lines: List[str] = []
-    for c in controllers:
-        if c.get("type") != "hd":
-            continue
-        sb = c.get("standby_guard") or {}
-        if not sb.get("enabled"):
-            continue
-        section = c.get("section", "HD")
-        device_names = [d.get("name", "") for d in (c.get("devices", []) or [])]
-        states = sb.get("states", []) or []
-        title = f"Standby Guard ([{section}], standby_hd_limit={sb.get('limit', 1)})"
-        standby_lines.append(_wrap(title, BOLD, use_color))
-        for i, name in enumerate(device_names):
-            if i >= len(states):
-                break
-            state_str = (_wrap("STANDBY", DIM, use_color) if states[i]
-                         else _wrap("ACTIVE", GREEN, use_color))
-            standby_lines.append(f"  {name}  {state_str}")
-        arr_str = sb.get("array_state", "")
-        standby_count = sb.get("standby_count", sum(1 for s in states if s))
-        if arr_str:
-            standby_lines.append(f"  Array state: {arr_str}  ({standby_count}/{len(states)} standby)")
-    if standby_lines:
-        lines.extend(standby_lines)
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
