@@ -1056,7 +1056,7 @@ class TestFormatReportFromSnapshot:
         cpu_block = out.split("[CPU]", 1)[1].split("\n\n", 1)[0]
         assert "Window: T=[30..60]C → L=[35..100]%" in cpu_block
         assert "Temp:   35.0 C" in cpu_block
-        assert "deferred=yes" in cpu_block
+        assert "shared=yes" in cpu_block
 
     def test_verbose_block_folds_standby_into_hd(self) -> None:
         """The Standby Guard line lives inside the [HD] block, not after IPMI zones."""

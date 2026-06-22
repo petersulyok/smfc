@@ -435,13 +435,14 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
     """
     lines: List[str] = []
     zones_str = str(zones) if zones else "[]"
-    deferred_str = "yes" if deferred else "no"
+    shared_str = "yes" if deferred else "no"
     # Cyan-paint just the [SECTION] tag — it carries the navigational signal. The rest of the
-    # header line (type, zones, polling, deferred) stays in default colour so the eye lands on
-    # the section name first instead of the whole row.
+    # header line (type, zones, shared, polling) stays in default colour so the eye lands on
+    # the section name first instead of the whole row. 'shared=yes' means another controller
+    # is driving this row's zone right now (the deferred_apply flag is set internally).
     tag = _wrap(f"[{section}]", BLUE, use_color)
-    lines.append(f"{tag}  {type_label}  zone(s)={zones_str}  polling={polling:.1f}s  "
-                 f"deferred={deferred_str}")
+    lines.append(f"{tag}  {type_label}  zone(s)={zones_str}  shared={shared_str}  "
+                 f"polling={polling:.1f}s")
     lines.append(f"  Window: T=[{temp_min:g}..{temp_max:g}]C → L=[{level_min}..{level_max}]%")
     lines.append(f"  Temp:   {last_temp_str}  →  Level: {last_level_str}")
     if standby is not None:
