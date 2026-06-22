@@ -220,6 +220,28 @@ class TestBuildSnapshot:
         assert entry["temp_max_c"] == pytest.approx(70.0)
         assert entry["level_min_pct"] == 25
         assert entry["level_max_pct"] == 100
+        # No control_function configured for this fake — the field is present (so consumers
+        # can rely on its existence) but empty (signals legacy linear mode).
+        assert entry["control_function"] == []
+
+    def test_controller_entry_curve_overrides_legacy_min_max(self) -> None:
+        """When `control_function` is configured the snapshot's window fields come from the
+        curve's first/last pair (not the unused legacy min_temp/max_temp/min_level/max_level
+        keys), and the breakpoints round-trip through the entry's `control_function` field."""
+        cpu = _make_cpu_fc(zones=[0])
+        # Override the fake's config to declare a curve. The legacy min/max keys are left at
+        # their fixture defaults (30/70/25/100) — the snapshot must IGNORE them and use the
+        # curve instead, since that's what the runtime LUT is built from.
+        cpu.config.control_function = [(35, 35), (55, 50), (70, 80), (85, 100)]
+        service = _make_service(controllers=[cpu], applied_levels={0: 45})
+        entry = build_snapshot(service)["fan_controllers"][0]
+        # Window fields are the curve's endpoints, not the legacy 30/70/25/100.
+        assert entry["temp_min_c"] == pytest.approx(35.0)
+        assert entry["temp_max_c"] == pytest.approx(85.0)
+        assert entry["level_min_pct"] == 35
+        assert entry["level_max_pct"] == 100
+        # Pairs round-trip as nested lists (JSON-friendly).
+        assert entry["control_function"] == [[35, 35], [55, 50], [70, 80], [85, 100]]
 
     def test_const_controller_entry(self) -> None:
         """A ConstFc entry has device_count=0 and a target_level_pct field; standby block is absent."""

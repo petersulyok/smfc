@@ -61,11 +61,28 @@ def _build_controller_entry(controller) -> Dict[str, Any]:
         entry["level_max_pct"] = int(cfg.level)
     else:
         entry["device_count"] = int(getattr(controller, "count", 0))
-        # Static steering window: [T_min, T_max] mapped onto [L_min, L_max] (static config).
-        entry["temp_min_c"] = float(cfg.min_temp)
-        entry["temp_max_c"] = float(cfg.max_temp)
-        entry["level_min_pct"] = int(cfg.min_level)
-        entry["level_max_pct"] = int(cfg.max_level)
+        # Static steering window: [T_min, T_max] mapped onto [L_min, L_max]. When
+        # `control_function` is configured, those legacy min/max keys are IGNORED at runtime
+        # (the LUT is built from the breakpoints), so reporting them here would be misleading.
+        # Surface the curve's actual envelope instead, taken from the first and last pair —
+        # this keeps the band-colour logic in smfc-client (which keys off these fields) honest
+        # and lets the verbose Window: line match what the curve is actually doing.
+        curve = list(getattr(cfg, "control_function", []) or [])
+        if curve:
+            first_t, first_l = curve[0]
+            last_t, last_l = curve[-1]
+            entry["temp_min_c"] = float(first_t)
+            entry["temp_max_c"] = float(last_t)
+            entry["level_min_pct"] = int(first_l)
+            entry["level_max_pct"] = int(last_l)
+        else:
+            entry["temp_min_c"] = float(cfg.min_temp)
+            entry["temp_max_c"] = float(cfg.max_temp)
+            entry["level_min_pct"] = int(cfg.min_level)
+            entry["level_max_pct"] = int(cfg.max_level)
+        # The raw breakpoints — empty list when no curve is configured. smfc-client renders this
+        # as a `Curve:` line under `Window:` so the user sees the active LUT directly.
+        entry["control_function"] = [[int(t), int(l)] for t, l in curve]
         # Per-device temperature readings cached by the loop's last get_temp() call. Names come
         # from the controller (HD/NVMe expose configured paths; CPU/GPU synthesize ordinal labels).
         # When the loop hasn't run yet temps may be shorter than names — pad with 0.0 so the

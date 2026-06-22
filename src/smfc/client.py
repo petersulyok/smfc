@@ -352,18 +352,25 @@ def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_co
             # Pad first, THEN colour: ANSI escapes are zero-width on screen but real characters
             # in the string, so colouring before padding tears the table's grid. Parse the
             # *already-fetched* string back to a number for banding so we don't double the
-            # ipmitool / smartctl call count just to colour the cell.
+            # ipmitool / smartctl call count just to colour the cell. When control_function
+            # is configured the legacy min/max keys are ignored at runtime — use the curve's
+            # first/last pair instead so the cell colour matches the active LUT.
             temp_cell = f"{temp_str:<10}"
             level_cell = level_str
             cfg = controller.config
+            curve = list(getattr(cfg, "control_function", []) or [])
+            if curve:
+                row_t_min, row_t_max = float(curve[0][0]), float(curve[-1][0])
+                row_l_min, row_l_max = float(curve[0][1]), float(curve[-1][1])
+            else:
+                row_t_min, row_t_max = float(cfg.min_temp), float(cfg.max_temp)
+                row_l_min, row_l_max = float(cfg.min_level), float(cfg.max_level)
             t_now = _parse_temp_cell(temp_str)
             if t_now is not None:
-                temp_cell = _wrap(temp_cell, _band_color(t_now, float(cfg.min_temp), float(cfg.max_temp)),
-                                  use_color)
+                temp_cell = _wrap(temp_cell, _band_color(t_now, row_t_min, row_t_max), use_color)
             l_now = _parse_level_cell(level_str)
             if l_now is not None:
-                level_cell = _wrap(level_cell, _band_color(l_now, float(cfg.min_level), float(cfg.max_level)),
-                                   use_color)
+                level_cell = _wrap(level_cell, _band_color(l_now, row_l_min, row_l_max), use_color)
         lines.append(f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_cell}{level_cell}")
     return lines
 
@@ -401,6 +408,7 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
                              last_temp_str: str, last_level_str: str,
                              devices: List[Tuple[str, str, Optional[str], str]],
                              standby: Optional[Tuple[int, str, int, int]],
+                             curve_pairs: List[Tuple[int, int]],
                              use_color: bool) -> List[str]:
     """Format a single fan controller's verbose block (Proposal A).
 
@@ -428,6 +436,9 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
             are otherwise zero-width and would break alignment.
         standby (Optional[Tuple[int, str, int, int]]): HD standby guard info as
             (limit, array_state, standby_count, total) or None
+        curve_pairs (List[Tuple[int, int]]): user-defined control_function breakpoints as
+            (T, L) tuples. Empty list when the controller runs in legacy linear mode — the
+            `Curve:` line is then skipped (the Window line already conveys the full curve).
         use_color (bool): whether to emit ANSI colors
 
     Returns:
@@ -444,6 +455,12 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
     lines.append(f"{tag}  {type_label}  zone(s)={zones_str}  shared={shared_str}  "
                  f"polling={polling:.1f}s")
     lines.append(f"  Window: T=[{temp_min:g}..{temp_max:g}]C → L=[{level_min}..{level_max}]%")
+    # When a user-defined control_function is configured, show the curve directly under the
+    # Window so the active LUT is visible. Empty curve_pairs (legacy linear mode) keeps the
+    # block compact — the Window line already says everything in that case.
+    if curve_pairs:
+        pairs_str = ", ".join(f"{t}→{l}" for t, l in curve_pairs)
+        lines.append(f"  Curve:  {pairs_str}")
     lines.append(f"  Temp:   {last_temp_str}  →  Level: {last_level_str}")
     if standby is not None:
         limit, array_state, standby_count, total = standby
@@ -548,6 +565,21 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
                 names = list(controller.device_names())
             except Exception:  # pylint: disable=broad-except
                 names = []
+            # Curve-aware steering envelope: when `control_function` is configured the legacy
+            # min/max keys are ignored at runtime — derive the active window from the curve's
+            # first/last pair so per-device colour, level wrap, and the Window: line all see the
+            # same truth.
+            curve_pairs = list(getattr(cfg, "control_function", []) or [])
+            if curve_pairs:
+                blk_temp_min = float(curve_pairs[0][0])
+                blk_temp_max = float(curve_pairs[-1][0])
+                blk_level_min = int(curve_pairs[0][1])
+                blk_level_max = int(curve_pairs[-1][1])
+            else:
+                blk_temp_min = float(getattr(cfg, "min_temp", 0.0))
+                blk_temp_max = float(getattr(cfg, "max_temp", 0.0))
+                blk_level_min = int(getattr(cfg, "min_level", 0))
+                blk_level_max = int(getattr(cfg, "max_level", 0))
             # Build per-device rows. For HDs with standby guard enabled, fold the per-disk
             # STANDBY/ACTIVE annotation into the row's third element. CONST is filtered above.
             # The 4th tuple slot carries the temp colour: standby disks render DIM (stale read),
@@ -555,8 +587,6 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
             states: List[bool] = []
             if type_label == "hd" and getattr(cfg, "standby_guard_enabled", False):
                 states = list(getattr(controller, "standby_array_states", None) or [])
-            dev_t_min = float(getattr(cfg, "min_temp", 0.0))
-            dev_t_max = float(getattr(cfg, "max_temp", 0.0))
             device_rows: List[Tuple[str, str, Optional[str], str]] = []
             for i, name in enumerate(names):
                 temp_str = _safe_nth_temp_str(controller, i)
@@ -567,7 +597,7 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
                     temp_color = DIM
                 else:
                     t_dev = _parse_temp_cell(temp_str)
-                    temp_color = _band_color(t_dev, dev_t_min, dev_t_max) if t_dev is not None else ""
+                    temp_color = _band_color(t_dev, blk_temp_min, blk_temp_max) if t_dev is not None else ""
                 device_rows.append((_display_device_name(name, type_label), temp_str, state_str, temp_color))
             # Standby Guard summary line (HD only, when enabled and we have a usable state string).
             standby: Optional[Tuple[int, str, int, int]] = None
@@ -589,12 +619,11 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
             last_level_str = _safe_zone_level(ipmi, first_zone) if first_zone is not None else "-"
             t_now = _parse_temp_cell(last_temp_str)
             if t_now is not None:
-                last_temp_str = _wrap(last_temp_str, _band_color(t_now, dev_t_min, dev_t_max), use_color)
+                last_temp_str = _wrap(last_temp_str, _band_color(t_now, blk_temp_min, blk_temp_max), use_color)
             l_now = _parse_level_cell(last_level_str)
             if l_now is not None:
                 last_level_str = _wrap(last_level_str,
-                                       _band_color(l_now, float(getattr(cfg, "min_level", 0)),
-                                                   float(getattr(cfg, "max_level", 0))),
+                                       _band_color(l_now, float(blk_level_min), float(blk_level_max)),
                                        use_color)
             block = _format_controller_block(
                 section=section,
@@ -602,14 +631,15 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
                 zones=list(cfg.ipmi_zone),
                 polling=float(getattr(cfg, "polling", 0.0)),
                 deferred=bool(getattr(controller, "deferred_apply", False)),
-                temp_min=float(getattr(cfg, "min_temp", 0.0)),
-                temp_max=float(getattr(cfg, "max_temp", 0.0)),
-                level_min=int(getattr(cfg, "min_level", 0)),
-                level_max=int(getattr(cfg, "max_level", 0)),
+                temp_min=blk_temp_min,
+                temp_max=blk_temp_max,
+                level_min=blk_level_min,
+                level_max=blk_level_max,
                 last_temp_str=last_temp_str,
                 last_level_str=last_level_str,
                 devices=device_rows,
                 standby=standby,
+                curve_pairs=curve_pairs,
                 use_color=use_color,
             )
             lines.extend(block)
@@ -841,6 +871,9 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             last_level_str = _wrap(f"{level_int:3d} %",
                                    _band_color(float(level_int), float(l_min), float(l_max)),
                                    use_color)
+            # Curve breakpoints (empty list when controller is in legacy linear mode). Stored
+            # as nested lists in JSON; convert each inner list to a tuple for the renderer.
+            curve_pairs = [(int(p[0]), int(p[1])) for p in (c.get("control_function") or [])]
             block = _format_controller_block(
                 section=section,
                 type_label=type_label,
@@ -855,6 +888,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
                 last_level_str=last_level_str,
                 devices=device_rows,
                 standby=standby,
+                curve_pairs=curve_pairs,
                 use_color=use_color,
             )
             lines.extend(block)

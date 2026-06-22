@@ -1057,6 +1057,41 @@ class TestFormatReportFromSnapshot:
         assert "Window: T=[30..60]C → L=[35..100]%" in cpu_block
         assert "Temp:   35.0 C" in cpu_block
         assert "shared=yes" in cpu_block
+        # No control_function configured for the sample CPU — the Curve: line is suppressed.
+        assert "Curve:" not in cpu_block
+
+    def test_verbose_block_shows_curve_when_control_function_set(self) -> None:
+        """When control_function is configured the block adds a Curve: line under Window: with
+        the breakpoint pairs. The Window endpoints come from the curve's first/last pair, not
+        from the legacy temp_min_c/temp_max_c keys (which the runtime ignores in this mode)."""
+        snap = _sample_snapshot_dict()
+        # CPU runs in curve mode. The snapshot exporter is supposed to already set
+        # temp_min_c/temp_max_c/level_min_pct/level_max_pct from the curve's endpoints; mirror
+        # that here so client-side rendering sees consistent data.
+        snap["fan_controllers"][0].update({
+            "control_function": [[35, 35], [55, 50], [70, 80], [85, 100]],
+            "temp_min_c": 35.0, "temp_max_c": 85.0,
+            "level_min_pct": 35, "level_max_pct": 100,
+            "last_temp_c": 67.8, "last_level_pct": 76,
+        })
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        cpu_block = out.split("[CPU]", 1)[1].split("\n\n", 1)[0]
+        # Window reflects the curve's envelope.
+        assert "Window: T=[35..85]C → L=[35..100]%" in cpu_block
+        # Curve line lives directly after Window, in the same indentation and arrow style.
+        assert "Curve:  35→35, 55→50, 70→80, 85→100" in cpu_block
+        # Curve appears between Window and Temp.
+        assert cpu_block.index("Window:") < cpu_block.index("Curve:") < cpu_block.index("Temp:")
+
+    def test_verbose_block_no_curve_line_in_legacy_mode(self) -> None:
+        """Without control_function (legacy linear mode) the Curve: line is suppressed."""
+        snap = _sample_snapshot_dict()
+        # HD entry has no control_function key in the sample dict — make it explicit.
+        snap["fan_controllers"][1]["control_function"] = []
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        hd_block = out.split("[HD]", 1)[1].split("\n\n", 1)[0]
+        assert "Window:" in hd_block
+        assert "Curve:" not in hd_block
 
     def test_verbose_block_folds_standby_into_hd(self) -> None:
         """The Standby Guard line lives inside the [HD] block, not after IPMI zones."""
