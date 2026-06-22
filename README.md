@@ -923,7 +923,19 @@ It reads the **same configuration file** as the service (`/etc/smfc/smfc.conf` b
 - **Online (via the service):** if the `[Exporter]` section is enabled in the configuration (see [chapter 13.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#13-remote-monitoring-http-exporter)), `smfc-client` fetches the `/snapshot` JSON from the running service. This is dramatically faster because it serves already-cached state and spawns no `ipmitool`/`smartctl` subprocesses (so it can never wake disks the daemon has put to sleep).
 - **Offline (standalone):** if the exporter is disabled, unreachable, or `--standalone` is given, `smfc-client` reads the BMC and disks directly via `ipmitool`/hwmon/`smartctl`. This path typically needs root, so run it with `sudo smfc-client -s`.
 
-The first lines of the output state which source was used: `source: smfc service (live snapshot)` online, or `source: ipmitool (smfc service is not reachable)` offline (it says "not reachable" rather than "not running" because offline mode is also reached when the exporter is simply disabled or `--standalone` is passed). The online report additionally shows the service `uptime` and annotates the fan-mode line with how many times FULL mode was re-enforced and how old the reading is; the offline report reads the IPMI fan mode live and warns if the BMC is not in FULL mode.
+The first lines of the output state which source was used: `source: smfc service (live snapshot)` online, or `source: ipmitool (smfc service is not reachable)` offline (it says "not reachable" rather than "not running" because offline mode is also reached when the exporter is simply disabled or `--standalone` is passed). The online report additionally shows the service `uptime` (verbose only) and annotates the fan-mode line with how many times FULL mode was re-enforced and how old the reading is; the offline report reads the IPMI fan mode live and warns if the BMC is not in FULL mode.
+
+The report has two modes:
+
+- **Default** is a compact summary: just enough to confirm "is smfc running and on the right hardware?" — the BMC's Product line + Fan mode, the Fan controllers table, and the live IPMI zone levels.
+- **`--verbose` (`-V`)** unfolds the full picture: the complete BMC fingerprint, the service uptime, and a per-controller block below the Fan controllers table showing the steering window (`[temp_min..temp_max]C → [level_min..level_max]%`), the active LUT (a `Curve:` line for controllers configured with `control_function=...`), the per-device temperatures, and the *Standby Guard* status folded into the HD block.
+
+When stdout is a terminal and `--no-color` is not set, the report is **colourised**:
+
+- Section headers (`BMC`, `Fan controllers`, `[CPU]`/`[HD]`/`[NVME]`/`[GPU]`, `IPMI zones (live)`) render in bold bright-blue.
+- Each `Temp` and `Level` cell is banded against the controller's own steering window: **DIM** below the floor (idle), **GREEN** in the lower 70 % (working), **YELLOW** in the upper 30 % (warm — fans ramping), **RED** at or above the ceiling (curve maxed out). The per-device temperatures inside the verbose `Device` list use the same banding against the parent controller's window — handy for spotting a single hot disk dragging the aggregate up.
+- HD per-disk state cells show `STANDBY` in dim grey and `ACTIVE` in green.
+- The fan-mode line shows `FULL` in green and any other mode in red, accompanied by a warning.
 
 #### 14.1. Command-line parameters
 
@@ -931,6 +943,7 @@ The first lines of the output state which source was used: `source: smfc service
 |-----------|-----------------|----------|-----------------------|--------------------------------------------------------------------------------------|
 | `-c FILE` | `--config FILE` | path     | `/etc/smfc/smfc.conf` | Configuration file to read (same format the service uses).                           |
 | `-s`      | `--sudo`        | —        | off                   | Run `ipmitool` and `smartctl` via `sudo`. Required on the standalone path as non-root. |
+| `-V`      | `--verbose`     | —        | off                   | Expand each enabled fan controller into a per-controller block with window, curve, devices, and standby state. |
 | `-nc`     | `--no-color`    | —        | auto                  | Disable ANSI colors. Colors auto-disable when stdout is not a terminal.              |
 |           | `--standalone`  | —        | off                   | Bypass the service exporter and read sensors directly.                               |
 | `-v`      | `--version`     | —        | —                     | Print `smfc-client X.Y.Z` and exit.                                                  |
@@ -940,44 +953,91 @@ Exit codes: `0` = snapshot printed (per-controller errors are non-fatal), `6` = 
 
 #### 14.2. Sample output
 
+Default (non-verbose) — the at-a-glance summary:
+
 ```
 smfc-client 5.4.0
-    config: /etc/smfc/smfc.conf
-    source: ipmitool (smfc service is not reachable)
+  config: /etc/smfc/smfc.conf
+  source: smfc service (live snapshot)
+
+BMC
+  Product       : X11SCH-LN4F (6929)
+  Fan mode      : FULL (1)  (enforced 0x, read 0.3s ago)
+
+Fan controllers
+  Section   Type    Zones     Devices  Temp      Level
+  -------   -----   -----     -------  ------    -----
+  CPU       cpu     [0]       1        51.0 C     47 %
+  HD        hd      [1]       4        39.0 C     45 %
+  CONST     const   [2]       -        -          50 %
+
+IPMI zones (live)
+  Zone    Level
+  ----    -----
+  0        47 %
+  1        45 %
+  2        50 %
+```
+
+With `--verbose` (`-V`) the full report expands the BMC fingerprint, adds the service `uptime`, and emits one block per enabled fan controller with its steering window, active curve (when a `control_function` is configured), and per-device temperatures. The HD controller's `Standby Guard` line is folded into its block; CONST controllers stay in the Fan controllers table but don't get their own block (no devices, no curve):
+
+```
+smfc-client 5.4.0
+  config: /etc/smfc/smfc.conf
+  source: smfc service (live snapshot)
+  uptime: 1d 00:00:00
 
 BMC
   Manufacturer  : Super Micro Computer Inc. (10876)
   Product       : X11SCH-LN4F (6929)
   Firmware      : 1.74
   IPMI version  : 2.0
-  Platform      : X11SCH-LN4F (GenericPlatform)
-  Fan mode      : FULL (1)
+  Platform      : GenericPlatform
+  Fan mode      : FULL (1)  (enforced 0x, read 0.3s ago)
 
-Controllers
+Fan controllers
   Section   Type    Zones     Devices  Temp      Level
-  --------  ------  --------  -------  --------  ------
-  CPU       cpu     [0]       1        42.3 C     45 %
-  HD        hd      [1]       4        34.1 C     55 %
-  NVME      nvme    [1]       2        48.5 C     55 %
-  CONST:0   const   [2]       -        -          50 %
-  GPU       gpu     ERROR: nvidia-smi not found
+  -------   -----   -----     -------  ------    -----
+  CPU       cpu     [0]       1        51.0 C     47 %
+  HD        hd      [1]       4        39.0 C     45 %
+  CONST     const   [2]       -        -          50 %
+
+[CPU]  cpu  zone(s)=[0]  shared=no  polling=2.0s
+  Window: T=[35..75]C → L=[35..100]%
+  Curve:  35→35, 55→50, 70→80, 75→100
+  Temp:   51.0 C  →  Level:  47 %
+  Device  Temp
+  ------  ------
+  cpu0    51.0 C
+
+[HD]  hd  zone(s)=[1]  shared=no  polling=960.0s
+  Window: T=[35..48]C → L=[35..100]%
+  Temp:   39.0 C  →  Level:  45 %
+  Standby Guard: enabled (limit=2)  Array: SAAA  (1/4 standby)
+  Device                              Temp      State
+  ----------------------------------  ------    -------
+  ata-WDC_WD120EFAX-68UNTN0_2AH1BHVY  36.0 C    STANDBY
+  ata-WDC_WD120EFAX-68UNTN0_8CH7T81E  38.0 C    ACTIVE
+  ata-WDC_WD120EFAX-68UNTN0_8CHUDDRE  39.0 C    ACTIVE
+  ata-WDC_WD120EFAX-68UNTN0_8CHUGGZE  39.0 C    ACTIVE
 
 IPMI zones (live)
   Zone    Level
-  ------  -----
-  0        45 %
-  1        55 %
+  ----    -----
+  0        47 %
+  1        45 %
   2        50 %
-
-Standby Guard ([HD], standby_hd_limit=1)
-  /dev/sda  ACTIVE
-  /dev/sdb  ACTIVE
-  /dev/sdc  STANDBY
-  /dev/sdd  STANDBY
-  Array state: AASS  (2/4 standby)
 ```
 
-Each fan controller is constructed independently, so a single failing controller (e.g. a missing GPU tool or a non-existent disk) shows an `ERROR` row while the rest of the report still renders. The *Standby Guard* section appears only when an HD controller has standby guard enabled and manages more than one disk.
+A few things to notice in the verbose block:
+
+- **`shared=yes/no`** tells you whether another controller is currently driving this row's IPMI zone (zone arbitration). When `yes`, this controller's request was deferred to the other one; useful for spotting a CPU and an NVMe sharing zone 0 where one drags the other up or down.
+- **`Window:` and `Curve:`** describe the active steering curve. When a `control_function=...` is configured, `Window:` shows the curve's actual `[temp_min..temp_max] → [level_min..level_max]` envelope (not the legacy `min_temp/max_temp` keys, which the runtime ignores in this mode), and `Curve:` lists the breakpoint pairs directly. Controllers without a `control_function` (legacy linear mode) skip the `Curve:` line — the `Window:` already says everything.
+- **`Temp: X → Level: Y`** is the aggregated temperature the curve was evaluated against and the resulting level that ended up on the BMC. With colours on, both cells carry the band colour against the same window — at a glance you see whether the controller is idle, working, ramping, or maxed out.
+- **Device names** for HD and NVMe controllers are shown as the path basename (e.g. `ata-WDC_WD120EFAX-68UNTN0_2AH1BHVY` instead of `/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_2AH1BHVY`) so per-disk rows stay scannable. The snapshot JSON and Prometheus labels still carry the full stable-id paths.
+- **`Standby Guard`** appears as a single line inside the `[HD]` block when the feature is enabled; the per-disk `STANDBY`/`ACTIVE` annotation lives in the right-most column of that block's device table. Disks in standby render in dim grey because the temperature reading is stale (smartctl is skipped while a disk sleeps).
+
+Each fan controller is constructed independently, so a single failing controller (e.g. a missing GPU tool or a non-existent disk) shows an `ERROR` row in the Fan controllers table while the rest of the report still renders. See [SMFC_CLIENT.md](SMFC_CLIENT.md) for the full design history and [CLIENT_SERVER.md](CLIENT_SERVER.md) for the request-thread contract that keeps the online path subprocess-free.
 
 ### 15. FAQ
 
