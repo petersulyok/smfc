@@ -325,7 +325,7 @@ def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_co
     lines: List[str] = []
     lines.append(_wrap("Fan controllers", BLUE, use_color))
     header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
-    sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6}"
+    sep = f"  {'-' * 7:<10}{'-' * 4:<8}{'-' * 5:<10}{'-' * 7:<9}{'-' * 4:<10}{'-' * 5}"
     lines.append(header)
     lines.append(sep)
     for section, type_label, controller, error in entries:
@@ -472,16 +472,16 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
         has_state = any(d[2] is not None for d in devices)
         name_w = max(len("Device"), max(len(d[0]) for d in devices))
         temp_w = 10  # matches the data-row format string below
-        state_w = len("State")
         # Devices subsection: column headers at the same 2-space indent as every other level-1
         # row (Window:, Temp:, Standby Guard:), a dashed separator beneath, then the data rows.
-        # 'State' is only shown for HD with standby guard enabled — has_state decides.
+        # 'State' is only shown for HD with standby guard enabled — has_state decides. Dash runs
+        # match the header *word* lengths (Device=6, Temp=4, State=5), not the data-column widths.
         if has_state:
             lines.append(f"  {'Device':<{name_w + 2}}{'Temp':<{temp_w}}State")
-            lines.append(f"  {'-' * name_w:<{name_w + 2}}{'-' * (temp_w - 2):<{temp_w}}{'-' * state_w}")
+            lines.append(f"  {'-' * len('Device'):<{name_w + 2}}{'-' * len('Temp'):<{temp_w}}{'-' * len('State')}")
         else:
             lines.append(f"  {'Device':<{name_w + 2}}Temp")
-            lines.append(f"  {'-' * name_w:<{name_w + 2}}{'-' * (temp_w - 2)}")
+            lines.append(f"  {'-' * len('Device'):<{name_w + 2}}{'-' * len('Temp')}")
         for name, temp_str, state_str, temp_color in devices:
             # Pad the visible temp_str to the column width, THEN wrap colour. ANSI escapes are
             # zero-width on screen but real characters in the string, so colouring before padding
@@ -778,7 +778,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     controllers = snapshot.get("fan_controllers", []) or []
     lines.append(_wrap("Fan controllers", BLUE, use_color))
     header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
-    sep = f"  {'-' * 8:<10}{'-' * 6:<8}{'-' * 8:<10}{'-' * 7:<9}{'-' * 8:<10}{'-' * 6}"
+    sep = f"  {'-' * 7:<10}{'-' * 4:<8}{'-' * 5:<10}{'-' * 7:<9}{'-' * 4:<10}{'-' * 5}"
     lines.append(header)
     lines.append(sep)
     zones = snapshot.get("zones", {}) or {}
