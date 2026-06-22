@@ -324,16 +324,14 @@ def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_co
     """
     lines: List[str] = []
     lines.append(_wrap("Fan controllers", BLUE, use_color))
-    header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
-    sep = f"  {'-' * 7:<10}{'-' * 4:<8}{'-' * 5:<10}{'-' * 7:<9}{'-' * 4:<10}{'-' * 5}"
-    lines.append(header)
-    lines.append(sep)
+    # First pass: collect each row's raw cell values (the temp/level pair carries both the plain
+    # string and any colour escape; the dash-width logic below keys off the plain string so the
+    # column grid never accounts for invisible ANSI characters). Failed-construction rows leave
+    # most cells empty — they render as a single ERROR span past Section/Type.
+    rows: List[Dict[str, Any]] = []
     for section, type_label, controller, error in entries:
         if controller is None:
-            # Construction failed: only Section and Type are known, so let the error message
-            # run free from the Zones column to the end of the line.
-            err_cell = _wrap(f"ERROR: {error}", RED, use_color)
-            lines.append(f"  {section:<10}{type_label:<8}{err_cell}")
+            rows.append({"section": section, "type": type_label, "error": str(error)})
             continue
         zones_str = str(controller.config.ipmi_zone)
         count = getattr(controller, "count", None)
@@ -341,22 +339,15 @@ def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_co
             devices_str = "-"
             temp_str = "-"
             level_str = f"{controller.config.level:3d} %"
-            temp_cell = f"{temp_str:<10}"
-            level_cell = level_str
+            temp_color = ""
+            level_color = ""
         else:
             devices_str = str(count) if count is not None else "-"
             temp_str = _safe_temp_str(controller, type_label)
-            # Level: use the first zone (controllers usually own a single zone or share).
             first_zone = controller.config.ipmi_zone[0] if controller.config.ipmi_zone else None
             level_str = _safe_zone_level(ipmi, first_zone) if first_zone is not None else "-"
-            # Pad first, THEN colour: ANSI escapes are zero-width on screen but real characters
-            # in the string, so colouring before padding tears the table's grid. Parse the
-            # *already-fetched* string back to a number for banding so we don't double the
-            # ipmitool / smartctl call count just to colour the cell. When control_function
-            # is configured the legacy min/max keys are ignored at runtime — use the curve's
-            # first/last pair instead so the cell colour matches the active LUT.
-            temp_cell = f"{temp_str:<10}"
-            level_cell = level_str
+            # Band the cell against the controller's curve (or legacy min/max) — see the
+            # standalone-path block builder below for the same logic; both paths must agree.
             cfg = controller.config
             curve = list(getattr(cfg, "control_function", []) or [])
             if curve:
@@ -366,12 +357,39 @@ def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_co
                 row_t_min, row_t_max = float(cfg.min_temp), float(cfg.max_temp)
                 row_l_min, row_l_max = float(cfg.min_level), float(cfg.max_level)
             t_now = _parse_temp_cell(temp_str)
-            if t_now is not None:
-                temp_cell = _wrap(temp_cell, _band_color(t_now, row_t_min, row_t_max), use_color)
+            temp_color = _band_color(t_now, row_t_min, row_t_max) if t_now is not None else ""
             l_now = _parse_level_cell(level_str)
-            if l_now is not None:
-                level_cell = _wrap(level_cell, _band_color(l_now, row_l_min, row_l_max), use_color)
-        lines.append(f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_cell}{level_cell}")
+            level_color = _band_color(l_now, row_l_min, row_l_max) if l_now is not None else ""
+        rows.append({
+            "section": section, "type": type_label,
+            "zones": zones_str, "devices": devices_str,
+            "temp": temp_str, "temp_color": temp_color,
+            "level": level_str, "level_color": level_color,
+        })
+    # Dash widths: max(header_word_length, longest_value_in_that_column) — this is what makes
+    # the separator span the full data width of each column rather than just the header word.
+    def _w(header: str, key: str) -> int:
+        return max(len(header), max((len(str(r.get(key, ""))) for r in rows), default=0))
+    sec_w = _w("Section", "section")
+    type_w = _w("Type", "type")
+    zone_w = _w("Zones", "zones")
+    dev_w = _w("Devices", "devices")
+    temp_w = _w("Temp", "temp")
+    level_w = _w("Level", "level")
+    header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
+    sep = (f"  {'-' * sec_w:<10}{'-' * type_w:<8}{'-' * zone_w:<10}"
+           f"{'-' * dev_w:<9}{'-' * temp_w:<10}{'-' * level_w}")
+    lines.append(header)
+    lines.append(sep)
+    for r in rows:
+        if "error" in r:
+            err_cell = _wrap(f"ERROR: {r['error']}", RED, use_color)
+            lines.append(f"  {r['section']:<10}{r['type']:<8}{err_cell}")
+            continue
+        temp_cell = _wrap(f"{r['temp']:<10}", r["temp_color"], use_color)
+        level_cell = _wrap(r["level"], r["level_color"], use_color)
+        lines.append(f"  {r['section']:<10}{r['type']:<8}{r['zones']:<10}"
+                     f"{r['devices']:<9}{temp_cell}{level_cell}")
     return lines
 
 
@@ -395,11 +413,16 @@ def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: b
     if not zones:
         return lines
     zones.sort()
+    # Dash widths: max(header_word, longest_value_in_column). Zone IDs are 1-2 digits in
+    # practice; Level cells are ' NN %' (5 chars) or 'ERROR' (5 chars).
+    level_strs = [_safe_zone_level(ipmi, z) for z in zones]
+    zone_dash = "-" * max(len("Zone"), *(len(str(z)) for z in zones))
+    level_dash = "-" * max(len("Level"), *(len(s) for s in level_strs))
     lines.append(_wrap("IPMI zones (live)", BLUE, use_color))
     lines.append(f"  {'Zone':<8}Level")
-    lines.append(f"  {'-' * 4:<8}-----")
-    for z in zones:
-        lines.append(f"  {z:<8}{_safe_zone_level(ipmi, z)}")
+    lines.append(f"  {zone_dash:<8}{level_dash}")
+    for z, level_str in zip(zones, level_strs):
+        lines.append(f"  {z:<8}{level_str}")
     return lines
 
 
@@ -475,13 +498,18 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
         # Devices subsection: column headers at the same 2-space indent as every other level-1
         # row (Window:, Temp:, Standby Guard:), a dashed separator beneath, then the data rows.
         # 'State' is only shown for HD with standby guard enabled — has_state decides. Dash runs
-        # match the header *word* lengths (Device=6, Temp=4, State=5), not the data-column widths.
+        # span max(header_word_length, longest_value) per column, so the separator stretches to
+        # cover wide /dev/disk/by-id-style names and the STANDBY label (7 chars > 'State').
+        dash_name = "-" * name_w
+        dash_temp = "-" * max(len("Temp"), max(len(d[1]) for d in devices))
         if has_state:
+            state_data_w = max((len(d[2]) for d in devices if d[2] is not None), default=0)
+            dash_state = "-" * max(len("State"), state_data_w)
             lines.append(f"  {'Device':<{name_w + 2}}{'Temp':<{temp_w}}State")
-            lines.append(f"  {'-' * len('Device'):<{name_w + 2}}{'-' * len('Temp'):<{temp_w}}{'-' * len('State')}")
+            lines.append(f"  {dash_name:<{name_w + 2}}{dash_temp:<{temp_w}}{dash_state}")
         else:
             lines.append(f"  {'Device':<{name_w + 2}}Temp")
-            lines.append(f"  {'-' * len('Device'):<{name_w + 2}}{'-' * len('Temp')}")
+            lines.append(f"  {dash_name:<{name_w + 2}}{dash_temp}")
         for name, temp_str, state_str, temp_color in devices:
             # Pad the visible temp_str to the column width, THEN wrap colour. ANSI escapes are
             # zero-width on screen but real characters in the string, so colouring before padding
@@ -777,11 +805,11 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     # Controllers table.
     controllers = snapshot.get("fan_controllers", []) or []
     lines.append(_wrap("Fan controllers", BLUE, use_color))
-    header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
-    sep = f"  {'-' * 7:<10}{'-' * 4:<8}{'-' * 5:<10}{'-' * 7:<9}{'-' * 4:<10}{'-' * 5}"
-    lines.append(header)
-    lines.append(sep)
     zones = snapshot.get("zones", {}) or {}
+    # First pass: collect raw cell strings + per-row band colours so we can size the dashed
+    # separator from the actual data widths. Cell padding (10/8/10/9/10) stays fixed — it
+    # defines the visual grid; only the dash run length is data-aware.
+    rows: List[Dict[str, Any]] = []
     for c in controllers:
         section = c.get("section", "?")
         type_label = c.get("type", "?")
@@ -791,6 +819,8 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             devices_str = "-"
             temp_str = "-"
             level_str = f"{int(c.get('target_level_pct', c.get('last_level_pct', 0))):3d} %"
+            temp_color = ""
+            level_color = ""
         else:
             devices_str = str(int(c.get("device_count", 0)))
             temp_str = f"{float(c.get('last_temp_c', 0.0)):.1f} C"
@@ -798,22 +828,38 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             zone_info = zones.get(str(first_zone), {}) if first_zone is not None else {}
             level = zone_info.get("applied_level_pct")
             level_str = f"{int(level):3d} %" if level is not None else f"{int(c.get('last_level_pct', 0)):3d} %"
-        # Pre-pad temp / level to their column widths, THEN wrap colour around the result so the
-        # invisible ANSI escapes don't disturb the table's character grid. CONST has no curve, so
-        # `_band_color` returns "" (no escape) and the cell renders in default colour.
-        temp_cell = f"{temp_str:<10}"
-        level_cell = level_str
-        if type_label != "const":
             t_min = float(c.get("temp_min_c", 0.0))
             t_max = float(c.get("temp_max_c", 0.0))
             l_min = int(c.get("level_min_pct", 0))
             l_max = int(c.get("level_max_pct", 0))
-            temp_cell = _wrap(temp_cell, _band_color(float(c.get("last_temp_c", 0.0)), t_min, t_max),
-                              use_color)
+            temp_color = _band_color(float(c.get("last_temp_c", 0.0)), t_min, t_max)
             level_int = int(level) if level is not None else int(c.get("last_level_pct", 0))
-            level_cell = _wrap(level_cell, _band_color(float(level_int), float(l_min), float(l_max)),
-                               use_color)
-        lines.append(f"  {section:<10}{type_label:<8}{zones_str:<10}{devices_str:<9}{temp_cell}{level_cell}")
+            level_color = _band_color(float(level_int), float(l_min), float(l_max))
+        rows.append({
+            "section": section, "type": type_label,
+            "zones": zones_str, "devices": devices_str,
+            "temp": temp_str, "temp_color": temp_color,
+            "level": level_str, "level_color": level_color,
+        })
+
+    def _w(header: str, key: str) -> int:
+        return max(len(header), max((len(str(r.get(key, ""))) for r in rows), default=0))
+    sec_w = _w("Section", "section")
+    type_w = _w("Type", "type")
+    zone_w = _w("Zones", "zones")
+    dev_w = _w("Devices", "devices")
+    temp_w = _w("Temp", "temp")
+    level_w = _w("Level", "level")
+    header = f"  {'Section':<10}{'Type':<8}{'Zones':<10}{'Devices':<9}{'Temp':<10}Level"
+    sep = (f"  {'-' * sec_w:<10}{'-' * type_w:<8}{'-' * zone_w:<10}"
+           f"{'-' * dev_w:<9}{'-' * temp_w:<10}{'-' * level_w}")
+    lines.append(header)
+    lines.append(sep)
+    for r in rows:
+        temp_cell = _wrap(f"{r['temp']:<10}", r["temp_color"], use_color)
+        level_cell = _wrap(r["level"], r["level_color"], use_color)
+        lines.append(f"  {r['section']:<10}{r['type']:<8}{r['zones']:<10}"
+                     f"{r['devices']:<9}{temp_cell}{level_cell}")
     lines.append("")
 
     # Per-controller verbose blocks (Proposal A). All fields are already in the snapshot, so
@@ -896,12 +942,17 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
 
     # IPMI zones (live) — applied levels straight from the snapshot.
     if zones:
+        zone_items = sorted(zones.items(), key=lambda kv: int(kv[0]))
+        zone_rows = []
+        for zone_str, info in zone_items:
+            level = info.get("applied_level_pct")
+            zone_rows.append((zone_str, f"{int(level):3d} %" if level is not None else "-"))
+        zone_dash = "-" * max(len("Zone"), *(len(z) for z, _ in zone_rows))
+        level_dash = "-" * max(len("Level"), *(len(lvl) for _, lvl in zone_rows))
         lines.append(_wrap("IPMI zones (live)", BLUE, use_color))
         lines.append(f"  {'Zone':<8}Level")
-        lines.append(f"  {'-' * 4:<8}-----")
-        for zone_str, info in sorted(zones.items(), key=lambda kv: int(kv[0])):
-            level = info.get("applied_level_pct")
-            level_fmt = f"{int(level):3d} %" if level is not None else "-"
+        lines.append(f"  {zone_dash:<8}{level_dash}")
+        for zone_str, level_fmt in zone_rows:
             lines.append(f"  {zone_str:<8}{level_fmt}")
         lines.append("")
 
