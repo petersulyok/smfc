@@ -873,7 +873,7 @@ With the help of command `journalctl` you can check logs easily. For example:
 
 ### 13. Remote monitoring (HTTP exporter)
 
-When enabled, `smfc` runs a small HTTP server alongside the fan-control loop, publishing live system state on demand. This lets you check temperatures, fan levels, IPMI zone assignments, and disk standby states at any time — from a browser, a `curl` command, or a Grafana dashboard — without interrupting the daemon or searching through logs.
+When enabled, `smfc` exposes live fan and temperature data over HTTP. This powers two use cases: `smfc-client` reads it to give you an instant status overview from the command line, and Prometheus can scrape it to feed a Grafana dashboard with historical charts and alerts.
 
 The exporter is **disabled by default**. Enable it in `smfc.conf`:
 
