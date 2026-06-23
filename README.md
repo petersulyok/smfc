@@ -59,8 +59,8 @@ Key features:
  - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13) and edge cases (X10QBi)
  - Remote IPMI access via `remote_parameters=` for VM setups (e.g. TrueNAS on Proxmox with PCI passthrough)
  - Distributed as a `systemd` service, Docker image, DEB/RPM package, or PyPI package
- - Companion `smfc-client` tool showing a live read-only snapshot of controllers, fan levels, IPMI zones, and standby state
  - Optional HTTP exporter for live monitoring: powers `smfc-client` and enables Grafana dashboard integration
+ - Companion `smfc-client` tool showing a live read-only snapshot of controllers, fan levels, IPMI zones, and standby state  
  - Automatic FULL-mode enforcement that detects and corrects BMC fan-mode drift
  - Safe shutdown: all fans are set back to 100% speed at service termination
 
@@ -907,9 +907,9 @@ All data is served from the daemon's already-cached state — no `ipmitool` or `
 For Grafana integration with a ready-to-import dashboard and a full monitoring stack setup, see [`grafana/GRAFANA.md`](grafana/GRAFANA.md).
 
 ### 14. smfc-client
-`smfc-client` is a separate console script (installed alongside the `smfc` service) that prints a **one-shot, read-only snapshot** of what `smfc` sees: BMC information, the current IPMI fan mode, every enabled fan controller with its temperature and applied fan level, the live per-zone levels, and the *Standby Guard* state for HD arrays. It never changes fan state and does not require the `smfc` service to be running. Use it to verify your configuration is doing the right thing without grepping through the system log.
+`smfc-client` gives you an instant read-only view of what `smfc` is currently doing: temperatures, fan levels, IPMI zone states, and standby status — all in one command. Use it to confirm your configuration is working as expected without digging through system logs. It is safe to run at any time and never changes any fan state.
 
-> `smfc-client` is shipped with `smfc v6.0.0` and later — it is not available on `smfc v5.x` and earlier releases.
+> `smfc-client` is shipped with `smfc v6.0.0` and later
 
 It reads the **same configuration file** as the service (`/etc/smfc/smfc.conf` by default), so it always reports on the same controllers and zones the service manages. There are two data sources, selected automatically:
 
