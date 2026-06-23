@@ -33,6 +33,7 @@ install -Dm644 config/smfc.conf    %{buildroot}/etc/smfc/smfc.conf
 install -Dm644 config/smfc         %{buildroot}/etc/default/smfc
 install -Dm644 config/smfc.service %{buildroot}%{_unitdir}/smfc.service
 install -Dm644 doc/smfc.1          %{buildroot}%{_mandir}/man1/smfc.1
+install -Dm644 doc/smfc-client.1   %{buildroot}%{_mandir}/man1/smfc-client.1
 install -d %{buildroot}%{_docdir}/%{name}/examples
 install -m644 config/samples/*.conf %{buildroot}%{_docdir}/%{name}/examples/
 
@@ -85,12 +86,14 @@ fi
 %license LICENSE
 %doc README.md CHANGELOG.md
 %{_bindir}/smfc
+%{_bindir}/smfc-client
 %{python3_sitelib}/smfc/
 %{python3_sitelib}/smfc-%{version}.dist-info/
 %config(noreplace) /etc/smfc/smfc.conf
 %config(noreplace) /etc/default/smfc
 %{_unitdir}/smfc.service
 %{_mandir}/man1/smfc.1*
+%{_mandir}/man1/smfc-client.1*
 %{_docdir}/%{name}/examples/
 
 %changelog
