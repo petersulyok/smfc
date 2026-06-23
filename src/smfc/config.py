@@ -201,6 +201,9 @@ class Config:
     DV_IPMI_PLATFORM_NAME: str = "auto"
     DV_IPMI_ENFORCE_FAN_MODE: bool = True
 
+    # Backward-compatible platform_name aliases (legacy value -> canonical value)
+    PLATFORM_NAME_ALIASES: dict = {"genericx9": "generic_x9"}
+
     # Default values — [CPU] section
     DV_CPU_STEPS: int = 6
     DV_CPU_SENSITIVITY: float = 3.0
@@ -407,12 +410,15 @@ class Config:
         fan_level_delay = parser[s].getint(self.CV_IPMI_FAN_LEVEL_DELAY, fallback=self.DV_IPMI_FAN_LEVEL_DELAY)
         if fan_level_delay < 0:
             raise ValueError(f"Negative {self.CV_IPMI_FAN_LEVEL_DELAY}= parameter ({fan_level_delay})")
+        # Normalize legacy platform_name values (e.g. 'genericx9' -> 'generic_x9') for backward compatibility.
+        platform_name = parser[s].get(self.CV_IPMI_PLATFORM_NAME, fallback=self.DV_IPMI_PLATFORM_NAME)
+        platform_name = self.PLATFORM_NAME_ALIASES.get(platform_name, platform_name)
         return IpmiConfig(
             command=parser[s].get(self.CV_IPMI_COMMAND, self.DV_IPMI_COMMAND),
             fan_mode_delay=fan_mode_delay,
             fan_level_delay=fan_level_delay,
             remote_parameters=parser[s].get(self.CV_IPMI_REMOTE_PARAMETERS, fallback=self.DV_IPMI_REMOTE_PARAMETERS),
-            platform_name=parser[s].get(self.CV_IPMI_PLATFORM_NAME, fallback=self.DV_IPMI_PLATFORM_NAME),
+            platform_name=platform_name,
             enforce_fan_mode=parser[s].getboolean(self.CV_IPMI_ENFORCE_FAN_MODE,
                                                   fallback=self.DV_IPMI_ENFORCE_FAN_MODE),
         )

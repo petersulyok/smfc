@@ -356,6 +356,24 @@ enforce_fan_mode = false
     @pytest.mark.parametrize(
         "value, expected, error_str",
         [
+            # Legacy value is normalized to the canonical one
+            ("genericx9", "generic_x9", "platform_name legacy genericx9 p1"),
+            # Canonical value is passed through unchanged
+            ("generic_x9", "generic_x9", "platform_name generic_x9 p2"),
+            # New X14 value is passed through unchanged
+            ("generic_x14", "generic_x14", "platform_name generic_x14 p3"),
+            # An unrelated value (BMC product name) is passed through unchanged
+            ("X14DAi-T", "X14DAi-T", "platform_name passthrough p4"),
+        ],
+    )
+    def test_ipmi_platform_name_aliases(self, create_config, value: str, expected: str, error_str: str):
+        """Positive test: legacy platform_name values are normalized for backward compatibility."""
+        cfg = create_config(f"[Ipmi]\nplatform_name = {value}\n")
+        assert cfg.ipmi.platform_name == expected, error_str
+
+    @pytest.mark.parametrize(
+        "value, expected, error_str",
+        [
             ("true", True, "enforce_fan_mode=true p1"),
             ("True", True, "enforce_fan_mode=True p2"),
             ("false", False, "enforce_fan_mode=false p3"),

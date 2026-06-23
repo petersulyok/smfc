@@ -26,8 +26,11 @@ class GenericX9Platform(Platform):
         r = self._exec(["raw", "0x30", "0x90", "0x5a", "0x03", f"0x{reg:x}", "0x01"])
         return int(r.stdout, 16)
 
-    def set_fan_manual_mode(self) -> None:
-        pass
+    def start(self) -> None:
+        """No manual-mode preparation needed on this platform."""
+
+    def end(self) -> None:
+        """No cleanup needed on this platform."""
 
     def set_fan_mode(self, mode: int) -> None:
         if mode not in self.valid_fan_modes:

@@ -45,6 +45,7 @@ class TestService:
         - mock atexit.unregister(), Ipmi.set_fan_mode(), Log.msg_to_stdout() functions
         - execute Service.exit_func()
         - ASSERT: if mocked functions not called expected times
+        - ASSERT: if the platform manual mode was not released (platform.end())
         """
         mock_atexit_unregister = MagicMock()
         mocker.patch("atexit.unregister", mock_atexit_unregister)
@@ -55,12 +56,15 @@ class TestService:
         service = Service()
         if log:
             service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        mock_platform = MagicMock()
         if ipmi:
             service.ipmi = Ipmi.__new__(Ipmi)
+            service.ipmi.platform = mock_platform
         service.exit_func()
         assert mock_atexit_unregister.call_count == 1, error_str
         if ipmi:
             assert mock_ipmi_set_fan_mode.call_count == 1, error_str
+            assert mock_platform.end.call_count == 1, error_str
             if log:
                 assert mock_log_msg.call_count == 1, error_str
 
