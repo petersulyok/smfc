@@ -6,10 +6,11 @@
 import subprocess
 from typing import Callable, List
 
+from smfc.config import PlatformName
 from smfc.generic import GenericPlatform
 from smfc.genericx9 import GenericX9Platform
 from smfc.genericx14 import GenericX14Platform
-from smfc.platform import Platform, PlatformName
+from smfc.platform import Platform
 from smfc.x10qbi import X10QBi
 
 
@@ -22,7 +23,7 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
             - 'generic_x14': force the GenericX14Platform (X14 motherboards)
             - 'X10QBi': force the X10QBi platform
             - any other string: auto-detected from the BMC product name prefix
-              ('X9...' -> X9, 'X14...' -> X14), falls back to GenericPlatform
+              ('X14...' -> X14, 'X10QBi...' -> X10QBi, 'X9...' -> X9), falls back to GenericPlatform
         exec_ipmitool (Callable): Function that executes ipmitool commands
     Returns:
         Platform: The platform-specific implementation (defaults to GenericPlatform)
@@ -37,6 +38,8 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
     if platform_class is None:
         if platform_name.startswith("X14"):
             platform_class = GenericX14Platform
+        elif platform_name.startswith("X10QBi"):
+            platform_class = X10QBi
         elif platform_name.startswith("X9"):
             platform_class = GenericX9Platform
         else:

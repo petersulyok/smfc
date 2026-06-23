@@ -7,9 +7,9 @@ import subprocess
 import time
 from typing import List
 from smfc.log import Log
-from smfc.platform import FanMode, Platform, PlatformName
+from smfc.platform import FanMode, Platform
 from smfc.platform_factory import create_platform
-from smfc.config import IpmiConfig, Config
+from smfc.config import IpmiConfig, Config, PlatformName
 
 
 class Ipmi:

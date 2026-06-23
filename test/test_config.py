@@ -343,14 +343,14 @@ command = /opt/ipmitool
 fan_mode_delay = 5
 fan_level_delay = 1
 remote_parameters = -I lanplus -U admin -P secret -H 192.168.1.100
-platform_name = X11DPH-T
+platform_name = X10QBi
 enforce_fan_mode = false
 """)
         assert cfg.ipmi.command == "/opt/ipmitool", f"{f}: command"
         assert cfg.ipmi.fan_mode_delay == 5, f"{f}: fan_mode_delay"
         assert cfg.ipmi.fan_level_delay == 1, f"{f}: fan_level_delay"
         assert cfg.ipmi.remote_parameters == "-I lanplus -U admin -P secret -H 192.168.1.100", f"{f}: remote_parameters"
-        assert cfg.ipmi.platform_name == "X11DPH-T", f"{f}: platform_name"
+        assert cfg.ipmi.platform_name == "X10QBi", f"{f}: platform_name"
         assert cfg.ipmi.enforce_fan_mode is False, f"{f}: enforce_fan_mode"
 
     @pytest.mark.parametrize(
@@ -358,18 +358,35 @@ enforce_fan_mode = false
         [
             # Legacy value is normalized to the canonical one
             ("genericx9", "generic_x9", "platform_name legacy genericx9 p1"),
-            # Canonical value is passed through unchanged
-            ("generic_x9", "generic_x9", "platform_name generic_x9 p2"),
-            # New X14 value is passed through unchanged
-            ("generic_x14", "generic_x14", "platform_name generic_x14 p3"),
-            # An unrelated value (BMC product name) is passed through unchanged
-            ("X14DAi-T", "X14DAi-T", "platform_name passthrough p4"),
+            # All documented values are accepted and passed through unchanged
+            ("auto", "auto", "platform_name auto p2"),
+            ("generic", "generic", "platform_name generic p3"),
+            ("generic_x9", "generic_x9", "platform_name generic_x9 p4"),
+            ("generic_x14", "generic_x14", "platform_name generic_x14 p5"),
+            ("X10QBi", "X10QBi", "platform_name X10QBi p6"),
         ],
     )
-    def test_ipmi_platform_name_aliases(self, create_config, value: str, expected: str, error_str: str):
-        """Positive test: legacy platform_name values are normalized for backward compatibility."""
+    def test_ipmi_platform_name_valid(self, create_config, value: str, expected: str, error_str: str):
+        """Positive test: documented platform_name values are accepted; the legacy value is normalized."""
         cfg = create_config(f"[Ipmi]\nplatform_name = {value}\n")
         assert cfg.ipmi.platform_name == expected, error_str
+
+    @pytest.mark.parametrize(
+        "value, error_str",
+        [
+            # A raw BMC product name is not a valid config value (auto-detection happens in 'auto' mode)
+            ("X11DPH-T", "platform_name invalid n1"),
+            # A typo in a documented value
+            ("genericx14", "platform_name invalid n2"),
+            # An empty value
+            ("", "platform_name invalid n3"),
+        ],
+    )
+    def test_ipmi_platform_name_invalid(self, create_config, value: str, error_str: str):
+        """Negative test: an unknown platform_name value is rejected with ValueError."""
+        with pytest.raises(ValueError) as cm:
+            create_config(f"[Ipmi]\nplatform_name = {value}\n")
+        assert cm.type is ValueError, error_str
 
     @pytest.mark.parametrize(
         "value, expected, error_str",

@@ -3,8 +3,8 @@
 #   smfc package: Supermicro fan control for Linux (home) servers.
 #
 from smfc.log import Log
-from smfc.platform import FanMode, Platform, PlatformName
-from smfc.config import Config, IpmiConfig, CpuConfig, HdConfig, NvmeConfig, GpuConfig, ConstConfig
+from smfc.platform import FanMode, Platform
+from smfc.config import Config, IpmiConfig, CpuConfig, HdConfig, NvmeConfig, GpuConfig, ConstConfig, PlatformName
 from smfc.ipmi import Ipmi
 from smfc.fancontroller import FanController
 from smfc.cpufc import CpuFc

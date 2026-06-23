@@ -5,7 +5,7 @@
 #
 import subprocess
 from abc import ABC, abstractmethod
-from enum import Enum, IntEnum
+from enum import IntEnum
 from typing import Callable, List
 
 
@@ -32,15 +32,6 @@ class FanMode(IntEnum):
     OPTIMAL = 2
     PUE = 3
     HEAVY_IO = 4
-
-
-class PlatformName(str, Enum):
-    """Valid platform name values for the platform_name configuration parameter."""
-    AUTO = "auto"
-    GENERIC = "generic"
-    GENERIC_X9 = "generic_x9"
-    GENERIC_X14 = "generic_x14"
-    X10QBI = "X10QBi"
 
 
 class Platform(ABC):

@@ -6,7 +6,17 @@
 import re
 from configparser import ConfigParser
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import List, Tuple
+
+
+class PlatformName(str, Enum):
+    """Valid platform name values for the platform_name configuration parameter."""
+    AUTO = "auto"
+    GENERIC = "generic"
+    GENERIC_X9 = "generic_x9"
+    GENERIC_X14 = "generic_x14"
+    X10QBI = "X10QBi"
 
 
 @dataclass
@@ -413,6 +423,11 @@ class Config:
         # Normalize legacy platform_name values (e.g. 'genericx9' -> 'generic_x9') for backward compatibility.
         platform_name = parser[s].get(self.CV_IPMI_PLATFORM_NAME, fallback=self.DV_IPMI_PLATFORM_NAME)
         platform_name = self.PLATFORM_NAME_ALIASES.get(platform_name, platform_name)
+        # Only the documented platform names are accepted; BMC product-name matching happens in 'auto' mode.
+        try:
+            PlatformName(platform_name)
+        except ValueError as e:
+            raise ValueError(f"[{s}] invalid value: {self.CV_IPMI_PLATFORM_NAME}={platform_name}.") from e
         return IpmiConfig(
             command=parser[s].get(self.CV_IPMI_COMMAND, self.DV_IPMI_COMMAND),
             fan_mode_delay=fan_mode_delay,

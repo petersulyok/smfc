@@ -4,7 +4,7 @@
 #   Unit tests for smfc.platform module (create_platform).
 #
 from mock import MagicMock
-from smfc.platform import PlatformName
+from smfc.config import PlatformName
 from smfc.platform_factory import create_platform
 from smfc.generic import GenericPlatform
 from smfc.genericx9 import GenericX9Platform
@@ -98,6 +98,18 @@ class TestCreatePlatform:
         platform = create_platform("X14DAi-T", mock_exec)
         assert isinstance(platform, GenericX14Platform), f"{f}: should be GenericX14Platform"
         assert platform.name == "X14DAi-T", f"{f}: platform name"
+
+    def test_create_x10qbi_fallback(self) -> None:
+        """Positive unit test for create_platform() function. It contains the following steps:
+        - call create_platform() with a BMC product name starting with X10QBi
+        - ASSERT: if the returned platform is not an X10QBi instance
+        - ASSERT: if the platform name is different from expected
+        """
+        f = "TestCreatePlatform.test_create_x10qbi_fallback"
+        mock_exec = MagicMock()
+        platform = create_platform("X10QBi-Series", mock_exec)
+        assert isinstance(platform, X10QBi), f"{f}: should be X10QBi"
+        assert platform.name == "X10QBi-Series", f"{f}: platform name"
 
 
 # End.

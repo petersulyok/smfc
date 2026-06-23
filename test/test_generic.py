@@ -7,7 +7,8 @@ import subprocess
 from typing import List
 import pytest
 from mock import MagicMock, call
-from smfc.platform import FanMode, PlatformName
+from smfc.platform import FanMode
+from smfc.config import PlatformName
 from smfc.generic import GenericPlatform
 
 
