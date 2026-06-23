@@ -520,7 +520,8 @@ The default location of the installed files:
 | `smfc.1.gz`        | `/usr/local/share/man/man1`                                | smfc manual page                |
 | `smfc-client.1.gz` | `/usr/local/share/man/man1`                                | smfc-client manual page         |
 | `smfc`             | `/usr/local/bin` or </br> `/usr/bin`                       | smfc command                    |
-| `smfc service` | `/usr/local/lib/python3.xx` or </br> `/usr/lib/python3.xx` | smfc python package             |
+| `smfc-client`      | `/usr/local/bin` or </br> `/usr/bin`                       | smfc-client command             |
+| `smfc service`     | `/usr/local/lib/python3.xx` or </br> `/usr/lib/python3.xx` | smfc python package             |
 
 Notes for the script:
 - Different Linux distros install the Python package to different folders (tested on Ubuntu 24.04, Debian 13,
