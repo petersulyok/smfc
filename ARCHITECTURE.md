@@ -64,6 +64,7 @@ src/smfc/
 ├── platform_factory.py   create_platform() — selects implementation by name/BMC
 ├── generic.py            GenericPlatform — X10/X11/X12/X13/H10-H13 IPMI raw
 ├── genericx9.py          GenericX9Platform — X9 IPMI raw (different opcodes)
+├── genericx14.py         GenericX14Platform — X14 OpenBMC IPMI raw (OEM per-zone manual mode)
 ├── x10qbi.py             X10QBi — Nuvoton NCT7904D variant
 ├── fancontroller.py      FanController base (temperature-driven) + Protocol
 ├── cpufc.py              CpuFc — Intel coretemp / AMD k10temp source
@@ -134,6 +135,7 @@ classDiagram
     }
     class GenericPlatform
     class GenericX9Platform
+    class GenericX14Platform
     class X10QBi
 
     class FanController {
@@ -160,6 +162,7 @@ classDiagram
     Ipmi o--> Platform             : owns
     Platform <|-- GenericPlatform
     Platform <|-- GenericX9Platform
+    Platform <|-- GenericX14Platform
     Platform <|-- X10QBi
     FanController <|-- CpuFc
     FanController <|-- HdFc
@@ -254,7 +257,7 @@ A message is emitted only if `level <= self.log_level`.
   where Linux finishes booting before the BMC is ready to answer,
 - parses `ipmitool bmc info` into `bmc_*` attributes,
 - selects the appropriate `Platform` implementation,
-- forces the BMC into manual-mode (`platform.set_fan_manual_mode()`),
+- calls `platform.start()` to prepare manual fan control (no-op on most platforms; enables per-zone manual mode on `GenericX14Platform`, programs NCT7904D registers on `X10QBi`),
 - exposes `get_fan_mode`, `set_fan_mode`, `get_fan_level`,
   `set_fan_level`, `set_multiple_fan_levels` — all delegating to the
   `Platform`.
@@ -268,40 +271,51 @@ command. Negative delays are rejected at startup.
 ```mermaid
 flowchart TD
     A[config: platform_name] --> B{value == auto?}
-    B -- yes --> C["use bmc_product_name<br/>(e.g. X11SSL-F, X9DRi-F, X10QBi)"]
+    B -- yes --> C["use bmc_product_name<br/>(e.g. X14SPi-TF, X11SSL-F, X9DRi-F, X10QBi)"]
     B -- no --> D[use config value as-is]
     C --> F[create_platform name]
     D --> F
-    F --> G{name startswith X9?}
-    G -- yes --> X9[GenericX9Platform]
-    G -- no --> H{matches PlatformName enum?}
-    H -- GENERIC_X9 --> X9
-    H -- X10QBI --> XQ[X10QBi]
-    H -- GENERIC --> GP[GenericPlatform]
-    H -- no match --> GP
+    F --> G{name startswith X14?}
+    G -- yes --> X14[GenericX14Platform]
+    G -- no --> H{name startswith X9?}
+    H -- yes --> X9[GenericX9Platform]
+    H -- no --> I{matches PlatformName enum?}
+    I -- GENERIC_X14 --> X14
+    I -- GENERIC_X9 --> X9
+    I -- X10QBI --> XQ[X10QBi]
+    I -- GENERIC --> GP[GenericPlatform]
+    I -- no match --> GP
 ```
 
-This means *auto-detection is purely string-prefix matching against the BMC
-product name*. Boards whose names start with `X9` get the X9 platform;
-everything else (X10, X11, X12, X13, H1x, …) gets the generic platform.
-X10QBi must be opted into explicitly via `platform_name=X10QBi`.
+Auto-detection is purely string-prefix matching against the BMC product name.
+Boards whose names start with `X14` get the X14 platform; boards starting with
+`X9` get the X9 platform; everything else (X10, X11, X12, X13, H1x, …) gets
+the generic platform. `X10QBi` must be opted into explicitly via
+`platform_name=X10QBi`.
 
 ### 6.3 Platform implementations
 
 Each platform encodes vendor-specific `ipmitool raw` commands and zone/level
 encodings:
 
-| Platform            | Fan-level opcode                                   | Notes                                            |
-|---------------------|----------------------------------------------------|--------------------------------------------------|
-| `GenericPlatform`   | `raw 0x30 0x70 0x66 0x01 zone level`               | Level in %, 0x00–0x64                            |
-| `GenericX9Platform` | `raw 0x30 0x91 0x5a 0x03 reg duty`                 | Zone → reg (0x10+zone), level *255/100         |
-| `X10QBi`            | `raw 0x30 0x91 0x5c 0x03 reg duty` + TMFR setup    | Nuvoton NCT7904D, requires extra register setup |
+| Platform               | Fan-level opcode                                | Notes                                                    |
+|------------------------|-------------------------------------------------|----------------------------------------------------------|
+| `GenericPlatform`      | `raw 0x30 0x70 0x66 0x01 zone level`            | Level in %, 0x00–0x64                                    |
+| `GenericX9Platform`    | `raw 0x30 0x91 0x5a 0x03 reg duty`              | Zone → reg (0x10+zone), level × 255/100                  |
+| `GenericX14Platform`   | `raw 0x30 0x70 0x88 zone level`                 | Level in %, 0x00–0x64; manual mode via OEM `0x2c 0x04 0xcf 0xc2` per zone |
+| `X10QBi`               | `raw 0x30 0x91 0x5c 0x03 reg duty` + TMFR setup| Nuvoton NCT7904D, zone → 0x10+zone, level × 255/100      |
 
-`set_fan_manual_mode()` is a no-op on the generic platforms; on `X10QBi` it
-programs the chip's temperature-to-fan mapping registers (T1FMR–T10FMR) and
-sets PWM output mode (FOMC). It is called once during `Ipmi` init and once
-per `set_fan_level` / `set_multiple_fan_levels` on X10QBi (the chip can
-drift back to SmartFan mode on its own).
+`start()` is called once during `Ipmi` init; `end()` is called once at
+shutdown via `Service.exit_func()`:
+
+- `GenericPlatform` and `GenericX9Platform`: both `start()` and `end()` are no-ops.
+- `GenericX14Platform`: `start()` enables per-zone manual mode for all 6 zones via
+  OEM command `0x2c 0x04 0xcf 0xc2`; `end()` disables it, restoring automatic BMC
+  fan control.
+- `X10QBi`: `start()` programs the NCT7904D temperature-to-fan mapping registers
+  (T1FMR–T10FMR) and sets PWM output mode (FOMC); `end()` is a no-op (configuration
+  persists until BMC restart). `start()` is also re-invoked before each `set_fan_level` /
+  `set_multiple_fan_levels` call because the chip can drift back to SmartFan mode on its own.
 
 ---
 
@@ -725,6 +739,8 @@ The `_ExporterHandler` subclasses `BaseHTTPRequestHandler`. Handler exceptions
 are caught, logged at ERROR level, and answered with HTTP 500 so a faulty
 handler never crashes the daemon thread.
 
+A sample Grafana dashboard ([`grafana/smfc.json`](https://github.com/petersulyok/smfc/blob/main/grafana/smfc.json)) and a full setup guide covering the exported metrics, a Docker Compose stack, and PromQL examples ([`grafana/GRAFANA.md`](https://github.com/petersulyok/smfc/blob/main/grafana/GRAFANA.md)) are included in the repository.
+
 ### 10.3 smfc-client (`client.py`)
 
 `smfc-client` is a read-only console script that prints a one-shot snapshot
@@ -885,7 +901,7 @@ main()                                          (cmd.py)
     │   ├── _exec_ipmitool(["sdr"]) loop        — wait for BMC
     │   ├── _exec_ipmitool(["bmc","info"])
     │   ├── create_platform(...)                (platform_factory.py)
-    │   └── platform.set_fan_manual_mode()
+    │   └── platform.start()
     ├── ipmi.set_fan_mode(FULL)
     ├── pyudev.Context()
     ├── for cfg in config.cpu / hd / nvme / gpu / const if cfg.enabled:
@@ -1057,8 +1073,8 @@ The signing key never lives in the `smfc` source repository or in `smfc/packages
 - `test/test_*.py` — unit tests structured per source file; the
   `MockDevices` / `factory_mockdevice` helpers in `test/test_data.py`
   illustrate how the udev path is exercised without real hardware.
-- `config/samples/*.conf` — eight canonical configurations covering the
+- `config/samples/*.conf` — nine canonical configurations covering the
   common deployment shapes (CPU-only, HD-only, mixed, multi-curve, GPU,
-  CONST-only, X9, X10QBi).
+  CONST-only, X9, X10QBi, advanced control function).
 - `README.md` chapters 6 (IPMI thresholds), 10 (configuration), 11 (run).
 - `DEVELOPMENT.md` for the contributor workflow.
