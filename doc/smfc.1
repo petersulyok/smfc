@@ -72,15 +72,18 @@ no fan speed recovery at exit
 .SH FILES
 .TP
 .I
-/etc/smfc/sfmc.conf
+/etc/smfc/smfc.conf
+Default configuration file.
 
 .TP
 .I
 /etc/default/smfc
+Environment file for the smfc systemd unit.
 
 .TP
 .I
 /etc/systemd/system/smfc.service
+systemd service unit for smfc.
 
 .SH EXIT CODES
 .TP
@@ -117,7 +120,15 @@ none of the fan controllers are enabled
 
 .TP
 .B 11
-IPMI fan mode drifted away from FULL
+IPMI fan mode drifted away from FULL mode and enforce_fan_mode= is disabled
+
+.SH SEE ALSO
+.BR smfc-client (1),
+.BR ipmitool (1),
+.BR smartctl (8),
+.BR systemctl (1),
+.BR nvidia-smi (1),
+.BR rocm-smi (1)
 
 .SH COPYRIGHT
 .B smfc
