@@ -38,7 +38,8 @@ class PlatformName(str, Enum):
     """Valid platform name values for the platform_name configuration parameter."""
     AUTO = "auto"
     GENERIC = "generic"
-    GENERIC_X9 = "genericx9"
+    GENERIC_X9 = "generic_x9"
+    GENERIC_X14 = "generic_x14"
     X10QBI = "X10QBi"
 
 
@@ -90,8 +91,18 @@ class Platform(ABC):
         """
 
     @abstractmethod
-    def set_fan_manual_mode(self) -> None:
-        """Set the fan controllers on the platform to accept manual PWM or DC input.
+    def start(self) -> None:
+        """Prepare the platform for manual fan control.
+        Called once at startup (e.g. to set the fan controllers to accept manual PWM or DC input).
+        Raises:
+            FileNotFoundError: ipmitool cannot be found
+            RuntimeError: ipmitool execution problem
+        """
+
+    @abstractmethod
+    def end(self) -> None:
+        """Restore the platform state when shutting down.
+        Called once at shutdown (e.g. to restore automatic fan control or release manual mode).
         Raises:
             FileNotFoundError: ipmitool cannot be found
             RuntimeError: ipmitool execution problem

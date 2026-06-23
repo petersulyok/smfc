@@ -640,10 +640,10 @@ class TestIpmi:
     )
     def test_init_in_client(self, mocker: MockerFixture, in_client: bool, expect_set_manual_called: bool,
                             error_str: str) -> None:
-        """Regression test: in_client=True must skip self.platform.set_fan_manual_mode().
+        """Regression test: in_client=True must skip self.platform.start().
         - mock _exec_ipmitool to return BMC info
-        - mock GenericPlatform.set_fan_manual_mode and observe call count
-        - ASSERT: set_fan_manual_mode called only when in_client=False
+        - mock GenericPlatform.start and observe call count
+        - ASSERT: start called only when in_client=False
         """
         my_td = TestData()
         command = my_td.create_command_file()
@@ -655,7 +655,7 @@ class TestIpmi:
         ]
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
         mock_set_manual = MagicMock()
-        mocker.patch("smfc.generic.GenericPlatform.set_fan_manual_mode", mock_set_manual)
+        mocker.patch("smfc.generic.GenericPlatform.start", mock_set_manual)
         cfg = create_ipmi_config(command=command)
         my_log = Log(Log.LOG_NONE, Log.LOG_STDOUT)
         Ipmi(my_log, cfg, False, in_client=in_client)

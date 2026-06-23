@@ -55,6 +55,8 @@ class Service:
         # Configure fans.
         if hasattr(self, "ipmi"):
             self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
+            # Release any platform-specific manual mode so the BMC resumes automatic control (no-op on most platforms).
+            self.ipmi.platform.end()
             if hasattr(self, "log"):
                 self.log.msg(Log.LOG_INFO, "smfc terminated: all fans set to the 100% speed.")
 

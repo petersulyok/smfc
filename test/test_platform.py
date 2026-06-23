@@ -8,6 +8,7 @@ from smfc.platform import PlatformName
 from smfc.platform_factory import create_platform
 from smfc.generic import GenericPlatform
 from smfc.genericx9 import GenericX9Platform
+from smfc.genericx14 import GenericX14Platform
 from smfc.x10qbi import X10QBi
 
 
@@ -25,6 +26,18 @@ class TestCreatePlatform:
         platform = create_platform(PlatformName.GENERIC_X9, mock_exec)
         assert isinstance(platform, GenericX9Platform), f"{f}: should be GenericX9Platform"
         assert platform.name == PlatformName.GENERIC_X9, f"{f}: platform name"
+
+    def test_create_genericx14(self) -> None:
+        """Positive unit test for create_platform() function. It contains the following steps:
+        - call create_platform() with 'generic_x14' platform name
+        - ASSERT: if the returned platform is not a GenericX14Platform instance
+        - ASSERT: if the platform name is different from expected
+        """
+        f = "TestCreatePlatform.test_create_genericx14"
+        mock_exec = MagicMock()
+        platform = create_platform(PlatformName.GENERIC_X14, mock_exec)
+        assert isinstance(platform, GenericX14Platform), f"{f}: should be GenericX14Platform"
+        assert platform.name == PlatformName.GENERIC_X14, f"{f}: platform name"
 
     def test_create_x10qbi(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
@@ -73,6 +86,18 @@ class TestCreatePlatform:
         platform = create_platform("X9DRi-LN4+", mock_exec)
         assert isinstance(platform, GenericX9Platform), f"{f}: should be GenericX9Platform"
         assert platform.name == "X9DRi-LN4+", f"{f}: platform name"
+
+    def test_create_genericx14_fallback(self) -> None:
+        """Positive unit test for create_platform() function. It contains the following steps:
+        - call create_platform() with a BMC product name starting with X14
+        - ASSERT: if the returned platform is not a GenericX14Platform instance
+        - ASSERT: if the platform name is different from expected
+        """
+        f = "TestCreatePlatform.test_create_genericx14_fallback"
+        mock_exec = MagicMock()
+        platform = create_platform("X14DAi-T", mock_exec)
+        assert isinstance(platform, GenericX14Platform), f"{f}: should be GenericX14Platform"
+        assert platform.name == "X14DAi-T", f"{f}: platform name"
 
 
 # End.
