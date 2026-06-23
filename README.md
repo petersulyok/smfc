@@ -268,17 +268,17 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 
 | `platform_name=` parameter | Platform                                     | Notes                                                                                            |
 |----------------------------|----------------------------------------------|--------------------------------------------------------------------------------------------------|
-| `auto`                     | automatic discovery based on BMC information | Reads product name from IPMI; selects `X10QBi` if the name is `X10QBi`, `genericx9` if the name starts with `X9`, otherwise falls back to `generic` |
+| `auto`                     | automatic discovery based on BMC information | Reads BMC product name; selects `generic_x14` if it starts with `X14`, `X10QBi` if it starts with `X10QBi`, `generic_x9` if it starts with `X9`, otherwise falls back to `generic` |
 | `generic`                  | Generic X10-X13/H10-H13 Supermicro boards    | Uses standard Supermicro IPMI raw commands                                                       |
-| `genericx9`                | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                  |
+| `generic_x9`               | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                  |
+| `generic_x14`              | Generic Supermicro X14 boards                | OpenBMC-based, 6 fan zones (0-5), duty cycle 0-100% — **experimental**, see [issue #98](https://github.com/petersulyok/smfc/issues/98), [discussion #92](https://github.com/petersulyok/smfc/discussions/92), [discussion #106](https://github.com/petersulyok/smfc/discussions/106) |
 | `X10QBi`                   | Supermicro X10QBi motherboard                | Nuvoton NCT7904D fan controller, 4 fan zones (0x10-0x13), see [issue #69](https://github.com/petersulyok/smfc/issues/69) and [PR #97](https://github.com/petersulyok/smfc/pull/97) |
 
 With this abstraction layer, new Supermicro motherboards can also be added to `smfc` with a good understanding of their IPMI raw commands and fan control logic.
 
-Some X9 motherboards are supported (since `smfc v5.2.0`) via the `genericx9` platform, provided they support the specific IPMI raw commands used for fan control. There is 
-no auto-detection for X9 boards, so you must set `platform_name=genericx9` in the configuration file. The `X10QBi` platform is auto-detected when the BMC product name is exactly `X10QBi`.
+Some X9 motherboards are supported (since `smfc v5.2.0`) via the `generic_x9` platform, provided they support the specific IPMI raw commands used for fan control. X9 boards are auto-detected when the BMC product name starts with `X9`; you can also force the platform by setting `platform_name=generic_x9`. The `X10QBi` platform is auto-detected when the BMC product name starts with `X10QBi`.
 
-For the newer X14/H14 motherboards, compatibility is still being investigated. There are some issues ([#98](https://github.com/petersulyok/smfc/issues/98)) and discussions ([#92](https://github.com/petersulyok/smfc/discussions/92), [#106](https://github.com/petersulyok/smfc/discussions/106)) about this to get better understanding.
+X14/H14 motherboard support (`generic_x14`) was introduced in `smfc v6.0.0` and is currently **in testing phase**. The X14 BMC is OpenBMC-based and uses different IPMI raw commands from older platforms. If you own an X14 board and test `smfc`, please share your experience in [discussion #92](https://github.com/petersulyok/smfc/discussions/92) or [discussion #106](https://github.com/petersulyok/smfc/discussions/106) — your feedback is essential to stabilize this support.
 
 The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
 
@@ -614,10 +614,11 @@ fan_level_delay=2
 #remote_parameters=-U USERNAME -P PASSWORD -H HOST
 # Supermicro platform (string, default='auto')
 # Potential values:
-#  auto       - automatic discovery based on BMC information
-#  generic    - Generic Supermicro X10-X13/H10-H13 platform
-#  genericx9  - Generic Supermicro X9 platform
-#  X10QBi     - Supermicro X10QBi platform
+#  auto        - automatic discovery based on BMC information
+#  generic     - Generic Supermicro X10-X13/H10-H13 platform
+#  generic_x9  - Generic Supermicro X9 platform
+#  generic_x14 - Generic Supermicro X14 platform (experimental)
+#  X10QBi      - Supermicro X10QBi platform
 platform_name=auto
 # Re-assert FULL fan mode if the BMC drifts away from it (bool, default=true)
 # When true, the service logs the drift and restores FULL plus all per-zone levels.
@@ -910,7 +911,7 @@ scrape_configs:
 ```
 
 Notes:
-- Metrics include `smfc_temperature_celsius`, `smfc_controller_level_percent`, `smfc_fan_level_percent`, `smfc_controller_zone`, `smfc_disk_standby`, the `smfc_fan_mode_enforced_total` counter, and an `smfc_up{version="..."} 1` sentinel (BMC identity is in `smfc_bmc_info`). Each controller's static steering window is exported as `smfc_controller_temperature_min_celsius` / `_max_celsius` and `smfc_controller_level_min_percent` / `_max_percent`, so a dashboard can colour each controller by its position within its own configured range.
+- Metrics include `smfc_controller_temperature_celsius`, `smfc_controller_level_percent`, `smfc_zone_level_percent`, `smfc_controller_zone`, `smfc_disk_standby`, the `smfc_fan_mode_enforced_total` counter, and an `smfc_up{version="..."} 1` sentinel (BMC identity is in `smfc_bmc_info`). Each controller's static steering window is exported as `smfc_controller_temperature_min_celsius` / `_max_celsius` and `smfc_controller_level_min_percent` / `_max_percent`, so a dashboard can colour each controller by its position within its own configured range.
 - The exporter uses only Python's stdlib (`http.server`, `urllib`, `json`). No `prometheus_client` package is required.
 - A bind failure (e.g. port already in use) is logged but does **not** stop the fan-control loop — fan control is the priority.
 - All data is served from the daemon's already-cached state. The request handler issues no `ipmitool` or `smartctl` subprocesses, so a Prometheus scrape can never wake disks the daemon has put to sleep.

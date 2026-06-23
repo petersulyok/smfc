@@ -103,9 +103,9 @@ class TestPrometheusRenderer:
         out = render_prometheus(_sample_snapshot())
         assert out.endswith("\n")
         for metric in ("smfc_up", "smfc_start_time_seconds", "smfc_bmc_info",
-                       "smfc_controller_zone", "smfc_temperature_celsius",
+                       "smfc_controller_zone", "smfc_controller_temperature_celsius",
                        "smfc_device_temperature_celsius",
-                       "smfc_controller_level_percent", "smfc_fan_level_percent",
+                       "smfc_controller_level_percent", "smfc_zone_level_percent",
                        "smfc_controller_temperature_min_celsius", "smfc_controller_temperature_max_celsius",
                        "smfc_controller_level_min_percent", "smfc_controller_level_max_percent",
                        "smfc_disk_standby"):
@@ -151,8 +151,8 @@ class TestPrometheusRenderer:
         snap = _sample_snapshot()
         snap["fan_controllers"][0]["ipmi_zones"] = [0, 1]
         out = render_prometheus(snap)
-        assert 'smfc_temperature_celsius{section="CPU",type="cpu",zone="0"} 42.3' in out
-        assert 'smfc_temperature_celsius{section="CPU",type="cpu",zone="1"} 42.3' in out
+        assert 'smfc_controller_temperature_celsius{section="CPU",type="cpu",zone="0"} 42.3' in out
+        assert 'smfc_controller_temperature_celsius{section="CPU",type="cpu",zone="1"} 42.3' in out
         assert 'smfc_controller_zone{section="CPU",type="cpu",zone="1"} 1' in out
 
     def test_controller_zone_skips_disabled_controllers(self) -> None:
@@ -166,19 +166,18 @@ class TestPrometheusRenderer:
         assert 'smfc_controller_zone{section="HD",type="hd",zone="1"} 1' in out
 
     def test_per_zone_levels(self) -> None:
-        """smfc_fan_level_percent emits one line per zone in numerical order."""
+        """smfc_zone_level_percent emits one line per zone in numerical order."""
         out = render_prometheus(_sample_snapshot())
-        assert 'smfc_fan_level_percent{zone="0"} 45' in out
-        assert 'smfc_fan_level_percent{zone="1"} 55' in out
-        assert 'smfc_fan_level_percent{zone="2"} 50' in out
+        assert 'smfc_zone_level_percent{zone="0"} 45' in out
+        assert 'smfc_zone_level_percent{zone="1"} 55' in out
+        assert 'smfc_zone_level_percent{zone="2"} 50' in out
 
     def test_temperature_skips_const(self) -> None:
-        """smfc_temperature_celsius is emitted (with a zone label) for cpu and hd but not const."""
+        """smfc_controller_temperature_celsius is emitted for cpu and hd but not const."""
         out = render_prometheus(_sample_snapshot())
-        assert 'smfc_temperature_celsius{section="CPU",type="cpu",zone="0"} 42.3' in out
-        assert 'smfc_temperature_celsius{section="HD",type="hd",zone="1"} 34.1' in out
-        temp_block = out.split("# TYPE smfc_temperature_celsius", 1)[1].split("# HELP")[0]
-        assert 'section="CONST"' not in temp_block
+        assert 'smfc_controller_temperature_celsius{section="CPU",type="cpu",zone="0"} 42.3' in out
+        assert 'smfc_controller_temperature_celsius{section="HD",type="hd",zone="1"} 34.1' in out
+        assert 'smfc_controller_temperature_celsius{section="CONST"' not in out
 
     def test_per_device_temperature_emitted(self) -> None:
         """smfc_device_temperature_celsius is emitted once per device with section/type/device labels."""
@@ -204,10 +203,8 @@ class TestPrometheusRenderer:
     def test_steering_window_temperature_skips_const(self) -> None:
         """The temperature window is omitted for CONST, but the level window includes it (L_min=L_max)."""
         out = render_prometheus(_sample_snapshot())
-        tmin_block = out.split("# TYPE smfc_controller_temperature_min_celsius", 1)[1].split("# HELP")[0]
-        tmax_block = out.split("# TYPE smfc_controller_temperature_max_celsius", 1)[1].split("# HELP")[0]
-        assert 'section="CONST"' not in tmin_block
-        assert 'section="CONST"' not in tmax_block
+        assert 'smfc_controller_temperature_min_celsius{section="CONST"' not in out
+        assert 'smfc_controller_temperature_max_celsius{section="CONST"' not in out
         assert 'smfc_controller_level_min_percent{section="CONST",type="const",zone="2"} 50' in out
         assert 'smfc_controller_level_max_percent{section="CONST",type="const",zone="2"} 50' in out
 
@@ -263,7 +260,7 @@ class TestExporterHTTP:
         assert "text/plain" in ctype
         text = body.decode("utf-8")
         assert "# HELP smfc_up " in text
-        assert 'smfc_fan_level_percent{zone="0"} 45' in text
+        assert 'smfc_zone_level_percent{zone="0"} 45' in text
 
     def test_healthz_endpoint(self, running_exporter: Exporter) -> None:
         host, port = running_exporter.bound_address()

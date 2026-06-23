@@ -711,14 +711,14 @@ header. Label values are escaped per the exposition format spec
 | `smfc_bmc_info` | `product_name, firmware_version, manufacturer_name` | BMC identity (value always 1) |
 | `smfc_fan_mode_enforced_total` | — | Counter of FULL-mode re-assertions |
 | `smfc_controller_zone` | `section, type, zone` | Controller-to-zone mapping (value always 1) |
-| `smfc_temperature_celsius` | `section, type, zone` | Per-controller aggregated temperature |
+| `smfc_controller_temperature_celsius` | `section, type, zone` | Per-controller aggregated temperature |
 | `smfc_device_temperature_celsius` | `section, type, device` | Per-device individual temperature |
 | `smfc_controller_level_percent` | `section, type, zone` | Fan level requested by controller |
 | `smfc_controller_temperature_min_celsius` | `section, type, zone` | Steering window floor |
 | `smfc_controller_temperature_max_celsius` | `section, type, zone` | Steering window ceiling |
 | `smfc_controller_level_min_percent` | `section, type, zone` | Level window floor |
 | `smfc_controller_level_max_percent` | `section, type, zone` | Level window ceiling |
-| `smfc_fan_level_percent` | `zone` | Applied level per zone after arbitration |
+| `smfc_zone_level_percent` | `zone` | Applied level per zone after arbitration |
 | `smfc_disk_standby` | `section, device` | Disk standby state (1=standby, 0=active); HD with standby guard only |
 
 The `_ExporterHandler` subclasses `BaseHTTPRequestHandler`. Handler exceptions
