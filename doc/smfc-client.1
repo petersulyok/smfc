@@ -1,55 +1,75 @@
 .TH SMFC\-CLIENT 1 smfc\-6.0.0
 .SH NAME
 .B smfc\-client
-\- print a one\-shot snapshot of smfc\-managed fans and temperatures.
+\- display the current state of fans and temperature sensors managed by smfc.
 .SH SYNOPSIS
 .B smfc\-client
 [options]
 .SH DESCRIPTION
-.B smfc\-client
-is a read\-only diagnostic tool that prints the current state of all fan controllers managed by
+.B smfc-client
+displays the current state of the fans and temperature sensors managed by
 .BR smfc (1).
+Run it to see at a glance what your fan controllers are doing \(em what
+temperatures they see, what fan levels they have set, and whether the BMC
+is operating in the expected mode.
 .PP
+Use it after installing or reconfiguring
+.B smfc
+to verify that the controllers are behaving as expected, or whenever you
+want a quick status summary without digging into logs.
+.PP
+.B smfc-client
+operates in two ways:
+.RB *
 When the
-.B [Exporter]
-section is enabled in the configuration file and the smfc service is reachable, the snapshot is
-fetched from the service's
-.I /snapshot
-HTTP endpoint (online mode).
-On any failure \(en connection refused, timeout, or malformed response \(en the tool falls back
-transparently to the standalone mode, which reads sensors directly through
+.B smfc
+service is running and the HTTP exporter is enabled, it fetches a live
+snapshot from the service \(em no special permissions needed.
+.RB *
+When the service is not available (or with the
+.B \-sa
+flag), it reads sensors directly from the hardware using
 .BR ipmitool (1)
 and
 .BR smartctl (8).
+In this mode it may require root or
+.BR sudo (8)
+privileges.
 .PP
-The output is structured in sections:
+The output is structured in four main sections:
 .IP \(bu 2
 .B Banner
-\(en program name, version, config path, and data source.
+\(em program name, version, config path, and data source.
 .IP \(bu 2
 .B BMC
-\(en product name and current IPMI fan mode
-(with
-.BR \-V :
-manufacturer, firmware revision, IPMI version, and platform class).
+\(em product name and current IPMI fan mode.
 .IP \(bu 2
 .B Fan controllers
-\(en a summary table with one row per enabled controller: section name, type, IPMI zone(s),
-device count, aggregated temperature, and current fan level.
-.IP \(bu 2
-.B Per\-controller blocks
-(with
-.B \-V
-only) \(en one block per non\-CONST controller with the steering window, optional control\-function
-curve, current temperature and level, optional HD standby guard summary, and a per\-device
-temperature list.
+\(em a summary table with one row per enabled controller showing section
+name, type, IPMI zone(s), device count, aggregated temperature, and
+current fan level.
 .IP \(bu 2
 .B IPMI zones
-\(en live fan level per zone.
+\(em live fan level per zone.
 .PP
-Temperature and level cells are colour\-coded when the output is a terminal (suppressed with
-.BR \-nc ):
-.BR DIM " (below floor), " GREEN " (working in range), " YELLOW " (upper 30% of window), " RED " (at or above ceiling)."
+By default (non-verbose mode), the tool shows only these high-level
+sections. Add the
+.B \-V
+(verbose) flag to expand each controller into a detailed block showing
+its temperature-to-level curve, per-device temperatures, extended BMC
+information, and (for SATA arrays) HD standby guard status.
+.PP
+Temperature and level cells are color-coded when printed to a terminal
+(suppressed with
+.BR \-nc ).
+.B DIM
+(below floor),
+.B GREEN
+(working in range),
+.B YELLOW
+(upper 30% of window), and
+.B RED
+(at or above ceiling) make it easy to spot problems at a glance."
 .SH OPTIONS
 .TP
 .B \-h, \-\-help
