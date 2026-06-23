@@ -884,7 +884,7 @@ bind_address=127.0.0.1   # change to 0.0.0.0 (or a specific LAN IP) for remote a
 port=9099
 ```
 
-Three endpoints are available:
+The exporter implements three endpoints:
 
 - `/metrics` — for Prometheus and Grafana: feeds dashboards and alerting rules with live fan and temperature data.
 - `/snapshot` — for `smfc-client` and ad-hoc inspection: delivers the same data as a structured JSON object.
@@ -900,7 +900,7 @@ curl -s http://127.0.0.1:9099/healthz
 
 All data is served from the daemon's already-cached state — no `ipmitool` or `smartctl` subprocesses are spawned per request, so querying the exporter can never wake disks that `smfc` has put to sleep. A bind failure (e.g. port already in use) is logged but does **not** stop the fan-control loop.
 
-For Grafana integration with a ready-to-import dashboard and a full monitoring stack setup, see [`grafana/GRAFANA.md`](grafana/GRAFANA.md).
+For Grafana integration with a ready-to-import dashboard and a full monitoring stack setup, see [`grafana/GRAFANA.md`](https://github.com/petersulyok/smfc/blob/main/grafana/GRAFANA.md).
 
 ### 14. smfc-client
 `smfc-client` gives you an instant read-only view of what `smfc` is currently doing: temperatures, fan levels, IPMI zone states, and standby status — all in one command. Use it to confirm your configuration is working as expected without digging through system logs. It is safe to run at any time and never changes any fan state.
@@ -1023,7 +1023,7 @@ A few things to notice in the verbose block:
 - **`shared=yes/no`** tells you whether another controller is currently driving this row's IPMI zone (zone arbitration). When `yes`, this controller's request was deferred to the other one; useful for spotting a CPU and an NVMe sharing zone 0 where one drags the other up or down.
 - **`Window:` and `Curve:`** describe the active steering curve. When a `control_function=...` is configured, `Window:` shows the curve's actual `[temp_min..temp_max] → [level_min..level_max]` envelope (not the legacy `min_temp/max_temp` keys, which the runtime ignores in this mode), and `Curve:` lists the breakpoint pairs directly. Controllers without a `control_function` (legacy linear mode) skip the `Curve:` line — the `Window:` already says everything.
 - **`Temp: X → Level: Y`** is the aggregated temperature the curve was evaluated against and the resulting level that ended up on the BMC. With colours on, both cells carry the band colour against the same window — at a glance you see whether the controller is idle, working, ramping, or maxed out.
-- **Device names** for HD and NVMe controllers are shown as the path basename (e.g. `ata-WDC_WD120EFAX-68UNTN0_99GMFQVW` instead of `/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_99GMFQVW`) so per-disk rows stay scannable. The snapshot JSON and Prometheus labels still carry the full stable-id paths.
+- **`Device names`** for HD and NVMe controllers are shown as the path basename (e.g. `ata-WDC_WD120EFAX-68UNTN0_99GMFQVW` instead of `/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_99GMFQVW`) so per-disk rows stay scannable. The snapshot JSON and Prometheus labels still carry the full stable-id paths.
 - **`Standby Guard`** appears as a single line inside the `[HD]` block when the feature is enabled; the per-disk `STANDBY`/`ACTIVE` annotation lives in the right-most column of that block's device table. Disks in standby render in dim grey because the temperature reading is stale (smartctl is skipped while a disk sleeps).
 
 Each fan controller is constructed independently, so a single failing controller (e.g. a missing GPU tool or a non-existent disk) shows an `ERROR` row in the Fan controllers table while the rest of the report still renders.
