@@ -358,12 +358,14 @@ class Service:
                         configured_zones.update(cfg.ipmi_zone)
             for zone in sorted(configured_zones):
                 self.log.msg(Log.LOG_DEBUG, f"Old level in IPMI zone {zone} = {self.ipmi.get_fan_level(zone)}%")
-        # Set the FULL IPMI fan mode if it is not the current fan mode, and update the cache.
-        if self.last_fan_mode != Ipmi.FULL_MODE:
-            self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
-            self.last_fan_mode = Ipmi.FULL_MODE
-            self.last_fan_mode_at = time.monotonic()
-            self.log.msg(Log.LOG_DEBUG, f"New IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}")
+        # Always set FULL fan mode at startup unconditionally — even if the BMC already reports FULL.
+        # On some Supermicro firmware (e.g. X11SCH-LN4F), the BMC can be in a transitional FULL state
+        # where zone-0 updates reset zone-1 to 100%. Forcing a fresh FULL mode set plus the
+        # fan_mode_delay sleep settles the BMC into a stable state before zone levels are applied.
+        self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
+        self.last_fan_mode = Ipmi.FULL_MODE
+        self.last_fan_mode_at = time.monotonic()
+        self.log.msg(Log.LOG_DEBUG, f"Set IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}")
 
         # Initialize connection to udev database
         try:
