@@ -886,9 +886,9 @@ port=9099
 
 Three endpoints are available:
 
-- `/metrics` — temperatures, fan levels, per-device readings, standby states, and service identity in Prometheus text format.
-- `/snapshot` — the same data as a JSON object, easy to inspect with `curl | jq`.
-- `/healthz` — returns `ok`; useful as a quick liveness check.
+- `/metrics` — for Prometheus and Grafana: feeds dashboards and alerting rules with live fan and temperature data.
+- `/snapshot` — for `smfc-client` and ad-hoc inspection: delivers the same data as a structured JSON object.
+- `/healthz` — for monitoring and orchestration: confirms the service is up and responding.
 
 Verify locally:
 
