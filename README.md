@@ -876,45 +876,33 @@ With the help of command `journalctl` you can check logs easily. For example:
 		journalctl -b -u smfc
 
 ### 13. Remote monitoring (HTTP exporter)
-For users who want a quick view of the daemon's live state — what each controller "sees", what fan level is applied to each IPMI zone, which disks are in standby — `smfc` can run a small HTTP exporter alongside the main control loop. The exporter serves two routes on the same port:
 
-- `/snapshot` — JSON, consumed by [`smfc-client`](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#14-smfc-client) and easy to script against with `curl | jq`.
-- `/metrics` — Prometheus text format, scrapeable by Prometheus (no third-party Python deps).
+When enabled, `smfc` runs a small HTTP server alongside the fan-control loop, publishing live system state on demand. This lets you check temperatures, fan levels, IPMI zone assignments, and disk standby states at any time — from a browser, a `curl` command, or a Grafana dashboard — without interrupting the daemon or searching through logs.
 
-The exporter is **disabled by default** — opt in via the `[Exporter]` section:
+The exporter is **disabled by default**. Enable it in `smfc.conf`:
 
 ```ini
 [Exporter]
 enabled=true
-bind_address=127.0.0.1   # change to 0.0.0.0 (or a specific LAN IP) when Prometheus runs elsewhere
+bind_address=127.0.0.1   # change to 0.0.0.0 (or a specific LAN IP) for remote access
 port=9099
 ```
 
-`smfc-client` automatically uses the exporter's `/snapshot` when it's enabled, which is dramatically faster than the standalone path because it avoids spawning ~10 ipmitool / smartctl subprocesses per invocation. Pass `--standalone` to bypass the exporter for diagnostics.
+Two endpoints are available:
 
-**Verifying the routes locally:**
+- `/metrics` — temperatures, fan levels, per-device readings, standby states, and service identity in Prometheus text format.
+- `/healthz` — returns `ok`; useful as a quick liveness check.
+
+Verify locally:
 
 ```bash
-curl -s http://127.0.0.1:9099/snapshot | jq .
 curl -s http://127.0.0.1:9099/metrics
-curl -s http://127.0.0.1:9099/healthz   # always 200 "ok" while the exporter is running
+curl -s http://127.0.0.1:9099/healthz
 ```
 
-**Example Prometheus scrape job** (the typical homelab setup is Prometheus running in Docker inside an LXC on a different host than smfc itself — point it at the host running `smfc.service`):
+All data is served from the daemon's already-cached state — no `ipmitool` or `smartctl` subprocesses are spawned per request, so querying the exporter can never wake disks that `smfc` has put to sleep. A bind failure (e.g. port already in use) is logged but does **not** stop the fan-control loop.
 
-```yaml
-scrape_configs:
-  - job_name: smfc
-    scrape_interval: 30s
-    static_configs:
-      - targets: ['<smfc-host-or-ip>:9099']
-```
-
-Notes:
-- Metrics include `smfc_controller_temperature_celsius`, `smfc_controller_level_percent`, `smfc_zone_level_percent`, `smfc_controller_zone`, `smfc_disk_standby`, the `smfc_fan_mode_enforced_total` counter, and an `smfc_up{version="..."} 1` sentinel (BMC identity is in `smfc_bmc_info`). Each controller's static steering window is exported as `smfc_controller_temperature_min_celsius` / `_max_celsius` and `smfc_controller_level_min_percent` / `_max_percent`, so a dashboard can colour each controller by its position within its own configured range.
-- The exporter uses only Python's stdlib (`http.server`, `urllib`, `json`). No `prometheus_client` package is required.
-- A bind failure (e.g. port already in use) is logged but does **not** stop the fan-control loop — fan control is the priority.
-- All data is served from the daemon's already-cached state. The request handler issues no `ipmitool` or `smartctl` subprocesses, so a Prometheus scrape can never wake disks the daemon has put to sleep.
+For Grafana integration with a ready-to-import dashboard and a full monitoring stack setup, see [`grafana/GRAFANA.md`](grafana/GRAFANA.md).
 
 ### 14. smfc-client
 `smfc-client` is a separate console script (installed alongside the `smfc` service) that prints a **one-shot, read-only snapshot** of what `smfc` sees: BMC information, the current IPMI fan mode, every enabled fan controller with its temperature and applied fan level, the live per-zone levels, and the *Standby Guard* state for HD arrays. It never changes fan state and does not require the `smfc` service to be running. Use it to verify your configuration is doing the right thing without grepping through the system log.
