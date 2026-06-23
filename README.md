@@ -898,6 +898,7 @@ Verify locally:
 
 ```bash
 curl -s http://127.0.0.1:9099/metrics
+curl -s http://127.0.0.1:9099/snapshot | jq .
 curl -s http://127.0.0.1:9099/healthz
 ```
 
