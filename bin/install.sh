@@ -114,6 +114,7 @@ if [ "$LOCAL_INSTALL" = "yes" ]; then
   fi
   cp -f ./config/smfc.service /etc/systemd/system/smfc.service
   cp -f ./doc/smfc.1 /usr/local/share/man/man1/smfc.1
+  cp -f ./doc/smfc-client.1 /usr/local/share/man/man1/smfc-client.1
 
 # CASE 2: Remote installation from GitHub and pypi.
 else
@@ -144,17 +145,20 @@ else
   fi
   curl --silent -o "/etc/systemd/system/smfc.service" "$GITHUB_URL/config/smfc.service"
   curl --silent -o "/usr/local/share/man/man1/smfc.1" "$GITHUB_URL/doc/smfc.1"
+  curl --silent -o "/usr/local/share/man/man1/smfc-client.1" "$GITHUB_URL/doc/smfc-client.1"
 
 fi
 
-# Compress manual page.
+# Compress manual pages.
 gzip -f /usr/local/share/man/man1/smfc.1
+gzip -f /usr/local/share/man/man1/smfc-client.1
 mandb > /dev/null 2>&1
 chown root:root \
   /etc/smfc/smfc.conf \
   /etc/default/smfc \
   /etc/systemd/system/smfc.service \
-  /usr/local/share/man/man1/smfc.1.gz
+  /usr/local/share/man/man1/smfc.1.gz \
+  /usr/local/share/man/man1/smfc-client.1.gz
 verbose_echo "smfc files have been installed."
 
 # Collect all disk names for `hd_names=` parameter in 'smfc.conf' file.
