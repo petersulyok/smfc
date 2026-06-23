@@ -67,6 +67,8 @@ remove_file /etc/default/smfc
 remove_file /etc/systemd/system/smfc.service
 remove_file /usr/share/man/man1/smfc.1.gz
 remove_file /usr/local/share/man/man1/smfc.1.gz
+remove_file /usr/share/man/man1/smfc-client.1.gz
+remove_file /usr/local/share/man/man1/smfc-client.1.gz
 verbose_echo "smfc files removed."
 
 # Remove config file.
