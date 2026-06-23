@@ -512,11 +512,11 @@ usage: install.sh [-h|--help] [-k|--keep-config] [-l|--local] [-v|--verbose]
 
 The default location of the installed files: 
 
-| Files          | Installation folder                                        | Description                     |
-|----------------|------------------------------------------------------------|---------------------------------|
-| `smfc.service` | `/etc/systemd/system`                                      | systemd service definition file |
-| `smfc`         | `/etc/default`                                             | service command line options    |
-| `smfc.conf`    | `/etc/smfc`                                                | service configuration file      |
+| Files              | Installation folder                                        | Description                     |
+|--------------------|------------------------------------------------------------|---------------------------------|
+| `smfc.service`     | `/etc/systemd/system`                                      | systemd service definition file |
+| `smfc`             | `/etc/default`                                             | service command line options    |
+| `smfc.conf`        |   `/etc/smfc`                                              | service configuration file      |
 | `smfc.1.gz`        | `/usr/local/share/man/man1`                                | smfc manual page                |
 | `smfc-client.1.gz` | `/usr/local/share/man/man1`                                | smfc-client manual page         |
 | `smfc`             | `/usr/local/bin` or </br> `/usr/bin`                       | smfc command                    |
@@ -615,16 +615,14 @@ fan_level_delay=2
 # IPMI parameters for remote access (string, default='')
 #remote_parameters=-U USERNAME -P PASSWORD -H HOST
 # Supermicro platform (string, default='auto')
-# Potential values:
-#  auto        - automatic discovery based on BMC information
-#  generic     - Generic Supermicro X10-X13/H10-H13 platform
-#  generic_x9  - Generic Supermicro X9 platform
-#  generic_x14 - Generic Supermicro X14 platform (experimental)
-#  X10QBi      - Supermicro X10QBi platform
+# Valid platform values:
+#  auto         - automatic discovery based on BMC information
+#  generic      - Generic Supermicro X10-X13/H10-H13 platform
+#  generic_x9   - Generic Supermicro X9 platform
+#  generic_x14  - Generic Supermicro X14 platform
+#  X10QBi       - Supermicro X10QBi platform
 platform_name=auto
-# Re-assert FULL fan mode if the BMC drifts away from it (bool, default=true)
-# When true, the service logs the drift and restores FULL plus all per-zone levels.
-# When false, the service exits with code 11 on drift.
+# Re-assert FULL fan mode (bool, default=true)
 enforce_fan_mode=true
 
 
@@ -636,12 +634,12 @@ enabled=1
 ipmi_zone=0
 # Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
-# Discrete steps in mapping of temperatures to fan level (int, default=6)
-steps=6
 # Threshold in temperature change before the fan controller reacts (float, C, default=3.0)
 sensitivity=3.0
 # Polling time interval for reading temperature (int, sec, default=2)
 polling=2
+# Discrete steps in mapping of temperatures to fan level (int, default=6)
+steps=6
 # Minimum CPU temperature (float, C, default=30.0)
 min_temp=30.0
 # Maximum CPU temperature (float, C, default=60.0)
@@ -651,10 +649,9 @@ min_level=35
 # Maximum CPU fan level (int, %, default=100)
 max_level=100
 # User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
-# Temp in °C, level in %; at least 2 pairs, temps strictly ascending
-# If this parameter specified then min_temp/max_temp/min_level/max_level parameters are skipped
-# Example: control_function=30-35, 50-55, 60-90, 65-100
-control_function=
+# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified 
+# then min_temp/max_temp/min_level/max_level parameters are skipped
+#control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
 
@@ -667,12 +664,12 @@ enabled=1
 ipmi_zone=1
 # Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
-# Discrete steps in mapping of temperatures to fan level (int, default=4)
-steps=4
 # Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
 sensitivity=2.0
 # Polling interval for reading temperature (int, sec, default=10)
 polling=10
+# Discrete steps in mapping of temperatures to fan level (int, default=4)
+steps=4
 # Minimum HD temperature (float, C, default=32.0)
 min_temp=32.0
 # Maximum HD temperature (float, C, default=46.0)
@@ -682,10 +679,9 @@ min_level=35
 # Maximum HD fan level (int, %, default=100)
 max_level=100
 # User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
-# Temp in °C, level in %; at least 2 pairs, temps strictly ascending
-# If this parameter specified then min_temp/max_temp/min_level/max_level parameters are skipped
-# Example: control_function=30-35, 50-55, 60-90, 65-100
-control_function=
+# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified 
+# then min_temp/max_temp/min_level/max_level parameters are skipped
+#control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
 # Names of the HDs (str multi-line list, default=)
@@ -710,12 +706,12 @@ enabled=0
 ipmi_zone=1
 # Calculation of NVMe temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
-# Discrete steps in mapping of temperatures to fan level (int, default=4)
-steps=4
 # Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
 sensitivity=2.0
 # Polling interval for reading temperature (int, sec, default=2)
 polling=2
+# Discrete steps in mapping of temperatures to fan level (int, default=4)
+steps=4
 # Minimum NVMe temperature (float, C, default=35.0)
 min_temp=35.0
 # Maximum NVMe temperature (float, C, default=70.0)
@@ -725,10 +721,9 @@ min_level=35
 # Maximum NVMe fan level (int, %, default=100)
 max_level=100
 # User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
-# Temp in °C, level in %; at least 2 pairs, temps strictly ascending
-# If this parameter specified then min_temp/max_temp/min_level/max_level parameters are skipped
-# Example: control_function=30-35, 50-55, 60-90, 65-100
-control_function=
+# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified 
+# then min_temp/max_temp/min_level/max_level parameters are skipped
+#control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
 # Names of the NVMe devices (str multi-line list, default=)
@@ -750,12 +745,12 @@ gpu_type=nvidia
 amd_temp_sensor=0
 # Calculation of GPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
-# Discrete steps in mapping of temperatures to fan level (int, default=5)
-steps=5
 # Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
 sensitivity=2.0
 # Polling interval for reading temperature (int, sec, default=2)
 polling=2
+# Discrete steps in mapping of temperatures to fan level (int, default=5)
+steps=5
 # Minimum GPU temperature (float, C, default=40.0)
 min_temp=40.0
 # Maximum GPU temperature (float, C, default=70.0)
@@ -765,10 +760,9 @@ min_level=35
 # Maximum GPU fan level (int, %, default=100)
 max_level=100
 # User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
-# Temp in °C, level in %; at least 2 pairs, temps strictly ascending
-# If this parameter specified then min_temp/max_temp/min_level/max_level parameters are skipped
-# Example: control_function=30-35, 50-55, 60-90, 65-100
-control_function=
+# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified 
+# then min_temp/max_temp/min_level/max_level parameters are skipped
+#control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
 # GPU device IDs (comma- or space-separated list of int, default=0)
