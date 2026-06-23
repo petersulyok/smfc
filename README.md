@@ -517,8 +517,9 @@ The default location of the installed files:
 | `smfc.service` | `/etc/systemd/system`                                      | systemd service definition file |
 | `smfc`         | `/etc/default`                                             | service command line options    |
 | `smfc.conf`    | `/etc/smfc`                                                | service configuration file      |
-| `smfc.1.gz`    | `/usr/local/share/man/man1`                                | smfc manual page                | 
-| `smfc`         | `/usr/local/bin` or </br> `/usr/bin`                       | smfc command                    |
+| `smfc.1.gz`        | `/usr/local/share/man/man1`                                | smfc manual page                |
+| `smfc-client.1.gz` | `/usr/local/share/man/man1`                                | smfc-client manual page         |
+| `smfc`             | `/usr/local/bin` or </br> `/usr/bin`                       | smfc command                    |
 | `smfc service` | `/usr/local/lib/python3.xx` or </br> `/usr/lib/python3.xx` | smfc python package             |
 
 Notes for the script:
