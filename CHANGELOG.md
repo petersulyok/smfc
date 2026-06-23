@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pylint warnings corrected.
 - README chapter 9 (Installation and uninstallation) restructured: DEB and RPM repository installation are now 9.1 and 9.2 (preferred install path), Docker is 9.3, manual install script is 9.4.
 - [`PACKAGES.md`](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) updated: top-level pointer to the `smfc-deb` and `smfc-rpm` repositories added; Proxmox VE 8+ added to DEB-compatible distributions; openSUSE Leap 15.5+/Tumbleweed added to RPM-compatible distributions; compatibility tables column-aligned.
+- Two Prometheus metric names corrected for consistency: `smfc_temperature_celsius` renamed to `smfc_controller_temperature_celsius` and `smfc_fan_level_percent` renamed to `smfc_zone_level_percent`. Static configuration metrics reordered before dynamic runtime metrics in the `/metrics` output.
+- `smfc-client.1` man page added to [`install.sh`](https://github.com/petersulyok/smfc/blob/main/bin/install.sh) and [`uninstall.sh`](https://github.com/petersulyok/smfc/blob/main/bin/uninstall.sh); `smfc-client` command and `smfc-client.1` man page added to the RPM spec.
+
+### New
+- Sample Grafana dashboard [`grafana/smfc.json`](https://github.com/petersulyok/smfc/blob/main/grafana/smfc.json) with three collapsible row sections: service identity (version, uptime, BMC product, fan-mode enforcement count, zone–controller mapping), and one zone row per IPMI zone (fan-level time-series, temperature time-series, applied-level stat, and per-controller temp+level table).
+- Grafana integration documentation [`grafana/GRAFANA.md`](https://github.com/petersulyok/smfc/blob/main/grafana/GRAFANA.md): HTTP exporter overview, full exported metrics reference, sample `/metrics` output, and a step-by-step Docker Compose stack guide (Prometheus + Grafana).
 
 ## [5.4.0] - 2026.04.30
 
