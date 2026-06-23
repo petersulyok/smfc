@@ -888,9 +888,10 @@ bind_address=127.0.0.1   # change to 0.0.0.0 (or a specific LAN IP) for remote a
 port=9099
 ```
 
-Two endpoints are available:
+Three endpoints are available:
 
 - `/metrics` — temperatures, fan levels, per-device readings, standby states, and service identity in Prometheus text format.
+- `/snapshot` — the same data as a JSON object, easy to inspect with `curl | jq`.
 - `/healthz` — returns `ok`; useful as a quick liveness check.
 
 Verify locally:
