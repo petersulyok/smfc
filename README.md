@@ -879,7 +879,7 @@ The exporter is **disabled by default**. Enable it in `smfc.conf`:
 
 ```ini
 [Exporter]
-enabled=true
+enabled=1
 bind_address=127.0.0.1   # change to 0.0.0.0 (or a specific LAN IP) for remote access
 port=9099
 ```
