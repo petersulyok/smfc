@@ -35,10 +35,9 @@ def _sample_snapshot() -> Dict[str, Any]:
             "product_id": 6929,
             "firmware_rev": "1.74",
             "ipmi_version": "2.0",
-            "platform_name": "X11SCH-LN4F",
-            "platform_class": "GenericPlatform",
+            "platform": "auto -> GenericPlatform",
         },
-        "fan_mode": {"id": 1, "name": "FULL", "age_s": 1.5},
+        "fan_mode": {"id": 1, "name": "FULL", "age_s": 1.5, "enforce_fan_mode": True},
         "fan_controllers": [
             {
                 "section": "CPU", "type": "cpu", "enabled": True,

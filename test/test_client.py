@@ -755,10 +755,9 @@ def _sample_snapshot_dict() -> dict:
             "product_id": 6929,
             "firmware_rev": "1.74",
             "ipmi_version": "2.0",
-            "platform_name": "X11SCH-LN4F",
-            "platform_class": "GenericPlatform",
+            "platform": "auto -> GenericPlatform",
         },
-        "fan_mode": {"id": 1, "name": "FULL", "age_s": 0.5},
+        "fan_mode": {"id": 1, "name": "FULL", "age_s": 0.5, "enforce_fan_mode": True},
         "fan_controllers": [
             {
                 "section": "CPU", "type": "cpu", "enabled": True,
@@ -815,12 +814,9 @@ class TestFormatReportFromSnapshot:
         # And the rest of the header is still present.
         assert "  config: x.conf\n" in out
         assert "  source: smfc service (live snapshot)\n" in out
-        # Verbose BMC: full layout. Manufacturer is back, Platform shows the factory class only
-        # (no product repetition).
+        # Verbose BMC: full layout. Manufacturer is back, Platform shows combined string.
         assert "Super Micro Computer Inc." in out
-        assert "Platform      : GenericPlatform" in out
-        # The old "name (class)" form must not regress.
-        assert "Platform      : X11SCH-LN4F" not in out
+        assert "Platform      : auto -> GenericPlatform" in out
         assert "FULL" in out
         # The fan-mode line carries the enforced count and reading age (online only).
         assert "enforced 3x" in out
@@ -828,6 +824,14 @@ class TestFormatReportFromSnapshot:
         assert "42.3 C" in out
         assert "34.1 C" in out
         assert "IPMI zones (live)" in out
+
+    def test_fan_mode_enforcement_disabled(self) -> None:
+        """When enforce_fan_mode is False the fan-mode detail reads 'enforcement disabled'."""
+        snap = _sample_snapshot_dict()
+        snap["fan_mode"]["enforce_fan_mode"] = False
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False)
+        assert "enforcement disabled" in out
+        assert "enforced" not in out
 
     def test_standby_section_present_when_enabled(self) -> None:
         """The Standby Guard line is folded into the [HD] verbose block when enabled."""
@@ -881,8 +885,8 @@ class TestFormatReportFromSnapshot:
             "fan_mode_enforced_count": 0, "smfc_version": "6.0.0",
             "bmc": {"manufacturer_name": "X", "manufacturer_id": 0, "product_name": "Y",
                     "product_id": 0, "firmware_rev": "0", "ipmi_version": "0",
-                    "platform_name": "Y", "platform_class": "P"},
-            "fan_mode": {"id": 1, "name": "FULL", "age_s": 0.0},
+                    "platform": "generic"},
+            "fan_mode": {"id": 1, "name": "FULL", "age_s": 0.0, "enforce_fan_mode": True},
             "fan_controllers": [
                 {"section": "CPU", "type": "cpu", "enabled": True, "ipmi_zones": [0],
                  "device_count": 1, "polling": 2.0, "deferred_apply": False,
