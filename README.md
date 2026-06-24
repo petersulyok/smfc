@@ -622,13 +622,13 @@ fan_level_delay=2
 #  generic_x14  - Generic Supermicro X14 platform
 #  X10QBi       - Supermicro X10QBi platform
 platform_name=auto
-# Re-assert FULL fan mode (bool, default=true)
-enforce_fan_mode=true
+# Re-assert FULL fan mode (bool, default=1/true)
+enforce_fan_mode=1
 
 
 # CPU fan controller: works based on CPU(s) temperature.
 [CPU]
-# Fan controller enabled (bool, default=0)
+# Fan controller enabled (bool, default=0/false)
 enabled=1
 # IPMI zone(s) (comma- or space-separated list of int, default=0))
 ipmi_zone=0
@@ -658,7 +658,7 @@ smoothing=1
 
 # HD fan controller: works based on SATA or SAS HDDs/SSDs temperature.
 [HD]
-# Fan controller enabled (bool, default=0)
+# Fan controller enabled (bool, default=0/false)
 enabled=1
 # IPMI zone(s) (comma- or space-separated list of int, default=1))
 ipmi_zone=1
@@ -692,7 +692,7 @@ smoothing=1
 hd_names=
 # Path for 'smartctl' command (str, default=/usr/sbin/smartctl).
 smartctl_path=/usr/sbin/smartctl
-# Standby guard feature for RAID arrays (bool, default=0)
+# Standby guard feature for RAID arrays (bool, default=0/false)
 standby_guard_enabled=0
 # Number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)
 standby_hd_limit=1
@@ -700,7 +700,7 @@ standby_hd_limit=1
 
 # NVME fan controller: works based on NVMe SSD(s) temperature.
 [NVME]
-# Fan controller enabled (bool, default=0)
+# Fan controller enabled (bool, default=0/false)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1))
 ipmi_zone=1
@@ -735,7 +735,7 @@ nvme_names=
 
 # GPU fan controller: works based on Nvidia or AMD GPU(s) temperature.
 [GPU]
-# Fan controller enabled (bool, default=0)
+# Fan controller enabled (bool, default=0/false)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1))
 ipmi_zone=1
@@ -776,7 +776,7 @@ rocm_smi_path=/usr/bin/rocm-smi
 
 # CONST fan controller: sets constant fan level (without any heat source) for IPMI zones(s).
 [CONST]
-# Fan controller enabled (bool, default=0)
+# Fan controller enabled (bool, default=0/false)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1))
 ipmi_zone=1
@@ -788,8 +788,8 @@ level=50
 
 # HTTP exporter: serves /snapshot (JSON for smfc-client) and /metrics (Prometheus text format).
 [Exporter]
-# Enable the HTTP exporter (bool, default=false)
-enabled=false
+# Enable the HTTP exporter (bool, default=0/false)
+enabled=0
 # IP to bind on (str, default=127.0.0.1)
 # Use 127.0.0.1 for local-only access; use 0.0.0.0 or a specific LAN IP for remote Prometheus.
 bind_address=127.0.0.1
