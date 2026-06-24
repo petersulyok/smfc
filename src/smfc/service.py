@@ -236,13 +236,11 @@ class Service:
             self.log.msg(Log.LOG_ERROR, f"Fan mode recovery failed: {e}")
 
     def _start_exporter(self) -> None:
-        """Build and start the HTTP exporter when [Exporter] enabled=true; tolerate bind failures.
+        """Build and start the HTTP exporter; tolerate bind failures.
 
-        Stores the live `Exporter` on `self.exporter`, or `None` if disabled / failed to bind.
+        Stores the live `Exporter` on `self.exporter`, or `None` if bind failed.
         """
         self.exporter = None
-        if not self.config.exporter.enabled:
-            return
         if self.log.log_level >= Log.LOG_CONFIG:
             self.log.msg(Log.LOG_CONFIG, "HTTP Exporter was initialized with:")
             self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_EXPORTER_BIND_ADDRESS} = {self.config.exporter.bind_address}")
@@ -423,7 +421,8 @@ class Service:
 
         # Start the HTTP exporter if enabled (smfc-client + Prometheus). Bind failure is logged
         # and the daemon continues — fan-control behavior must not be gated on the listener.
-        self._start_exporter()
+        if self.config.exporter.enabled:
+            self._start_exporter()
 
         # Main execution loop.
         while True:
