@@ -25,38 +25,45 @@ class GenericX14Platform(Platform):
     ]
 
     def start(self) -> None:
+        """Enable manual fan control for all zones so the BMC stops overriding the PWM values."""
         # Enable manual mode for all zones so the BMC stops overriding the PWM values.
         # OEM command (IANA 0x0000C2CF): 0x2c 0x04 0xcf 0xc2 0x00 <zone> 0x01
         for zone in range(self.FANCTL_COUNT):
             self._exec(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x01"])
 
     def end(self) -> None:
+        """Disable manual fan control for all zones, restoring automatic BMC fan control."""
         # Disable manual mode for all zones, restoring automatic BMC fan control.
         # OEM command (IANA 0x0000C2CF): 0x2c 0x04 0xcf 0xc2 0x00 <zone> 0x00
         for zone in range(self.FANCTL_COUNT):
             self._exec(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x00"])
 
     def get_fan_mode(self) -> int:
+        """Return the current IPMI fan mode."""
         r = self._exec(["raw", "0x30", "0x45", "0x00"])
         return int(r.stdout)
 
     def get_fan_level(self, zone: int) -> int:
+        """Return the current fan duty cycle percentage for the given zone."""
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         r = self._exec(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}"])
         return int(r.stdout, 16)
 
     def set_fan_mode(self, mode: int) -> None:
+        """Set the IPMI fan mode."""
         if mode not in self.valid_fan_modes:
             raise ValueError(f"Invalid value: fan mode ({mode}).")
         self._exec(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
 
     def set_fan_level(self, zone: int, level: int) -> None:
+        """Set the fan duty cycle percentage for the given zone."""
         # X14 uses the percentage directly (0x00-0x64); manual mode must be enabled first (start()).
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         validate_input_range(level, "level", 0, 100)
         self._exec(["raw", "0x30", "0x70", "0x88", f"0x{zone:02x}", f"0x{level:02x}"])
 
     def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
+        """Set the same fan duty cycle percentage for all given zones."""
         # X14 uses the percentage directly (0x00-0x64); manual mode must be enabled first (start()).
         for zone in zone_list:
             validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)

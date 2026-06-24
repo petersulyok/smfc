@@ -18,10 +18,12 @@ class X10QBi(Platform):
     FANCTL_COUNT: int = 4                      # Number of fan controllers (FANCTL1-FANCTL4)
 
     def get_fan_mode(self) -> int:
+        """Return the current IPMI fan mode."""
         r = self._exec(["raw", "0x30", "0x45", "0x00"])
         return int(r.stdout)
 
     def get_fan_level(self, zone: int) -> int:
+        """Return the current fan duty cycle percentage for the given zone."""
         # Zone 0-3 maps to register 0x10-0x13 (FANCTL1-FANCTL4)
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         reg = self.FANCTL_BASE_REG + zone
@@ -29,6 +31,7 @@ class X10QBi(Platform):
         return int(r.stdout, 16)
 
     def start(self) -> None:
+        """Configure the NCT7904D chip for direct PWM fan control."""
         # Set Temperature Fan Mapping Relationships (TMFR)
         # These map which of the 4 fan controllers are assigned to which
         # of the 10 temperature sensors. Each temperature sensor can have
@@ -62,11 +65,13 @@ class X10QBi(Platform):
         """No cleanup needed; the NCT7904D configuration persists until BMC restart."""
 
     def set_fan_mode(self, mode: int) -> None:
+        """Set the IPMI fan mode."""
         if mode not in self.valid_fan_modes:
             raise ValueError(f"Invalid value: fan mode ({mode}).")
         self._exec(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
 
     def set_fan_level(self, zone: int, level: int) -> None:
+        """Set the fan duty cycle percentage for the given zone."""
         # Zone 0-3 maps to register 0x10-0x13 (FANCTL1-FANCTL4)
         # Reference: Nuvoton NCT7904D Datasheet (p120)
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
@@ -78,6 +83,7 @@ class X10QBi(Platform):
         self._exec(["raw", "0x30", "0x91", "0x5c", self.BANK_3_REGISTER, f"0x{reg:02x}", f"0x{normalised_level:02x}"])
 
     def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
+        """Set the same fan duty cycle percentage for all given zones."""
         # Zone 0-3 maps to register 0x10-0x13 (FANCTL1-FANCTL4)
         # Reference: Nuvoton NCT7904D Datasheet (p120)
         for zone in zone_list:

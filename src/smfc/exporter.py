@@ -193,6 +193,7 @@ class _ExporterHandler(http.server.BaseHTTPRequestHandler):
             self.log.msg(Log.LOG_DEBUG, "exporter: " + (format % args))
 
     def _send(self, status: int, content_type: str, body: bytes) -> None:
+        """Send an HTTP response with the given status code, content type, and body."""
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))

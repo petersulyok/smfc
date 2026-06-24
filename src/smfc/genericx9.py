@@ -16,10 +16,12 @@ class GenericX9Platform(Platform):
     valid_fan_modes: List[FanMode] = [FanMode.STANDARD, FanMode.FULL, FanMode.OPTIMAL, FanMode.HEAVY_IO]
 
     def get_fan_mode(self) -> int:
+        """Return the current IPMI fan mode."""
         r = self._exec(["raw", "0x30", "0x45", "0x00"])
         return int(r.stdout)
 
     def get_fan_level(self, zone: int) -> int:
+        """Return the current fan duty cycle percentage for the given zone."""
         # Zone 0-3 maps to register 0x10-0x13
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         reg = self.FANCTL_BASE_REG + zone
@@ -33,11 +35,13 @@ class GenericX9Platform(Platform):
         """No cleanup needed on this platform."""
 
     def set_fan_mode(self, mode: int) -> None:
+        """Set the IPMI fan mode."""
         if mode not in self.valid_fan_modes:
             raise ValueError(f"Invalid value: fan mode ({mode}).")
         self._exec(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
 
     def set_fan_level(self, zone: int, level: int) -> None:
+        """Set the fan duty cycle percentage for the given zone."""
         # Zone 0-3 maps to register 0x10-0x13
         # Duty cycle uses 0-255 scale (100% = 0xFF)
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
@@ -47,6 +51,7 @@ class GenericX9Platform(Platform):
         self._exec(["raw", "0x30", "0x91", "0x5a", "0x03", f"0x{reg:02x}", f"0x{normalised_level:02x}"])
 
     def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
+        """Set the same fan duty cycle percentage for all given zones."""
         # Zone 0-3 maps to register 0x10-0x13
         for zone in zone_list:
             validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
