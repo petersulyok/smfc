@@ -391,44 +391,21 @@ written to the fan. The shape is the same in both cases — a staircase rising
 from the minimum to the maximum fan level — only the underlying ideal differs
 (single linear segment vs. arbitrary piecewise-linear curve).
 
-At `CONFIG` log level, `print_temp_level_mapping()` renders the resulting
-`levels_lut` as an ASCII bar chart so the curve can be eyeballed directly in
-the logs (no image viewer needed). The Y axis is the fan level in 10 % rows and
-the X axis is temperature. The chart has a **fixed inner width** of
-`CHART_WIDTH` columns regardless of the temperature range, so the charts of
-different controllers line up; the X scale therefore varies per controller and
-must be read from the axis labels. The range is auto-fitted to the curve
-(snapped to 5 °C with a small margin); `#` fills the area under the curve and
-`^` markers under the X axis flag the breakpoints. The exact temperature->level
-plateaus are listed to the right of the chart. The same renderer is used for
-both configuration styles (it reads only the LUT plus the breakpoint / min-max
-temperatures for the X range). Example for
+At `CONFIG` log level, `print_temp_level_mapping()` logs the resulting
+`levels_lut` as a plain list of temperature→level plateaus (consecutive
+temperatures that share the same fan level). The same renderer is used for
+both configuration styles (it reads only the LUT). Example for
 `control_function = 35-35, 45-50, 50-70, 55-100` (`steps = 4`):
 
 ```
    Temperature to level mapping:
-   100% |                                    ########|  T=[0..35]C   -> L=35%
-    90% |                                    ########|  T=[36..40]C  -> L=39%
-    80% |                              ##############|  T=[41..45]C  -> L=47%
-    70% |                              ##############|  T=[46..50]C  -> L=62%
-    60% |                       #####################|  T=[51..54]C  -> L=85%
-    50% |                       #####################|  T=[55..100]C -> L=100%
-    40% |                ############################|
-    30% |############################################|
-    20% |############################################|
-    10% |############################################|
-     0% |############################################|
-        +--------------------------------------------+
-         30     35     40      45     50     55     60  (C)
-                ^              ^      ^      ^   (^ = breakpoint)
+   T=[0..35]C -> L=35%
+   T=[36..40]C -> L=39%
+   T=[41..45]C -> L=47%
+   T=[46..50]C -> L=62%
+   T=[51..54]C -> L=85%
+   T=[55..100]C -> L=100%
 ```
-
-Only ASCII characters (`#`, `^`, `-`, `+`, `|`) are emitted so the output stays
-clean under `grep` / `journalctl` / `syslog`. The geometry is controlled by the
-`CHART_PREFIX_WIDTH` and `CHART_WIDTH` class constants; `CHART_WIDTH` (44) is
-chosen so the chart plus its plateau legend stays within 80 columns. Tick labels
-are placed every 5 °C and any that would overlap on the fixed-width axis are
-skipped.
 
 `run()` semantics, every iteration of the service main loop:
 
