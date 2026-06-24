@@ -243,6 +243,10 @@ class Service:
         self.exporter = None
         if not self.config.exporter.enabled:
             return
+        if self.log.log_level >= Log.LOG_CONFIG:
+            self.log.msg(Log.LOG_CONFIG, "HTTP Exporter was initialized with:")
+            self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_EXPORTER_BIND_ADDRESS} = {self.config.exporter.bind_address}")
+            self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_EXPORTER_PORT} = {self.config.exporter.port}")
         try:
             self.exporter = Exporter(
                 log=self.log,
@@ -384,27 +388,22 @@ class Service:
             if cfg.enabled:
                 self.log.msg(Log.LOG_DEBUG, f"CPU fan controller [{cfg.section}] enabled")
                 self.controllers.append(CpuFc(self.log, self.udevc, self.ipmi, cfg))
-                time.sleep(self.config.ipmi.fan_level_delay)
         for cfg in self.config.hd:
             if cfg.enabled:
                 self.log.msg(Log.LOG_DEBUG, f"HD fan controller [{cfg.section}] enabled")
                 self.controllers.append(HdFc(self.log, self.udevc, self.ipmi, cfg, self.sudo))
-                time.sleep(self.config.ipmi.fan_level_delay)
         for cfg in self.config.nvme:
             if cfg.enabled:
                 self.log.msg(Log.LOG_DEBUG, f"NVME fan controller [{cfg.section}] enabled")
                 self.controllers.append(NvmeFc(self.log, self.udevc, self.ipmi, cfg))
-                time.sleep(self.config.ipmi.fan_level_delay)
         for cfg in self.config.gpu:
             if cfg.enabled:
                 self.log.msg(Log.LOG_DEBUG, f"GPU fan controller [{cfg.section}] enabled")
                 self.controllers.append(GpuFc(self.log, self.ipmi, cfg))
-                time.sleep(self.config.ipmi.fan_level_delay)
         for cfg in self.config.const:
             if cfg.enabled:
                 self.log.msg(Log.LOG_DEBUG, f"CONST fan controller [{cfg.section}] enabled")
                 self.controllers.append(ConstFc(self.log, self.ipmi, cfg))
-                time.sleep(self.config.ipmi.fan_level_delay)
 
         # If none of the fan controllers is enabled.
         if not self.controllers:

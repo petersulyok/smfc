@@ -126,8 +126,9 @@ class Ipmi:
             self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_IPMI_FAN_MODE_DELAY} = {self.config.fan_mode_delay}")
             self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_IPMI_FAN_LEVEL_DELAY} = {self.config.fan_level_delay}")
             self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_IPMI_REMOTE_PARAMETERS} = {self.config.remote_parameters}")
-            self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_IPMI_PLATFORM_NAME} = {self.platform.name} "
-                                         f"({type(self.platform).__name__})")
+            platform_suffix = f" -> {type(self.platform).__name__}" if self.config.platform_name == PlatformName.AUTO else ""
+            self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_IPMI_PLATFORM_NAME} = {self.config.platform_name}{platform_suffix}")
+            self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_IPMI_ENFORCE_FAN_MODE} = {self.config.enforce_fan_mode}")
             self.log.msg(Log.LOG_CONFIG, "BMC information:")
             self.log.msg(Log.LOG_CONFIG, f"   manufacturer name (id) = {self.bmc_manufacturer_name} "
                                          f"({self.bmc_manufacturer_id})")
