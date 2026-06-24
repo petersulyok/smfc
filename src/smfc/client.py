@@ -788,17 +788,17 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     if verbose:
         lines.append(f"  Firmware      : {bmc.get('firmware_rev', '?')}")
         lines.append(f"  IPMI version  : {bmc.get('ipmi_version', '?')}")
-        # Platform shows the factory class only — the product name is already on the line above.
-        lines.append(f"  Platform      : {bmc.get('platform_class', '?')}")
-    # Fan mode (service-cached) closes the BMC block. It is always FULL when smfc is running with
-    # enforce_fan_mode=true; the exporter served whatever was cached on the loop's last poll.
+        lines.append(f"  Platform      : {bmc.get('platform', '?')}")
     fan_mode = snapshot.get("fan_mode", {}) or {}
     mode_id = fan_mode.get("id", -1)
     mode_name = fan_mode.get("name", "?")
     mode_color = GREEN if mode_id == int(Ipmi.FULL_MODE) else RED
-    enforced = int(snapshot.get("fan_mode_enforced_count", 0) or 0)
     age_s = float(fan_mode.get("age_s", 0.0) or 0.0)
-    detail = _wrap(f"  (enforced {enforced}x, read {age_s:.1f}s ago)", DIM, use_color)
+    if fan_mode.get("enforce_fan_mode", True):
+        enforced = int(snapshot.get("fan_mode_enforced_count", 0) or 0)
+        detail = _wrap(f"  (enforced {enforced}x, read {age_s:.1f}s ago)", DIM, use_color)
+    else:
+        detail = _wrap(f"  (enforcement disabled, read {age_s:.1f}s ago)", DIM, use_color)
     lines.append(f"  Fan mode      : {_wrap(str(mode_name), mode_color, use_color)} ({mode_id}){detail}")
     lines.append("")
 

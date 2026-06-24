@@ -11,7 +11,7 @@ from smfc.ipmi import Ipmi
 from smfc.snapshot import SNAPSHOT_SCHEMA_VERSION, build_snapshot
 
 
-def _make_ipmi() -> MagicMock:
+def _make_ipmi(enforce_fan_mode: bool = True, platform_name: str = "auto") -> MagicMock:
     """Build a fully-mocked Ipmi instance with the static BMC info attributes the snapshot reads."""
     ipmi = MagicMock(spec=Ipmi)
     ipmi.bmc_manufacturer_name = "Super Micro Computer Inc."
@@ -21,8 +21,10 @@ def _make_ipmi() -> MagicMock:
     ipmi.bmc_firmware_rev = "1.74"
     ipmi.bmc_ipmi_version = "2.0"
     ipmi.platform = MagicMock()
-    ipmi.platform.name = "X11SCH-LN4F"
     type(ipmi.platform).__name__ = "GenericPlatform"
+    ipmi.config = MagicMock()
+    ipmi.config.enforce_fan_mode = enforce_fan_mode
+    ipmi.config.platform_name = platform_name
     return ipmi
 
 
@@ -154,10 +156,11 @@ def _make_gpu_fc(zones=None, count=1, last_temp=55.0, last_level=60,
 
 def _make_service(controllers=None, applied_levels=None,
                   last_fan_mode=Ipmi.FULL_MODE, last_fan_mode_at=None,
-                  start_time=1716902400.0, fan_mode_enforced_count=0) -> MagicMock:
+                  start_time=1716902400.0, fan_mode_enforced_count=0,
+                  enforce_fan_mode=True) -> MagicMock:
     """Build a fake Service with attributes the snapshot reads."""
     service = MagicMock()
-    service.ipmi = _make_ipmi()
+    service.ipmi = _make_ipmi(enforce_fan_mode=enforce_fan_mode)
     service.controllers = controllers or []
     service.applied_levels = applied_levels if applied_levels is not None else {}
     service.last_fan_mode = last_fan_mode
@@ -179,8 +182,9 @@ class TestBuildSnapshot:
         assert "smfc_version" in snap
         assert snap["bmc"]["manufacturer_name"] == "Super Micro Computer Inc."
         assert snap["bmc"]["product_name"] == "X11SCH-LN4F"
-        assert snap["bmc"]["platform_name"] == "X11SCH-LN4F"
-        assert snap["bmc"]["platform_class"] == "GenericPlatform"
+        assert snap["bmc"]["platform"] == "auto -> GenericPlatform"
+        assert "platform_name" not in snap["bmc"]
+        assert "platform_class" not in snap["bmc"]
 
     def test_start_time_and_enforcement_count(self) -> None:
         """The snapshot surfaces the service start time and the fan-mode enforcement counter."""
@@ -190,7 +194,7 @@ class TestBuildSnapshot:
         assert snap["fan_mode_enforced_count"] == 3
 
     def test_fan_mode_block(self) -> None:
-        """fan_mode reflects service.last_fan_mode and reports a non-negative age."""
+        """fan_mode reflects service.last_fan_mode, age, and enforce_fan_mode flag."""
         before = time.monotonic() - 5.0  # 5 s ago
         service = _make_service(last_fan_mode=Ipmi.FULL_MODE, last_fan_mode_at=before)
         snap = build_snapshot(service)
@@ -199,6 +203,13 @@ class TestBuildSnapshot:
         assert fm["name"] == "FULL"
         assert fm["age_s"] >= 5.0
         assert fm["age_s"] < 60.0  # sanity bound for the test environment
+        assert fm["enforce_fan_mode"] is True
+
+    def test_fan_mode_block_enforcement_disabled(self) -> None:
+        """fan_mode carries enforce_fan_mode=False when the feature is turned off."""
+        service = _make_service(enforce_fan_mode=False)
+        snap = build_snapshot(service)
+        assert snap["fan_mode"]["enforce_fan_mode"] is False
 
     def test_cpu_controller_entry(self) -> None:
         """A CpuFc-like controller produces a complete entry with type 'cpu'."""

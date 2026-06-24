@@ -11,6 +11,7 @@ from smfc.constfc import ConstFc
 from smfc.cpufc import CpuFc
 from smfc.gpufc import GpuFc
 from smfc.hdfc import HdFc
+from smfc.config import PlatformName
 from smfc.ipmi import Ipmi
 from smfc.nvmefc import NvmeFc
 
@@ -157,13 +158,15 @@ def build_snapshot(service: "Service") -> Dict[str, Any]:
             "product_id": int(ipmi.bmc_product_id),
             "firmware_rev": ipmi.bmc_firmware_rev,
             "ipmi_version": ipmi.bmc_ipmi_version,
-            "platform_name": ipmi.platform.name,
-            "platform_class": type(ipmi.platform).__name__,
+            "platform": (f"{ipmi.config.platform_name} -> {type(ipmi.platform).__name__}"
+                         if ipmi.config.platform_name == PlatformName.AUTO
+                         else str(ipmi.config.platform_name)),
         },
         "fan_mode": {
             "id": last_fan_mode,
             "name": Ipmi.get_fan_mode_name(last_fan_mode),
             "age_s": round(age_s, 3),
+            "enforce_fan_mode": bool(ipmi.config.enforce_fan_mode),
         },
         "fan_controllers": controllers_section,
         "zones": zones_section,
