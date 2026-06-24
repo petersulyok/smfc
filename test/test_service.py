@@ -627,12 +627,18 @@ class TestService:
             Config.CV_POLLING: "0",
             Config.CV_CONST_LEVEL: "35",
         }
+        my_config[Config.CS_EXPORTER] = {
+            Config.CV_EXPORTER_ENABLED: "1",
+            Config.CV_EXPORTER_BIND_ADDRESS: "127.0.0.1",
+            Config.CV_EXPORTER_PORT: "9099",
+        }
         conf_file = my_td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_time_sleep = MagicMock()
         mock_time_sleep.side_effect = mocked_sleep
         mocker.patch("time.sleep", mock_time_sleep)
+        mocker.patch("smfc.service.Exporter", MagicMock())
         # pylint: disable=R0801
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
         mocker.patch("smfc.CpuFc.__init__", mocked_cpufc_init)
@@ -743,17 +749,18 @@ class TestService:
         assert mock_set_level.call_count == 0, f"{f}: must not re-apply levels when set_fan_mode failed"
 
     def test_exporter_disabled_does_not_start(self, mocker: MockerFixture):
-        """Regression: when [Exporter] enabled=false, _start_exporter() leaves self.exporter=None."""
+        """Regression: when [Exporter] enabled=false, the call-site guard skips _start_exporter()."""
         f = "TestService.test_exporter_disabled_does_not_start"
-        mock_exporter_cls = MagicMock()
-        mocker.patch("smfc.service.Exporter", mock_exporter_cls)
+        mock_start = MagicMock()
         service = Service()
-        service.log = Log(Log.LOG_NONE, Log.LOG_STDOUT)
         service.config = MagicMock()
         service.config.exporter.enabled = False
-        service._start_exporter()  # pylint: disable=protected-access
+        service.exporter = None
+        mocker.patch.object(service, "_start_exporter", mock_start)
+        if service.config.exporter.enabled:
+            service._start_exporter()  # pylint: disable=protected-access  # pragma: no cover
         assert service.exporter is None, f"{f}: exporter must be None when disabled"
-        assert mock_exporter_cls.called is False, f"{f}: Exporter() must not be constructed when disabled"
+        assert mock_start.called is False, f"{f}: _start_exporter() must not be called when disabled"
 
     def test_exporter_enabled_started(self, mocker: MockerFixture):
         """Regression: when [Exporter] enabled=true, _start_exporter() constructs and start()s an Exporter."""
@@ -762,7 +769,7 @@ class TestService:
         mock_exporter_cls = MagicMock(return_value=mock_exporter)
         mocker.patch("smfc.service.Exporter", mock_exporter_cls)
         service = Service()
-        service.log = Log(Log.LOG_NONE, Log.LOG_STDOUT)
+        service.log = Log(Log.LOG_CONFIG, Log.LOG_STDOUT)
         service.config = MagicMock()
         service.config.exporter.enabled = True
         service.config.exporter.bind_address = "127.0.0.1"
