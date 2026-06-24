@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
-#   test_platform.py (C) 2025-2026, Samuel Dowling, Peter Sulyok
-#   Unit tests for smfc.platform module (create_platform).
+#   test_platform_factory.py (C) 2025-2026, Samuel Dowling, Peter Sulyok
+#   Unit tests for smfc.platform_factory module (create_platform).
 #
 from mock import MagicMock
 from smfc.config import PlatformName

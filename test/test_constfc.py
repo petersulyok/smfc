@@ -3,7 +3,7 @@
 #   test_constfc.py (C) 2021-2026, Peter Sulyok
 #   Unit tests for smfc.ConstFc() class.
 #
-from typing import List
+from typing import List, Tuple
 import pytest
 from mock import MagicMock
 from pytest_mock import MockerFixture
@@ -12,162 +12,131 @@ from smfc.config import Config
 from .test_data import create_const_config
 
 
+def _make_const_fc(mocker: MockerFixture, **cfg_kwargs) -> Tuple[ConstFc, Log, Ipmi]:
+    """Build a ConstFc from a const config (print mocked). Returns (fc, log, ipmi).
+
+    ConstFc is not a FanController subclass (no device discovery / hwmon), so it does not use the shared
+    test_fc_helpers builders; this small local helper just removes the repeated construction boilerplate.
+    """
+    mocker.patch("builtins.print", MagicMock())
+    cfg = create_const_config(enabled=True, **cfg_kwargs)
+    log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+    ipmi = Ipmi.__new__(Ipmi)
+    return ConstFc(log, ipmi, cfg), log, ipmi
+
+
 class TestConstFc:
     """Unit test class for smfc.ConstFc() class"""
 
     @pytest.mark.parametrize(
-        "ipmi_zone, polling, level, error_str",
+        "ipmi_zone, polling, level",
         [
-            # Single zone
-            ([0], 30, 45, "ConstFc.__init__() p1"),
-            # Comma-separated zones
-            ([0, 1], 35, 55, "ConstFc.__init__() p2"),
-            # Three comma-separated zones
-            ([0, 1, 2], 40, 60, "ConstFc.__init__() p3"),
-            # Space-separated zones
-            ([0, 1, 2], 45, 65, "ConstFc.__init__() p4"),
+            pytest.param([0], 30, 45, id="1zone"),
+            pytest.param([0, 1], 35, 55, id="2zones"),
+            pytest.param([0, 1, 2], 40, 60, id="3zones"),
+            pytest.param([0, 1, 2], 45, 65, id="3zones-alt"),
         ],
     )
-    def test_init_p1(self, mocker: MockerFixture, ipmi_zone: List[int], polling: float, level: int, error_str: str):
-        """Positive unit test for ConstFc.__init__() method. It contains the following steps:
-        - mock print() function
-        - initialize a Config, Log, Ipmi, and ConstFc classes
-        - ASSERT: if the ConstFc class attributes contain different from passed values to __init__
+    def test_init_sets_attributes_from_config(self, mocker: MockerFixture, ipmi_zone: List[int], polling: float,
+                                              level: int):
+        """Positive unit test for ConstFc.__init__() with an explicit configuration. It contains the steps:
+        - build a ConstFc from a config with the given ipmi_zone/polling/level
+        - ASSERT: the controller kept the log/ipmi references
+        - ASSERT: name, ipmi_zone, polling and level match the configuration
         """
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
-        cfg = create_const_config(enabled=True, ipmi_zone=ipmi_zone, polling=polling, level=level)
-        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-        my_ipmi = Ipmi.__new__(Ipmi)
-        my_constfc = ConstFc(my_log, my_ipmi, cfg)
-        assert my_constfc.log == my_log, error_str
-        assert my_constfc.ipmi == my_ipmi, error_str
-        assert my_constfc.config.ipmi_zone == ipmi_zone, error_str
-        assert my_constfc.name == cfg.section, error_str
-        assert my_constfc.config.polling == polling, error_str
-        assert my_constfc.config.level == level, error_str
+        fc, log, ipmi = _make_const_fc(mocker, ipmi_zone=ipmi_zone, polling=polling, level=level)
+        assert fc.log is log
+        assert fc.ipmi is ipmi
+        assert fc.name == fc.config.section
+        assert fc.config.ipmi_zone == ipmi_zone
+        assert fc.config.polling == polling
+        assert fc.config.level == level
 
-    @pytest.mark.parametrize("error_str", [("ConstFc.__init__() p5")])
-    def test_init_p2(self, mocker: MockerFixture, error_str: str):
-        """Positive unit test ConstFc.__init__() method. It contains the following steps:
-        - mock print() function
-        - initialize a Config, Log, Ipmi, and ConstFc classes
-        - ASSERT: if the ConstFc class attributes contain different from default configuration values
+    def test_init_applies_defaults(self, mocker: MockerFixture):
+        """Positive unit test for ConstFc.__init__() with default configuration values. It contains the steps:
+        - build a ConstFc from a default config (only enabled set)
+        - ASSERT: the controller kept the log/ipmi references
+        - ASSERT: name, ipmi_zone, polling and level match the CONST defaults (Config.DV_CONST_*)
         """
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
-        cfg = create_const_config(enabled=True)
-        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-        my_ipmi = Ipmi.__new__(Ipmi)
-        my_constfc = ConstFc(my_log, my_ipmi, cfg)
-        assert my_constfc.log == my_log, error_str
-        assert my_constfc.ipmi == my_ipmi, error_str
-        assert my_constfc.config.ipmi_zone == [Config.HD_ZONE], error_str
-        assert my_constfc.name == cfg.section, error_str
-        assert my_constfc.config.polling == Config.DV_CONST_POLLING, error_str
-        assert my_constfc.config.level == Config.DV_CONST_LEVEL, error_str
+        fc, log, ipmi = _make_const_fc(mocker)
+        assert fc.log is log
+        assert fc.ipmi is ipmi
+        assert fc.name == fc.config.section
+        assert fc.config.ipmi_zone == [Config.HD_ZONE]
+        assert fc.config.polling == Config.DV_CONST_POLLING
+        assert fc.config.level == Config.DV_CONST_LEVEL
 
     @pytest.mark.parametrize(
-        "ipmi_zone, polling, level, error_str",
+        "ipmi_zone",
         [
-            # Invalid IPMI zone - special character
-            ("!", 30, 40, "ConstFc.__init__() n1"),
-            # Invalid IPMI zone - negative
-            ("-1", 30, 40, "ConstFc.__init__() n2"),
-            # Invalid IPMI zone - wrong separator
-            ("1; 2", 30, 40, "ConstFc.__init__() n3"),
-            # NOTE: Invalid polling/level tests (9-11) moved to Config validation tests,
-            # since validation now happens in Config class, not in ConstFc.__init__()
+            pytest.param("!", id="special-char"),
+            pytest.param("-1", id="negative"),
+            pytest.param("1; 2", id="wrong-separator"),
         ],
     )
-    # pylint: disable-next=unused-argument
-    def test_init_n(self, mocker: MockerFixture, ipmi_zone, polling: float, level: int, error_str: str):
-        """Negative unit test for ConstFc.__init__() method. It contains the following steps:
-        - mock print() function
-        - test that Config.parse_ipmi_zones() raises ValueError for invalid zone strings
-        - ASSERT: if no ValueError assertion will be generated due to invalid configuration
+    def test_init_rejects_invalid_zones(self, ipmi_zone: str):
+        """Negative unit test for CONST IPMI zone parsing. It contains the steps:
+        - parse an invalid ipmi zone string used to build a CONST controller config
+        - ASSERT: Config.parse_ipmi_zones() raises ValueError (zone validation happens at parse time)
         """
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
-        with pytest.raises(Exception) as cm:
-            # Invalid zone strings should fail at parse time
+        with pytest.raises(ValueError):
             Config.parse_ipmi_zones(ipmi_zone)
-        assert cm.type is ValueError, error_str
 
     @pytest.mark.parametrize(
-        "ipmi_zone, read_level, level, error_str",
+        "ipmi_zone, read_level, level",
         [
-            # Single zone, same level
-            ([0], 30, 30, "ConstFc.run() p1"),
-            # Two zones, same level
-            ([0, 1], 30, 30, "ConstFc.run() p2"),
-            # Three zones space-separated, same level
-            ([0, 1, 2], 30, 30, "ConstFc.run() p3"),
-            # Single zone, different level
-            ([0], 30, 40, "ConstFc.run() p4"),
-            # Two zones space-separated, different level
-            ([0, 1], 30, 40, "ConstFc.run() p5"),
-            # Three zones comma-separated, different level
-            ([0, 1, 2], 30, 40, "ConstFc.run() p6"),
+            pytest.param([0], 30, 30, id="1zone-no-drift"),
+            pytest.param([0, 1], 30, 30, id="2zones-no-drift"),
+            pytest.param([0, 1, 2], 30, 30, id="3zones-no-drift"),
+            pytest.param([0], 30, 40, id="1zone-drift"),
+            pytest.param([0, 1], 30, 40, id="2zones-drift"),
+            pytest.param([0, 1, 2], 30, 40, id="3zones-drift"),
         ],
     )
-    def test_run_p(self, mocker: MockerFixture, ipmi_zone: List[int], read_level: int, level: int, error_str: str):
-        """Positive unit test for ConstFc.run() method. It contains the following steps:
-        - mock print(), Ipmi.get_fan_level(), Ipmi.set_fan_level() functions
-        - initialize a Config, Log, Ipmi, and ConstFc classes
-        - call ConstFc.run()
-        - ASSERT: if the number of Ipmi.get_fan_level() and Ipmi.set_fan_level() calls different from expected
+    def test_run_applies_level_on_drift(self, mocker: MockerFixture, ipmi_zone: List[int], read_level: int,
+                                        level: int):
+        """Positive unit test for ConstFc.run(). It contains the steps:
+        - mock Ipmi.get_fan_level()/set_fan_level() and build a ConstFc past its polling interval
+        - call run()
+        - ASSERT: get_fan_level() is read once per zone
+        - ASSERT: set_fan_level() is issued once per zone only when the read level differs from the target
         """
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
-        mock_getfanlevel = MagicMock()
-        mock_getfanlevel.return_value = read_level
-        mocker.patch("smfc.Ipmi.get_fan_level", mock_getfanlevel)
-        mock_setfanlevel = MagicMock()
-        mocker.patch("smfc.Ipmi.set_fan_level", mock_setfanlevel)
-        cfg = create_const_config(enabled=True, ipmi_zone=ipmi_zone, polling=3.0, level=level)
-        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-        my_ipmi = Ipmi.__new__(Ipmi)
-        my_constfc = ConstFc(my_log, my_ipmi, cfg)
-        my_constfc.config.level = level
-        my_constfc.last_time = -100.0
-        my_constfc.run()
-        assert mock_getfanlevel.call_count == len(my_constfc.config.ipmi_zone), error_str
+        mock_get = MagicMock(return_value=read_level)
+        mocker.patch("smfc.Ipmi.get_fan_level", mock_get)
+        mock_set = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set)
+        fc, _, _ = _make_const_fc(mocker, ipmi_zone=ipmi_zone, polling=3.0, level=level)
+        fc.last_time = -100.0
+        fc.run()
+        assert mock_get.call_count == len(ipmi_zone)
         if read_level != level:
-            assert mock_setfanlevel.call_count == len(my_constfc.config.ipmi_zone), error_str
+            assert mock_set.call_count == len(ipmi_zone)
 
     @pytest.mark.parametrize(
-        "ipmi_zone, level, error_str",
+        "ipmi_zone, level",
         [
-            # Single zone deferred
-            ([0], 45, "ConstFc.run() p7"),
-            # Two zones deferred
-            ([0, 1], 55, "ConstFc.run() p8"),
+            pytest.param([0], 45, id="1zone"),
+            pytest.param([0, 1], 55, id="2zones"),
         ],
     )
-    def test_run_deferred(self, mocker: MockerFixture, ipmi_zone: List[int], level: int, error_str: str):
-        """Positive unit test for ConstFc.run() method in deferred mode. It contains the following steps:
-        - mock print(), Ipmi.get_fan_level(), Ipmi.set_fan_level() functions
-        - initialize a Config, Log, Ipmi, and ConstFc classes
-        - call ConstFc.run() with deferred=True
-        - ASSERT: if last_level is not set or IPMI calls were made
+    def test_run_deferred_skips_ipmi(self, mocker: MockerFixture, ipmi_zone: List[int], level: int):
+        """Positive unit test for ConstFc.run() in deferred mode. It contains the steps:
+        - mock Ipmi.get_fan_level()/set_fan_level() and build a ConstFc with deferred_apply set
+        - call run()
+        - ASSERT: last_level is updated to the target level
+        - ASSERT: no IPMI get/set calls are made (level is only stored for zone arbitration)
         """
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
-        mock_getfanlevel = MagicMock()
-        mocker.patch("smfc.Ipmi.get_fan_level", mock_getfanlevel)
-        mock_setfanlevel = MagicMock()
-        mocker.patch("smfc.Ipmi.set_fan_level", mock_setfanlevel)
-        cfg = create_const_config(enabled=True, ipmi_zone=ipmi_zone, polling=3.0, level=level)
-        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
-        my_ipmi = Ipmi.__new__(Ipmi)
-        my_constfc = ConstFc(my_log, my_ipmi, cfg)
-        my_constfc.deferred_apply = True
-        my_constfc.last_time = -100.0
-        my_constfc.run()
-        assert my_constfc.last_level == level, error_str
-        assert mock_getfanlevel.call_count == 0, error_str
-        assert mock_setfanlevel.call_count == 0, error_str
+        mock_get = MagicMock()
+        mocker.patch("smfc.Ipmi.get_fan_level", mock_get)
+        mock_set = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set)
+        fc, _, _ = _make_const_fc(mocker, ipmi_zone=ipmi_zone, polling=3.0, level=level)
+        fc.deferred_apply = True
+        fc.last_time = -100.0
+        fc.run()
+        assert fc.last_level == level
+        assert mock_get.call_count == 0
+        assert mock_set.call_count == 0
 
 
 # End.

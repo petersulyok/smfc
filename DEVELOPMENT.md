@@ -81,37 +81,38 @@ source .venv/bin/activate
 
 Several smoke tests have been provided for `smfc` where the service is executed with different configuration files. Notes:  
   
-* all smoke tests should be executed from the project root folder and can be stopped by pressing `CTRL+C`:
+* smoke tests are executed from the project root folder via a single dispatcher, `./test/run_smoke.sh <scenario>`, and can be stopped by pressing `CTRL+C`:
 
 ```commandline
-$ ./test/run_test_cpu_1.sh
+$ ./test/run_smoke.sh cpu_1
 ```
 
-* the following smoke scripts and fan controller configurations can be executed:
+* the scenario matrix is the single source of truth in `test/smoke_runner.py` (`SCENARIOS`); passing an unknown or missing id makes pytest print the list of valid scenarios. The following scenarios and fan controller configurations can be executed:
 
-   | Test script                    | CPU                         | HD        | NVME      | GPU           | CONST      | Standby guard |
-   |--------------------------------|-----------------------------|-----------|-----------|---------------|------------|---------------|
-   | `run_test_cpu_1.sh`            | 1 x CPU                     | 1 x HD    | disabled  | disabled      | enabled    | enabled       |
-   | `run_test_cpu_2.sh`            | 2 x CPUs                    | disabled  | disabled  | 1 GPU         | disabled   | disabled      |
-   | `run_test_cpu_4.sh`            | 4 x CPUs                    | 4 x HDs   | disabled  | 4 GPUs        | disabled   | enabled       |
-   | `run_test_hd_1.sh`             | disabled                    | 1 x HD    | disabled  | disabled      | enabled    | enabled       |
-   | `run_test_hd_2.sh`             | 1 x CPU                     | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
-   | `run_test_hd_4.sh`             | disabled                    | 4 x HDs   | disabled  | 2 GPUs        | disabled   | disabled      |
-   | `run_test_hd_8.sh`             | 4 x CPUs                    | 8 x HDs   | disabled  | disabled      | disabled   | enabled       |
-   | `run_test_const_level.sh`      | 1 x CPU                     | disabled  | disabled  | disabled      | enabled    | enabled       |
-   | `run_test_gpu_8_nvidia.sh`     | 1 x CPU                     | disabled  | disabled  | 8 Nvidia GPUs | enabled    | disabled      |
-   | `run_test_gpu_8_amd.sh`        | 1 x CPU                     | disabled  | disabled  | 8 AMD GPUs    | enabled    | disabled      |
-   | `run_test_nvme_4.sh`           | 2 x CPU                     | disabled  | 4 x NVME  | disabled      | enabled    | disabled      |
-   | `run_test_shared_zones.sh`     | 1 x CPU                     | disabled  | 2 x NVMEs | disabled      | disabled   | disabled      |
-   | `run_test_shared_zones_2.sh`   | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
-   | `run_test_control_function.sh` | 2 x CPUs                    | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
+   | Scenario            | conf                    | CPU                         | HD        | NVME      | GPU           | CONST      | Standby guard |
+   |---------------------|-------------------------|-----------------------------|-----------|-----------|---------------|------------|---------------|
+   | `cpu_1`             | `cpu_1.conf`            | 1 x CPU                     | 1 x HD    | disabled  | disabled      | enabled    | enabled       |
+   | `cpu_2`             | `cpu_2.conf`            | 2 x CPUs                    | disabled  | disabled  | 1 GPU         | disabled   | disabled      |
+   | `cpu_4`             | `cpu_4.conf`            | 4 x CPUs                    | 4 x HDs   | disabled  | 4 GPUs        | disabled   | enabled       |
+   | `hd_1`              | `hd_1.conf`             | disabled                    | 1 x HD    | disabled  | disabled      | enabled    | enabled       |
+   | `hd_2`              | `hd_2.conf`             | 1 x CPU                     | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
+   | `hd_4`              | `hd_4.conf`             | disabled                    | 4 x HDs   | disabled  | 2 GPUs        | disabled   | disabled      |
+   | `hd_8`              | `hd_8.conf`             | 4 x CPUs                    | 8 x HDs   | disabled  | disabled      | disabled   | enabled       |
+   | `const_level`       | `const_level.conf`      | 1 x CPU                     | disabled  | disabled  | disabled      | enabled    | enabled       |
+   | `gpu_8_nvidia`      | `gpu_8_nvidia.conf`     | 1 x CPU                     | disabled  | disabled  | 8 Nvidia GPUs | enabled    | disabled      |
+   | `gpu_8_amd`         | `gpu_8_amd.conf`        | 1 x CPU                     | disabled  | disabled  | 8 AMD GPUs    | enabled    | disabled      |
+   | `nvme_4`            | `nvme_4.conf`           | 2 x CPU                     | disabled  | 4 x NVME  | disabled      | enabled    | disabled      |
+   | `shared_zones`      | `shared_zones.conf`     | 1 x CPU                     | disabled  | 2 x NVMEs | disabled      | disabled   | disabled      |
+   | `shared_zones_2`    | `shared_zones_2.conf`   | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
+   | `control_function`  | `control_function.conf` | 2 x CPUs                    | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
 
    Notes:
-   - `run_test_shared_zones.sh` tests the shared IPMI zone arbitration where CPU and NVME fan controllers both use IPMI zone 0.
-   - `run_test_shared_zones_2.sh` tests the multi-curve CPU feature combined with shared-zone arbitration: `CPU:0` controls zone 0, while `CPU:1` and `HD` share zone 1.
-   - `run_test_gpu_8_nvidia.sh` and `run_test_gpu_8_amd.sh` test GPU fan controller with Nvidia and AMD GPUs respectively.
-   - `run_test_control_function.sh` tests the new `control_function=` parameter: the CPU section uses a 4-point curve (`30-35, 50-40, 60-90, 65-100`) and the HD section uses a 3-point curve (`32-35, 38-45, 46-100`), both with `min_temp`/`max_temp`/`min_level`/`max_level` omitted.
-   - During smoke tests, temperature values change gradually over time to simulate realistic thermal behavior. A background thread updates hwmon temperature files (for CPU, HD, NVMe) every second, applying random changes of +/- 0-3 degrees within the configured min/max range. GPU temperatures (both Nvidia and AMD) also change gradually between script invocations using a state file to track previous values.
+   - The `Standby guard` column reflects each `*.conf`; note that the smoke runner force-disables the standby guard at runtime (it would otherwise drive the fake `smartctl` command into STANDBY and stop temperature readings).
+   - `shared_zones` tests the shared IPMI zone arbitration where CPU and NVME fan controllers both use IPMI zone 0.
+   - `shared_zones_2` tests the multi-curve CPU feature combined with shared-zone arbitration: `CPU:0` controls zone 0, while `CPU:1` and `HD` share zone 1.
+   - `gpu_8_nvidia` and `gpu_8_amd` test the GPU fan controller with Nvidia and AMD GPUs respectively.
+   - `control_function` tests the `control_function=` parameter: the CPU section uses a 4-point curve (`30-35, 50-40, 60-90, 65-100`) and the HD section uses a 3-point curve (`32-35, 38-45, 46-100`), both with `min_temp`/`max_temp`/`min_level`/`max_level` omitted.
+   - During smoke tests, temperature values change gradually over time to simulate realistic thermal behavior. A background thread updates hwmon temperature files (for CPU, HD, NVMe) every second, applying random changes of +/- 0-3 degrees within the configured min/max range. GPU temperatures (both Nvidia and AMD) also change gradually between invocations using a state file to track previous values.
 
 ## Unit tests
 
