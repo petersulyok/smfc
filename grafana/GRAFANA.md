@@ -25,8 +25,8 @@ Add an `[Exporter]` section to `smfc.conf`:
 
 ```ini
 [Exporter]
-# Enable the HTTP exporter (bool, default=false)
-enabled=true
+# Enable the HTTP exporter (bool, default=0/false)
+enabled=1
 # IP to bind on; use 127.0.0.1 for local-only, 0.0.0.0 for remote Prometheus
 bind_address=127.0.0.1
 # TCP port (int, 1..65535, default=9099)
@@ -209,7 +209,7 @@ In `/etc/smfc/smfc.conf` on the Supermicro host:
 
 ```ini
 [Exporter]
-enabled=true
+enabled=1
 # Bind to all interfaces so Prometheus can reach it from the Docker host
 bind_address=0.0.0.0
 port=9099
