@@ -1,294 +1,436 @@
-# Testing Overview
+# Testing
 
-This document gives a structured inventory of the `smfc` test suite: what each test
-module covers, the shared test infrastructure, and a set of concrete ideas for
-making the suite more consistent and easier to extend.
+This document describes how the `smfc` test suite is organised and how each
+layer relates to the source code. It is intended for a new contributor who
+needs to find their way around the tests, understand the design choices, and
+know where new tests belong.
 
-> Companion docs: high-level test setup lives in [`DEVELOPMENT.md`](DEVELOPMENT.md)
-> (how to run unit + smoke tests); architecture lives in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+> If you only need *how to run the tests*, jump to the "Running" subsections
+> under each chapter. This document covers both the *shape* of the suite and
+> the commands to drive it.
 
-## At a glance
+## Goals
 
-| Metric | Value |
-|--------|-------|
-| Unit test modules | 16 (`test/test_*.py`) |
-| Shared infrastructure | `conftest.py`, `test_data.py`, `smoke_runner.py` |
-| Smoke configs / drivers | 15 `*.conf` + 15 `run_test_*.sh` |
+The test suite is built to satisfy four goals, in order:
 
-Every source module under `src/smfc/` has a matching `test_*.py` module, with two
-exceptions: `test_platform_factory.py` covers the platform factory, and the four concrete
-platform implementations share a single matrix-driven `test_platforms.py`
-(see improvement idea 1, now implemented).
+1. **Catch regressions in *behaviour*, not in *implementation*.** Tests assert
+   what the service does (logs produced, fan levels applied, exit codes
+   returned), not how it does it. Internal refactors should not require
+   rewriting tests.
+2. **Run anywhere.** No real hardware, no real `ipmitool`, no real
+   `smartctl`, no real `nvidia-smi` / `rocm-smi`, no real udev. Every external
+   command is substituted by a generated bash script; every device tree by a
+   temp directory; every system probe by a python mock. The suite runs on a
+   stock laptop in roughly **20 seconds** for unit tests and **2 minutes** for
+   the full smoke matrix.
+3. **Two complementary layers.** A fast, deterministic **unit-test** layer
+   that exercises each class in isolation, plus a slower **smoke-test** layer
+   that boots the real `Service.run()` loop end-to-end against mocked devices.
+   The two layers answer different questions: "is this class correct?" vs.
+   "does the whole pipeline work?".
+4. **Source ↔ test 1:1.** Every source module under `src/smfc/` has a matching
+   `test_*.py` module under `test/`. Two well-justified exceptions: the four
+   concrete platform implementations share a single matrix-driven
+   `test_platforms.py`, and the abstract base class `platform.py` is exercised
+   indirectly through its concrete subclasses.
 
-## Source ↔ test mapping
+## Prerequisites
 
-| Source module | Test module | LoC (test) | Primary test class(es) |
-|---------------|-------------|-----------:|------------------------|
-| `client.py` | `test_client.py` | 1311 | `TestParseArgs`, `TestUseColor`, `TestFormatReport`, `TestMain`, `TestSafeHelpers`, `TestFormatReportErrorPaths`, `TestConstructControllers`, `TestFormatReportFromSnapshot`, `TestTryFetchSnapshot`, `TestMainOnlinePath` |
-| `cmd.py` | `test_cmd.py` | 30 | `TestMain` |
-| `config.py` | `test_config.py` | 1412 | `TestConfigStaticMethods`, `TestControlFunctionSectionWiring`, `TestConfigFileLoading`, `TestIpmiConfigParsing`, `TestExporterConfigParsing`, `TestCpuConfigParsing`, `TestHdConfigParsing`, `TestNvmeConfigParsing`, `TestGpuConfigParsing`, `TestConstConfigParsing`, `TestFanControllerValidation`, `TestConfigConstants`, `TestEdgeCases`, `TestConfigFullIntegration`, `TestDuplicateZoneValidation` |
-| `constfc.py` | `test_constfc.py` | 173 | `TestConstFc` |
-| `cpufc.py` | `test_cpufc.py` | 261 | `TestCpuFc` |
-| `exporter.py` | `test_exporter.py` | 365 | `TestPrometheusRenderer`, `TestExporterHTTP` |
-| `fancontroller.py` | `test_fancontroller.py` | 866 | `TestFanController` |
-| `generic.py`, `genericx9.py`, `genericx14.py`, `x10qbi.py` | `test_platforms.py` | 321 | `TestPlatforms` (matrix-driven) |
-| `gpufc.py` | `test_gpufc.py` | 284 | `TestGpuFc` |
-| `hdfc.py` | `test_hdfc.py` | 700 | `TestHdFc` |
-| `ipmi.py` | `test_ipmi.py` | 700 | `TestIpmi` |
-| `log.py` | `test_log.py` | 277 | `TestLog` |
-| `nvmefc.py` | `test_nvmefc.py` | 262 | `TestNvmeFc` |
-| `platform_factory.py` | `test_platform_factory.py` | 115 | `TestCreatePlatform` |
-| `service.py` | `test_service.py` | 1861 | `TestService` |
-| `snapshot.py` | `test_snapshot.py` | 419 | `TestBuildSnapshot` |
-| `platform.py` (base ABC, `FanMode`, `validate_input_range`) | — | — | Covered indirectly through the four concrete platform test modules |
+The whole suite runs from a clean checkout with no system-level installs:
 
-## Shared test infrastructure
+- Only `python3` and `bash` are required (tested on Linux and macOS). All
+  external commands — `ipmitool`, `smartctl`, `nvidia-smi`, `rocm-smi` — are
+  substituted by generated bash scripts.
+- All development dependencies (defined in `pyproject.toml`) are installed
+  with `uv`:
 
-### `conftest.py`
-Registers extra pytest command-line options consumed only by the smoke runner:
-`--cpu-num`, `--hd-num`, `--gpu-num`, `--nvme-num`, `--conf-file`.
+   ```commandline
+   uv sync
+   source .venv/bin/activate
+   ```
 
-### `test_data.py` (625 LoC)
-The central helper module. It currently mixes three responsibilities:
+  After that, the invocations in the rest of this document work as written.
 
-1. **`TestData`** — a class that builds temporary hwmon trees and fake external
-   commands on disk: `create_cpu_data`, `create_hd_data`, `create_nvme_data`,
-   `create_config_file`, `create_command_file`, `create_ipmi_command`,
-   `create_smart_command`, `create_nvidia_smi_command`, `create_rocm_smi_command`,
-   `update_hwmon_temperatures`. Lifecycle is managed by `__init__`/`__del__`
-   (temp dir created/removed).
-2. **pyudev mocks** — `MockDevice`, `MockContext`, `MockDevices`,
-   `factory_mockdevice`, `MockedContextError`, `MockedContextGood`.
-3. **Config factories** — module-level builders returning ready-made config
-   objects: `create_ipmi_config`, `create_cpu_config`, `create_hd_config`,
-   `create_nvme_config`, `create_gpu_config`, `create_const_config`.
+## Unit tests
 
-### `smoke_runner.py` + `run_test_*.sh`
-End-to-end smoke harness: `TestSmoke.test_smoke` boots the real `Service.run()`
-loop against mocked devices using a config file and device counts supplied on the
-command line. The 15 `run_test_*.sh` wrappers each invoke pytest with a different
-`(cpu, hd, gpu, nvme, conf)` matrix (see the table in `DEVELOPMENT.md`).
+Unit tests verify each source class in isolation. They are fast, deterministic,
+and the layer CI runs on every push.
 
-## Covered test cases by module
+### Design principles
 
-### Fan controllers (`FanController` and subclasses)
+- **Test full functionality with 100% code coverage.** Every branch in every
+  source module is exercised by at least one unit test. Coverage is enforced
+  in CI via `pytest --cov=src --cov=test` and uploaded to Codecov on every
+  push (see [Running](#running) below for the local equivalent). A new
+  feature is not complete until the new branches are covered.
+- **Tests are data-driven, not duplicated.** Anywhere multiple cases differ
+  only in input/output, they are expressed as `@pytest.mark.parametrize` rows
+  with `pytest.param(..., id="...")`, not as separate test methods. Test ids
+  appear in pytest's output and replace any need for `error_str` arguments
+  threaded through asserts.
+- **Test method names describe the behaviour under test**, not internal
+  numbering schemes — e.g. `test_run_maps_temperature_to_level`,
+  `test_init_sets_attributes_from_config`,
+  `test_run_exits_on_bad_args_or_config`.
+- **Shared infrastructure over copy-paste.** When a setup pattern recurs
+  across multiple test modules — building a fake hwmon tree, constructing an
+  `Ipmi` without going through the real `__init__`, asserting the
+  `FanController` base contract — it lives in a dedicated helper module, not
+  duplicated per file.
+- **Pytest-managed temp directories.** Tests that need on-disk artefacts
+  declare the `td: TestData` fixture in their signature. `TestData` is
+  populated against pytest's `tmp_path` (one fresh directory per test);
+  pytest creates the directory before the test, hands it over, and reclaims
+  it on teardown. Failed tests keep their directory for inspection. Tests
+  receive a ready-to-use `TestData` instance from the fixture.
+- **Mock at the boundary, not in the middle.** External boundaries
+  (`pyudev.Context`, `subprocess.run` for ipmitool/smartctl/SMI, file I/O on
+  hwmon paths) are mocked. Internal interactions between smfc's own classes
+  are exercised through real method calls. This keeps tests resilient to
+  refactors that don't change the external contract.
 
-`test_fancontroller.py` (`TestFanController`) covers the **base contract**:
-- Construction (`test_init_p1`, `test_init_n1`) and duplicate-zone collapsing.
-- `get_hwmon_path`, `get_temp` (per-`temp_calc` modes), per-device temp caching,
-  default device names.
-- `set_fan_level` / deferred level application, single- and multi-zone.
-- The main `run()` loop, polling skip, and the temperature-smoothing algorithm
-  (spike, warmup, sustained heat, disabled, rapid oscillation, sensitivity,
-  boundaries).
-- LUT construction: legacy linear LUT vs. user-defined `control_function=` curve
-  (`create_legacy_lut*`, `create_control_function*`, `build_lut` dispatch,
-  plateau logging, run-via-LUT).
+### Running
 
-Each concrete subclass test repeats a common skeleton — `init_p1` (attribute
-wiring), `init_p2`/`init_n*` (validation), `get_nth_temp_p/n` — and adds
-device-specific cases:
-- **`test_cpufc.py`** — hwmon discovery, ordinal `cpuN` device names.
-- **`test_hdfc.py`** — `exec_smartctl` (sudo / rc / exceptions), standby-state
-  string formatting, `check_standby_state`, `go_standby_state`, standby-guard
-  `run`, smartctl debug path.
-- **`test_nvmefc.py`** — NVMe name validation, smartctl-based temps.
-- **`test_gpufc.py`** — `exec_smi` (Nvidia/AMD), AMD sensor selection, temp parse
-  errors.
-- **`test_constfc.py`** — fixed-level controller init, `run`, deferred apply.
+The unit suite runs in roughly **20 seconds** on a stock laptop:
 
-### Platforms
+```commandline
+pytest
+```
 
-`test_platforms.py` (`TestPlatforms`) covers the **same 11-method contract** for
-all four platform classes from one matrix: `get_fan_mode`, `get_fan_level` (valid
-+ invalid zone), `start`, `end`, `set_fan_mode` (valid + invalid), `set_fan_level`
-(valid + invalid), `set_multiple_fan_levels` (valid + invalid). Each platform
-contributes a `PlatformSpec` describing its raw ipmitool byte sequences, zone
-range, level normalisation (X9/X10-QBi 0–100 → 0–255) and `start`/`end`
-behaviour; `_cases()` expands the per-platform vectors into individual
-parametrized cases (ids like `x10qbi-3`). Adding a new platform is a single
-`PLATFORMS` entry. This replaced four ~270-line near-duplicate modules with no
-loss of coverage (142 cases, 100% on all four platform sources).
+Add coverage to see per-module statement and branch coverage:
 
-`test_platform_factory.py` (`TestCreatePlatform`) covers `create_platform` dispatch for
-each platform name plus fallback behaviour.
+```commandline
+pytest --cov=src --cov=test
+```
 
-### IPMI (`test_ipmi.py`)
-Init (positive/negative, BMC timeout, client mode), `exec_ipmitool` (remote args,
-sudo, rc, exceptions), `get/set_fan_mode`, fan-mode name mapping,
-`get/set_fan_level`, `set_multiple_fan_levels`, exception surface.
+For a detailed HTML coverage report (which lines are / aren't covered, with
+syntax highlighting) use:
 
-### Configuration (`test_config.py`)
-The largest behavioural surface: static parsers (`parse_ipmi_zones`,
-`parse_device_names`, `parse_gpu_ids`, `parse_control_function`), per-section
-parsing + validation for IPMI / Exporter / CPU / HD / NVMe / GPU / Const,
-control-function vs. legacy min/max precedence, duplicate-zone detection,
-constants, a large `TestEdgeCases` boundary battery, and full multi-section
-integration.
+```commandline
+pytest --cov=src --cov=test --cov-report=html
+```
 
-### Service (`test_service.py`)
-Lifecycle (`exit_func`), dependency checks (CPU/HD/GPU/NVMe, AMD, invalid type),
-the `run()` exit-code matrix (`run_026n`, `run_5n`, `run_7n`, `run_810n`,
-`run_9n`, `run_100p`, old section names), fan-mode drift enforcement, exporter
-start/stop wiring, and an extensive **shared-zone arbitration** battery
-(`collect_desired_levels`, `apply_fan_levels` across single/shared/multi-zone,
-const winner/loser, caching, oscillation, 3–5 controller overlaps).
+The report lands in `htmlcov/index.html`. The same `--cov` invocation is what
+CI uses (with `--cov-report=xml` for Codecov upload). Target is 100%.
 
-### Client / snapshot / exporter (observability)
-- **`test_client.py`** — arg parsing, colour detection, the offline report
-  formatter, the snapshot-driven (online) report formatter, snapshot fetch over
-  HTTP, controller construction, and `main` online/offline path selection.
-- **`test_snapshot.py`** (`TestBuildSnapshot`) — snapshot schema/version, fan-mode
-  block, per-controller entries (cpu/hd/nvme/gpu/const), curve vs. legacy
-  min/max, zones block, applied levels, per-device temperatures.
-- **`test_exporter.py`** — Prometheus text rendering (`TestPrometheusRenderer`)
-  and the HTTP server endpoints `/snapshot`, `/metrics`, `/healthz`, 404/500
-  handling, idempotent stop (`TestExporterHTTP`).
+### Layered structure
 
-### Logging (`test_log.py`)
-Init (valid/invalid level+output combos), level/output/message-type string
-mapping, and message routing to stdout/stderr/syslog.
+```
+test/
+├── conftest.py              ← pytest hooks + the `td` fixture
+├── test_*.py                ← 16 unit-test modules, one per source class
+├── test_config_builders.py  ← shared infra: config-object factories
+├── test_fc_helpers.py       ← shared infra: FanController base-contract helpers
+├── test_fixtures.py         ← shared infra: TestData (temp hwmon trees, fake commands)
+└── test_mocks.py            ← shared infra: pyudev mock classes
+```
 
----
+The four shared-infra files form the foundation that every test module reuses:
 
-# Improvement ideas
+- **`test_fixtures.py`** owns the `TestData` class — a temp-directory-backed
+  builder that materializes fake `hwmon` trees and bash scripts emulating
+  external commands (`ipmitool`, `smartctl`, `nvidia-smi`, `rocm-smi`). The
+  `td` fixture in `conftest.py` wraps it with deterministic teardown.
+- **`test_mocks.py`** holds the `pyudev` doubles — `MockDevice`,
+  `MockContext`, `MockDevices`, `factory_mockdevice`, `MockedContextGood`,
+  `MockedContextError`. Stateless, used by both unit tests and the smoke
+  harness.
+- **`test_config_builders.py`** holds six `create_*_config(...)` builders, one
+  per smfc config dataclass. Each returns a fully-populated `*Config`
+  instance with defaults sourced from `Config.DV_*`. Tests can write
+  `create_cpu_config(steps=4)` without touching a real config file.
+- **`test_fc_helpers.py`** holds builders specific to the `FanController`
+  hierarchy: `FcHarness`, `assert_fc_base_contract()`, and per-controller
+  `build_cpu_fc` / `build_hd_fc` / `build_nvme_fc` / `build_gpu_fc` helpers
+  that absorb the `pyudev.Context.__new__` / `Ipmi.__new__` / `print` mock
+  boilerplate.
 
-The suite is genuinely thorough — coverage is broad and the parametrized
-positive/negative style is consistent *within* most files. The friction is
-**cross-file duplication** and a few **naming/lifecycle conventions** that make
-the suite feel chaotic and raise the cost of adding the next controller or
-platform. Ordered by payoff:
+### Source ↔ test mapping
 
-### 1. Collapse the four platform test modules into one matrix ✅ *(done)*
-**Implemented** in `test/test_platforms.py`. `test_generic.py`,
-`test_genericx9.py`, `test_genericx14.py`, and `test_x10qbi.py` (~1090 lines
-testing the *same 11 methods*) were replaced by a single 321-line module driven
-by a `PlatformSpec` per platform and `@pytest.mark.parametrize`. Per-platform
-test vectors live in the spec and are expanded into individual cases by
-`_cases()`; case ids carry the platform label (e.g. `x10qbi-3`) instead of the
-old hand-maintained `error_str` strings. Adding the next Supermicro platform is
-now a single `PLATFORMS` entry. Coverage is unchanged: 142 cases, 100% on all
-four platform source modules.
+Every smfc class has a matching test module. The "Primary classes" column
+names the most prominent test class(es) within each module; many modules
+contain several test classes grouped by feature.
 
-### 2. Extract a shared `FanController` contract test  ✅ *(done)*
-The five FC test modules repeat the same `init_p1 / init_p2 / init_n* /
-get_nth_temp_p/n` skeleton plus the same pyudev/`get_hwmon_path`/`print` mock
-boilerplate. Factor the common contract into a reusable base test class (or a
-parametrized fixture providing the FC class + its config factory), so each
-subclass module keeps **only** its device-specific surface (`exec_smartctl`,
-`exec_smi`, standby handling). This also centralises the mock setup that is
-currently copy-pasted into every `test_init_*`.
+| Source                           | Test module                  | Primary class(es) |
+|----------------------------------|------------------------------|-------------------|
+| `client.py`                      | `test_client.py`             | Arg parsing, colour detection, offline report formatter, snapshot-driven report, snapshot fetch over HTTP, controller construction, main online/offline path selection |
+| `cmd.py`                         | `test_cmd.py`                | `__main__` entry point |
+| `config.py`                      | `test_config.py`             | Static parsers, per-section parsing + validation (`Ipmi` / `Exporter` / `CPU` / `HD` / `NVMe` / `GPU` / `Const`), control-function precedence, duplicate-zone detection, edge cases, full multi-section integration |
+| `constfc.py`                     | `test_constfc.py`            | Fixed-level controller init, `run`, deferred apply |
+| `cpufc.py`                       | `test_cpufc.py`              | Hwmon discovery, ordinal `cpuN` device names |
+| `exporter.py`                    | `test_exporter.py`           | Prometheus text rendering, HTTP server endpoints (`/snapshot`, `/metrics`, `/healthz`), 404/500 handling, idempotent stop |
+| `fancontroller.py`               | `test_fancontroller.py`      | Base contract: construction, `get_hwmon_path`, `get_temp` modes, per-device temp caching, `set_fan_level`, deferred level application, `run()` mapping, smoothing algorithm, LUT construction (legacy vs. user-defined `control_function=`) |
+| `generic.py`, `genericx9.py`, `genericx14.py`, `x10qbi.py` | `test_platforms.py` | Matrix-driven: same 11-method contract for all four platforms |
+| `gpufc.py`                       | `test_gpufc.py`              | `exec_smi` (Nvidia/AMD), AMD sensor selection, temp parse errors |
+| `hdfc.py`                        | `test_hdfc.py`               | `exec_smartctl` (sudo / rc / exceptions), standby-state formatting, `check_standby_state`, `go_standby_state`, standby-guard `run`, smartctl debug path |
+| `ipmi.py`                        | `test_ipmi.py`               | Init (positive/negative, BMC timeout, client mode), `exec_ipmitool` (remote args, sudo, rc, exceptions), `get/set_fan_mode`, fan-mode name mapping, `get/set_fan_level`, `set_multiple_fan_levels`, exception surface |
+| `log.py`                         | `test_log.py`                | Init (valid/invalid level+output combos), level/output/message-type mapping, message routing to stdout/stderr/syslog |
+| `nvmefc.py`                      | `test_nvmefc.py`             | NVMe name validation, smartctl-based temps |
+| `platform.py`                    | *(no dedicated module)*      | Exercised indirectly through `test_platforms.py` |
+| `platform_factory.py`            | `test_platform_factory.py`   | `create_platform` dispatch per platform name + fallback |
+| `service.py`                     | `test_service.py`            | Lifecycle (`exit_func`), dependency checks (CPU/HD/GPU/NVMe, AMD, invalid type), `run()` exit-code matrix, fan-mode drift enforcement, exporter start/stop wiring, **shared-zone arbitration** (`collect_desired_levels`, `apply_fan_levels` across single/shared/multi-zone, const winner/loser, caching, oscillation) |
+| `snapshot.py`                    | `test_snapshot.py`           | Schema/version, fan-mode block, per-controller entries (cpu/hd/nvme/gpu/const), curve vs. legacy min/max, zones block, applied levels, per-device temperatures |
 
-**Status:** shared layer landed in `test/test_fc_helpers.py` (`FcHarness`,
-`assert_fc_base_contract`, per-controller `build_*`/`make_bare_*` helpers) plus a
-`td` fixture in `conftest.py` (folds in idea 5). **All four controllers migrated:
-NVMe, CPU, HD, GPU** — each at identical case count and 100% source coverage.
-Each migration also applied ideas 3 (`id=` over `error_str`) and 4 (descriptive
-names) and the detailed step/ASSERT docstring style. (`ConstFc` is out of scope —
-it is not a `FanController` subclass.) Only the smoke-runner final step remains.
+Behind that table sit two cross-cutting topics worth knowing about:
 
-**Final step — refactor `smoke_runner.py` to match. ✅ Done.** `smoke_runner.py`
-now carries an inline `SCENARIOS` table (single source of truth), module-level
-`_make_*fc_init` factories (the old nested `mocked_*fc_init` are gone, along with
-their `# duplicate-code` disable), and a single `--scenario <id>` option. The 14
-`run_test_*.sh` wrappers were replaced by one `run_smoke.sh <scenario>`
-dispatcher, and the `hd_8` scenario now correctly uses `hd_8.conf` (it had pointed
-at `hd_2.conf`). `TestData`'s generators stay imported from `test_data.py` (the
-idea-6 invariant holds). Verified end-to-end: CPU/HD/CONST, GPU, NVMe and
-shared-zone scenarios all boot `Service.run()` and drive fan levels.
+- **Fan-controller subclasses share a contract.** The four `FanController`
+  subclasses (`CpuFc`, `HdFc`, `NvmeFc`, `GpuFc`) implement the same base
+  contract but differ in how they discover devices. The shared base
+  behaviours (construction, `set_fan_level`, deferred levels, the smoothing
+  algorithm, LUT construction) are tested *once* in `test_fancontroller.py`.
+  Each subclass test then asserts only its device-specific surface
+  (`exec_smartctl`, `exec_smi`, standby handling), with `build_*` / `make_bare_*`
+  helpers from `test_fc_helpers.py` absorbing the discovery-mock boilerplate.
+- **Platforms share a matrix.** All four platforms (`Generic`, `GenericX9`,
+  `GenericX14`, `X10QBi`) implement the same 11-method `Platform` interface
+  but with very different raw IPMI byte sequences and level encodings. A
+  single `test_platforms.py` module drives every platform through every
+  method via a `PlatformSpec` per platform. Adding a new Supermicro platform
+  is one `PLATFORMS` entry; the test count grows automatically.
 
-### 3. Drop the hand-maintained `error_str` parameters; use `pytest.param(id=...)`  🔶 *(partial)*
-Almost every parametrized case carries a positional message string like
-`"CpuFc.__init__() p1"` threaded through to every `assert ..., error_str`. This:
-- duplicates information pytest already shows,
-- drifts from the code (renamed methods leave stale strings),
-- is inconsistently named (`error_str` vs `error`).
+### Where to add new unit tests
 
-Replace with `pytest.param(..., id="cpu-zone0-calc-min")`. The test id then names
-the case in the report, and the asserts lose the trailing `, error_str`.
+| You're adding... | It goes in... |
+|------------------|---------------|
+| A new method or branch in an existing class | The matching `test_<class>.py` |
+| A new source class | A new `test_<class>.py` following the patterns described above |
+| A new Supermicro platform | A new `PlatformSpec` row in `test_platforms.py` |
+| A new `FanController` subclass | A new `test_<class>fc.py` that reuses `test_fc_helpers.py` for the base contract |
+| A new shared mock or builder | Extend the appropriate infra module (`test_fixtures.py` / `test_mocks.py` / `test_config_builders.py` / `test_fc_helpers.py`); do **not** add it to a test module |
 
-**Status:** done in `test_platforms.py` and all controller modules (`test_nvmefc`,
-`test_cpufc`, `test_hdfc`, `test_gpufc`, `test_constfc`). **Remaining (5 legacy
-modules still carry `error_str`):** `test_config.py`, `test_fancontroller.py`,
-`test_ipmi.py`, `test_log.py`, `test_service.py`.
+## Smoke tests
 
-### 4. Rename the opaque test cases  🔶 *(partial)*
-`test_run_026n`, `test_run_5n`, `test_run_7n`, `test_run_810n`, `test_run_9n`,
-`test_run_100p` (in `test_service.py`) encode an internal numbering scheme nobody
-can read. Rename to intent (`test_run_exits_on_missing_config`,
-`test_run_happy_path`, …). Same for the `p1/p2/n1/n2` suffixes elsewhere.
+Where unit tests verify each class in isolation, smoke tests verify the
+**whole service running end-to-end** against mocked devices. The smoke layer
+catches integration bugs — wrong configuration wiring, missing IPMI commands
+on a platform, broken fan-zone arbitration — that unit tests cannot see.
 
-**Status:** the controller + platform + const modules are renamed to descriptive
-behaviour names. **Remaining:** the `test_run_*n` cases in `test_service.py`, and
-the `init_p1/n1` / `exec_*_p/n` suffixes in `test_ipmi.py`, `test_log.py`,
-`test_fancontroller.py`.
+### Design principles
 
-### 5. Turn `TestData` lifecycle into fixtures  🔶 *(partial)*
-`TestData` relies on `__del__` for temp-dir cleanup and is used as
-`my_td = TestData(); ...; del my_td` throughout. `__del__`-based cleanup is
-non-deterministic and easy to leak. Expose it as a pytest fixture with explicit
-teardown, so cleanup is guaranteed and the boilerplate disappears from each test.
-The repeated `Ipmi.__new__(Ipmi)` / `pyudev.Context.__new__(...)` constructions
-are good fixture candidates too.
+- **The smoke runner is the only place that boots the real service.** Unit
+  tests construct individual classes and call individual methods; the smoke
+  runner constructs a real `Service` and calls `Service.run()`, with only the
+  device-discovery layer replaced by injected fakes. Everything else —
+  configuration parsing, controller wiring, IPMI command formatting,
+  fan-zone arbitration — runs unmodified.
+- **One scenario per `.conf`.** Each scenario is a single configuration file
+  under `test/scenarios/` plus a row in `SCENARIOS` describing its device
+  counts. There is no scenario-specific Python code; everything is data.
+- **Dynamic inputs, real loop.** A background thread drifts the fake hwmon
+  temperatures every second so the service genuinely sees changing inputs
+  and reacts to them across multiple polling cycles. The run continues until
+  the operator sends Ctrl-C (the documented exit path) — or, for one
+  scenario, until the service self-terminates on the configured trigger.
+- **Two entry points.** The interactive `./test/run_smoke.sh <scenario>`
+  dispatcher runs one scenario at a time until Ctrl-C, for hands-on
+  debugging. The non-interactive
+  `test/automatic_smoke_runner/check_smoke.py` driver runs every scenario in
+  turn with a bounded time window and asserts the expected end-to-end
+  signals appear in each log.
 
-**Status:** the `td` fixture exists in `conftest.py` and is used by the migrated
-controller modules (`test_cpufc`, `test_nvmefc`, `test_hdfc`); the `build_*`
-helpers also absorb the `Ipmi.__new__`/`Context.__new__` boilerplate for those.
-**Remaining:** adopt `td` in `test_fancontroller.py`, `test_ipmi.py`,
-`test_service.py`, `test_config.py`, `test_log.py` (still `my_td = TestData()`).
+### Running
 
-### 6. Split `test_data.py` by responsibility  ⬜ *(not started)*
-It currently bundles filesystem fixtures, pyudev mocks, and config factories in
-one 625-line file. Split into `fixtures.py` (or move into `conftest.py`),
-`mocks.py`, and `factories.py`. Promote the broadly-used config factories and the
-`create_config` / `create_config_file` fixtures (today private to
-`test_config.py`) into `conftest.py` so they are auto-injected and not
-re-imported per file.
+A single scenario runs from the project root via the wrapper script:
 
-### 7. Split the three oversized modules  ⬜ *(not started)*
-`test_service.py` (1861), `test_config.py` (1412), and `test_client.py` (1311)
-each mix several concerns under one class. Splitting along existing seams would
-improve navigability, e.g. `test_service.py` →
-`test_service_lifecycle.py` / `test_service_arbitration.py` /
-`test_service_exporter.py` (the shared-zone arbitration block alone is ~900
-lines).
+```commandline
+./test/run_smoke.sh <scenario>
+```
 
-### 8. Generate the smoke matrix instead of 15 bash wrappers  ✅ *(done)*
-The 14 `run_test_*.sh` scripts (which differed only in the
-`(cpu, hd, gpu, nvme, conf)` tuple) were replaced by the inline `SCENARIOS` table
-in `smoke_runner.py` plus one `run_smoke.sh <scenario>` dispatcher (see idea 2).
-Adding a scenario is now one table row + one `.conf`; `DEVELOPMENT.md` links to
-the table instead of restating it.
+For example:
 
-### 9. Close the small consistency gaps  🔶 *(partial)*
-- ✅ `test_platform.py` was renamed to `test_platform_factory.py` (matches its
-  source module `platform_factory.py`; disambiguates from `test_platforms.py`).
-- ⬜ `platform.py` (the base ABC, `FanMode`, `validate_input_range`) still has no
-  dedicated test module — it is only exercised indirectly through the four
-  concrete platforms. A small `test_platform_base.py` would make that intentional.
-- 🔶 Naming/suffix standardisation lands module-by-module with ideas 3 and 4.
+```commandline
+./test/run_smoke.sh cpu_1
+```
 
----
+The smoke test runs until you press `CTRL+C`. The wrapper validates the
+scenario name against the authoritative `SCENARIOS` table in
+`test/smoke_runner.py`; with no argument or an unknown id it prints the full
+list of valid scenarios.
 
-## Progress summary & remaining phases
+Refer to the [scenario matrix](#scenario-matrix) below for what each
+scenario contains.
 
-**Done ✅**
-- Idea 1 — platform tests collapsed into `test_platforms.py` (matrix).
-- Idea 2 — `test_fc_helpers.py` shared layer; NVMe/CPU/HD/GPU migrated; `ConstFc`
-  modernised standalone; **smoke runner refactored** (inline `SCENARIOS`,
-  `--scenario`, one `run_smoke.sh`). All at identical case counts and 100% source
-  coverage; full suite green.
-- Idea 8 — smoke matrix collapsed into the `SCENARIOS` table + single dispatcher.
-- Idea 9 — `test_platform_factory.py` rename.
-- The `td` fixture (part of idea 5) exists in `conftest.py`.
+To run **every** scenario in turn with automated pass/fail assertions per
+scenario, use the non-interactive driver:
 
-**Remaining phases (suggested order)**
-1. **Finish ideas 3 + 4 + 5 on the 5 legacy modules** — `test_config.py`,
-   `test_fancontroller.py`, `test_ipmi.py`, `test_log.py`, `test_service.py`:
-   drop `error_str` for `pytest.param(id=...)`, rename opaque cases
-   (`test_run_026n` → intent), and adopt the `td` fixture.
-2. **Idea 6** — split `test_data.py` (filesystem fixtures / mocks / config
-   factories); must preserve the smoke-runner import invariant.
-3. **Idea 7** — split the oversized `test_service.py` / `test_config.py` /
-   `test_client.py` along their existing seams.
-4. **Idea 9 (remainder)** — add `test_platform_base.py` for `platform.py`.
+```commandline
+./test/automatic_smoke_runner/run_all.sh           # all 20 scenarios (~2 min)
+./test/automatic_smoke_runner/run_all.sh --only platform_x9
+./test/automatic_smoke_runner/run_all.sh --quiet   # PASS/FAIL only, no log tails
+```
+
+See [`test/automatic_smoke_runner/README.md`](test/automatic_smoke_runner/README.md)
+for the full flag list and what each scenario's checks look for.
+
+### Layered structure
+
+```
+test/
+├── smoke_runner.py          ← end-to-end smoke harness (one scenario per run)
+├── run_smoke.sh             ← interactive smoke-test entry point (Ctrl-C to stop)
+├── scenarios/               ← 20 .conf files, one per smoke scenario
+└── automatic_smoke_runner/  ← non-interactive driver that exercises every scenario
+```
+
+`smoke_runner.py` and the unit-test shared infrastructure (`test_fixtures.py`,
+`test_mocks.py`) work together: the smoke runner imports `TestData` from
+`test_fixtures.py` and `MockedContextGood` from `test_mocks.py`, then layers
+its own `_make_*fc_init` factories on top that bypass device discovery and
+inject the fake hwmon paths into each `FanController` subclass.
+
+### How the smoke runner works
+
+A smoke run boots a real `Service` against fakes:
+
+1. **`TestData` materializes the environment**: a temp directory containing
+   a hwmon tree (`coretemp.N/hwmon/temp1_input` for CPU, `disks/N:0:0:0/...`
+   for HD, `nvme/N/...` for NVMe), plus bash scripts that emulate
+   `ipmitool` / `smartctl` / `nvidia-smi` / `rocm-smi` and return realistic
+   output for every command the service issues.
+2. **`smoke_runner.py` patches the device-discovery layer**:
+   `pyudev.Context.__init__` is replaced with `MockedContextGood`, and each
+   `*Fc.__init__` is replaced by a small factory that injects the fake hwmon
+   paths and SMI command paths from `TestData`. Everything else — the
+   `Service` constructor, the configuration parser, the IPMI command
+   formatter, the fan-zone arbitration logic — runs unmodified.
+3. **Config injection**: the chosen `.conf` file is loaded via `ConfigParser`,
+   the generated command paths and device names are merged in, and the
+   result is written to a temp file the service will read.
+4. **Background drift thread**: a daemon thread updates the fake hwmon
+   temperature files every second (random ±0–3 °C within the configured
+   `min_temp`/`max_temp` range). GPU temperatures drift via state files
+   inside the SMI emulator scripts.
+5. **`Service.run()` is called** and runs until the operator sends Ctrl-C
+   (the documented exit path) or — for one specific scenario,
+   `no_enforce_fan_mode` — until the service self-terminates on a BMC drift
+   it is configured not to correct.
+
+The scenario itself is described by a single tuple:
+
+```python
+Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf"])
+```
+
+— device counts plus a `.conf` filename under `test/scenarios/`. The full set
+lives in `test/smoke_runner.py::SCENARIOS`, which is the **single source of
+truth** for both the interactive runner and the automatic driver.
+
+### Scenario matrix
+
+The scenario matrix is designed to exercise every meaningful combination of
+controllers, platforms, and configuration modes:
+
+- **Per-controller sanity**: `cpu_1` / `cpu_2` / `cpu_4`, `hd_1` / `hd_2` /
+  `hd_4` / `hd_8`, `nvme_4`, `const_level`, `gpu_8_nvidia` / `gpu_8_amd` —
+  scaling each controller type from 1 to 8 instances.
+- **Cross-controller integration**: `cpu_4` (CPU + HD + GPU), `nvme_4` (CPU +
+  NVMe), `hd_4` (HD + GPU). These prove the wiring between distinct
+  controller types in a single service.
+- **Shared-zone arbitration**: `shared_zones` (CPU + NVMe both in zone 0),
+  `shared_zones_cpu_split` (numbered `[CPU:0]` + `[CPU:1]`, with `CPU:1` and
+  `HD` sharing zone 1). The arbitration code path is one of the most complex
+  in the service.
+- **Numbered sections**: `shared_zones_cpu_split` (multi-CPU) and
+  `hd_split_zones` (multi-HD pool across zones).
+- **Curve modes**: `control_function` (user-defined T→L curves on both CPU
+  and HD, with the legacy `min_temp`/`max_temp` keys omitted).
+- **Platform overrides**: `platform_x9`, `platform_x14`, `platform_x10qbi`
+  drive the non-default platform code paths end-to-end. Each platform emits
+  a distinctive IPMI raw byte sequence that proves the platform layer is
+  actually engaged.
+- **Configuration toggles**: `no_enforce_fan_mode` (service exits on BMC
+  drift instead of restoring FULL), `smoothing_window` (moving-average
+  temperature filter with `smoothing>1`).
+
+The full table — what each scenario contains:
+
+| Scenario             | conf                       | CPU                         | HD                          | NVME      | GPU           | CONST      | Standby guard |
+|----------------------|----------------------------|-----------------------------|-----------------------------|-----------|---------------|------------|---------------|
+| `cpu_1`              | `cpu_1.conf`               | 1 x CPU                     | 1 x HD                      | disabled  | disabled      | enabled    | enabled       |
+| `cpu_2`              | `cpu_2.conf`               | 2 x CPUs                    | disabled                    | disabled  | 1 GPU         | disabled   | disabled      |
+| `cpu_4`              | `cpu_4.conf`               | 4 x CPUs                    | 4 x HDs                     | disabled  | 4 GPUs        | disabled   | enabled       |
+| `hd_1`               | `hd_1.conf`                | disabled                    | 1 x HD                      | disabled  | disabled      | enabled    | enabled       |
+| `hd_2`               | `hd_2.conf`                | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
+| `hd_4`               | `hd_4.conf`                | disabled                    | 4 x HDs                     | disabled  | 2 GPUs        | disabled   | disabled      |
+| `hd_8`               | `hd_8.conf`                | 4 x CPUs                    | 8 x HDs                     | disabled  | disabled      | disabled   | enabled       |
+| `const_level`        | `const_level.conf`         | 1 x CPU                     | disabled                    | disabled  | disabled      | enabled    | enabled       |
+| `gpu_8_nvidia`       | `gpu_8_nvidia.conf`        | 1 x CPU                     | disabled                    | disabled  | 8 Nvidia GPUs | enabled    | disabled      |
+| `gpu_8_amd`          | `gpu_8_amd.conf`           | 1 x CPU                     | disabled                    | disabled  | 8 AMD GPUs    | enabled    | disabled      |
+| `nvme_4`             | `nvme_4.conf`              | 2 x CPU                     | disabled                    | 4 x NVME  | disabled      | enabled    | disabled      |
+| `shared_zones`       | `shared_zones.conf`        | 1 x CPU                     | disabled                    | 2 x NVMEs | disabled      | disabled   | disabled      |
+| `shared_zones_cpu_split` | `shared_zones_cpu_split.conf` | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
+| `control_function`   | `control_function.conf`    | 2 x CPUs                    | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
+| `platform_x9`        | `platform_x9.conf`         | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
+| `platform_x14`       | `platform_x14.conf`        | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
+| `platform_x10qbi`    | `platform_x10qbi.conf`     | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
+| `no_enforce_fan_mode`| `no_enforce_fan_mode.conf` | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
+| `hd_split_zones`     | `hd_split_zones.conf`      | disabled                    | 4 x HDs (`HD:0`, `HD:1`)    | disabled  | disabled      | disabled   | disabled      |
+| `smoothing_window`   | `smoothing_window.conf`    | 2 x CPUs (`smoothing=5`)    | 2 x HDs (`smoothing=3`)     | disabled  | disabled      | disabled   | disabled      |
+
+Notes:
+
+- The `Standby guard` column reflects each `*.conf`; note that the smoke
+  runner force-disables the standby guard at runtime (it would otherwise
+  drive the fake `smartctl` command into STANDBY and stop temperature
+  readings).
+- `shared_zones` tests the shared IPMI zone arbitration where CPU and NVME
+  fan controllers both use IPMI zone 0.
+- `shared_zones_cpu_split` tests the multi-curve CPU feature combined with
+  shared-zone arbitration: `CPU:0` controls zone 0, while `CPU:1` and `HD`
+  share zone 1.
+- `gpu_8_nvidia` and `gpu_8_amd` test the GPU fan controller with Nvidia and
+  AMD GPUs respectively.
+- `control_function` tests the `control_function=` parameter: the CPU
+  section uses a 4-point curve (`30-35, 50-40, 60-90, 65-100`) and the HD
+  section uses a 3-point curve (`32-35, 38-45, 46-100`), both with
+  `min_temp`/`max_temp`/`min_level`/`max_level` omitted.
+- `platform_x9`, `platform_x14`, `platform_x10qbi` force a specific platform
+  via `platform_name=` (overriding the BMC auto-detect path). Each platform
+  produces a distinctive raw IPMI byte sequence on `set_fan_level`: X9 uses
+  `raw 0x30 0x91 0x5a 0x03 …` with the 0–255 scaled level encoding, X14 uses
+  `raw 0x30 0x70 0x88 …` with direct-% encoding plus an OEM
+  `raw 0x2c 0x04 0xcf 0xc2 …` manual-mode-enable sequence at startup, and
+  X10QBi uses `raw 0x30 0x91 0x5c 0x03 …` preceded by an 11-line Nuvoton
+  NCT7904D TMFR/FOMC init.
+- `no_enforce_fan_mode` sets `enforce_fan_mode=0` in `[Ipmi]`. Unlike every
+  other scenario, the service is **designed to exit immediately**
+  (`SystemExit(11)`) the first time the BMC fan-mode reads as anything other
+  than `FULL`, instead of restoring it. The smoke run typically terminates
+  within 0–6 seconds; the log ends with `ERROR: BMC fan mode drifted from
+  FULL to … ; enforce_fan_mode is disabled, smfc exiting.`
+- `hd_split_zones` exercises numbered `[HD:0]` / `[HD:1]` sections — the 4
+  generated `/dev/sd?` devices are split across two HD controllers each
+  driving its own IPMI zone, modelling a backplane split (front pool vs.
+  rear pool).
+- `smoothing_window` exercises the temperature-smoothing moving-average
+  window with `smoothing=5` (CPU) and `smoothing=3` (HD). Short polling
+  intervals (1–2 s) let the window fill within the smoke run while the
+  drift thread keeps feeding varying values, so the moving-average output
+  changes across cycles.
+- During smoke tests, temperature values change gradually over time to
+  simulate realistic thermal behavior. A background thread updates hwmon
+  temperature files (for CPU, HD, NVMe) every second, applying random
+  changes of +/- 0-3 degrees within the configured min/max range. GPU
+  temperatures (both Nvidia and AMD) also change gradually between
+  invocations using a state file to track previous values.
+
+### The automatic smoke driver
+
+`test/automatic_smoke_runner/check_smoke.py` is a non-interactive driver
+that runs every scenario in turn and scans the captured log for the expected
+end-to-end signals: startup banner, controller init, fan-level apply,
+temperature drift observable, clean Ctrl-C exit, plus per-scenario
+assertions (e.g. the X9 raw byte sequence for `platform_x9`, the
+autonomous-exit log line for `no_enforce_fan_mode`). It is used by
+contributors to confirm a change hasn't regressed any scenario; CI does not
+run it (CI runs the unit suite only). See
+[`test/automatic_smoke_runner/README.md`](test/automatic_smoke_runner/README.md)
+for full details on assertions and flags.
+
+### Where to add new smoke tests
+
+| You're adding... | It goes in... |
+|------------------|---------------|
+| A new end-to-end scenario | One `.conf` under `test/scenarios/` + one row in `test/smoke_runner.py::SCENARIOS` (and matching entry/checks in the automatic driver) |
+| A new platform that needs end-to-end verification | A `platform_<name>.conf` scenario plus the corresponding row, alongside the unit-test `PlatformSpec` |
+| New on-disk emulator behaviour (a new fake command, extra ipmitool branches) | `test_fixtures.py` (so unit tests and smoke share the same emulator) |
