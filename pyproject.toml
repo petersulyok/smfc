@@ -68,16 +68,23 @@ filterwarnings = [
 ]
 
 # coverage options
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "if __name__ == .__main__.:"
-]
-
 [tool.coverage.run]
+source = ["src/smfc"]
 omit = [
     "test/conftest.py",
-    "test/smoke_runner.py"
+    "test/smoke_runner.py",
+    "test/automatic_smoke_runner/*"
+]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:"
 ]
 
 # ruff options
