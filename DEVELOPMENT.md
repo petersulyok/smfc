@@ -2,17 +2,14 @@
 
 > For an overview of the internal structure (classes, execution order, shared IPMI zones, etc.) see [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Development environment setup
+
+### Manual installation and use of `uv`
+
 This project is using `uv` for Python project management, see more details about [installation of `uv`](https://docs.astral.sh/uv/getting-started/installation/).
-`uv` can provide everything that multiple tools (e.g. `pip`, `pyenv`, `venv`) provide, but much faster. For example:
+`uv` can provide everything that multiple tools (e.g. `pip`, `pyenv`, `venv`) provide, but much faster.
 
-* install a Python run-time: `uv python install 3.14`
-* use a specific Python version: `uv python pin 3.14`
-* create virtual Python environment: `uv venv`
-* install all dependencies: `uv sync`
-
-`uv` has a lock file (`uv.lock`) for storing dependencies, this should be part of version control.
-
-Building a development environment from scratch (with Python 3.14) contains the following steps:
+Manual building a development environment from scratch (with Python 3.14) contains the following steps:
 
 ```commandline
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -22,6 +19,10 @@ uv python pin 3.14
 uv sync
 source .venv/bin/activate
 ```
+
+> `uv` has a lock file (`uv.lock`) for storing dependencies, this should be part of version control.
+
+### Dependencies
 
 Dependencies are listed in `pyproject.toml` file and the proper version numbers are handled by `uv`:
 
@@ -47,6 +48,8 @@ lint = [
 ]
 ```
 
+### Automated installation of development environment
+
 All the steps above (installing `uv`, Python, and dependencies) can be automated with the `./bin/create_python_env.sh` script:
 
 ```commandline
@@ -62,184 +65,75 @@ pylint src test
 ruff check
 ```
 
+## Local development and deployment
+
+To install a development build of `smfc` onto the local system (real
+`/etc/smfc`, real systemd unit), two steps are required: build a distribution
+archive from the current source tree, then install it.
+
+### Build a local package
+
+The project uses `setuptools` as the build backend (declared in
+`pyproject.toml`); `uv build` is the recommended front-end for producing the
+distribution artifacts. From the project root:
+
+```commandline
+uv build
+```
+
+This produces both a source distribution and a wheel under `./dist/`:
+
+```
+dist/smfc-<version>.tar.gz   ← source distribution (consumed by ./bin/install.sh)
+dist/smfc-<version>-py3-none-any.whl
+```
+
+The version number is read from the `version = "..."` field in
+`pyproject.toml`. Bump it with [`./bin/update_version_number.sh X.Y.Z`](bin/update_version_number.sh)
+when you want a distinct local build, otherwise the existing version is reused.
+
+### Local system install
+
+After the source distribution (`dist/smfc-<version>.tar.gz`) has been built, install it onto the local machine with the
+[`./bin/install.sh`](bin/install.sh) wrapper:
+
+```commandline
+sudo ./bin/install.sh --local --keep-config --verbose
+```
+
+What it does:
+
+- Reads the version from `./pyproject.toml` and runs
+  `pip install ./dist/smfc-<version>.tar.gz`.
+- Drops [`config/smfc.conf`](config/smfc.conf) into `/etc/smfc/`, with the
+  existing one backed up as `/etc/smfc/smfc.conf.<timestamp>` (unless
+  `--keep-config` is passed).
+- Installs [`config/smfc`](config/smfc) into `/etc/default/`.
+- Installs [`config/smfc.service`](config/smfc.service) as a systemd unit at
+  `/etc/systemd/system/smfc.service`.
+- Installs the man pages from `doc/`.
+
+Then start the service:
+
+```commandline
+sudo systemctl daemon-reload
+sudo systemctl enable --now smfc
+sudo journalctl -fu smfc
+```
+
+Reverse the install with [`./bin/uninstall.sh`](bin/uninstall.sh) (the same
+`--keep-config` flag is supported).
+
 # Testing
 
-This chapter describes the test environment of `smfc` project.  
-Important notes:  
-  
-* All test related content can be found in `test` folder
-* Only `python3` and `bash` commands are required for the execution of the tests (was tested on Linux, macOS), all external commands `ipmitool` and `smartctl` are substituted by scripts
-* Test are executed by `pytest`
-* All development dependencies (defined in `pyproject.toml`) will be installed after the execution of these commands:
-
-```commandline
-uv sync
-source .venv/bin/activate
-```
-
-## Smoke tests  
-
-Several smoke tests have been provided for `smfc` where the service is executed with different configuration files. Notes:  
-  
-* smoke tests are executed from the project root folder via a single dispatcher, `./test/run_smoke.sh <scenario>`, and can be stopped by pressing `CTRL+C`:
-
-```commandline
-$ ./test/run_smoke.sh cpu_1
-```
-
-* the scenario matrix is the single source of truth in `test/smoke_runner.py` (`SCENARIOS`); passing an unknown or missing id makes pytest print the list of valid scenarios. The following scenarios and fan controller configurations can be executed:
-
-   | Scenario            | conf                    | CPU                         | HD        | NVME      | GPU           | CONST      | Standby guard |
-   |---------------------|-------------------------|-----------------------------|-----------|-----------|---------------|------------|---------------|
-   | `cpu_1`             | `cpu_1.conf`            | 1 x CPU                     | 1 x HD    | disabled  | disabled      | enabled    | enabled       |
-   | `cpu_2`             | `cpu_2.conf`            | 2 x CPUs                    | disabled  | disabled  | 1 GPU         | disabled   | disabled      |
-   | `cpu_4`             | `cpu_4.conf`            | 4 x CPUs                    | 4 x HDs   | disabled  | 4 GPUs        | disabled   | enabled       |
-   | `hd_1`              | `hd_1.conf`             | disabled                    | 1 x HD    | disabled  | disabled      | enabled    | enabled       |
-   | `hd_2`              | `hd_2.conf`             | 1 x CPU                     | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
-   | `hd_4`              | `hd_4.conf`             | disabled                    | 4 x HDs   | disabled  | 2 GPUs        | disabled   | disabled      |
-   | `hd_8`              | `hd_8.conf`             | 4 x CPUs                    | 8 x HDs   | disabled  | disabled      | disabled   | enabled       |
-   | `const_level`       | `const_level.conf`      | 1 x CPU                     | disabled  | disabled  | disabled      | enabled    | enabled       |
-   | `gpu_8_nvidia`      | `gpu_8_nvidia.conf`     | 1 x CPU                     | disabled  | disabled  | 8 Nvidia GPUs | enabled    | disabled      |
-   | `gpu_8_amd`         | `gpu_8_amd.conf`        | 1 x CPU                     | disabled  | disabled  | 8 AMD GPUs    | enabled    | disabled      |
-   | `nvme_4`            | `nvme_4.conf`           | 2 x CPU                     | disabled  | 4 x NVME  | disabled      | enabled    | disabled      |
-   | `shared_zones`      | `shared_zones.conf`     | 1 x CPU                     | disabled  | 2 x NVMEs | disabled      | disabled   | disabled      |
-   | `shared_zones_2`    | `shared_zones_2.conf`   | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
-   | `control_function`  | `control_function.conf` | 2 x CPUs                    | 2 x HDs   | disabled  | disabled      | disabled   | disabled      |
-
-   Notes:
-   - The `Standby guard` column reflects each `*.conf`; note that the smoke runner force-disables the standby guard at runtime (it would otherwise drive the fake `smartctl` command into STANDBY and stop temperature readings).
-   - `shared_zones` tests the shared IPMI zone arbitration where CPU and NVME fan controllers both use IPMI zone 0.
-   - `shared_zones_2` tests the multi-curve CPU feature combined with shared-zone arbitration: `CPU:0` controls zone 0, while `CPU:1` and `HD` share zone 1.
-   - `gpu_8_nvidia` and `gpu_8_amd` test the GPU fan controller with Nvidia and AMD GPUs respectively.
-   - `control_function` tests the `control_function=` parameter: the CPU section uses a 4-point curve (`30-35, 50-40, 60-90, 65-100`) and the HD section uses a 3-point curve (`32-35, 38-45, 46-100`), both with `min_temp`/`max_temp`/`min_level`/`max_level` omitted.
-   - During smoke tests, temperature values change gradually over time to simulate realistic thermal behavior. A background thread updates hwmon temperature files (for CPU, HD, NVMe) every second, applying random changes of +/- 0-3 degrees within the configured min/max range. GPU temperatures (both Nvidia and AMD) also change gradually between invocations using a state file to track previous values.
-
-## Unit tests
-
-The whole project (all source code) is completely unit tested. The unit tests are executed with `pytest`:
-
-```commandline
-$ pytest
-============================= test session starts ==============================
-platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
-rootdir: /home/petersulyok/git/github/smfc
-configfile: pyproject.toml
-plugins: cov-6.0.0, mock-3.14.0
-collected 708 items                                                            
-
-test/test_cmd.py .                                                       [  0%]
-test/test_config.py .................................................... [  7%]
-........................................................................ [ 17%]
-..................................................                       [ 24%]
-test/test_constfc.py ................                                    [ 26%]
-test/test_cpufc.py .....................                                 [ 29%]
-test/test_fancontroller.py ............................................. [ 36%]
-.....                                                                    [ 37%]
-test/test_generic.py ................................                    [ 41%]
-test/test_genericx9.py .................................                 [ 46%]
-test/test_gpufc.py ...................                                   [ 48%]
-test/test_hdfc.py ...................................................... [ 56%]
-......................                                                   [ 59%]
-test/test_ipmi.py ...................................................... [ 67%]
-.................                                                        [ 69%]
-test/test_log.py ....................................................... [ 77%]
-..................................................                       [ 84%]
-test/test_nvmefc.py ..............                                       [ 86%]
-test/test_platform.py .....                                              [ 87%]
-test/test_service.py ................................................... [ 94%]
-........                                                                 [ 95%]
-test/test_x10qbi.py ................................                     [100%]
-
-============================= 708 passed in 1.59s ==============================
-```
-
-The code coverage could be also measured and displayed during the test execution:
-
-```commandline
-$ pytest --cov=test --cov=src  
-======================================= test session starts ========================================
-platform linux -- Python 3.14.3, pytest-8.3.5, pluggy-1.5.0
-rootdir: /home/petersulyok/git/github/smfc
-configfile: pyproject.toml
-plugins: cov-6.0.0, mock-3.14.0
-collected 708 items                                                                                
-
-test/test_cmd.py .                                                                           [  0%]
-test/test_config.py ........................................................................ [ 10%]
-............................................................................................ [ 23%]
-..........                                                                                   [ 24%]
-test/test_constfc.py ................                                                        [ 26%]
-test/test_cpufc.py .....................                                                     [ 29%]
-test/test_fancontroller.py ..................................................                [ 37%]
-test/test_generic.py ................................                                        [ 41%]
-test/test_genericx9.py .................................                                     [ 46%]
-test/test_gpufc.py ...................                                                       [ 48%]
-test/test_hdfc.py .......................................................................... [ 59%]
-..                                                                                           [ 59%]
-test/test_ipmi.py .......................................................................    [ 69%]
-test/test_log.py ........................................................................... [ 80%]
-..............................                                                               [ 84%]
-test/test_nvmefc.py ..............                                                           [ 86%]
-test/test_platform.py .....                                                                  [ 87%]
-test/test_service.py ...........................................................             [ 95%]
-test/test_x10qbi.py ................................                                         [100%]
-
----------- coverage: platform linux, python 3.14.3-final-0 -----------
-Name                           Stmts   Miss  Cover
---------------------------------------------------
-src/smfc/__init__.py              13      0   100%
-src/smfc/cmd.py                    4      0   100%
-src/smfc/config.py               269      0   100%
-src/smfc/constfc.py               33      0   100%
-src/smfc/cpufc.py                 16      0   100%
-src/smfc/fancontroller.py        105      0   100%
-src/smfc/generic.py               27      0   100%
-src/smfc/genericx9.py             34      0   100%
-src/smfc/gpufc.py                 55      0   100%
-src/smfc/hdfc.py                 120      0   100%
-src/smfc/ipmi.py                 122      0   100%
-src/smfc/log.py                   57      0   100%
-src/smfc/nvmefc.py                23      0   100%
-src/smfc/platform.py              37      0   100%
-src/smfc/platform_factory.py      14      0   100%
-src/smfc/service.py              209      0   100%
-src/smfc/x10qbi.py                42      0   100%
-test/__init__.py                   0      0   100%
-test/test_cmd.py                   9      0   100%
-test/test_config.py              522      0   100%
-test/test_constfc.py              80      0   100%
-test/test_cpufc.py               139      0   100%
-test/test_data.py                173      0   100%
-test/test_fancontroller.py       318      0   100%
-test/test_generic.py              80      0   100%
-test/test_genericx9.py            82      0   100%
-test/test_gpufc.py               131      0   100%
-test/test_hdfc.py                305      0   100%
-test/test_ipmi.py                245      0   100%
-test/test_log.py                  52      0   100%
-test/test_nvmefc.py              142      0   100%
-test/test_platform.py             32      0   100%
-test/test_service.py             981      0   100%
-test/test_x10qbi.py               85      0   100%
---------------------------------------------------
-TOTAL                           4556      0   100%
-
-
-======================================= 708 passed in 2.34s ========================================
-```
-
-For a more detailed HTML coverage report run this command:
-
-```commandline
-$ pytest --cov=src --cov=test --cov-report=html
-```
-
-The detailed HTML report will be available in folder `htmlcov/index.html` with coverage statistics and showing the covered and non-covered lines in the source code. The actual coverage is 100%.  
-
+All test-related material — unit tests, smoke tests, the scenario matrix,
+shared infrastructure, and how to invoke each layer — lives in
+[`TESTING.md`](TESTING.md).
 
 # GitHub
 
 ## GitHub workflow
+
 The project implemented the following GitHub workflows:
 
 1. Unit test and lint execution (`test.yml`). A commit can trigger this action:
@@ -261,6 +155,7 @@ The project implemented the following GitHub workflows:
 # Release process
 
 ## Creation of a new GitHub release
+
 Follow these steps to create a new release:
 
 * Run `./bin/update_version_number.sh X.Y.Z` to update the version number in all release-specific files
@@ -275,6 +170,7 @@ Follow these steps to create a new release:
 * Build new images for docker and upload them
 
 ## Building and uploading of Docker images
+
 After publishing an `smfc` release, the docker image could be built and uploaded. 
 The docker images can be built locally in the project root folder:
 
