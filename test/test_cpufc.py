@@ -8,7 +8,7 @@ from typing import List
 import pytest
 from pytest_mock import MockerFixture
 from smfc.config import Config
-from .test_data import TestData
+from .test_fixtures import TestData
 from .test_fc_helpers import assert_fc_base_contract, build_cpu_fc
 
 # Field order for the parametrized explicit-configuration init test.
@@ -37,10 +37,15 @@ class TestCpuFc:
                                               ipmi_zone: List[int], temp_calc: int, steps: int, sensitivity: float,
                                               polling: float, min_temp: float, max_temp: float, min_level: int,
                                               max_level: int, smoothing: int):
-        """Positive unit test for CpuFc.__init__() with an explicit configuration. It contains the steps:
-        - build a CpuFc via the shared builder (udev/hwmon discovery mocked)
-        - ASSERT: the base-class contract (log/ipmi refs, name, count, config fields)
-        - ASSERT: the hwmon paths and the synthesized cpu0..cpuN device_names specific to CpuFc
+        """Positive unit test for CpuFc.__init__() method. It contains the following steps:
+        - mock pyudev.Context.list_devices, smfc.FanController.get_hwmon_path, and print via the
+          build_cpu_fc helper (which also absorbs pyudev.Context.__new__, Ipmi.__new__, and print mocks)
+        - build a Config with the parametrized explicit values for the CPU section
+        - instantiate a CpuFc through build_cpu_fc with the requested count and config overrides
+        - call assert_fc_base_contract() to validate base-class wiring against the expected values
+        - ASSERT: the base-class contract (log/ipmi refs, name, count, config fields) holds
+        - ASSERT: fc.hwmon_path equals td.cpu_files (the discovered hwmon paths)
+        - ASSERT: fc.device_names() returns the synthesized ["cpu0", ..., f"cpu{count-1}"] labels
         """
         cfg_values = {"ipmi_zone": ipmi_zone, "temp_calc": temp_calc, "steps": steps, "sensitivity": sensitivity,
                       "polling": polling, "min_temp": min_temp, "max_temp": max_temp, "min_level": min_level,
@@ -52,10 +57,15 @@ class TestCpuFc:
         assert h.fc.device_names() == [f"cpu{i}" for i in range(count)]
 
     def test_init_applies_defaults(self, mocker: MockerFixture, td: TestData):
-        """Positive unit test for CpuFc.__init__() with default configuration values. It contains the steps:
-        - build a CpuFc from a default config (only enabled set)
+        """Positive unit test for CpuFc.__init__() method with default configuration values. It contains the
+        following steps:
+        - mock pyudev.Context.list_devices, smfc.FanController.get_hwmon_path, and print via the
+          build_cpu_fc helper (which also absorbs pyudev.Context.__new__, Ipmi.__new__, and print mocks)
+        - build the expected-defaults dict from Config.DV_CPU_* constants
+        - instantiate a CpuFc through build_cpu_fc with count=1 and no config overrides
+        - call assert_fc_base_contract() to validate base-class wiring against the default values
         - ASSERT: the base-class contract holds with the CPU default config values (Config.DV_CPU_*)
-        - ASSERT: the hwmon paths match the test data
+        - ASSERT: fc.hwmon_path equals td.cpu_files (the discovered hwmon paths)
         """
         count = 1
         expected = {"ipmi_zone": [Config.CPU_ZONE], "temp_calc": Config.CALC_AVG, "steps": Config.DV_CPU_STEPS,
@@ -68,9 +78,13 @@ class TestCpuFc:
         assert h.fc.hwmon_path == td.cpu_files
 
     def test_init_raises_without_hwmon_devices(self, mocker: MockerFixture, td: TestData):
-        """Negative unit test for CpuFc.__init__() when no CPU hwmon device is found. It contains the steps:
-        - build a CpuFc via the shared builder with an empty udev device list (no hwmon discovered)
-        - ASSERT: construction raises RuntimeError (no HWMON device found for the CPU)
+        """Negative unit test for CpuFc.__init__() method when no CPU hwmon device is found. It contains the
+        following steps:
+        - mock pyudev.Context.list_devices, smfc.FanController.get_hwmon_path, and print via the
+          build_cpu_fc helper (which also absorbs pyudev.Context.__new__, Ipmi.__new__, and print mocks)
+        - call build_cpu_fc with count=0 so the mocked udev discovery yields an empty device list
+        - enter a pytest.raises(RuntimeError) block around the construction
+        - ASSERT: CpuFc.__init__ raises RuntimeError because no HWMON device is found for the CPU
         """
         with pytest.raises(RuntimeError):
             build_cpu_fc(mocker, td, count=0)
@@ -90,8 +104,12 @@ class TestCpuFc:
     )
     def test_get_nth_temp_reads_hwmon(self, mocker: MockerFixture, td: TestData, count: int, index: int,
                                       temperatures: List[float]):
-        """Positive unit test for CpuFc._get_nth_temp(). It contains the steps:
-        - build a CpuFc over hwmon test data with fixed per-device temperatures
+        """Positive unit test for CpuFc._get_nth_temp() method. It contains the following steps:
+        - mock pyudev.Context.list_devices, smfc.FanController.get_hwmon_path, and print via the
+          build_cpu_fc helper (which also absorbs pyudev.Context.__new__, Ipmi.__new__, and print mocks)
+        - prepare a list of per-device temperatures and write them into the hwmon test files
+        - instantiate a CpuFc through build_cpu_fc with the parametrized count and temps
+        - call fc._get_nth_temp(index) for the parametrized index
         - ASSERT: _get_nth_temp(index) returns the temperature written to that device's hwmon file
         """
         h = build_cpu_fc(mocker, td, count=count, temps=temperatures)
@@ -106,9 +124,13 @@ class TestCpuFc:
         ],
     )
     def test_get_nth_temp_raises_on_io_errors(self, mocker: MockerFixture, td: TestData, operation: int, exception):
-        """Negative unit test for CpuFc._get_nth_temp() error handling. It contains the steps:
-        - build a CpuFc over a single hwmon file
-        - trigger one of: missing file, invalid numeric value, or index overflow
+        """Negative unit test for CpuFc._get_nth_temp() method error handling. It contains the following steps:
+        - mock pyudev.Context.list_devices, smfc.FanController.get_hwmon_path, and print via the
+          build_cpu_fc helper (which also absorbs pyudev.Context.__new__, Ipmi.__new__, and print mocks)
+        - instantiate a CpuFc through build_cpu_fc with count=1 (one hwmon test file)
+        - apply the parametrized fault: delete the hwmon file, write an invalid numeric value, or set
+          an out-of-range index
+        - enter a pytest.raises(exception) block and call fc._get_nth_temp(index)
         - ASSERT: _get_nth_temp() raises the matching exception (FileNotFoundError/ValueError/IndexError)
         """
         h = build_cpu_fc(mocker, td, count=1)

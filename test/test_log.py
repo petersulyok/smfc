@@ -4,274 +4,244 @@
 #   Unit test for smfc.Log() class.
 #
 import syslog
+from typing import Tuple
 import pytest
 from mock import MagicMock
 from pytest_mock import MockerFixture
 from smfc.log import Log
 
 
+def _make_log(mocker: MockerFixture, level: int, output: int) -> Tuple[Log, MagicMock, MagicMock]:
+    """Build a Log with print/syslog mocked. Returns (log, mock_print, mock_syslog_syslog).
+
+    Removes the repeated print/syslog.openlog/syslog.syslog patching boilerplate that appears in every
+    test that constructs a Log instance.
+    """
+    mock_print = MagicMock()
+    mocker.patch("builtins.print", mock_print)
+    mocker.patch("syslog.openlog", MagicMock())
+    mock_syslog_syslog = MagicMock()
+    mocker.patch("syslog.syslog", mock_syslog_syslog)
+    return Log(level, output), mock_print, mock_syslog_syslog
+
+
 class TestLog:
     """Unit test class for smfc.Log() class"""
 
     @pytest.mark.parametrize(
-        "level, output, error_str",
+        "level, output",
         [
-            # LOG_NONE to STDOUT
-            (Log.LOG_NONE, Log.LOG_STDOUT, "Log.__init__() p1"),
-            # LOG_ERROR to STDOUT
-            (Log.LOG_ERROR, Log.LOG_STDOUT, "Log.__init__() p2"),
-            # LOG_CONFIG to STDOUT
-            (Log.LOG_CONFIG, Log.LOG_STDOUT, "Log.__init__() p3"),
-            # LOG_INFO to STDOUT
-            (Log.LOG_INFO, Log.LOG_STDOUT, "Log.__init__() p4"),
-            # LOG_DEBUG to STDOUT
-            (Log.LOG_DEBUG, Log.LOG_STDOUT, "Log.__init__() p5"),
-            # LOG_NONE to STDERR
-            (Log.LOG_NONE, Log.LOG_STDERR, "Log.__init__() p6"),
-            # LOG_ERROR to STDERR
-            (Log.LOG_ERROR, Log.LOG_STDERR, "Log.__init__() p7"),
-            # LOG_CONFIG to STDERR
-            (Log.LOG_CONFIG, Log.LOG_STDERR, "Log.__init__() p8"),
-            # LOG_INFO to STDERR
-            (Log.LOG_INFO, Log.LOG_STDERR, "Log.__init__() p9"),
-            # LOG_DEBUG to STDERR
-            (Log.LOG_DEBUG, Log.LOG_STDERR, "Log.__init__() p10"),
-            # LOG_NONE to SYSLOG
-            (Log.LOG_NONE, Log.LOG_SYSLOG, "Log.__init__() p11"),
-            # LOG_ERROR to SYSLOG
-            (Log.LOG_ERROR, Log.LOG_SYSLOG, "Log.__init__() p12"),
-            # LOG_CONFIG to SYSLOG
-            (Log.LOG_CONFIG, Log.LOG_SYSLOG, "Log.__init__() p13"),
-            # LOG_INFO to SYSLOG
-            (Log.LOG_INFO, Log.LOG_SYSLOG, "Log.__init__() p14"),
-            # LOG_DEBUG to SYSLOG
-            (Log.LOG_DEBUG, Log.LOG_SYSLOG, "Log.__init__() p15"),
+            pytest.param(Log.LOG_NONE, Log.LOG_STDOUT, id="none-stdout"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDOUT, id="error-stdout"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDOUT, id="config-stdout"),
+            pytest.param(Log.LOG_INFO, Log.LOG_STDOUT, id="info-stdout"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDOUT, id="debug-stdout"),
+            pytest.param(Log.LOG_NONE, Log.LOG_STDERR, id="none-stderr"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDERR, id="error-stderr"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDERR, id="config-stderr"),
+            pytest.param(Log.LOG_INFO, Log.LOG_STDERR, id="info-stderr"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDERR, id="debug-stderr"),
+            pytest.param(Log.LOG_NONE, Log.LOG_SYSLOG, id="none-syslog"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_SYSLOG, id="error-syslog"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_SYSLOG, id="config-syslog"),
+            pytest.param(Log.LOG_INFO, Log.LOG_SYSLOG, id="info-syslog"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_SYSLOG, id="debug-syslog"),
         ],
     )
-    def test_init_p1(self, mocker: MockerFixture, level: int, output: int, error_str: str) -> None:
+    def test_init_sets_attributes_and_dispatcher(self, mocker: MockerFixture, level: int, output: int) -> None:
         """Positive unit test for Log.__init__() method. It contains the following steps:
         - mock print(), syslog.openlog(), and syslog.syslog() functions
         - initialize a Log class instance with a specified level and output values
-        - ASSERT: if the class attributes contain different values that were passed to __init__
-        - ASSERT: if the mocked system functions were called wrong number of times
+        - ASSERT: log_level and log_output match the values passed to __init__
+        - ASSERT: msg dispatcher is wired to the output-matching backend
+          (msg_to_stdout / msg_to_stderr / msg_to_syslog)
         """
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
-        mock_syslog_openlog = MagicMock()
-        mocker.patch("syslog.openlog", mock_syslog_openlog)
-        mock_syslog_syslog = MagicMock()
-        mocker.patch("syslog.syslog", mock_syslog_syslog)
-        my_log = Log(level, output)
-        assert my_log.log_level == level, error_str
-        assert my_log.log_output == output, error_str
+        my_log, _, _ = _make_log(mocker, level, output)
+        assert my_log.log_level == level
+        assert my_log.log_output == output
         if my_log.log_output is Log.LOG_STDOUT:
             # pylint: disable=comparison-with-callable
-            assert my_log.msg == my_log.msg_to_stdout, error_str
+            assert my_log.msg == my_log.msg_to_stdout
         elif my_log.log_output is Log.LOG_STDERR:
             # pylint: disable=comparison-with-callable
-            assert my_log.msg == my_log.msg_to_stderr, error_str
+            assert my_log.msg == my_log.msg_to_stderr
         elif my_log.log_output == Log.LOG_SYSLOG:
             # pylint: disable=comparison-with-callable
-            assert my_log.msg == my_log.msg_to_syslog, error_str
+            assert my_log.msg == my_log.msg_to_syslog
 
     @pytest.mark.parametrize(
-        "level, output, error_str",
+        "level, output",
         [
-            # Invalid level: 100
-            (100, Log.LOG_STDOUT, "Log.__init__() n1"),
-            # Invalid output: 100
-            (Log.LOG_ERROR, 100, "Log.__init__() n2"),
+            pytest.param(100, Log.LOG_STDOUT, id="invalid-level"),
+            pytest.param(Log.LOG_ERROR, 100, id="invalid-output"),
         ],
     )
-    def test_init_n1(self, mocker: MockerFixture, level: int, output: int, error_str: str) -> None:
+    def test_init_raises_on_invalid_level_or_output(self, mocker: MockerFixture, level: int, output: int) -> None:
         """Negative unit test for Log.__init__() method. It contains the following steps:
-        - initialize a Log class instance with specified level and output values
         - mock print() function
-        - ASSERT: if __init__ does not raise an exception in case of invalid value
+        - initialize a Log class instance with specified level and output values
+        - ASSERT: __init__ raises ValueError in case of invalid value
         """
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
+        mocker.patch("builtins.print", MagicMock())
         with pytest.raises(ValueError) as cm:
             Log(level, output)
-        assert cm.type is ValueError, error_str
+        assert cm.type is ValueError
 
     @pytest.mark.parametrize(
-        "level, syslog_level, error_str",
+        "level, syslog_level",
         [
-            # LOG_ERROR maps to LOG_ERR
-            (Log.LOG_ERROR, syslog.LOG_ERR, "Log.map_to_syslog() p1"),
-            # LOG_CONFIG maps to LOG_INFO
-            (Log.LOG_CONFIG, syslog.LOG_INFO, "Log.map_to_syslog() p2"),
-            # LOG_INFO maps to LOG_INFO
-            (Log.LOG_INFO, syslog.LOG_INFO, "Log.map_to_syslog() p3"),
-            # LOG_DEBUG maps to LOG_DEBUG
-            (Log.LOG_DEBUG, syslog.LOG_DEBUG, "Log.map_to_syslog() p4"),
-            # Invalid level: 1000 maps to LOG_ERR
-            (1000, syslog.LOG_ERR, "Log.map_to_syslog() p5"),
-            # Invalid level: -1 maps to LOG_ERR
-            (-1, syslog.LOG_ERR, "Log.map_to_syslog() p6"),
+            pytest.param(Log.LOG_ERROR, syslog.LOG_ERR, id="error-to-err"),
+            pytest.param(Log.LOG_CONFIG, syslog.LOG_INFO, id="config-to-info"),
+            pytest.param(Log.LOG_INFO, syslog.LOG_INFO, id="info-to-info"),
+            pytest.param(Log.LOG_DEBUG, syslog.LOG_DEBUG, id="debug-to-debug"),
+            pytest.param(1000, syslog.LOG_ERR, id="invalid-high-to-err"),
+            pytest.param(-1, syslog.LOG_ERR, id="invalid-negative-to-err"),
         ],
     )
-    def test_mts(self, level: int, syslog_level: int, error_str: str) -> None:
+    def test_map_to_syslog(self, level: int, syslog_level: int) -> None:
         """Positive unit test for Log.map_to_syslog() method. It contains the following steps:
-        - initialize a Log class instance
-        - call map_to_syslog with a specified level
-        - ASSERT: if map_to_syslog function maps a specified log levels to a wrong syslog level value
+        - call map_to_syslog() with a specified level
+        - ASSERT: map_to_syslog returns the expected syslog level (invalid levels fall back to LOG_ERR)
         """
-        assert Log.map_to_syslog(level) == syslog_level, error_str
+        assert Log.map_to_syslog(level) == syslog_level
 
     @pytest.mark.parametrize(
-        "level, level_str, error_str",
+        "level, level_str",
         [
-            # LOG_NONE to "NONE"
-            (Log.LOG_NONE, "NONE", "Log.level_to_str() p1"),
-            # LOG_ERROR to "ERROR"
-            (Log.LOG_ERROR, "ERROR", "Log.level_to_str() p2"),
-            # LOG_CONFIG to "CONFIG"
-            (Log.LOG_CONFIG, "CONFIG", "Log.level_to_str() p3"),
-            # LOG_INFO to "INFO"
-            (Log.LOG_INFO, "INFO", "Log.level_to_str() p4"),
-            # LOG_DEBUG to "DEBUG"
-            (Log.LOG_DEBUG, "DEBUG", "Log.level_to_str() p5"),
-            # Invalid level: -1 to "NONE"
-            (-1, "NONE", "Log.level_to_str() p6"),
-            # Invalid level: 1000 to "NONE"
-            (1000, "NONE", "Log.level_to_str() p7"),
+            pytest.param(Log.LOG_NONE, "NONE", id="none"),
+            pytest.param(Log.LOG_ERROR, "ERROR", id="error"),
+            pytest.param(Log.LOG_CONFIG, "CONFIG", id="config"),
+            pytest.param(Log.LOG_INFO, "INFO", id="info"),
+            pytest.param(Log.LOG_DEBUG, "DEBUG", id="debug"),
+            pytest.param(-1, "NONE", id="invalid-negative"),
+            pytest.param(1000, "NONE", id="invalid-high"),
         ],
     )
-    def test_lts(self, level: int, level_str: str, error_str: str) -> None:
+    def test_level_to_str(self, level: int, level_str: str) -> None:
         """Positive unit test for Log.level_to_str() method. It contains the following steps:
         - call level_to_str() with a specified level
-        - ASSERT: if level_to_str function maps a log level to an invalid string value
+        - ASSERT: level_to_str returns the expected name (invalid levels fall back to "NONE")
         """
-        assert Log.level_to_str(level) == level_str, error_str
+        assert Log.level_to_str(level) == level_str
 
     @pytest.mark.parametrize(
-        "output, output_str, error_str",
+        "output, output_str",
         [
-            # LOG_STDOUT to "STDOUT"
-            (Log.LOG_STDOUT, "STDOUT", "Log.output_to_str() p1"),
-            # LOG_STDERR to "STDERR"
-            (Log.LOG_STDERR, "STDERR", "Log.output_to_str() p2"),
-            # LOG_SYSLOG to "SYSLOG"
-            (Log.LOG_SYSLOG, "SYSLOG", "Log.output_to_str() p3"),
-            # Invalid output: -1 to "STDOUT"
-            (-1, "STDOUT", "Log.output_to_str() p4"),
-            # Invalid output: 1000 to "STDOUT"
-            (1000, "STDOUT", "Log.output_to_str() p5"),
+            pytest.param(Log.LOG_STDOUT, "STDOUT", id="stdout"),
+            pytest.param(Log.LOG_STDERR, "STDERR", id="stderr"),
+            pytest.param(Log.LOG_SYSLOG, "SYSLOG", id="syslog"),
+            pytest.param(-1, "STDOUT", id="invalid-negative"),
+            pytest.param(1000, "STDOUT", id="invalid-high"),
         ],
     )
-    def test_ots(self, output: int, output_str: str, error_str: str) -> None:
+    def test_output_to_str(self, output: int, output_str: str) -> None:
         """Positive unit test for Log.output_to_str() method. It contains the following steps:
         - call output_to_str() with a specified output
-        - ASSERT: if output_to_str function maps a log output to an invalid string value
+        - ASSERT: output_to_str returns the expected name (invalid outputs fall back to "STDOUT")
         """
-        assert Log.output_to_str(output) == output_str, error_str
+        assert Log.output_to_str(output) == output_str
 
     @pytest.mark.parametrize(
-        "level, output, msg_level, count, error_str",
+        "level, output, msg_level, count",
         [
-            (Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_NONE, 0, "Log.msg_to_xxx() p1"),
-            (Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_ERROR, 0, "Log.msg_to_xxx() p2"),
-            (Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_CONFIG, 0, "Log.msg_to_xxx() p3"),
-            (Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_INFO, 0, "Log.msg_to_xxx() p4"),
-            (Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p5"),
-            (Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_NONE, 0, "Log.msg_to_xxx() p6"),
-            (Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_ERROR, 0, "Log.msg_to_xxx() p7"),
-            (Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_CONFIG, 0, "Log.msg_to_xxx() p8"),
-            (Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_INFO, 0, "Log.msg_to_xxx() p9"),
-            (Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p10"),
-            (Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "Log.msg_to_xxx() p11"),
-            (Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_ERROR, 0, "Log.msg_to_xxx() p12"),
-            (Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_CONFIG, 0, "Log.msg_to_xxx() p13"),
-            (Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_INFO, 0, "Log.msg_to_xxx() p14"),
-            (Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p15"),
-            (Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_NONE, 0, "Log.msg_to_xxx() p16"),
-            (Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p17"),
-            (Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_CONFIG, 0, "Log.msg_to_xxx() p18"),
-            (Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_INFO, 0, "Log.msg_to_xxx() p19"),
-            (Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p20"),
-            (Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_NONE, 0, "Log.msg_to_xxx() p21"),
-            (Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p22"),
-            (Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_CONFIG, 0, "Log.msg_to_xxx() p23"),
-            (Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_INFO, 0, "Log.msg_to_xxx() p24"),
-            (Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p25"),
-            (Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "Log.msg_to_xxx() p26"),
-            (Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p27"),
-            (Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_CONFIG, 0, "Log.msg_to_xxx() p28"),
-            (Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_INFO, 0, "Log.msg_to_xxx() p29"),
-            (Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p30"),
-            (Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_NONE, 0, "Log.msg_to_xxx() p31"),
-            (Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p32"),
-            (Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_CONFIG, 1, "Log.msg_to_xxx() p33"),
-            (Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_INFO, 0, "Log.msg_to_xxx() p34"),
-            (Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p35"),
-            (Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_NONE, 0, "Log.msg_to_xxx() p36"),
-            (Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p37"),
-            (Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_CONFIG, 1, "Log.msg_to_xxx() p38"),
-            (Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_INFO, 0, "Log.msg_to_xxx() p39"),
-            (Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p40"),
-            (Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "Log.msg_to_xxx() p41"),
-            (Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p42"),
-            (Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_CONFIG, 1, "Log.msg_to_xxx() p43"),
-            (Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_INFO, 0, "Log.msg_to_xxx() p44"),
-            (Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p45"),
-            (Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_NONE, 0, "Log.msg_to_xxx() p46"),
-            (Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p47"),
-            (Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_CONFIG, 1, "Log.msg_to_xxx() p48"),
-            (Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_INFO, 1, "Log.msg_to_xxx() p49"),
-            (Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p50"),
-            (Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_NONE, 0, "Log.msg_to_xxx() p51"),
-            (Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p52"),
-            (Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_CONFIG, 1, "Log.msg_to_xxx() p53"),
-            (Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_INFO, 1, "Log.msg_to_xxx() p54"),
-            (Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p55"),
-            (Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "Log.msg_to_xxx() p56"),
-            (Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p57"),
-            (Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_CONFIG, 1, "Log.msg_to_xxx() p58"),
-            (Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_INFO, 1, "Log.msg_to_xxx() p59"),
-            (Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, "Log.msg_to_xxx() p60"),
-            (Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_NONE, 0, "Log.msg_to_xxx() p61"),
-            (Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p62"),
-            (Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_CONFIG, 1, "Log.msg_to_xxx() p63"),
-            (Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_INFO, 1, "Log.msg_to_xxx() p64"),
-            (Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_DEBUG, 1, "Log.msg_to_xxx() p65"),
-            (Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_NONE, 0, "Log.msg_to_xxx() p66"),
-            (Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p67"),
-            (Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_CONFIG, 1, "Log.msg_to_xxx() p68"),
-            (Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_INFO, 1, "Log.msg_to_xxx() p69"),
-            (Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_DEBUG, 1, "Log.msg_to_xxx() p70"),
-            (Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_NONE, 0, "Log.msg_to_xxx() p71"),
-            (Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, "Log.msg_to_xxx() p72"),
-            (Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_CONFIG, 1, "Log.msg_to_xxx() p73"),
-            (Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_INFO, 1, "Log.msg_to_xxx() p74"),
-            (Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_DEBUG, 1, "Log.msg_to_xxx() p75"),
+            # LOG_NONE: nothing emitted regardless of msg_level / output
+            pytest.param(Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_NONE, 0, id="none-stdout-msg-none"),
+            pytest.param(Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_ERROR, 0, id="none-stdout-msg-error"),
+            pytest.param(Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_CONFIG, 0, id="none-stdout-msg-config"),
+            pytest.param(Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_INFO, 0, id="none-stdout-msg-info"),
+            pytest.param(Log.LOG_NONE, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, id="none-stdout-msg-debug"),
+            pytest.param(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_NONE, 0, id="none-stderr-msg-none"),
+            pytest.param(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_ERROR, 0, id="none-stderr-msg-error"),
+            pytest.param(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_CONFIG, 0, id="none-stderr-msg-config"),
+            pytest.param(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_INFO, 0, id="none-stderr-msg-info"),
+            pytest.param(Log.LOG_NONE, Log.LOG_STDERR, Log.LOG_DEBUG, 0, id="none-stderr-msg-debug"),
+            pytest.param(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_NONE, 0, id="none-syslog-msg-none"),
+            pytest.param(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_ERROR, 0, id="none-syslog-msg-error"),
+            pytest.param(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_CONFIG, 0, id="none-syslog-msg-config"),
+            pytest.param(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_INFO, 0, id="none-syslog-msg-info"),
+            pytest.param(Log.LOG_NONE, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, id="none-syslog-msg-debug"),
+            # LOG_ERROR: only ERROR messages emitted
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_NONE, 0, id="error-stdout-msg-none"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_ERROR, 1, id="error-stdout-msg-error"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_CONFIG, 0, id="error-stdout-msg-config"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_INFO, 0, id="error-stdout-msg-info"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, id="error-stdout-msg-debug"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_NONE, 0, id="error-stderr-msg-none"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_ERROR, 1, id="error-stderr-msg-error"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_CONFIG, 0, id="error-stderr-msg-config"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_INFO, 0, id="error-stderr-msg-info"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_STDERR, Log.LOG_DEBUG, 0, id="error-stderr-msg-debug"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_NONE, 0, id="error-syslog-msg-none"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, id="error-syslog-msg-error"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_CONFIG, 0, id="error-syslog-msg-config"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_INFO, 0, id="error-syslog-msg-info"),
+            pytest.param(Log.LOG_ERROR, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, id="error-syslog-msg-debug"),
+            # LOG_CONFIG: ERROR + CONFIG messages emitted
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_NONE, 0, id="config-stdout-msg-none"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_ERROR, 1, id="config-stdout-msg-error"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_CONFIG, 1, id="config-stdout-msg-config"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_INFO, 0, id="config-stdout-msg-info"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, id="config-stdout-msg-debug"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_NONE, 0, id="config-stderr-msg-none"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_ERROR, 1, id="config-stderr-msg-error"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_CONFIG, 1, id="config-stderr-msg-config"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_INFO, 0, id="config-stderr-msg-info"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_STDERR, Log.LOG_DEBUG, 0, id="config-stderr-msg-debug"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_NONE, 0, id="config-syslog-msg-none"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, id="config-syslog-msg-error"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_CONFIG, 1, id="config-syslog-msg-config"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_INFO, 0, id="config-syslog-msg-info"),
+            pytest.param(Log.LOG_CONFIG, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, id="config-syslog-msg-debug"),
+            # LOG_INFO: ERROR + CONFIG + INFO messages emitted
+            pytest.param(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_NONE, 0, id="info-stdout-msg-none"),
+            pytest.param(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_ERROR, 1, id="info-stdout-msg-error"),
+            pytest.param(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_CONFIG, 1, id="info-stdout-msg-config"),
+            pytest.param(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_INFO, 1, id="info-stdout-msg-info"),
+            pytest.param(Log.LOG_INFO, Log.LOG_STDOUT, Log.LOG_DEBUG, 0, id="info-stdout-msg-debug"),
+            pytest.param(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_NONE, 0, id="info-stderr-msg-none"),
+            pytest.param(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_ERROR, 1, id="info-stderr-msg-error"),
+            pytest.param(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_CONFIG, 1, id="info-stderr-msg-config"),
+            pytest.param(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_INFO, 1, id="info-stderr-msg-info"),
+            pytest.param(Log.LOG_INFO, Log.LOG_STDERR, Log.LOG_DEBUG, 0, id="info-stderr-msg-debug"),
+            pytest.param(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_NONE, 0, id="info-syslog-msg-none"),
+            pytest.param(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, id="info-syslog-msg-error"),
+            pytest.param(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_CONFIG, 1, id="info-syslog-msg-config"),
+            pytest.param(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_INFO, 1, id="info-syslog-msg-info"),
+            pytest.param(Log.LOG_INFO, Log.LOG_SYSLOG, Log.LOG_DEBUG, 0, id="info-syslog-msg-debug"),
+            # LOG_DEBUG: all messages emitted
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_NONE, 0, id="debug-stdout-msg-none"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_ERROR, 1, id="debug-stdout-msg-error"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_CONFIG, 1, id="debug-stdout-msg-config"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_INFO, 1, id="debug-stdout-msg-info"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDOUT, Log.LOG_DEBUG, 1, id="debug-stdout-msg-debug"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_NONE, 0, id="debug-stderr-msg-none"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_ERROR, 1, id="debug-stderr-msg-error"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_CONFIG, 1, id="debug-stderr-msg-config"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_INFO, 1, id="debug-stderr-msg-info"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_STDERR, Log.LOG_DEBUG, 1, id="debug-stderr-msg-debug"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_NONE, 0, id="debug-syslog-msg-none"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_ERROR, 1, id="debug-syslog-msg-error"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_CONFIG, 1, id="debug-syslog-msg-config"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_INFO, 1, id="debug-syslog-msg-info"),
+            pytest.param(Log.LOG_DEBUG, Log.LOG_SYSLOG, Log.LOG_DEBUG, 1, id="debug-syslog-msg-debug"),
         ],
     )
-    def test_msg_to_xxx(self, mocker: MockerFixture, level: int, output: int, msg_level: int, count: int,
-                        error_str: str) -> None:
-        """Positive unit test for Log.msg_to_xxx() method. It contains the following steps:
+    def test_msg_routes_by_level_and_output(self, mocker: MockerFixture, level: int, output: int, msg_level: int,
+                                            count: int) -> None:
+        """Positive unit test for Log.msg() routing. It contains the following steps:
         - mock print() and syslog.syslog() functions
         - initialize a Log class instance with a specified level and output
-        - calls Log.msg() with a specified level and log message
-        - ASSERT: if msg() function calls print and/or syslog functions other times than expected
-          (in case of DEBUG level there are additional 3 calls)
-        - delete the Log instance
+        - call Log.msg() with a specified msg_level and a log message
+        - ASSERT: print is called `count` times for STDOUT/STDERR outputs (suppressed when msg_level
+          exceeds the configured level)
+        - ASSERT: syslog.syslog is called `count` times for SYSLOG output
         """
-        mock_print = MagicMock()
-        mocker.patch("builtins.print", mock_print)
-        mock_syslog_openlog = MagicMock()
-        mocker.patch("syslog.openlog", mock_syslog_openlog)
-        mock_syslog_syslog = MagicMock()
-        mocker.patch("syslog.syslog", mock_syslog_syslog)
-        my_log = Log(level, output)
+        my_log, mock_print, mock_syslog_syslog = _make_log(mocker, level, output)
         my_log.msg(msg_level, "This is a test log message.")
-        if output == Log.LOG_STDOUT:
-            assert mock_print.call_count == count, error_str
-        elif output == Log.LOG_STDERR:
-            assert mock_print.call_count == count, error_str
+        if output in (Log.LOG_STDOUT, Log.LOG_STDERR):
+            assert mock_print.call_count == count
         elif output == Log.LOG_SYSLOG:
-            assert mock_syslog_syslog.call_count == count, error_str
+            assert mock_syslog_syslog.call_count == count
 
 
 # End.

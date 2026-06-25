@@ -17,9 +17,10 @@ class TestCreatePlatform:
 
     def test_create_genericx9(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
-        - call create_platform() with 'genericx9' platform name
-        - ASSERT: if the returned platform is not a GenericX9Platform instance
-        - ASSERT: if the platform name is different from expected
+        - mock Exec dependency with MagicMock
+        - call `create_platform(name=PlatformName.GENERIC_X9, exec=mock_exec)`
+        - ASSERT: returned platform is an instance of GenericX9Platform
+        - ASSERT: returned platform's name equals PlatformName.GENERIC_X9
         """
         f = "TestCreatePlatform.test_create_genericx9"
         mock_exec = MagicMock()
@@ -29,9 +30,10 @@ class TestCreatePlatform:
 
     def test_create_genericx14(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
-        - call create_platform() with 'generic_x14' platform name
-        - ASSERT: if the returned platform is not a GenericX14Platform instance
-        - ASSERT: if the platform name is different from expected
+        - mock Exec dependency with MagicMock
+        - call `create_platform(name=PlatformName.GENERIC_X14, exec=mock_exec)`
+        - ASSERT: returned platform is an instance of GenericX14Platform
+        - ASSERT: returned platform's name equals PlatformName.GENERIC_X14
         """
         f = "TestCreatePlatform.test_create_genericx14"
         mock_exec = MagicMock()
@@ -41,9 +43,10 @@ class TestCreatePlatform:
 
     def test_create_x10qbi(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
-        - call create_platform() with 'X10QBi' platform name
-        - ASSERT: if the returned platform is not an X10QBi instance
-        - ASSERT: if the platform name is different from expected
+        - mock Exec dependency with MagicMock
+        - call `create_platform(name=PlatformName.X10QBI, exec=mock_exec)`
+        - ASSERT: returned platform is an instance of X10QBi
+        - ASSERT: returned platform's name equals PlatformName.X10QBI
         """
         f = "TestCreatePlatform.test_create_x10qbi"
         mock_exec = MagicMock()
@@ -53,9 +56,10 @@ class TestCreatePlatform:
 
     def test_create_generic_explicit(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
-        - call create_platform() with 'generic' platform name
-        - ASSERT: if the returned platform is not a GenericPlatform instance
-        - ASSERT: if the platform name is 'generic'
+        - mock Exec dependency with MagicMock
+        - call `create_platform(name=PlatformName.GENERIC, exec=mock_exec)`
+        - ASSERT: returned platform is an instance of GenericPlatform
+        - ASSERT: returned platform's name equals PlatformName.GENERIC
         """
         f = "TestCreatePlatform.test_create_generic_explicit"
         mock_exec = MagicMock()
@@ -65,9 +69,10 @@ class TestCreatePlatform:
 
     def test_create_generic_fallback(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
-        - call create_platform() with an unknown platform name (BMC product name)
-        - ASSERT: if the returned platform is not a GenericPlatform instance
-        - ASSERT: if the platform name is different from expected
+        - mock Exec dependency with MagicMock
+        - call `create_platform(name="X11SCH-LN4F", exec=mock_exec)` with an unknown BMC product name
+        - ASSERT: returned platform is an instance of GenericPlatform (fallback path)
+        - ASSERT: returned platform's name equals the supplied BMC product string "X11SCH-LN4F"
         """
         f = "TestCreatePlatform.test_create_generic_fallback"
         mock_exec = MagicMock()
@@ -77,9 +82,10 @@ class TestCreatePlatform:
 
     def test_create_genericx9_fallback(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
-        - call create_platform() with a BMC product name starting with X9
-        - ASSERT: if the returned platform is not a GenericX9Platform instance
-        - ASSERT: if the platform name is different from expected
+        - mock Exec dependency with MagicMock
+        - call `create_platform(name="X9DRi-LN4+", exec=mock_exec)` with a BMC product name starting with X9
+        - ASSERT: returned platform is an instance of GenericX9Platform (X9 prefix fallback)
+        - ASSERT: returned platform's name equals the supplied BMC product string "X9DRi-LN4+"
         """
         f = "TestCreatePlatform.test_create_genericx9_fallback"
         mock_exec = MagicMock()
@@ -89,9 +95,10 @@ class TestCreatePlatform:
 
     def test_create_genericx14_fallback(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
-        - call create_platform() with a BMC product name starting with X14
-        - ASSERT: if the returned platform is not a GenericX14Platform instance
-        - ASSERT: if the platform name is different from expected
+        - mock Exec dependency with MagicMock
+        - call `create_platform(name="X14DAi-T", exec=mock_exec)` with a BMC product name starting with X14
+        - ASSERT: returned platform is an instance of GenericX14Platform (X14 prefix fallback)
+        - ASSERT: returned platform's name equals the supplied BMC product string "X14DAi-T"
         """
         f = "TestCreatePlatform.test_create_genericx14_fallback"
         mock_exec = MagicMock()
@@ -101,9 +108,10 @@ class TestCreatePlatform:
 
     def test_create_x10qbi_fallback(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
-        - call create_platform() with a BMC product name starting with X10QBi
-        - ASSERT: if the returned platform is not an X10QBi instance
-        - ASSERT: if the platform name is different from expected
+        - mock Exec dependency with MagicMock
+        - call `create_platform(name="X10QBi-Series", exec=mock_exec)` with a BMC product name starting with X10QBi
+        - ASSERT: returned platform is an instance of X10QBi (X10QBi prefix fallback)
+        - ASSERT: returned platform's name equals the supplied BMC product string "X10QBi-Series"
         """
         f = "TestCreatePlatform.test_create_x10qbi_fallback"
         mock_exec = MagicMock()

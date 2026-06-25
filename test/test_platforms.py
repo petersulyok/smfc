@@ -228,7 +228,13 @@ class TestPlatforms:
 
     @pytest.mark.parametrize("spec, mode", _cases("get_mode_values"))
     def test_get_fan_mode(self, spec: PlatformSpec, mode: int, mock_exec: MagicMock) -> None:
-        """get_fan_mode() returns the BMC-reported mode and issues the read raw command."""
+        """Positive unit test for Platform.get_fan_mode() method. It contains the following steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - mock the ipmitool exec callback to return a CompletedProcess whose stdout encodes the BMC fan mode
+        - build the platform via spec.make() and invoke get_fan_mode()
+        - ASSERT: get_fan_mode() returns the BMC-reported mode value
+        - ASSERT: exec callback is invoked with the GET_FAN_MODE_CMD ipmitool byte sequence
+        """
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {mode:02}")
         platform = spec.make(mock_exec)
         assert platform.get_fan_mode() == mode
@@ -237,7 +243,13 @@ class TestPlatforms:
     @pytest.mark.parametrize("spec, zone, hex_output, expected_level", _cases("get_level_vectors"))
     def test_get_fan_level(self, spec: PlatformSpec, zone: int, hex_output: str, expected_level: int,
                            mock_exec: MagicMock) -> None:
-        """get_fan_level() decodes the BMC duty cycle and issues the platform's read command."""
+        """Positive unit test for Platform.get_fan_level() method. It contains the following steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - mock the ipmitool exec callback to return a CompletedProcess whose stdout encodes the duty cycle byte
+        - build the platform via spec.make() and invoke get_fan_level() for the given zone
+        - ASSERT: get_fan_level() decodes the BMC duty cycle to the expected level
+        - ASSERT: exec callback is invoked with the platform-specific read ipmitool byte sequence
+        """
         mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=hex_output)
         platform = spec.make(mock_exec)
         assert platform.get_fan_level(zone) == expected_level
@@ -245,14 +257,26 @@ class TestPlatforms:
 
     @pytest.mark.parametrize("spec, zone", _cases("bad_zones"))
     def test_get_fan_level_invalid_zone(self, spec: PlatformSpec, zone: int, mock_exec: MagicMock) -> None:
-        """get_fan_level() rejects out-of-range zones with ValueError."""
+        """Negative unit test for Platform.get_fan_level() method. It contains the following steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - mock the ipmitool exec callback (no BMC interaction expected)
+        - build the platform via spec.make() and invoke get_fan_level() with an out-of-range zone
+        - ASSERT: get_fan_level() raises ValueError for zones outside the platform's accepted range
+        """
         platform = spec.make(mock_exec)
         with pytest.raises(ValueError):
             platform.get_fan_level(zone)
 
     @pytest.mark.parametrize("spec", PLATFORMS, ids=PLATFORM_IDS)
     def test_start(self, spec: PlatformSpec, mock_exec: MagicMock) -> None:
-        """start() either is a no-op or issues the platform's manual-mode enable commands."""
+        """Positive unit test for Platform.start() method. It contains the following steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - mock the ipmitool exec callback to record the sequence of issued commands
+        - build the platform via spec.make() and invoke start()
+        - ASSERT: exec callback is invoked exactly len(spec.start_calls) times when start_calls is non-empty
+        - ASSERT: exec callback is invoked with the platform's manual-mode enable ipmitool byte sequences
+        - ASSERT: exec callback is not invoked at all for platforms whose start() is a no-op
+        """
         platform = spec.make(mock_exec)
         platform.start()
         if spec.start_calls:
@@ -263,7 +287,14 @@ class TestPlatforms:
 
     @pytest.mark.parametrize("spec", PLATFORMS, ids=PLATFORM_IDS)
     def test_end(self, spec: PlatformSpec, mock_exec: MagicMock) -> None:
-        """end() either is a no-op or issues the platform's manual-mode disable commands."""
+        """Positive unit test for Platform.end() method. It contains the following steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - mock the ipmitool exec callback to record the sequence of issued commands
+        - build the platform via spec.make() and invoke end()
+        - ASSERT: exec callback is invoked exactly len(spec.end_calls) times when end_calls is non-empty
+        - ASSERT: exec callback is invoked with the platform's manual-mode disable ipmitool byte sequences
+        - ASSERT: exec callback is not invoked at all for platforms whose end() is a no-op
+        """
         platform = spec.make(mock_exec)
         platform.end()
         if spec.end_calls:
@@ -274,7 +305,13 @@ class TestPlatforms:
 
     @pytest.mark.parametrize("spec, mode", _cases("set_mode_valid"))
     def test_set_fan_mode(self, spec: PlatformSpec, mode: int, mock_exec: MagicMock) -> None:
-        """set_fan_mode() issues exactly one write raw command for an accepted mode."""
+        """Positive unit test for Platform.set_fan_mode() method. It contains the following steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - mock the ipmitool exec callback to record the issued command
+        - build the platform via spec.make() and invoke set_fan_mode() with a platform-accepted mode
+        - ASSERT: exec callback is invoked with the set-fan-mode ipmitool byte sequence for the given mode
+        - ASSERT: exec callback is invoked exactly once (single write raw command)
+        """
         platform = spec.make(mock_exec)
         platform.set_fan_mode(mode)
         mock_exec.assert_called_with(_set_fan_mode_cmd(mode))
@@ -282,7 +319,12 @@ class TestPlatforms:
 
     @pytest.mark.parametrize("spec, mode", _cases("set_mode_invalid"))
     def test_set_fan_mode_invalid(self, spec: PlatformSpec, mode: int, mock_exec: MagicMock) -> None:
-        """set_fan_mode() rejects modes the platform does not support with ValueError."""
+        """Negative unit test for Platform.set_fan_mode() method. It contains the following steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - mock the ipmitool exec callback (no BMC interaction expected)
+        - build the platform via spec.make() and invoke set_fan_mode() with a mode the platform does not support
+        - ASSERT: set_fan_mode() raises ValueError for unsupported modes
+        """
         platform = spec.make(mock_exec)
         with pytest.raises(ValueError):
             platform.set_fan_mode(mode)
@@ -290,7 +332,14 @@ class TestPlatforms:
     @pytest.mark.parametrize("spec, zone, level, wire", _cases("set_level_vectors"))
     def test_set_fan_level(self, spec: PlatformSpec, zone: int, level: int, wire: int,
                            mock_exec: MagicMock) -> None:
-        """set_fan_level() normalises the level and issues the platform's write command."""
+        """Positive unit test for Platform.set_fan_level() method. It contains the following steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - mock the ipmitool exec callback to record the sequence of issued commands
+        - build the platform via spec.make() and invoke set_fan_level() with a valid zone and level
+        - ASSERT: exec callback is invoked exactly spec.set_level_extra_calls + 1 times (covers X10QBi pre-write calls)
+        - ASSERT: exec callback's last call uses the platform's write ipmitool byte sequence with the normalised wire
+          level
+        """
         platform = spec.make(mock_exec)
         platform.set_fan_level(zone, level)
         assert mock_exec.call_count == spec.set_level_extra_calls + 1
@@ -298,7 +347,12 @@ class TestPlatforms:
 
     @pytest.mark.parametrize("spec, zone, level", _cases("bad_levels"))
     def test_set_fan_level_invalid(self, spec: PlatformSpec, zone: int, level: int, mock_exec: MagicMock) -> None:
-        """set_fan_level() rejects out-of-range zones or levels with ValueError."""
+        """Negative unit test for Platform.set_fan_level() method. It contains the following steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - mock the ipmitool exec callback (no BMC interaction expected)
+        - build the platform via spec.make() and invoke set_fan_level() with an out-of-range zone or level
+        - ASSERT: set_fan_level() raises ValueError for invalid zone or level
+        """
         platform = spec.make(mock_exec)
         with pytest.raises(ValueError):
             platform.set_fan_level(zone, level)
@@ -306,7 +360,13 @@ class TestPlatforms:
     @pytest.mark.parametrize("spec, zones, level, wire", _cases("multi_vectors"))
     def test_set_multiple_fan_levels(self, spec: PlatformSpec, zones: List[int], level: int, wire: int,
                                      mock_exec: MagicMock) -> None:
-        """set_multiple_fan_levels() writes the normalised level once per zone."""
+        """Positive unit test for Platform.set_multiple_fan_levels() method. It contains the following steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - mock the ipmitool exec callback to record the sequence of issued commands
+        - build the platform via spec.make() and invoke set_multiple_fan_levels() with a zone list and level
+        - ASSERT: exec callback is invoked spec.multi_extra_calls + len(zones) times (pre-write calls + one per zone)
+        - ASSERT: exec callback receives the expected platform-specific write ipmitool byte sequence for each zone
+        """
         platform = spec.make(mock_exec)
         platform.set_multiple_fan_levels(zones, level)
         assert mock_exec.call_count == spec.multi_extra_calls + len(zones)
@@ -316,7 +376,12 @@ class TestPlatforms:
     @pytest.mark.parametrize("spec, zones, level", _cases("multi_bad"))
     def test_set_multiple_fan_levels_invalid(self, spec: PlatformSpec, zones: List[int], level: int,
                                              mock_exec: MagicMock) -> None:
-        """set_multiple_fan_levels() rejects any out-of-range zone or level with ValueError."""
+        """Negative unit test for Platform.set_multiple_fan_levels() method. It contains the following steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - mock the ipmitool exec callback (no BMC interaction expected)
+        - build the platform via spec.make() and invoke set_multiple_fan_levels() with an out-of-range zone or level
+        - ASSERT: set_multiple_fan_levels() raises ValueError when any zone is out of range or the level is invalid
+        """
         platform = spec.make(mock_exec)
         with pytest.raises(ValueError):
             platform.set_multiple_fan_levels(zones, level)

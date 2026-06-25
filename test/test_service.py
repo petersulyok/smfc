@@ -15,7 +15,8 @@ from mock import MagicMock
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, FanController, ConstFc, Service
 from smfc.config import Config
-from .test_data import TestData, MockedContextError, MockedContextGood
+from .test_fixtures import TestData
+from .test_mocks import MockedContextError, MockedContextGood
 from .test_ipmi import BMC_INFO_OUTPUT
 
 
@@ -32,20 +33,21 @@ class TestService:
     sleep_counter: int
 
     @pytest.mark.parametrize(
-        "ipmi, log, error_str",
+        "ipmi, log",
         [
-            # Both IPMI and Log initialized
-            (True, True, "Service.exit_func() p1"),
-            # Neither IPMI nor Log initialized
-            (False, False, "Service.exit_func() p2"),
+            pytest.param(True, True, id="ipmi-and-log"),
+            pytest.param(False, False, id="neither"),
         ],
     )
-    def test_exit_func(self, mocker: MockerFixture, ipmi: bool, log: bool, error_str: str) -> None:
+    def test_exit_func(self, mocker: MockerFixture, ipmi: bool, log: bool) -> None:
         """Positive unit test for Service.exit_func() method. It contains the following steps:
-        - mock atexit.unregister(), Ipmi.set_fan_mode(), Log.msg_to_stdout() functions
-        - execute Service.exit_func()
-        - ASSERT: if mocked functions not called expected times
-        - ASSERT: if the platform manual mode was not released (platform.end())
+        - mock atexit.unregister(), Ipmi.set_fan_mode(), Log.msg_to_stdout(), platform end()
+        - instantiate Service and conditionally attach Log and Ipmi (with mocked platform)
+        - call Service.exit_func()
+        - ASSERT: atexit.unregister() is called exactly once
+        - ASSERT: Ipmi.set_fan_mode() is called once when ipmi is attached
+        - ASSERT: platform.end() is called once to release manual mode when ipmi is attached
+        - ASSERT: Log.msg_to_stdout() is called once when both ipmi and log are attached
         """
         mock_atexit_unregister = MagicMock()
         mocker.patch("atexit.unregister", mock_atexit_unregister)
@@ -61,40 +63,42 @@ class TestService:
             service.ipmi = Ipmi.__new__(Ipmi)
             service.ipmi.platform = mock_platform
         service.exit_func()
-        assert mock_atexit_unregister.call_count == 1, error_str
+        assert mock_atexit_unregister.call_count == 1
         if ipmi:
-            assert mock_ipmi_set_fan_mode.call_count == 1, error_str
-            assert mock_platform.end.call_count == 1, error_str
+            assert mock_ipmi_set_fan_mode.call_count == 1
+            assert mock_platform.end.call_count == 1
             if log:
-                assert mock_log_msg.call_count == 1, error_str
+                assert mock_log_msg.call_count == 1
 
     @pytest.mark.parametrize(
-        "module_list, cpufc, hdfc, gpufc, standby, error_str",
+        "module_list, cpufc, hdfc, gpufc, standby",
         [
             # coretemp module loaded, CPU fan controller enabled
-            ("something\ncoretemp\n", True, False, False, False, "Service.check_dependencies() p1"),
+            pytest.param("something\ncoretemp\n", True, False, False, False, id="coretemp-cpu"),
             # k10temp module loaded, CPU and GPU enabled
-            ("something\nk10temp\n", True, False, True, False, "Service.check_dependencies() p2"),
+            pytest.param("something\nk10temp\n", True, False, True, False, id="k10temp-cpu-gpu"),
             # Both coretemp and k10temp loaded
-            ("coretemp\nsomething\nk10temp\n", True, False, False, False, "Service.check_dependencies() p3"),
+            pytest.param("coretemp\nsomething\nk10temp\n", True, False, False, False, id="coretemp-k10temp-cpu"),
             # drivetemp module loaded, HD and GPU enabled
-            ("something\ndrivetemp\n", False, True, True, False, "Service.check_dependencies() p4"),
+            pytest.param("something\ndrivetemp\n", False, True, True, False, id="drivetemp-hd-gpu"),
             # drivetemp module loaded, HD with standby guard
-            ("something\ndrivetemp\n", False, True, False, True, "Service.check_dependencies() p5"),
+            pytest.param("something\ndrivetemp\n", False, True, False, True, id="drivetemp-hd-standby"),
             # No temperature module (HD only)
-            ("something\n", False, True, False, False, "Service.check_dependencies() p6"),
+            pytest.param("something\n", False, True, False, False, id="no-module-hd"),
             # drivetemp module loaded, HD, GPU, and standby
-            ("something\ndrivetemp\nx", False, True, True, True, "Service.check_dependencies() p7"),
+            pytest.param("something\ndrivetemp\nx", False, True, True, True, id="drivetemp-hd-gpu-standby"),
             # Both coretemp and drivetemp loaded
-            ("coretemp\ndrivetemp\n", True, True, False, True, "Service.check_dependencies() p8"),
+            pytest.param("coretemp\ndrivetemp\n", True, True, False, True, id="coretemp-drivetemp-cpu-hd"),
         ],
     )
-    def test_check_dependencies_p(self, mocker: MockerFixture, module_list: str, cpufc, hdfc, gpufc, standby: bool,
-                                  error_str: str, tmp_path):
+    def test_check_dependencies_p(self, mocker: MockerFixture, td: TestData, module_list: str,
+                                  cpufc, hdfc, gpufc, standby: bool, tmp_path):
         """Positive unit test for Service.check_dependencies() method. It contains the following steps:
-        - mock print(), argparse.ArgumentParser._print_message() and builtins.open() functions
-        - execute Service.check_dependencies()
-        - ASSERT: if returns an error message
+        - mock print(), builtins.open() (redirects /proc/modules to a fake module list)
+        - build a temporary config file via `td` with selected controllers enabled and fake command files
+        - instantiate Service and assign a Config loaded from the temp config file
+        - call Service.check_dependencies()
+        - ASSERT: check_dependencies() returns an empty string (no missing dependency)
         """
 
         def mocked_open(path: str, *args, **kwargs):
@@ -104,9 +108,8 @@ class TestService:
                 else original_open(path, *args, **kwargs)
             )
 
-        my_td = TestData()
-        ipmi_command = my_td.create_ipmi_command()
-        modules = my_td.create_text_file(module_list)
+        ipmi_command = td.create_ipmi_command()
+        modules = td.create_text_file(module_list)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         original_open = open
@@ -117,12 +120,12 @@ class TestService:
         if cpufc:
             config_content += "[CPU]\nenabled = 1\n"
         if hdfc:
-            smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
+            smartctl_cmd = td.create_command_file('echo "ACTIVE"')
             config_content += f"[HD]\nenabled = 1\nhd_names = /dev/sda\nsmartctl_path = {smartctl_cmd}\n"
             if standby:
                 config_content += "standby_guard_enabled = 1\n"
         if gpufc:
-            nvidia_smi_cmd = my_td.create_command_file('echo "0"')
+            nvidia_smi_cmd = td.create_command_file('echo "0"')
             config_content += f"[GPU]\nenabled = 1\ngpu_type = nvidia\nnvidia_smi_path = {nvidia_smi_cmd}\n"
 
         config_file = tmp_path / "test.conf"
@@ -131,14 +134,18 @@ class TestService:
         service = Service()
         service.config = Config(str(config_file))
 
-        assert service.check_dependencies() == "", error_str
-        del my_td
+        assert service.check_dependencies() == ""
 
-    def test_check_dependencies_disabled_gpu(self, mocker: MockerFixture, tmp_path):
-        """Positive unit test: GPU section present with enabled=0 is skipped by check_dependencies()."""
-        my_td = TestData()
-        ipmi_command = my_td.create_ipmi_command()
-        modules = my_td.create_text_file("something\ncoretemp\n")
+    def test_check_dependencies_disabled_gpu(self, mocker: MockerFixture, td: TestData, tmp_path):
+        """Positive unit test for Service.check_dependencies() method. It contains the following steps:
+        - mock print(), builtins.open() (redirects /proc/modules to a fake module list with coretemp)
+        - build a temporary config file via `td` with [GPU] enabled=0 (section present but disabled)
+        - instantiate Service and assign a Config loaded from the temp config file
+        - call Service.check_dependencies()
+        - ASSERT: check_dependencies() returns an empty string (disabled GPU section is skipped)
+        """
+        ipmi_command = td.create_ipmi_command()
+        modules = td.create_text_file("something\ncoretemp\n")
         original_open = open
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -153,22 +160,27 @@ class TestService:
         config_file.write_text(config_content)
         service = Service()
         service.config = Config(str(config_file))
-        f = "TestService.test_check_dependencies_disabled_gpu"
-        assert service.check_dependencies() == "", f"{f}: should return empty string"
-        del my_td
+        assert service.check_dependencies() == ""
 
     @pytest.mark.parametrize(
-        "error_str",
+        "_dummy",
         [
-            # Dependency check error conditions
-            ("Service.check_dependencies() n1"),
+            # Missing commands/modules conditions
+            pytest.param(None, id="missing-commands-modules"),
         ],
     )
-    def test_check_dependecies_n(self, mocker: MockerFixture, error_str: str, tmp_path):
+    def test_check_dependencies_returns_error_for_missing_commands(self, mocker: MockerFixture, td: TestData,
+                                                                    _dummy, tmp_path):
         """Negative unit test for Service.check_dependencies() method. It contains the following steps:
-        - mock print() and builtins.open() functions
-        - execute Service.check_dependencies()
-        - ASSERT: if it didn't return the specific error message
+        - mock print(), builtins.open() (redirects /proc/modules to a fake module list)
+        - build a config with CPU/HD/GPU enabled and fake nvidia-smi / smartctl / ipmitool commands
+        - delete each prerequisite in turn (nvidia-smi, smartctl, drivetemp, coretemp, ipmitool)
+        - call Service.check_dependencies() after each deletion
+        - ASSERT: returned error message mentions "command cannot be found!" when nvidia-smi is missing
+        - ASSERT: returned error message mentions "smartctl" when smartctl is missing
+        - ASSERT: returned error message mentions "drivetemp" when drivetemp module is missing
+        - ASSERT: returned error message mentions "coretemp" when coretemp module is missing
+        - ASSERT: returned error message mentions "ipmitool" when ipmitool is missing
         """
 
         def mocked_open(path: str, *args, **kwargs):
@@ -178,17 +190,16 @@ class TestService:
                 else original_open(path, *args, **kwargs)
             )
 
-        my_td = TestData()
-        ipmi_command = my_td.create_ipmi_command()
-        modules = my_td.create_text_file("coretemp\ndrivetemp\n")
+        ipmi_command = td.create_ipmi_command()
+        modules = td.create_text_file("coretemp\ndrivetemp\n")
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_open = MagicMock(side_effect=mocked_open)
         original_open = open
         mocker.patch("builtins.open", mock_open)
 
-        smartctl_cmd = my_td.create_command_file('echo "ACTIVE"')
-        nvidia_smi_cmd = my_td.create_command_file('echo "0"')
+        smartctl_cmd = td.create_command_file('echo "ACTIVE"')
+        nvidia_smi_cmd = td.create_command_file('echo "0"')
 
         hd_section = (f"[HD]\nenabled = 1\nhd_names = /dev/sda\n"
                       f"smartctl_path = {smartctl_cmd}\nstandby_guard_enabled = 1\n")
@@ -203,57 +214,57 @@ class TestService:
         service.config = Config(str(config_file))
 
         # Check if `nvidia-smi` command is not available.
-        my_td.delete_file(nvidia_smi_cmd)
+        td.delete_file(nvidia_smi_cmd)
         check_result = service.check_dependencies()
-        assert check_result.find("command cannot be found!") != -1, error_str
+        assert check_result.find("command cannot be found!") != -1
 
         # Check if `smartctl` command is not available.
-        my_td.delete_file(smartctl_cmd)
+        td.delete_file(smartctl_cmd)
         check_result = service.check_dependencies()
-        assert check_result.find("smartctl") != -1, error_str
+        assert check_result.find("smartctl") != -1
 
         # Check if `drivetemp` is not on the module list.
-        modules = my_td.create_text_file("coretemp something")
+        modules = td.create_text_file("coretemp something")
         check_result = service.check_dependencies()
-        assert check_result.find("drivetemp") != -1, error_str
+        assert check_result.find("drivetemp") != -1
 
         # Check if `coretemp` is not on the module list.
-        modules = my_td.create_text_file("drivetemp something")
+        modules = td.create_text_file("drivetemp something")
         check_result = service.check_dependencies()
-        assert check_result.find("coretemp") != -1, error_str
+        assert check_result.find("coretemp") != -1
 
         # Check if `ipmitool` is not available.
-        my_td.delete_file(ipmi_command)
+        td.delete_file(ipmi_command)
         check_result = service.check_dependencies()
-        assert check_result.find("ipmitool") != -1, error_str
-        del my_td
+        assert check_result.find("ipmitool") != -1
 
     @pytest.mark.parametrize(
-        "command_line, exit_code, error_str",
+        "command_line, exit_code",
         [
             # Help flag (exit 0)
-            ("-h", 0, "Service.run() n1"),
+            pytest.param("-h", 0, id="help-exit0"),
             # Version flag (exit 0)
-            ("-v", 0, "Service.run() n2"),
+            pytest.param("-v", 0, id="version-exit0"),
             # Invalid log level (exit 2)
-            ("-l 10", 2, "Service.run() n3"),
+            pytest.param("-l 10", 2, id="invalid-log-level-exit2"),
             # Invalid output (exit 2)
-            ("-o 9", 2, "Service.run() n4"),
+            pytest.param("-o 9", 2, id="invalid-output-exit2"),
             # Invalid output with valid log level (exit 2)
-            ("-o 1 -l 10", 2, "Service.run() n5"),
+            pytest.param("-o 1 -l 10", 2, id="invalid-output-valid-log-exit2"),
             # Valid output with invalid log level (exit 2)
-            ("-o 9 -l 1", 2, "Service.run() n6"),
+            pytest.param("-o 9 -l 1", 2, id="valid-output-invalid-log-exit2"),
             # Invalid config file path: special char (exit 6)
-            ("-o 0 -l 3 -c &.txt", 6, "Service.run() n7"),
+            pytest.param("-o 0 -l 3 -c &.txt", 6, id="invalid-config-path-exit6"),
             # Invalid config file path: non-existent (exit 6)
-            ("-o 0 -l 3 -c ./nonexistent_folder/nonexistent_file.conf", 6, "Service.run() n8"),
+            pytest.param("-o 0 -l 3 -c ./nonexistent_folder/nonexistent_file.conf", 6, id="nonexistent-config-exit6"),
         ],
     )
-    def test_run_026n(self, mocker: MockerFixture, command_line: str, exit_code: int, error_str: str):
+    def test_run_exits_on_bad_args_or_config(self, mocker: MockerFixture, command_line: str, exit_code: int):
         """Negative unit test for Service.run() method. It contains the following steps:
-        - mock print(), argparse.ArgumentParser._print_message() functions
-        - execute Service.run()
-        - ASSERT: if sys.exit() did not return code 0 (-h -v), 2 (invalid arguments), 6 (invalid configuration file)
+        - mock print(), argparse.ArgumentParser._print_message()
+        - set sys.argv to the parametrized command line (help/version/invalid log level/invalid output/bad config path)
+        - instantiate Service and call Service.run() inside pytest.raises(SystemExit)
+        - ASSERT: sys.exit() code equals 0 (-h/-v), 2 (invalid args), or 6 (invalid configuration file)
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -263,22 +274,22 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error_str
+        assert cm.value.code == exit_code
 
     @pytest.mark.parametrize(
-        "level, output, exit_code, error_str",
+        "level, output, exit_code",
         [
             # Invalid log level via namespace (exit 5)
-            (10, 0, 5, "Service.run() n9"),
+            pytest.param(10, 0, 5, id="invalid-level-via-namespace"),
             # Invalid output via namespace (exit 5)
-            (0, 9, 5, "Service.run() n10"),
+            pytest.param(0, 9, 5, id="invalid-output-via-namespace"),
         ],
     )
-    def test_run_5n(self, mocker: MockerFixture, level: int, output: int, exit_code: int, error_str: str):
+    def test_run_exits_on_log_init_failure(self, mocker: MockerFixture, level: int, output: int, exit_code: int):
         """Negative unit test for Service.run() method. It contains the following steps:
-        - mock print(), argparse.ArgumentParser.parse_args() functions
-        - execute Service.run()
-        - ASSERT: if sys.exit() did not return code 5 (log initialization error)
+        - mock print(), argparse.ArgumentParser.parse_args() to return a Namespace with bad level/output
+        - instantiate Service and call Service.run() inside pytest.raises(SystemExit)
+        - ASSERT: sys.exit() code equals 5 (log initialization error)
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -288,22 +299,22 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error_str
+        assert cm.value.code == exit_code
 
     @pytest.mark.parametrize(
-        "exit_code, error_str",
+        "exit_code",
         [
             # Check dependency error (exit 7)
-            (7, "Service.run() n11"),
+            pytest.param(7, id="dependency-check-error-exit7"),
         ],
     )
-    def test_run_7n(self, mocker: MockerFixture, exit_code: int, error_str: str):
+    def test_run_exits_on_dependency_check_failure(self, mocker: MockerFixture, td: TestData, exit_code: int):
         """Negative unit test for Service.run() method. It contains the following steps:
-        - mock print(), argparse.ArgumentParser.parse_args(), smfc.Service.check_dependencies() functions
-        - execute Service.run()
-        - ASSERT: if sys.exit() did not return code 7 (check dependency error)
+        - mock print(), argparse.ArgumentParser.parse_args(), smfc.Service.check_dependencies() to return "ERROR"
+        - build a minimal config file via `td` with all controllers disabled
+        - instantiate Service and call Service.run() inside pytest.raises(SystemExit)
+        - ASSERT: sys.exit() code equals 7 (dependency check error)
         """
-        my_td = TestData()
         my_config = ConfigParser()
         my_config[Config.CS_IPMI] = {}
         my_config[Config.CS_CPU] = {Config.CV_ENABLED: "0"}
@@ -311,7 +322,7 @@ class TestService:
         my_config[Config.CS_NVME] = {Config.CV_ENABLED: "0"}
         my_config[Config.CS_GPU] = {Config.CV_ENABLED: "0"}
         my_config[Config.CS_CONST] = {Config.CV_ENABLED: "0"}
-        conf_file = my_td.create_config_file(my_config)
+        conf_file = td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_parser_parse_args = MagicMock()
@@ -323,39 +334,39 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error_str
-        del my_td
+        assert cm.value.code == exit_code
 
     @pytest.mark.parametrize(
-        "ipmi_command, mode_delay, level_delay, exit_code, error_str",
+        "ipmi_command, mode_delay, level_delay, exit_code",
         [
             # Non-existent IPMI command (exit 8)
-            ("NON_EXIST", 0, 0, 8, "Service.run() n12"),
+            pytest.param("NON_EXIST", 0, 0, 8, id="nonexistent-ipmitool-exit8"),
             # Invalid mode_delay (exit 6 - caught by Config validation)
-            ("GOOD", -1, 0, 6, "Service.run() n13"),
+            pytest.param("GOOD", -1, 0, 6, id="invalid-mode-delay-exit6"),
             # Invalid level_delay (exit 6 - caught by Config validation)
-            ("GOOD", 0, -1, 6, "Service.run() n14"),
+            pytest.param("GOOD", 0, -1, 6, id="invalid-level-delay-exit6"),
             # Bad IPMI command (exit 8)
-            ("BAD", 0, 0, 8, "Service.run() n15"),
+            pytest.param("BAD", 0, 0, 8, id="bad-ipmitool-exit8"),
             # No enabled zone (exit 10)
-            ("GOOD", 0, 0, 10, "Service.run() n16"),
+            pytest.param("GOOD", 0, 0, 10, id="no-enabled-zone-exit10"),
         ],
     )
-    def test_run_810n(self, mocker: MockerFixture, ipmi_command: str, mode_delay: int, level_delay: int,
-                      exit_code: int, error_str: str):
+    def test_run_exits_on_ipmi_init_failure_or_no_zone(self, mocker: MockerFixture, td: TestData,
+                                                        ipmi_command: str, mode_delay: int, level_delay: int,
+                                                        exit_code: int):
         """Negative unit test for Service.run() method. It contains the following steps:
-        - mock print(), pyudev.Context.__init__() functions
-        - execute Service.run()
-        - ASSERT: if sys.exit() did not return code 8 (Ipmi initialization error) or 10 (no enabled zone)
+        - mock print(), pyudev.Context.__init__ via MockedContextGood
+        - build a config with bad/missing ipmitool path or invalid mode_delay/level_delay
+        - instantiate Service and call Service.run() inside pytest.raises(SystemExit)
+        - ASSERT: sys.exit() code equals 8 (Ipmi initialization error), 6 (Config validation), or 10 (no enabled zone)
         """
-        my_td = TestData()
         my_config = ConfigParser()
         if ipmi_command == "NON_EXIST":
             ipmi_command = "./non-existent-dir/non-existent-file"
         if ipmi_command == "BAD":
-            ipmi_command = my_td.create_command_file()
+            ipmi_command = td.create_command_file()
         if ipmi_command == "GOOD":
-            ipmi_command = my_td.create_ipmi_command()
+            ipmi_command = td.create_ipmi_command()
         my_config[Config.CS_IPMI] = {
             Config.CV_IPMI_COMMAND: ipmi_command,
             Config.CV_IPMI_FAN_MODE_DELAY: str(mode_delay),
@@ -366,7 +377,7 @@ class TestService:
         my_config[Config.CS_NVME] = {Config.CV_ENABLED: "0"}
         my_config[Config.CS_GPU] = {Config.CV_ENABLED: "0"}
         my_config[Config.CS_CONST] = {Config.CV_ENABLED: "0"}
-        conf_file = my_td.create_config_file(my_config)
+        conf_file = td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
@@ -374,15 +385,15 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error_str
-        del my_td
+        assert cm.value.code == exit_code
 
-    def test_check_dependencies_amd_p(self, mocker: MockerFixture, tmp_path):
-        """Positive unit test for Service.check_dependencies() with AMD GPU. It contains the following steps:
-        - mock print() and builtins.open() functions
-        - configure gpu_type=amd with a valid rocm_smi_path
-        - execute Service.check_dependencies()
-        - ASSERT: if it returns an error message (should return empty string)
+    def test_check_dependencies_amd_p(self, mocker: MockerFixture, td: TestData, tmp_path):
+        """Positive unit test for Service.check_dependencies() method with AMD GPU. It contains the following steps:
+        - mock print(), builtins.open() (redirects /proc/modules to a fake module list with coretemp)
+        - build a config with [GPU] enabled=1 / gpu_type=amd and a fake rocm-smi command via `td`
+        - instantiate Service and assign a Config loaded from the temp config file
+        - call Service.check_dependencies()
+        - ASSERT: check_dependencies() returns an empty string (no missing dependency for AMD GPU)
         """
 
         def mocked_open(path: str, *args, **kwargs):
@@ -392,10 +403,9 @@ class TestService:
                 else original_open(path, *args, **kwargs)
             )
 
-        my_td = TestData()
-        ipmi_command = my_td.create_ipmi_command()
-        modules = my_td.create_text_file("something\ncoretemp\n")
-        rocm_smi_cmd = my_td.create_command_file('echo "0"')
+        ipmi_command = td.create_ipmi_command()
+        modules = td.create_text_file("something\ncoretemp\n")
+        rocm_smi_cmd = td.create_command_file('echo "0"')
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         original_open = open
@@ -409,19 +419,18 @@ class TestService:
 
         service = Service()
         service.config = Config(str(config_file))
-        f = "TestService.test_check_dependencies_amd_p"
-        assert service.check_dependencies() == "", f"{f}: should return empty string"
-        del my_td
+        assert service.check_dependencies() == ""
 
-    def test_check_dependencies_invalid_gpu_type_n(self, mocker: MockerFixture, tmp_path):
-        """Negative unit test for Config parsing with invalid gpu_type. It contains the following steps:
-        - configure gpu_type=invalid
-        - attempt to create Config
-        - ASSERT: if ValueError is not raised with "invalid" in the message
+    def test_check_dependencies_invalid_gpu_type_n(self, mocker: MockerFixture, td: TestData, tmp_path):
+        """Negative unit test for Config parsing exercised through Service setup with invalid gpu_type. It contains the
+        following steps:
+        - mock print()
+        - build a config with [GPU] enabled=1 / gpu_type=invalid
+        - instantiate Config(str(config_file)) inside pytest.raises(ValueError)
+        - ASSERT: ValueError is raised and its message contains the substring "invalid"
         """
 
-        my_td = TestData()
-        ipmi_command = my_td.create_ipmi_command()
+        ipmi_command = td.create_ipmi_command()
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
 
@@ -432,26 +441,24 @@ class TestService:
 
         with pytest.raises(ValueError) as exc_info:
             Config(str(config_file))
-        f = "TestService.test_check_dependencies_invalid_gpu_type_n"
-        assert "invalid" in str(exc_info.value), f"{f}: should reject invalid gpu_type"
-        del my_td
+        assert "invalid" in str(exc_info.value)
 
     @pytest.mark.parametrize(
-        "exit_code, error_str",
+        "exit_code",
         [
             # pyudev.Context init error (exit 9)
-            (9, "Service.run() n17"),
+            pytest.param(9, id="pyudev-init-error-exit9"),
         ],
     )
-    def test_run_9n(self, mocker: MockerFixture, exit_code: int, error_str: str):
+    def test_run_exits_on_pyudev_init_failure(self, mocker: MockerFixture, td: TestData, exit_code: int):
         """Negative unit test for Service.run() method. It contains the following steps:
-        - mock print(), pyudev.Context.__init__() functions
-        - execute Service.run()
-        - ASSERT: if sys.exit() did not return code 9 (pyudev.Context() init error)
+        - mock print(), pyudev.Context.__init__ via MockedContextError (forces pyudev init to fail)
+        - build a minimal config file via `td` with all controllers disabled and a fake ipmitool command
+        - instantiate Service and call Service.run() inside pytest.raises(SystemExit)
+        - ASSERT: sys.exit() code equals 9 (pyudev.Context() init error)
         """
-        my_td = TestData()
         my_config = ConfigParser()
-        ipmi_command = my_td.create_ipmi_command()
+        ipmi_command = td.create_ipmi_command()
         my_config[Config.CS_IPMI] = {
             Config.CV_IPMI_COMMAND: ipmi_command,
             Config.CV_IPMI_FAN_MODE_DELAY: "0",
@@ -462,7 +469,7 @@ class TestService:
         my_config[Config.CS_NVME] = {Config.CV_ENABLED: "0"}
         my_config[Config.CS_GPU] = {Config.CV_ENABLED: "0"}
         my_config[Config.CS_CONST] = {Config.CV_ENABLED: "0"}
-        conf_file = my_td.create_config_file(my_config)
+        conf_file = td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mocker.patch("pyudev.Context.__init__", MockedContextError.__init__)
@@ -470,30 +477,32 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error_str
-        del my_td
+        assert cm.value.code == exit_code
 
     @pytest.mark.parametrize(
-        "cpufc, hdfc, nvmefc, gpufc, constfc, exit_code, error_str",
+        "cpufc, hdfc, nvmefc, gpufc, constfc, exit_code",
         [
             # CPU and GPU enabled
-            (True, False, False, True, False, 100, "Service.run() p1"),
+            pytest.param(True, False, False, True, False, 100, id="cpu-gpu"),
             # HD and CONST enabled
-            (False, True, False, False, True, 100, "Service.run() p2"),
+            pytest.param(False, True, False, False, True, 100, id="hd-const"),
             # CPU and GPU enabled (duplicate)
-            (True, False, False, True, False, 100, "Service.run() p3"),
+            pytest.param(True, False, False, True, False, 100, id="cpu-gpu-alt"),
             # CPU and NVME enabled
-            (True, False, True, False, False, 100, "Service.run() p4"),
+            pytest.param(True, False, True, False, False, 100, id="cpu-nvme"),
             # All controllers enabled
-            (True, True, True, True, True, 100, "Service.run() p5"),
+            pytest.param(True, True, True, True, True, 100, id="all-controllers"),
         ],
     )
-    def test_run_100p(self, mocker: MockerFixture, cpufc: bool, hdfc: bool, nvmefc: bool, gpufc: bool,
-                      constfc: bool, exit_code: int, error_str: str):
+    def test_run_happy_path(self, mocker: MockerFixture, td: TestData, cpufc: bool, hdfc: bool, nvmefc: bool,
+                            gpufc: bool, constfc: bool, exit_code: int):
         """Positive unit test for Service.run() method. It contains the following steps:
-        - mock print(), time.sleep() functions
-        - execute smfc.run()
-        - The main loop will be executed 10 times then exit with code 100
+        - mock print(), time.sleep() (exits with code 100 after 10 iterations), smfc.service.Exporter
+        - mock pyudev.Context.__init__ via MockedContextGood and CpuFc/HdFc/NvmeFc/GpuFc/ConstFc.__init__
+        - build a full config via `td` (fake ipmitool, smartctl, nvidia-smi, cpu/hd/nvme hwmon data)
+          enabling the parametrized combination of controllers
+        - instantiate Service and call Service.run() inside pytest.raises(SystemExit)
+        - ASSERT: sys.exit() code equals 100 (the main loop ran 10 iterations and exited via mocked sleep)
         """
 
         # pylint: disable=unused-argument
@@ -504,24 +513,24 @@ class TestService:
                 sys.exit(100)
 
         def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
-            nonlocal my_td
-            self.hwmon_path = my_td.cpu_files
+            nonlocal td
+            self.hwmon_path = td.cpu_files
             self.config = cfg
-            FanController.__init__(self, log, ipmi, cfg.section, len(my_td.cpu_files))
+            FanController.__init__(self, log, ipmi, cfg.section, len(td.cpu_files))
 
         def mocked_hdfc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg, sudo: bool) -> None:
-            nonlocal my_td
-            self.hd_device_names = my_td.hd_name_list
-            self.hwmon_path = my_td.hd_files
+            nonlocal td
+            self.hd_device_names = td.hd_name_list
+            self.hwmon_path = td.hd_files
             self.sudo = sudo
             self.config = cfg
-            FanController.__init__(self, log, ipmi, cfg.section, len(my_td.hd_files))
+            FanController.__init__(self, log, ipmi, cfg.section, len(td.hd_files))
             self.standby_array_states = [False] * self.count
             self.standby_flag = False
             self.standby_change_timestamp = time.monotonic()
 
         def mocked_gpufc_init(self, log: Log, ipmi: Ipmi, cfg) -> None:
-            nonlocal my_td
+            nonlocal td
             self.smi_called = 0
             self.hwmon_path = []
             self.gpu_temperature = []
@@ -529,11 +538,11 @@ class TestService:
             FanController.__init__(self, log, ipmi, cfg.section, len(cfg.gpu_device_ids))
 
         def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
-            nonlocal my_td
-            self.nvme_device_names = my_td.nvme_name_list
-            self.hwmon_path = my_td.nvme_files
+            nonlocal td
+            self.nvme_device_names = td.nvme_name_list
+            self.hwmon_path = td.nvme_files
             self.config = cfg
-            FanController.__init__(self, log, ipmi, cfg.section, len(my_td.nvme_files))
+            FanController.__init__(self, log, ipmi, cfg.section, len(td.nvme_files))
 
         def mocked_constfc_init(self, log: Log, ipmi: Ipmi, cfg) -> None:
             self.ipmi = ipmi
@@ -547,9 +556,8 @@ class TestService:
 
         # pragma pylint: enable=unused-argument
 
-        my_td = TestData()
         # Force mode initial fan mode 0 for setting new FULL mode during the test.
-        cmd_ipmi = my_td.create_command_file(
+        cmd_ipmi = td.create_command_file(
             'if [[ $1 = "bmc" && $2 = "info" ]] ; then\n'
             "cat << 'BMCEOF'\n" + BMC_INFO_OUTPUT +
             "BMCEOF\n"
@@ -557,12 +565,12 @@ class TestService:
             "fi\n"
             'echo "0"'
         )
-        cmd_smart = my_td.create_smart_command()
+        cmd_smart = td.create_smart_command()
         # create_command_file('echo "ACTIVE"'))
-        cmd_nvidia = my_td.create_nvidia_smi_command(1)
-        my_td.create_cpu_data(1)
-        my_td.create_hd_data(8)
-        my_td.create_nvme_data(2)
+        cmd_nvidia = td.create_nvidia_smi_command(1)
+        td.create_cpu_data(1)
+        td.create_hd_data(8)
+        td.create_nvme_data(2)
         my_config = ConfigParser()
         my_config[Config.CS_IPMI] = {
             Config.CV_IPMI_COMMAND: cmd_ipmi,
@@ -590,7 +598,7 @@ class TestService:
             Config.CV_MAX_TEMP: "45",
             Config.CV_MIN_LEVEL: "35",
             Config.CV_MAX_LEVEL: "100",
-            Config.CV_HD_NAMES: my_td.hd_names,
+            Config.CV_HD_NAMES: td.hd_names,
             Config.CV_HD_SMARTCTL_PATH: cmd_smart,
             Config.CV_HD_STANDBY_GUARD_ENABLED: "1",
             Config.CV_HD_STANDBY_HD_LIMIT: "2",
@@ -605,7 +613,7 @@ class TestService:
             Config.CV_MAX_TEMP: "50",
             Config.CV_MIN_LEVEL: "35",
             Config.CV_MAX_LEVEL: "100",
-            Config.CV_NVME_NAMES: my_td.nvme_names,
+            Config.CV_NVME_NAMES: td.nvme_names,
         }
         my_config[Config.CS_GPU] = {
             Config.CV_ENABLED: str(gpufc),
@@ -632,7 +640,7 @@ class TestService:
             Config.CV_EXPORTER_BIND_ADDRESS: "127.0.0.1",
             Config.CV_EXPORTER_PORT: "9099",
         }
-        conf_file = my_td.create_config_file(my_config)
+        conf_file = td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mock_time_sleep = MagicMock()
@@ -652,8 +660,70 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error_str
-        del my_td
+        assert cm.value.code == exit_code
+
+    def test_run_propagates_controller_exception(self, mocker: MockerFixture, td: TestData):
+        """Negative unit test for Service.run() method when a controller's fc.run() raises mid-loop. It contains the
+        following steps:
+        - mock print(), time.sleep() (counted but not exited), smfc.service.Exporter, pyudev.Context.__init__ via
+          MockedContextGood, and CpuFc.__init__ to skip real hwmon discovery
+        - mock smfc.CpuFc.run via mocker.patch with a MagicMock whose side_effect raises RuntimeError("sensor gone")
+          on the very first call from the main loop
+        - build a minimal CPU-only config via `td` (fake ipmitool + one CPU hwmon file) and write it to disk
+        - instantiate Service and invoke Service.run()
+        - ASSERT: RuntimeError("sensor gone") propagates out of Service.run() unhandled (the main loop has no
+          exception handler around fc.run(), so a single controller fault terminates the daemon)
+        - ASSERT: smfc.CpuFc.run was called exactly once before the exception escaped
+        """
+
+        # pylint: disable=unused-argument
+        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
+            nonlocal td
+            self.hwmon_path = td.cpu_files
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(td.cpu_files))
+        # pylint: enable=unused-argument
+
+        # Force initial fan mode 0 so Service sets FULL mode once, then bmc-info supplies a stub product name.
+        cmd_ipmi = td.create_command_file(
+            'if [[ $1 = "bmc" && $2 = "info" ]] ; then\n'
+            "cat << 'BMCEOF'\n" + BMC_INFO_OUTPUT +
+            "BMCEOF\n"
+            "exit 0\n"
+            "fi\n"
+            'echo "0"'
+        )
+        td.create_cpu_data(1)
+        my_config = ConfigParser()
+        my_config[Config.CS_IPMI] = {
+            Config.CV_IPMI_COMMAND: cmd_ipmi,
+            Config.CV_IPMI_FAN_MODE_DELAY: "0",
+            Config.CV_IPMI_FAN_LEVEL_DELAY: "0",
+        }
+        my_config[Config.CS_CPU] = {
+            Config.CV_ENABLED: "True",
+            Config.CV_TEMP_CALC: "1",
+            Config.CV_STEPS: "5",
+            Config.CV_SENSITIVITY: "5",
+            Config.CV_POLLING: "0",
+            Config.CV_MIN_TEMP: "30",
+            Config.CV_MAX_TEMP: "60",
+            Config.CV_MIN_LEVEL: "35",
+            Config.CV_MAX_LEVEL: "100",
+        }
+        conf_file = td.create_config_file(my_config)
+        mocker.patch("builtins.print", MagicMock())
+        mocker.patch("time.sleep", MagicMock())
+        mocker.patch("smfc.service.Exporter", MagicMock())
+        mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
+        mocker.patch("smfc.CpuFc.__init__", mocked_cpufc_init)
+        mock_run = MagicMock(side_effect=RuntimeError("sensor gone"))
+        mocker.patch("smfc.CpuFc.run", mock_run)
+        sys.argv = ("smfc.py -o 0 -l 4 -ne -nd -c " + conf_file).split()
+        service = Service()
+        with pytest.raises(RuntimeError, match="sensor gone"):
+            service.run()
+        assert mock_run.call_count == 1
 
     def _make_service_for_fan_mode_check(self, mocker: MockerFixture, enforce: bool) -> Service:
         """Build a minimally-initialized Service for unit-testing _check_fan_mode()."""
@@ -672,7 +742,14 @@ class TestService:
         return service
 
     def test_check_fan_mode_no_drift(self, mocker: MockerFixture):
-        """Positive: enforce=true, BMC reports FULL → no recovery, no exit, cache updated."""
+        """Positive unit test for Service._check_fan_mode() method. It contains the following steps:
+        - mock print(), Ipmi.get_fan_mode() returning FULL_MODE, Ipmi.set_fan_mode(), Ipmi.set_fan_level()
+        - build a Service via _make_service_for_fan_mode_check() with enforce=True
+        - call Service._check_fan_mode()
+        - ASSERT: service.last_fan_mode still equals Ipmi.FULL_MODE (cache holds FULL)
+        - ASSERT: Ipmi.set_fan_mode() is not called (no recovery needed)
+        - ASSERT: Ipmi.set_fan_level() is not called (no zone re-apply needed)
+        """
         f = "TestService.test_check_fan_mode_no_drift"
         service = self._make_service_for_fan_mode_check(mocker, enforce=True)
         mocker.patch("smfc.Ipmi.get_fan_mode", MagicMock(return_value=Ipmi.FULL_MODE))
@@ -686,7 +763,17 @@ class TestService:
         assert mock_set_level.call_count == 0, f"{f}: no zone re-apply expected"
 
     def test_check_fan_mode_drift_recovers(self, mocker: MockerFixture):
-        """Positive: enforce=true, BMC drifts → set_fan_mode(FULL) once + set_fan_level for every zone."""
+        """Positive unit test for Service._check_fan_mode() method. It contains the following steps:
+        - mock print(), Ipmi.get_fan_mode() returning STANDARD_MODE (drift), Ipmi.set_fan_mode(), Ipmi.set_fan_level()
+        - build a Service via _make_service_for_fan_mode_check() with enforce=True and applied_levels={0:45,1:55}
+        - call Service._check_fan_mode()
+        - ASSERT: Ipmi.set_fan_mode() is called exactly once
+        - ASSERT: Ipmi.set_fan_mode() is called with Ipmi.FULL_MODE (mode restored)
+        - ASSERT: Ipmi.set_fan_level() is called once per cached zone in applied_levels
+        - ASSERT: set of zones passed to set_fan_level() equals service.applied_levels.keys()
+        - ASSERT: service.last_fan_mode is updated back to Ipmi.FULL_MODE
+        - ASSERT: service.fan_mode_enforced_count is incremented by one per excursion
+        """
         f = "TestService.test_check_fan_mode_drift_recovers"
         service = self._make_service_for_fan_mode_check(mocker, enforce=True)
         mocker.patch("smfc.Ipmi.get_fan_mode", MagicMock(return_value=Ipmi.STANDARD_MODE))
@@ -706,7 +793,13 @@ class TestService:
         assert service.fan_mode_enforced_count == 1, f"{f}: enforcement counter should increment once per excursion"
 
     def test_check_fan_mode_drift_exits_when_disabled(self, mocker: MockerFixture):
-        """Negative: enforce=false, BMC drifts → exit code 11."""
+        """Negative unit test for Service._check_fan_mode() method. It contains the following steps:
+        - mock print(), Ipmi.get_fan_mode() returning OPTIMAL_MODE (drift), Ipmi.set_fan_mode()
+        - build a Service via _make_service_for_fan_mode_check() with enforce=False
+        - call Service._check_fan_mode() inside pytest.raises(SystemExit)
+        - ASSERT: sys.exit() code equals 11 (drift detected with enforcement disabled)
+        - ASSERT: Ipmi.set_fan_mode() is not called (no recovery attempt when disabled)
+        """
         f = "TestService.test_check_fan_mode_drift_exits_when_disabled"
         service = self._make_service_for_fan_mode_check(mocker, enforce=False)
         mocker.patch("smfc.Ipmi.get_fan_mode", MagicMock(return_value=Ipmi.OPTIMAL_MODE))
@@ -718,7 +811,14 @@ class TestService:
         assert mock_set_mode.call_count == 0, f"{f}: must not attempt recovery when disabled"
 
     def test_check_fan_mode_get_mode_transient_error(self, mocker: MockerFixture):
-        """Transient: get_fan_mode() raises → ERROR logged, no exit, cache unchanged."""
+        """Negative unit test for Service._check_fan_mode() method. It contains the following steps:
+        - mock print(), Ipmi.get_fan_mode() raising RuntimeError("ipmitool error..."), Ipmi.set_fan_mode()
+        - build a Service via _make_service_for_fan_mode_check() with enforce=True and capture pre-call cache
+        - call Service._check_fan_mode() (no SystemExit expected)
+        - ASSERT: service.last_fan_mode is unchanged after the transient error
+        - ASSERT: service.last_fan_mode_at timestamp is unchanged after the transient error
+        - ASSERT: Ipmi.set_fan_mode() is not called (no recovery attempt on read failure)
+        """
         f = "TestService.test_check_fan_mode_get_mode_transient_error"
         service = self._make_service_for_fan_mode_check(mocker, enforce=True)
         before_mode = service.last_fan_mode
@@ -733,7 +833,14 @@ class TestService:
         assert mock_set_mode.call_count == 0, f"{f}: must not attempt recovery on read failure"
 
     def test_check_fan_mode_recovery_transient_error(self, mocker: MockerFixture):
-        """Transient: enforce=true, drift detected, but recovery set_fan_mode raises → no exit."""
+        """Negative unit test for Service._check_fan_mode() method. It contains the following steps:
+        - mock print(), Ipmi.get_fan_mode() returning STANDARD_MODE (drift),
+          Ipmi.set_fan_mode() raising RuntimeError, Ipmi.set_fan_level()
+        - build a Service via _make_service_for_fan_mode_check() with enforce=True
+        - call Service._check_fan_mode() (no SystemExit expected — loop is the recovery mechanism)
+        - ASSERT: service.last_fan_mode holds Ipmi.STANDARD_MODE (drifted mode) so the next iteration retries
+        - ASSERT: Ipmi.set_fan_level() is not called (no zone re-apply when set_fan_mode() failed)
+        """
         f = "TestService.test_check_fan_mode_recovery_transient_error"
         service = self._make_service_for_fan_mode_check(mocker, enforce=True)
         mocker.patch("smfc.Ipmi.get_fan_mode", MagicMock(return_value=Ipmi.STANDARD_MODE))
@@ -749,7 +856,13 @@ class TestService:
         assert mock_set_level.call_count == 0, f"{f}: must not re-apply levels when set_fan_mode failed"
 
     def test_exporter_disabled_does_not_start(self, mocker: MockerFixture):
-        """Regression: when [Exporter] enabled=false, the call-site guard skips _start_exporter()."""
+        """Positive unit test for Service._start_exporter() guard. It contains the following steps:
+        - mock Service._start_exporter() via mocker.patch.object
+        - instantiate Service, attach a MagicMock config with exporter.enabled = False, set exporter = None
+        - execute the call-site guard (if service.config.exporter.enabled: service._start_exporter())
+        - ASSERT: service.exporter remains None when exporter is disabled
+        - ASSERT: Service._start_exporter() is not called when exporter is disabled
+        """
         f = "TestService.test_exporter_disabled_does_not_start"
         mock_start = MagicMock()
         service = Service()
@@ -763,7 +876,16 @@ class TestService:
         assert mock_start.called is False, f"{f}: _start_exporter() must not be called when disabled"
 
     def test_exporter_enabled_started(self, mocker: MockerFixture):
-        """Regression: when [Exporter] enabled=true, _start_exporter() constructs and start()s an Exporter."""
+        """Positive unit test for Service._start_exporter() method. It contains the following steps:
+        - mock smfc.service.Exporter class to return a MagicMock instance
+        - instantiate Service with a Log and a MagicMock config (exporter.enabled=True, bind_address, port)
+        - call Service._start_exporter()
+        - ASSERT: Exporter class is constructed exactly once
+        - ASSERT: Exporter.start() is called exactly once on the constructed instance
+        - ASSERT: Exporter is constructed with kwargs bind_address="127.0.0.1"
+        - ASSERT: Exporter is constructed with kwargs port=9099
+        - ASSERT: service.exporter is the Exporter instance returned by the mocked class
+        """
         f = "TestService.test_exporter_enabled_started"
         mock_exporter = MagicMock()
         mock_exporter_cls = MagicMock(return_value=mock_exporter)
@@ -783,7 +905,12 @@ class TestService:
         assert service.exporter is mock_exporter
 
     def test_exporter_bind_failure_does_not_kill_service(self, mocker: MockerFixture):
-        """Regression: an OSError on Exporter.start() is logged and the daemon continues with exporter=None."""
+        """Negative unit test for Service._start_exporter() method. It contains the following steps:
+        - mock smfc.service.Exporter to return an instance whose start() raises OSError("port already in use")
+        - instantiate Service with a Log and a MagicMock config (exporter.enabled=True)
+        - call Service._start_exporter() (no exception should propagate)
+        - ASSERT: service.exporter is None after the bind failure (error swallowed, daemon continues)
+        """
         f = "TestService.test_exporter_bind_failure_does_not_kill_service"
         mock_exporter = MagicMock()
         mock_exporter.start.side_effect = OSError("port already in use")
@@ -799,7 +926,13 @@ class TestService:
         assert service.exporter is None, f"{f}: exporter must be None after a bind failure"
 
     def test_exit_func_stops_running_exporter(self, mocker: MockerFixture):
-        """exit_func() calls exporter.stop() before resetting the BMC, and tolerates a stop() error."""
+        """Positive unit test for Service.exit_func() method. It contains the following steps:
+        - mock print()
+        - instantiate Service with a Log, a MagicMock ipmi and a MagicMock exporter
+        - call Service.exit_func()
+        - ASSERT: exporter.stop() is called exactly once
+        - ASSERT: ipmi.set_fan_mode() is called with Ipmi.FULL_MODE (BMC reset to FULL)
+        """
         mocker.patch("builtins.print", MagicMock())
         service = Service()
         service.log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
@@ -811,7 +944,12 @@ class TestService:
         service.ipmi.set_fan_mode.assert_called_with(Ipmi.FULL_MODE)
 
     def test_exit_func_tolerates_exporter_stop_failure(self, mocker: MockerFixture):
-        """A failure inside exporter.stop() must not prevent the BMC fan-mode reset."""
+        """Negative unit test for Service.exit_func() method. It contains the following steps:
+        - mock print()
+        - instantiate Service with a Log, a MagicMock ipmi and a MagicMock exporter whose stop() raises RuntimeError
+        - call Service.exit_func() (no exception should propagate)
+        - ASSERT: ipmi.set_fan_mode() is still called with Ipmi.FULL_MODE despite exporter.stop() failing
+        """
         mocker.patch("builtins.print", MagicMock())
         service = Service()
         service.log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
@@ -824,12 +962,13 @@ class TestService:
 
     def test_collect_desired_levels(self, mocker: MockerFixture):
         """Positive unit test for Service._collect_desired_levels() method. It contains the following steps:
-        - mock print() function
-        - initialize a Service class with enabled controllers (CPU, HD, CONST)
-        - set last_level values for controllers (CPU=60, HD=0, CONST=50)
-        - call _collect_desired_levels()
-        - ASSERT: controllers with last_level=0 are skipped
-        - ASSERT: controllers with last_level>0 are collected (including ConstFc)
+        - mock print()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi), set applied_levels={} and last_desired=[]
+        - attach three controllers: CPU (last_level=60), HD (last_level=0), CONST (last_level=50)
+        - call Service._collect_desired_levels()
+        - ASSERT: CPU controller is present in the collected names (level > 0)
+        - ASSERT: HD controller is absent from the collected names (last_level=0 is skipped)
+        - ASSERT: CONST controller is present in the collected names (ConstFc with level > 0)
         """
         f = "TestService.test_collect_desired_levels"
         mock_print = MagicMock()
@@ -871,12 +1010,16 @@ class TestService:
         assert Config.CS_CONST in names, f"{f}: ConstFc with level > 0 should be collected"
 
     def test_apply_fan_levels_shared_zone(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with shared zone. It contains the following steps:
-        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
-        - initialize a Service class with two controllers on zone 1 (HD at 45%, NVME at 70%)
-        - call _apply_fan_levels()
-        - ASSERT: if the maximum level (70%) is not applied when two controllers share a zone
-        - ASSERT: if the log output does not contain the winner and losers
+        """Positive unit test for Service._apply_fan_levels() method with shared zone arbitration. It contains the
+        following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach two deferred controllers on zone 1: HD at 45%/38.0C and NVME at 70%/42.5C
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly once with (1, 70) — the higher level wins
+        - ASSERT: service.applied_levels[1] is cached as 70
+        - ASSERT: log output contains "winner: NVME=70%/42.5C"
+        - ASSERT: log output contains "losers: HD=45%/38.0C"
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -918,12 +1061,15 @@ class TestService:
         assert "losers: HD=45%/38.0C" in log_output, f"{f}: shared zone log should mention losers with temp"
 
     def test_apply_fan_levels_single_zone(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with single-controller zone.
-        It contains the following steps:
-        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
-        - initialize a Service class with single CPU controller on zone 0
-        - call _apply_fan_levels()
-        - ASSERT: if the fan level is not logged for a single-controller zone
+        """Positive unit test for Service._apply_fan_levels() method with single-controller zone. It contains the
+        following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach a single deferred CPU controller on zone 0 at 60%/45.0C
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly once with (0, 60)
+        - ASSERT: service.applied_levels[0] is cached as 60
+        - ASSERT: log output contains "IPMI zone [0]: new level = 60% (CPU=45.0C)" (single-contributor log)
         """
         f = "TestService.test_apply_fan_levels_single_zone"
         mock_print = MagicMock()
@@ -956,12 +1102,15 @@ class TestService:
         assert "IPMI zone [0]: new level = 60% (CPU=45.0C)" in log_output, f"{f}: log should contain level and temp"
 
     def test_apply_fan_levels_single_zone_const(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with single CONST controller.
-        It contains the following steps:
-        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
-        - initialize a Service class with single CONST controller on zone 0
-        - call _apply_fan_levels()
-        - ASSERT: if the log output does not exclude temperature for CONST controller
+        """Positive unit test for Service._apply_fan_levels() method with single CONST controller. It contains the
+        following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach a single deferred CONST controller on zone 0 at level=50
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly once with (0, 50)
+        - ASSERT: service.applied_levels[0] is cached as 50
+        - ASSERT: log output contains "IPMI zone [0]: new level = 50% (CONST)" (no temperature for CONST)
         """
         f = "TestService.test_apply_fan_levels_single_zone_const"
         mock_print = MagicMock()
@@ -994,12 +1143,16 @@ class TestService:
         assert "IPMI zone [0]: new level = 50% (CONST)" in log_output, f"{f}: log should not include temperature"
 
     def test_apply_fan_levels_shared_zone_const_winner(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method when CONST wins. It contains the following steps:
-        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
-        - initialize a Service class with CONST at 80% and HD at 45% on zone 1
-        - call _apply_fan_levels()
-        - ASSERT: if CONST (80%) does not win over HD (45%)
-        - ASSERT: if the log output does not show CONST winner without temperature
+        """Positive unit test for Service._apply_fan_levels() method with CONST winning a shared zone. It contains the
+        following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach two deferred controllers on zone 1: HD at 45%/38.0C and CONST at 80%
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly once with (1, 80) — CONST wins
+        - ASSERT: service.applied_levels[1] is cached as 80
+        - ASSERT: log output contains "winner: CONST=80%" (no temperature for CONST winner)
+        - ASSERT: log output contains "losers: HD=45%/38.0C"
         """
         f = "TestService.test_apply_fan_levels_shared_zone_const_winner"
         mock_print = MagicMock()
@@ -1039,12 +1192,16 @@ class TestService:
         assert "losers: HD=45%/38.0C" in log_output, f"{f}: loser should show HD with temp"
 
     def test_apply_fan_levels_shared_zone_const_loser(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method when CONST loses. It contains the following steps:
-        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
-        - initialize a Service class with HD at 70% and CONST at 40% on zone 1
-        - call _apply_fan_levels()
-        - ASSERT: if HD (70%) does not win over CONST (40%)
-        - ASSERT: if the log output does not show CONST loser without temperature
+        """Positive unit test for Service._apply_fan_levels() method with CONST losing a shared zone. It contains the
+        following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach two deferred controllers on zone 1: HD at 70%/55.0C and CONST at 40%
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly once with (1, 70) — HD wins
+        - ASSERT: service.applied_levels[1] is cached as 70
+        - ASSERT: log output contains "winner: HD=70%/55.0C"
+        - ASSERT: log output contains "losers: CONST=40%" (no temperature for CONST loser)
         """
         f = "TestService.test_apply_fan_levels_shared_zone_const_loser"
         mock_print = MagicMock()
@@ -1084,12 +1241,15 @@ class TestService:
         assert "losers: CONST=40%" in log_output, f"{f}: CONST loser should have no temperature"
 
     def test_apply_fan_levels_skips_non_deferred(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with non-deferred controllers.
-        It contains the following steps:
-        - mock print(), Ipmi.set_fan_level() functions
-        - initialize a Service class with CPU (deferred) on zone 0 and HD (non-deferred) on zone 1
-        - call _apply_fan_levels()
-        - ASSERT: if non-deferred controllers are not skipped in _apply_fan_levels()
+        """Positive unit test for Service._apply_fan_levels() method with mixed deferred/non-deferred controllers. It
+        contains the following steps:
+        - mock print(), Ipmi.set_fan_level()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach CPU (deferred=True) on zone 0 at 60% and HD (deferred=False) on zone 1 at 40%
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly once with (0, 60) — only deferred CPU triggers IPMI
+        - ASSERT: zone 0 is present in service.applied_levels (cached)
+        - ASSERT: zone 1 is absent from service.applied_levels (non-deferred HD applies its own level)
         """
         f = "TestService.test_apply_fan_levels_skips_non_deferred"
         mock_print = MagicMock()
@@ -1126,12 +1286,13 @@ class TestService:
         assert 1 not in service.applied_levels, f"{f}: zone 1 should not be cached"
 
     def test_apply_fan_levels_cache(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with level caching.
-        It contains the following steps:
-        - mock print(), Ipmi.set_fan_level() functions
-        - initialize a Service class with HD controller and pre-cached level 70% on zone 1
-        - call _apply_fan_levels() with same level
-        - ASSERT: if IPMI call is not skipped when level has not changed
+        """Positive unit test for Service._apply_fan_levels() method with level caching. It contains the following
+        steps:
+        - mock print(), Ipmi.set_fan_level()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); pre-seed applied_levels={1: 70} and last_desired=[]
+        - attach a single deferred HD controller on zone 1 at 70% (same as cached level)
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is not called (level unchanged, IPMI call skipped by cache)
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -1158,12 +1319,17 @@ class TestService:
         assert mock_set_fan_level.call_count == 0, f"{f}: should skip IPMI call when level is cached"
 
     def test_apply_fan_levels_three_controllers(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
-        - mock print(), Ipmi.set_fan_level(), and Log.msg_to_stdout() functions
-        - create 3 deferred controllers (CPU 40%, HD 60%, NVME 50%) on the same IPMI zone 1
-        - execute _apply_fan_levels()
-        - ASSERT: if the highest level (HD 60%) is not applied to zone 1
-        - ASSERT: if the log output does not contain the correct winner and losers
+        """Positive unit test for Service._apply_fan_levels() method with three controllers on a shared zone. It
+        contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach three deferred controllers on zone 1: CPU 40%/50.0C, HD 60%/38.0C, NVME 50%/42.0C
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly once with (1, 60) — HD wins as highest
+        - ASSERT: service.applied_levels[1] is cached as 60
+        - ASSERT: log output contains "winner: HD=60%/38.0C"
+        - ASSERT: log output contains "CPU=40%/50.0C" as a loser
+        - ASSERT: log output contains "NVME=50%/42.0C" as a loser
         """
         f = "TestService.test_apply_fan_levels_three_controllers"
         mock_print = MagicMock()
@@ -1212,12 +1378,15 @@ class TestService:
         assert "NVME=50%/42.0C" in log_output, f"{f}: NVME should be a loser"
 
     def test_apply_fan_levels_equal_levels(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
-        - mock print(), Ipmi.set_fan_level(), and Log.msg_to_stdout() functions
-        - create 2 deferred controllers (CPU 70%, HD 70%) on the same IPMI zone 1 with equal levels
-        - execute _apply_fan_levels()
-        - ASSERT: if level 70% is not applied to zone 1
-        - ASSERT: if the first collected controller (CPU) is not the winner (tie-breaking uses > not >=)
+        """Positive unit test for Service._apply_fan_levels() method with tied levels. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach two deferred controllers on zone 1 with identical 70%: CPU at 55.0C and HD at 40.0C
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly once with (1, 70)
+        - ASSERT: service.applied_levels[1] is cached as 70
+        - ASSERT: log output contains "winner: CPU=70%/55.0C" (first-collected wins because tie-break uses >)
+        - ASSERT: log output contains "losers: HD=70%/40.0C"
         """
         f = "TestService.test_apply_fan_levels_equal_levels"
         mock_print = MagicMock()
@@ -1259,13 +1428,19 @@ class TestService:
         assert "losers: HD=70%/40.0C" in log_output, f"{f}: HD should be the loser in tie"
 
     def test_apply_fan_levels_multi_zone_partial_shared(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
-        - mock print(), Ipmi.set_fan_level(), and Log.msg_to_stdout() functions
-        - create CPU controller on zones [0, 1] at 55% and HD controller on zone [1] at 70%, both deferred
-        - execute _apply_fan_levels()
-        - ASSERT: if zone 0 is not set to CPU's 55% (single contributor)
-        - ASSERT: if zone 1 is not set to HD's 70% (winner of shared zone arbitration)
-        - ASSERT: if the log output does not contain correct single-zone and shared-zone messages
+        """Positive unit test for Service._apply_fan_levels() method with partial multi-zone overlap. It contains the
+        following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach CPU on zones [0, 1] at 55%/48.0C and HD on zone [1] at 70%/42.0C, both deferred
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly twice (zone 0 and zone 1)
+        - ASSERT: zone 0 is set to 55 (CPU is the single contributor)
+        - ASSERT: zone 1 is set to 70 (HD wins shared-zone arbitration)
+        - ASSERT: service.applied_levels[0] is cached as 55
+        - ASSERT: service.applied_levels[1] is cached as 70
+        - ASSERT: log output contains "IPMI zone [0]: new level = 55% (CPU=48.0C)" (single-contributor)
+        - ASSERT: log output contains "winner: HD=70%/42.0C" (shared zone)
         """
         f = "TestService.test_apply_fan_levels_multi_zone_partial_shared"
         mock_print = MagicMock()
@@ -1313,12 +1488,17 @@ class TestService:
         assert "winner: HD=70%/42.0C" in log_output, f"{f}: HD wins zone 1"
 
     def test_apply_fan_levels_cache_oscillation(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method. It contains the following steps:
-        - mock print() and Ipmi.set_fan_level() functions
-        - create HD controller on zone 1 with deferred apply
-        - execute _apply_fan_levels() three times with levels 70%, 50%, 70% (oscillation)
-        - ASSERT: if each level change does not trigger a new IPMI call (3 calls total)
-        - ASSERT: if the cache does not correctly reflect the current level after each step
+        """Positive unit test for Service._apply_fan_levels() method exercising oscillation across calls. It contains
+        the following steps:
+        - mock print(), Ipmi.set_fan_level()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach a single deferred HD controller on zone 1 and run three calls with last_level 70 -> 50 -> 70
+        - ASSERT: first call (level 70) triggers exactly 1 IPMI call
+        - ASSERT: after step 1, service.applied_levels[1] is cached as 70
+        - ASSERT: second call (level 50) brings the IPMI call count to 2 (level change triggers IPMI)
+        - ASSERT: after step 2, service.applied_levels[1] is cached as 50
+        - ASSERT: third call (level 70 again) brings the IPMI call count to 3 (returning level still re-applied)
+        - ASSERT: after step 3, service.applied_levels[1] is cached as 70
         """
         f = "TestService.test_apply_fan_levels_cache_oscillation"
         mock_print = MagicMock()
@@ -1358,12 +1538,12 @@ class TestService:
         assert service.applied_levels[1] == 70, f"{f}: zone 1 should cache 70 after step 3"
 
     def test_check_shared_zones_detected(self, mocker: MockerFixture):
-        """Positive unit test for Service._check_shared_zones() method with shared zone detection.
-        It contains the following steps:
-        - mock print(), Log.msg_to_stdout() functions
-        - initialize a Service class with HD and NVME controllers both on zone 1
-        - call _check_shared_zones()
-        - ASSERT: if shared zone 1 is not detected when HD and NVME share it
+        """Positive unit test for Service._check_shared_zones() method. It contains the following steps:
+        - mock print(), Log.msg_to_stdout()
+        - instantiate Service with a Log; attach HD and NVME controllers both on zone 1
+        - call Service._check_shared_zones()
+        - ASSERT: the returned set equals {1} (zone 1 is shared by HD and NVME)
+        - ASSERT: log output contains "Shared IPMI zone 1"
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -1389,12 +1569,12 @@ class TestService:
         assert "Shared IPMI zone 1" in log_output, f"{f}: should log shared zone 1"
 
     def test_check_shared_zones_none(self, mocker: MockerFixture):
-        """Positive unit test for Service._check_shared_zones() method with no shared zones.
-        It contains the following steps:
-        - mock print() function
-        - initialize a Service class with CPU on zone 0 and HD on zone 1 (no overlap)
-        - call _check_shared_zones()
-        - ASSERT: if empty set is not returned when no zones are shared
+        """Positive unit test for Service._check_shared_zones() method with no shared zones. It contains the following
+        steps:
+        - mock print()
+        - instantiate Service with a Log; attach CPU on zone 0 and HD on zone 1 (no overlap)
+        - call Service._check_shared_zones()
+        - ASSERT: the returned set is empty (no zones are shared)
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -1415,12 +1595,13 @@ class TestService:
         assert result == set(), "TestService.test_check_shared_zones_none: should not detect shared zones"
 
     def test_check_shared_zones_multi_zone(self, mocker: MockerFixture):
-        """Positive unit test for Service._check_shared_zones() method with multi-zone controller.
-        It contains the following steps:
-        - mock print(), Log.msg_to_stdout() functions
-        - initialize a Service class with CPU on zones [0,1] and HD on zone [1]
-        - call _check_shared_zones()
-        - ASSERT: if {1} is not returned when CPU spans zones [0,1] and HD is on zone [1]
+        """Positive unit test for Service._check_shared_zones() method with a multi-zone controller. It contains the
+        following steps:
+        - mock print(), Log.msg_to_stdout()
+        - instantiate Service with a Log; attach CPU on zones [0, 1] and HD on zone [1]
+        - call Service._check_shared_zones()
+        - ASSERT: the returned set equals {1} (CPU and HD overlap on zone 1)
+        - ASSERT: log output contains "Shared IPMI zone 1"
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -1446,13 +1627,15 @@ class TestService:
         assert "Shared IPMI zone 1" in log_output, f"{f}: should log shared zone 1"
 
     def test_check_shared_zones_selective_deferred(self, mocker: MockerFixture):
-        """Positive unit test for Service._check_shared_zones() method with selective deferred mode.
-        It contains the following steps:
-        - mock print() function
-        - initialize a Service class with CPU on zone 0 (exclusive), HD and NVME on zone 1 (shared)
-        - call _check_shared_zones() and set deferred_apply based on shared zones
-        - ASSERT: if controllers on non-shared zones get deferred_apply=True
-        - ASSERT: if controllers on shared zones do not get deferred_apply=True
+        """Positive unit test for Service._check_shared_zones() method with selective deferred-apply assignment. It
+        contains the following steps:
+        - mock print()
+        - instantiate Service with a Log; attach CPU on zone 0 (exclusive), HD and NVME on zone 1 (shared)
+        - call Service._check_shared_zones() and set deferred_apply=True only for controllers on shared zones
+        - ASSERT: service.shared_zones equals {1}
+        - ASSERT: CPU.deferred_apply remains False (zone 0 not shared)
+        - ASSERT: HD.deferred_apply is True (zone 1 shared)
+        - ASSERT: NVME.deferred_apply is True (zone 1 shared)
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -1490,23 +1673,22 @@ class TestService:
         assert nvme_fc.deferred_apply is True, f"{f}: NVME on shared zone 1 should be deferred"
 
     @pytest.mark.parametrize(
-        "exit_code, error_str",
+        "exit_code",
         [
             # Old-style section names migration (exit 10)
-            (10, "Service.run() p6"),
+            pytest.param(10, id="old-section-names-exit10"),
         ],
     )
-    def test_run_old_section_names(self, mocker: MockerFixture, exit_code: int, error_str: str):
-        """Positive unit test for Service.run() method with old section names. It contains the following steps:
-        - mock print(), pyudev.Context.__init__() functions
-        - create config with old-style section names ([CPU zone], [HD zone], etc.)
-        - execute Service.run()
-        - ASSERT: if exit code 10 (no enabled fancontroller) is not returned,
-          proving the migration code ran successfully
+    def test_run_old_section_names(self, mocker: MockerFixture, td: TestData, exit_code: int):
+        """Positive unit test for Service.run() method exercising old-section-name migration. It contains the
+        following steps:
+        - mock print(), pyudev.Context.__init__ via MockedContextGood
+        - build a config file via `td` with old-style section names ("CPU zone", "HD zone", "NVME zone", etc.)
+        - instantiate Service and call Service.run() inside pytest.raises(SystemExit)
+        - ASSERT: sys.exit() code equals 10 (no enabled fancontroller) — proves migration code ran successfully
         """
-        my_td = TestData()
         my_config = ConfigParser()
-        ipmi_command = my_td.create_ipmi_command()
+        ipmi_command = td.create_ipmi_command()
         my_config[Config.CS_IPMI] = {
             Config.CV_IPMI_COMMAND: ipmi_command,
             Config.CV_IPMI_FAN_MODE_DELAY: "0",
@@ -1518,7 +1700,7 @@ class TestService:
         my_config["NVME zone"] = {Config.CV_ENABLED: "0"}
         my_config["GPU zone"] = {Config.CV_ENABLED: "0"}
         my_config["CONST zone"] = {Config.CV_ENABLED: "0"}
-        conf_file = my_td.create_config_file(my_config)
+        conf_file = td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
@@ -1526,17 +1708,21 @@ class TestService:
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
-        assert cm.value.code == exit_code, error_str
-        del my_td
+        assert cm.value.code == exit_code
 
     def test_apply_fan_levels_four_controllers_same_zone(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with four controllers.
-        It contains the following steps:
-        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
-        - create 4 deferred controllers (CPU 40%, HD 60%, NVME 50%, GPU 75%) on the same IPMI zone 1
-        - execute _apply_fan_levels()
-        - ASSERT: if the highest level (GPU 75%) is not applied to zone 1
-        - ASSERT: if the log output does not contain the correct winner and losers
+        """Positive unit test for Service._apply_fan_levels() method with four controllers on a shared zone. It
+        contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach four deferred controllers on zone 1: CPU 40%/45.0C, HD 60%/38.0C, NVME 50%/42.0C, GPU 75%/65.0C
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly once with (1, 75) — GPU wins
+        - ASSERT: service.applied_levels[1] is cached as 75
+        - ASSERT: log output contains "winner: GPU=75%/65.0C"
+        - ASSERT: log output contains "CPU=40%/45.0C" as a loser
+        - ASSERT: log output contains "HD=60%/38.0C" as a loser
+        - ASSERT: log output contains "NVME=50%/42.0C" as a loser
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -1593,13 +1779,19 @@ class TestService:
         assert "NVME=50%/42.0C" in log_output, f"{f}: NVME should be a loser"
 
     def test_apply_fan_levels_five_controllers_with_const(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with all five controller types.
-        It contains the following steps:
-        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
-        - create 5 deferred controllers (CPU 40%, HD 60%, NVME 50%, GPU 55%, CONST 80%) on the same IPMI zone 1
-        - execute _apply_fan_levels()
-        - ASSERT: if the highest level (CONST 80%) is not applied to zone 1
-        - ASSERT: if the log output does not contain the correct winner (without temperature) and losers
+        """Positive unit test for Service._apply_fan_levels() method with five controllers including CONST winner. It
+        contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach five deferred controllers on zone 1: CPU 40%, HD 60%, NVME 50%, GPU 55%, CONST 80%
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly once with (1, 80) — CONST wins
+        - ASSERT: service.applied_levels[1] is cached as 80
+        - ASSERT: log output contains "winner: CONST=80%" (CONST has no temperature)
+        - ASSERT: log output contains "CPU=40%/45.0C" as a loser
+        - ASSERT: log output contains "HD=60%/38.0C" as a loser
+        - ASSERT: log output contains "NVME=50%/42.0C" as a loser
+        - ASSERT: log output contains "GPU=55%/60.0C" as a loser
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -1665,14 +1857,19 @@ class TestService:
         assert "GPU=55%/60.0C" in log_output, f"{f}: GPU should be a loser"
 
     def test_apply_fan_levels_complex_three_zone_overlap(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with complex zone overlap.
-        It contains the following steps:
-        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout() functions
-        - create CPU on zones [0, 1, 2] at 50%, HD on zones [1, 2] at 65%, NVME on zone [2] at 80%
-        - execute _apply_fan_levels()
-        - ASSERT: if zone 0 is not set to CPU's 50% (single contributor)
-        - ASSERT: if zone 1 is not set to HD's 65% (HD wins over CPU)
-        - ASSERT: if zone 2 is not set to NVME's 80% (NVME wins over CPU and HD)
+        """Positive unit test for Service._apply_fan_levels() method with three-zone overlap. It contains the
+        following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach CPU on zones [0,1,2] at 50%, HD on zones [1,2] at 65%, NVME on zone [2] at 80%, all deferred
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is called exactly three times (one per zone)
+        - ASSERT: zone 0 is set to 50 (CPU is the single contributor)
+        - ASSERT: zone 1 is set to 65 (HD wins over CPU)
+        - ASSERT: zone 2 is set to 80 (NVME wins over CPU and HD)
+        - ASSERT: service.applied_levels[0] is cached as 50
+        - ASSERT: service.applied_levels[1] is cached as 65
+        - ASSERT: service.applied_levels[2] is cached as 80
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -1728,12 +1925,13 @@ class TestService:
         assert service.applied_levels[2] == 80, f"{f}: zone 2 should cache 80"
 
     def test_apply_fan_levels_all_controllers_last_level_zero(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with last_level=0. It contains the following steps:
-        - mock print(), Ipmi.set_fan_level() functions
-        - create 2 deferred controllers on zone 1 with last_level=0 (not yet computed)
-        - execute _apply_fan_levels()
-        - ASSERT: if controllers with last_level=0 are not skipped in _collect_desired_levels()
-        - ASSERT: if IPMI call is made when no controller has a valid level
+        """Positive unit test for Service._apply_fan_levels() method with all controllers at last_level=0. It contains
+        the following steps:
+        - mock print(), Ipmi.set_fan_level()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach two deferred controllers on zone 1 (CPU and HD), both with last_level=0 (not yet computed)
+        - call Service._apply_fan_levels()
+        - ASSERT: Ipmi.set_fan_level() is not called (all level-zero controllers skipped by _collect_desired_levels())
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -1769,13 +1967,14 @@ class TestService:
         assert mock_set_fan_level.call_count == 0, f"{f}: controllers with last_level=0 should be skipped"
 
     def test_check_shared_zones_three_plus_zones_partial_overlap(self, mocker: MockerFixture):
-        """Positive unit test for Service._check_shared_zones() method with complex overlap.
-        It contains the following steps:
-        - mock print(), Log.msg_to_stdout() functions
-        - create CPU on zones [0, 1, 2], HD on zones [1, 2], NVME on zone [2]
-        - execute _check_shared_zones()
-        - ASSERT: if shared zones {1, 2} are not detected
-        - ASSERT: if log output does not contain messages for both shared zones
+        """Positive unit test for Service._check_shared_zones() method with three-controller partial overlap. It
+        contains the following steps:
+        - mock print(), Log.msg_to_stdout()
+        - instantiate Service with a Log; attach CPU on zones [0,1,2], HD on [1,2], NVME on [2]
+        - call Service._check_shared_zones()
+        - ASSERT: the returned set equals {1, 2} (zone 1 shared by CPU+HD, zone 2 shared by all three)
+        - ASSERT: log output contains "Shared IPMI zone 1"
+        - ASSERT: log output contains "Shared IPMI zone 2"
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
@@ -1808,14 +2007,18 @@ class TestService:
         assert "Shared IPMI zone 2" in log_output, f"{f}: zone 2 should be logged"
 
     def test_apply_fan_levels_multi_zone_deferred_caching(self, mocker: MockerFixture):
-        """Positive unit test for Service._apply_fan_levels() method with multi-zone caching.
-        It contains the following steps:
-        - mock print(), Ipmi.set_fan_level() functions
-        - create CPU controller on zones [0, 1] with deferred apply
-        - execute _apply_fan_levels() multiple times with same and different levels
-        - ASSERT: if first call does not set both zones
-        - ASSERT: if second call with same level does not skip IPMI calls (caching)
-        - ASSERT: if third call with different level does not update both zones
+        """Positive unit test for Service._apply_fan_levels() method with multi-zone deferred caching across calls. It
+        contains the following steps:
+        - mock print(), Ipmi.set_fan_level()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={} and last_desired=[]
+        - attach a single deferred CPU controller on zones [0, 1] at 60% and run three successive calls
+        - ASSERT: first call sets both zones (Ipmi.set_fan_level() called twice)
+        - ASSERT: after the first call, service.applied_levels[0] equals 60
+        - ASSERT: after the first call, service.applied_levels[1] equals 60
+        - ASSERT: second call with same level makes no IPMI calls (both zones cached)
+        - ASSERT: third call with new level=80 sets both zones again (2 IPMI calls)
+        - ASSERT: after the third call, service.applied_levels[0] equals 80
+        - ASSERT: after the third call, service.applied_levels[1] equals 80
         """
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)

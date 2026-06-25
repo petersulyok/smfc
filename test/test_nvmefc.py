@@ -8,7 +8,7 @@ from typing import List
 import pytest
 from pytest_mock import MockerFixture
 from smfc.config import Config
-from .test_data import TestData
+from .test_fixtures import TestData
 from .test_fc_helpers import assert_fc_base_contract, build_nvme_fc, make_bare_nvme_fc
 
 # Field order for the parametrized explicit-configuration init test.
@@ -32,10 +32,18 @@ class TestNvmeFc:
                                               ipmi_zone: List[int], temp_calc: int, steps: int, sensitivity: float,
                                               polling: float, min_temp: float, max_temp: float, min_level: int,
                                               max_level: int, smoothing: int):
-        """Positive unit test for NvmeFc.__init__() with an explicit configuration. It contains the steps:
-        - build an NvmeFc via the shared builder (udev/hwmon discovery mocked)
-        - ASSERT: the base-class contract (log/ipmi refs, name, count, config fields)
-        - ASSERT: the hwmon paths and device_names() copy semantics specific to NvmeFc
+        """Positive unit test for NvmeFc.__init__() method. It contains the following steps:
+        - mock build_nvme_fc helper (absorbs builtins.print, pyudev.Device.__new__, pyudev.Devices.from_device_file,
+          smfc.FanController.get_hwmon_path, pyudev.Context.__new__, Ipmi.__new__ mocks)
+        - parametrize explicit config field values (count, ipmi_zone, temp_calc, steps, sensitivity, polling,
+          min_temp, max_temp, min_level, max_level, smoothing) and build an NvmeFc from that config
+        - invoke assert_fc_base_contract to validate the shared FanController contract
+        - call device_names() to verify it returns a defensive copy of nvme_device_names
+        - ASSERT: assert_fc_base_contract holds (log/ipmi refs, config, name, count, config fields)
+        - ASSERT: fc.hwmon_path equals td.nvme_files
+        - ASSERT: fc.nvme_device_names equals td.nvme_name_list
+        - ASSERT: device_names() returns a list equal to td.nvme_name_list
+        - ASSERT: device_names() result is not the same object as fc.nvme_device_names (defensive copy)
         """
         cfg_values = {"ipmi_zone": ipmi_zone, "temp_calc": temp_calc, "steps": steps, "sensitivity": sensitivity,
                       "polling": polling, "min_temp": min_temp, "max_temp": max_temp, "min_level": min_level,
@@ -50,10 +58,16 @@ class TestNvmeFc:
         assert names is not h.fc.nvme_device_names
 
     def test_init_applies_defaults(self, mocker: MockerFixture, td: TestData):
-        """Positive unit test for NvmeFc.__init__() with default configuration values. It contains the steps:
-        - build an NvmeFc from a default config (only enabled + nvme_names set)
-        - ASSERT: the base-class contract holds with the NVMe default config values (Config.DV_NVME_*)
-        - ASSERT: the hwmon paths and configured nvme_device_names match the test data
+        """Positive unit test for NvmeFc.__init__() method using default configuration values. It contains the
+        following steps:
+        - mock build_nvme_fc helper (absorbs builtins.print, pyudev.Device.__new__, pyudev.Devices.from_device_file,
+          smfc.FanController.get_hwmon_path, pyudev.Context.__new__, Ipmi.__new__ mocks)
+        - build an NvmeFc from a config with only enabled and nvme_names set, leaving every other field at its
+          Config.DV_NVME_* default
+        - invoke assert_fc_base_contract with the expected Config.DV_NVME_* default values
+        - ASSERT: assert_fc_base_contract holds (log/ipmi refs, config, name, count, default config fields)
+        - ASSERT: fc.hwmon_path equals td.nvme_files
+        - ASSERT: fc.nvme_device_names equals td.nvme_name_list
         """
         count = 2
         expected = {"ipmi_zone": [Config.HD_ZONE], "temp_calc": Config.CALC_AVG, "steps": Config.DV_NVME_STEPS,
@@ -76,17 +90,26 @@ class TestNvmeFc:
         ],
     )
     def test_init_rejects_invalid_device_names(self, mocker: MockerFixture, td: TestData, data_count: int, names):
-        """Negative unit test for NvmeFc.__init__() with invalid device names. It contains the steps:
-        - build an NvmeFc via the shared builder with an empty or unreachable nvme_names list
-        - ASSERT: construction raises ValueError (count <= 0, or device cannot be reached in udev)
+        """Negative unit test for NvmeFc.__init__() method when nvme_names is invalid. It contains the following
+        steps:
+        - mock build_nvme_fc helper (absorbs builtins.print, pyudev.Device.__new__, pyudev.Devices.from_device_file,
+          smfc.FanController.get_hwmon_path, pyudev.Context.__new__, Ipmi.__new__ mocks)
+        - parametrize two invalid scenarios: no nvme_names provided (count <= 0) and an unreachable device name
+          ("raise") that the mocked udev lookup cannot resolve
+        - call build_nvme_fc with the invalid names list and expect construction to fail
+        - ASSERT: NvmeFc.__init__() raises ValueError
         """
         with pytest.raises(ValueError):
             build_nvme_fc(mocker, td, count=data_count, names=names)
 
     def test_init_rejects_missing_hwmon(self, mocker: MockerFixture, td: TestData):
-        """Negative unit test for NvmeFc.__init__() when a device has no hwmon path. It contains the steps:
-        - build an NvmeFc via the shared builder with get_hwmon_path() returning an empty string
-        - ASSERT: construction raises ValueError (device has no hwmon path)
+        """Negative unit test for NvmeFc.__init__() method when a device has no hwmon path. It contains the
+        following steps:
+        - mock build_nvme_fc helper (absorbs builtins.print, pyudev.Device.__new__, pyudev.Devices.from_device_file,
+          pyudev.Context.__new__, Ipmi.__new__ mocks)
+        - mock smfc.FanController.get_hwmon_path to return an empty string (hwmon="empty")
+        - call build_nvme_fc with count=1 and expect construction to fail
+        - ASSERT: NvmeFc.__init__() raises ValueError because the device has no hwmon path
         """
         with pytest.raises(ValueError):
             build_nvme_fc(mocker, td, count=1, hwmon="empty")
@@ -101,10 +124,12 @@ class TestNvmeFc:
         ],
     )
     def test_get_nth_temp_reads_hwmon(self, td: TestData, count: int, temperatures: List[float]):
-        """Positive unit test for NvmeFc._get_nth_temp(). It contains the steps:
-        - create NVMe hwmon test data with fixed per-device temperatures
-        - build a bare NvmeFc with only hwmon_path/nvme_device_names set
-        - ASSERT: _get_nth_temp(i) returns the temperature written to each device's hwmon file
+        """Positive unit test for NvmeFc._get_nth_temp() method. It contains the following steps:
+        - call td.create_nvme_data() to materialize NVMe hwmon files with the parametrized per-device temperatures
+        - mock build via make_bare_nvme_fc helper (bypasses udev/super().__init__(), sets only hwmon_path and
+          nvme_device_names attributes)
+        - iterate over each device index and read its temperature back through _get_nth_temp()
+        - ASSERT: _get_nth_temp(i) returns the temperature written to device i's hwmon file for every i
         """
         td.create_nvme_data(count, temperatures)
         fc = make_bare_nvme_fc(td)
@@ -120,10 +145,14 @@ class TestNvmeFc:
         ],
     )
     def test_get_nth_temp_raises_on_io_errors(self, td: TestData, operation: int, exception):
-        """Negative unit test for NvmeFc._get_nth_temp() error handling. It contains the steps:
-        - build a bare NvmeFc over a single hwmon file
-        - trigger one of: missing file, invalid numeric value, or index overflow
-        - ASSERT: _get_nth_temp() raises the matching exception (FileNotFoundError/ValueError/IndexError)
+        """Negative unit test for NvmeFc._get_nth_temp() method error handling. It contains the following steps:
+        - call td.create_nvme_data() to materialize a single NVMe hwmon file
+        - mock build via make_bare_nvme_fc helper (bypasses udev/super().__init__(), sets only hwmon_path and
+          nvme_device_names attributes)
+        - parametrize three failure modes: redirect hwmon_path[0] to a non-existent file (missing file),
+          overwrite the hwmon file with "invalid value" (unparsable numeric), or use index 1000 (out of range)
+        - call _get_nth_temp() with the chosen index and expect it to fail
+        - ASSERT: _get_nth_temp() raises the matching exception (FileNotFoundError, ValueError, or IndexError)
         """
         td.create_nvme_data(1, [35])
         fc = make_bare_nvme_fc(td)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 #   smoke_runner.py (C) 2021-2026, Peter Sulyok
-#   Smoke test runner for smfc service.
+#   Smoke test automatic_smoke_runner for smfc service.
 #
 #   Boots the real Service.run() loop against mocked devices for one scenario
 #   (selected with --scenario; see SCENARIOS below). The run continues until the
@@ -9,36 +9,45 @@
 #
 import atexit
 import os
+import random
 import sys
 import threading
 from collections import namedtuple
 from configparser import ConfigParser
+from typing import List
 from pytest import fixture, UsageError
 from pyudev import Context
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, FanController, Service
 from smfc.config import Config, CpuConfig, HdConfig, NvmeConfig, GpuConfig
-from .test_data import TestData, MockedContextGood
+from .test_fixtures import TestData
+from .test_mocks import MockedContextGood
 
 # Smoke scenario matrix — single source of truth (replaces the per-scenario run_test_*.sh wrappers).
 # Each scenario maps a name to device counts plus the config template (in this directory) under test.
 Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf"])
 
 SCENARIOS = {
-    "cpu_1":            Scenario(1, 1, 0, 0, "cpu_1.conf"),
-    "cpu_2":            Scenario(2, 0, 1, 0, "cpu_2.conf"),
-    "cpu_4":            Scenario(4, 4, 4, 0, "cpu_4.conf"),
-    "hd_1":             Scenario(0, 1, 0, 0, "hd_1.conf"),
-    "hd_2":             Scenario(1, 2, 0, 0, "hd_2.conf"),
-    "hd_4":             Scenario(0, 4, 4, 0, "hd_4.conf"),
-    "hd_8":             Scenario(4, 8, 0, 0, "hd_8.conf"),
-    "nvme_4":           Scenario(2, 0, 0, 4, "nvme_4.conf"),
-    "const_level":      Scenario(1, 0, 0, 0, "const_level.conf"),
-    "gpu_8_nvidia":     Scenario(1, 0, 8, 0, "gpu_8_nvidia.conf"),
-    "gpu_8_amd":        Scenario(1, 0, 8, 0, "gpu_8_amd.conf"),
-    "shared_zones":     Scenario(1, 0, 0, 2, "shared_zones.conf"),
-    "shared_zones_2":   Scenario(2, 2, 0, 0, "shared_zones_2.conf"),
-    "control_function": Scenario(2, 2, 0, 0, "control_function.conf"),
+    "cpu_1":             Scenario(1, 1, 0, 0, "cpu_1.conf"),
+    "cpu_2":             Scenario(2, 0, 1, 0, "cpu_2.conf"),
+    "cpu_4":             Scenario(4, 4, 4, 0, "cpu_4.conf"),
+    "hd_1":              Scenario(0, 1, 0, 0, "hd_1.conf"),
+    "hd_2":              Scenario(1, 2, 0, 0, "hd_2.conf"),
+    "hd_4":              Scenario(0, 4, 4, 0, "hd_4.conf"),
+    "hd_8":              Scenario(4, 8, 0, 0, "hd_8.conf"),
+    "nvme_4":            Scenario(2, 0, 0, 4, "nvme_4.conf"),
+    "const_level":       Scenario(1, 0, 0, 0, "const_level.conf"),
+    "gpu_8_nvidia":      Scenario(1, 0, 8, 0, "gpu_8_nvidia.conf"),
+    "gpu_8_amd":         Scenario(1, 0, 8, 0, "gpu_8_amd.conf"),
+    "shared_zones":      Scenario(1, 0, 0, 2, "shared_zones.conf"),
+    "shared_zones_cpu_split": Scenario(2, 2, 0, 0, "shared_zones_cpu_split.conf"),
+    "control_function":  Scenario(2, 2, 0, 0, "control_function.conf"),
+    "platform_x9":       Scenario(1, 2, 0, 0, "platform_x9.conf"),
+    "platform_x14":      Scenario(1, 2, 0, 0, "platform_x14.conf"),
+    "platform_x10qbi":   Scenario(1, 2, 0, 0, "platform_x10qbi.conf"),
+    "no_enforce_fan_mode": Scenario(1, 2, 0, 0, "no_enforce_fan_mode.conf"),
+    "hd_split_zones":    Scenario(0, 4, 0, 0, "hd_split_zones.conf"),
+    "smoothing_window":  Scenario(2, 2, 0, 0, "smoothing_window.conf"),
 }
 
 
@@ -72,11 +81,19 @@ def _make_hdfc_init(td: TestData, smartctl_cmd: str):
     # pylint: disable=unused-argument
     def _init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg: HdConfig, sudo: bool) -> None:
         self.config = cfg
-        self.hd_device_names = td.hd_name_list
-        self.hwmon_path = td.hd_files
+        # For single [HD] section: use the full device list. For numbered [HD:N] sections,
+        # cfg.hd_names is already the per-section slice (split by smoke_runner) — use it and
+        # look up the matching hwmon files from td by device name.
+        if cfg.hd_names and len(cfg.hd_names) < len(td.hd_name_list):
+            self.hd_device_names = cfg.hd_names
+            name_to_file = dict(zip(td.hd_name_list, td.hd_files))
+            self.hwmon_path = [name_to_file[n] for n in cfg.hd_names]
+        else:
+            self.hd_device_names = td.hd_name_list
+            self.hwmon_path = td.hd_files
         self.sudo = sudo
         cfg.smartctl_path = smartctl_cmd
-        FanController.__init__(self, log, ipmi, cfg.section, len(td.hd_files))
+        FanController.__init__(self, log, ipmi, cfg.section, len(self.hwmon_path))
         if self.count == 1:
             self.log.msg(Log.LOG_INFO, "   WARNING: Standby guard is disabled ([HD] count=1")
         # Standby guard is disabled in smoke tests (it would repeatedly drive the fake smartctl command).
@@ -129,36 +146,47 @@ def _section_temp_range(config: ConfigParser, section: str, dv_min: float, dv_ma
             config[sec].getfloat(Config.CV_MAX_TEMP, fallback=dv_max))
 
 
+def _update_hwmon_temperatures(files: List[str], min_temp: float, max_temp: float) -> None:  # pragma: no cover
+    """Update hwmon temperature files with gradual changes (+/- 0-3 degrees) within the given range.
+    Called from the smoke-automatic_smoke_runner background thread only."""
+    for path in files:
+        with open(path, "r", encoding="UTF-8") as f:
+            current = float(f.read()) / 1000
+        delta = random.choice([-3, -2, -1, 0, 1, 2, 3])
+        new_temp = max(min_temp, min(max_temp, current + delta))
+        with open(path, "w+t", encoding="UTF-8") as f:
+            f.write(f"{new_temp * 1000:.0f}")
+
+
 # pylint: disable=too-few-public-methods
 class TestSmoke:
     """Smoke test class."""
 
     # pylint: disable=redefined-outer-name
-    def test_smoke(self, mocker: MockerFixture, scenario: Scenario):
+    def test_smoke(self, mocker: MockerFixture, scenario: Scenario, tmp_path):
         """Smoke test for the smfc service. It contains the following steps:
         - materialize fake hwmon files and ipmitool/smartctl/SMI commands for the scenario
         - mock pyudev.Context and each *Fc.__init__ to inject the fake devices
         - load the scenario config, inject the generated command paths / device names
         - run Service.run(); the main loop runs until CTRL-C while a thread drifts temperatures
         """
-        my_td: TestData = TestData()
+        my_td: TestData = TestData(tmp_path)
         temp_updater_stop: threading.Event = threading.Event()
         temp_ranges: dict = {}
 
         def exit_func() -> None:
-            nonlocal my_td
+            # Signal the drift thread to stop; pytest will reclaim tmp_path on teardown.
             temp_updater_stop.set()
-            del my_td
 
         def temperature_updater() -> None:
             """Background thread that periodically updates hwmon temperature files."""
             while not temp_updater_stop.is_set():
                 if my_td.cpu_files and "cpu" in temp_ranges:
-                    my_td.update_hwmon_temperatures(my_td.cpu_files, *temp_ranges["cpu"])
+                    _update_hwmon_temperatures(my_td.cpu_files, *temp_ranges["cpu"])
                 if my_td.hd_files and "hd" in temp_ranges:
-                    my_td.update_hwmon_temperatures(my_td.hd_files, *temp_ranges["hd"])
+                    _update_hwmon_temperatures(my_td.hd_files, *temp_ranges["hd"])
                 if my_td.nvme_files and "nvme" in temp_ranges:
-                    my_td.update_hwmon_temperatures(my_td.nvme_files, *temp_ranges["nvme"])
+                    _update_hwmon_temperatures(my_td.nvme_files, *temp_ranges["nvme"])
                 temp_updater_stop.wait(1.0)
 
         atexit.register(exit_func)
@@ -175,12 +203,22 @@ class TestSmoke:
 
         # Load the scenario configuration file (resolved relative to this test module).
         my_config = ConfigParser()
-        my_config.read(os.path.join(os.path.dirname(__file__), scenario.conf))
+        my_config.read(os.path.join(os.path.dirname(__file__), "scenarios", scenario.conf))
         # Add generated parameters.
         my_config[Config.CS_IPMI][Config.CV_IPMI_COMMAND] = cmd_ipmi
+        # Inject hd_names / smartctl_path into every [HD] / [HD:N] section so numbered scenarios work too.
         if scenario.hd:
-            my_config[Config.CS_HD][Config.CV_HD_NAMES] = my_td.hd_names
-            my_config[Config.CS_HD][Config.CV_HD_SMARTCTL_PATH] = cmd_smart
+            # Split hd_name_list across HD sections in order (round-robin if multiple sections).
+            hd_sections = [s for s in my_config.sections() if s == Config.CS_HD or s.startswith(Config.CS_HD + ":")]
+            if len(hd_sections) > 1:
+                # Round-robin distribute the device names across sections so each gets a non-empty list.
+                chunks = [my_td.hd_name_list[i::len(hd_sections)] for i in range(len(hd_sections))]
+                for sec, chunk in zip(hd_sections, chunks):
+                    my_config[sec][Config.CV_HD_NAMES] = " ".join(chunk)
+                    my_config[sec][Config.CV_HD_SMARTCTL_PATH] = cmd_smart
+            else:
+                my_config[Config.CS_HD][Config.CV_HD_NAMES] = my_td.hd_names
+                my_config[Config.CS_HD][Config.CV_HD_SMARTCTL_PATH] = cmd_smart
         if scenario.nvme:
             my_config[Config.CS_NVME][Config.CV_NVME_NAMES] = my_td.nvme_names
         if scenario.gpu:

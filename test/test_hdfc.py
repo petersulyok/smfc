@@ -13,7 +13,8 @@ from mock import MagicMock
 from pytest_mock import MockerFixture
 from smfc import Log
 from smfc.config import Config
-from .test_data import TestData, create_hd_config
+from .test_config_builders import create_hd_config
+from .test_fixtures import TestData
 from .test_fc_helpers import assert_fc_base_contract, build_hd_fc, make_bare_hd_fc
 
 # Field order for the parametrized explicit-configuration init test (base fields + HD-specific sb_limit/sudo).
@@ -37,11 +38,20 @@ class TestHdFc:
                                               ipmi_zone: List[int], temp_calc: int, steps: int, sensitivity: float,
                                               polling: float, min_temp: float, max_temp: float, min_level: int,
                                               max_level: int, smoothing: int, sb_limit: int, sudo: bool):
-        """Positive unit test for HdFc.__init__() with an explicit configuration. It contains the steps:
-        - build an HdFc via the shared builder (udev/hwmon/smartctl mocked) with the standby guard enabled
-        - ASSERT: the base-class contract (log/ipmi refs, name, count, config fields)
-        - ASSERT: the HD-specific attributes (sudo, hd_names, smartctl_path, hwmon paths, device_names copy)
-        - ASSERT: the standby-guard config is wired when count > 1
+        """Positive unit test for HdFc.__init__() method. It contains the following steps:
+        - mock pyudev.Context.__new__, pyudev.Device.__new__, pyudev.Devices.from_device_file, Ipmi.__new__,
+          smfc.FanController.get_hwmon_path, smfc.HdFc._exec_smartctl, and builtins.print via build_hd_fc
+        - build the smartctl fake command via td.create_command_file and pass it as smartctl_path
+        - construct an HdFc via build_hd_fc with explicit config values and the standby guard enabled
+        - ASSERT: assert_fc_base_contract holds for the controller (log/ipmi refs, name, count, config fields)
+        - ASSERT: fc.sudo equals the configured sudo flag
+        - ASSERT: fc.hd_device_names equals td.hd_name_list
+        - ASSERT: fc.config.smartctl_path equals the smartctl command path
+        - ASSERT: fc.hwmon_path equals td.hd_files
+        - ASSERT: fc.device_names() returns a list equal to td.hd_name_list
+        - ASSERT: fc.device_names() returns a defensive copy (not the underlying hd_device_names)
+        - ASSERT: fc.config.standby_hd_limit equals sb_limit when count > 1
+        - ASSERT: fc.config.standby_guard_enabled is True when count > 1
         """
         cfg_values = {"ipmi_zone": ipmi_zone, "temp_calc": temp_calc, "steps": steps, "sensitivity": sensitivity,
                       "polling": polling, "min_temp": min_temp, "max_temp": max_temp, "min_level": min_level,
@@ -63,10 +73,16 @@ class TestHdFc:
             assert h.fc.config.standby_guard_enabled is True
 
     def test_init_applies_defaults(self, mocker: MockerFixture, td: TestData):
-        """Positive unit test for HdFc.__init__() with default configuration values. It contains the steps:
-        - build an HdFc from a default config (only enabled + hd_names set)
-        - ASSERT: the base-class contract holds with the HD default config values (Config.DV_HD_*)
-        - ASSERT: the HD-specific defaults (sudo False, default smartctl_path, hd_names, hwmon paths)
+        """Positive unit test for HdFc.__init__() method with default configuration values. It contains the
+        following steps:
+        - mock pyudev.Context.__new__, pyudev.Device.__new__, pyudev.Devices.from_device_file, Ipmi.__new__,
+          smfc.FanController.get_hwmon_path, smfc.HdFc._exec_smartctl, and builtins.print via build_hd_fc
+        - construct an HdFc via build_hd_fc with sudo=False and only the implicit defaults supplied by create_hd_config
+        - ASSERT: assert_fc_base_contract holds with the Config.DV_HD_* defaults
+        - ASSERT: fc.sudo is False
+        - ASSERT: fc.config.smartctl_path equals Config.DV_HD_SMARTCTL_PATH
+        - ASSERT: fc.hd_device_names equals td.hd_name_list
+        - ASSERT: fc.hwmon_path equals td.hd_files
         """
         count = 4
         expected = {"ipmi_zone": [Config.HD_ZONE], "temp_calc": Config.CALC_AVG, "steps": Config.DV_HD_STEPS,
@@ -96,9 +112,11 @@ class TestHdFc:
     )
     def test_init_rejects_invalid_config(self, mocker: MockerFixture, td: TestData, data_count: int, names,
                                          standby_hd_limit: int):
-        """Negative unit test for HdFc.__init__() with invalid configuration. It contains the steps:
-        - build an HdFc via the shared builder with an invalid device list or standby_hd_limit
-        - ASSERT: construction raises ValueError (no devices, bad standby limit, or unreachable device)
+        """Negative unit test for HdFc.__init__() method with invalid configuration. It contains the following steps:
+        - mock pyudev.Context.__new__, pyudev.Device.__new__, pyudev.Devices.from_device_file, Ipmi.__new__,
+          smfc.FanController.get_hwmon_path, smfc.HdFc._exec_smartctl, and builtins.print via build_hd_fc
+        - call build_hd_fc with an invalid device list (no devices, "raise" name) or standby_hd_limit out of range
+        - ASSERT: HdFc.__init__ raises ValueError
         """
         with pytest.raises(ValueError):
             build_hd_fc(mocker, td, count=data_count, names=names, standby_guard_enabled=True,
@@ -112,9 +130,11 @@ class TestHdFc:
         ],
     )
     def test_init_rejects_nvme_names(self, mocker: MockerFixture, td: TestData, hd_names: List[str]):
-        """Negative unit test for HdFc.__init__() with NVMe device names. It contains the steps:
-        - build an HdFc via the shared builder with NVMe names in hd_names
-        - ASSERT: construction raises ValueError (NVMe drives are not allowed in the HD fan controller)
+        """Negative unit test for HdFc.__init__() method with NVMe device names. It contains the following steps:
+        - mock pyudev.Context.__new__, pyudev.Device.__new__, pyudev.Devices.from_device_file, Ipmi.__new__,
+          smfc.FanController.get_hwmon_path, smfc.HdFc._exec_smartctl, and builtins.print via build_hd_fc
+        - call build_hd_fc with hd_names containing one or more NVMe device names
+        - ASSERT: HdFc.__init__ raises ValueError (NVMe drives are not allowed in the HD fan controller)
         """
         with pytest.raises(ValueError):
             build_hd_fc(mocker, td, count=1, names=hd_names)
@@ -132,10 +152,13 @@ class TestHdFc:
         ],
     )
     def test_exec_smartctl_builds_command(self, mocker: MockerFixture, args: List[str], sudo: bool):
-        """Positive unit test for HdFc._exec_smartctl(). It contains the steps:
-        - build a bare HdFc with a fixed smartctl_path and sudo flag
-        - mock subprocess.run() and call _exec_smartctl()
-        - ASSERT: subprocess.run() is called exactly once with the expected (sudo + path + args) argument list
+        """Positive unit test for HdFc._exec_smartctl() method. It contains the following steps:
+        - mock subprocess.run via mocker.patch with a MagicMock returning a CompletedProcess(returncode=0)
+        - build a bare HdFc via make_bare_hd_fc with smartctl_path="smartctl" and the parametrized sudo flag
+        - invoke fc._exec_smartctl(args) with the parametrized smartctl arguments
+        - ASSERT: subprocess.run is called with (["sudo"] if sudo else []) + [smartctl_path] + args plus
+          capture_output=True, check=False, text=True
+        - ASSERT: subprocess.run is called exactly once
         """
         fc = make_bare_hd_fc(config=create_hd_config(smartctl_path="smartctl"), sudo=sudo)
         mock_run = MagicMock(return_value=subprocess.CompletedProcess([], returncode=0, stdout="", stderr=""))
@@ -154,10 +177,13 @@ class TestHdFc:
     )
     def test_exec_smartctl_raises_on_errors(self, mocker: MockerFixture, smartctl_command: str, sudo: bool, rc: int,
                                             exception: Any):
-        """Negative unit test for HdFc._exec_smartctl() error handling. It contains the steps:
-        - build a bare HdFc with the given smartctl_path and sudo flag
-        - mock subprocess.run() to report a sudo error when a non-zero return code is requested
-        - ASSERT: _exec_smartctl() raises the matching exception (FileNotFoundError missing command / RuntimeError sudo)
+        """Negative unit test for HdFc._exec_smartctl() method error handling. It contains the following steps:
+        - when rc != 0, mock subprocess.run via mocker.patch with a MagicMock returning a CompletedProcess whose
+          stderr reports "sudo: smartctl: command not found"
+        - build a bare HdFc via make_bare_hd_fc with the parametrized smartctl_path and sudo flag
+        - invoke fc._exec_smartctl(["-a", "/dev/sda"])
+        - ASSERT: the call raises the expected exception (FileNotFoundError for missing command, RuntimeError for
+          sudo failure)
         """
         if rc:
             sudo_err = subprocess.CompletedProcess([], returncode=rc, stderr="sudo: smartctl: command not found")
@@ -165,6 +191,38 @@ class TestHdFc:
         fc = make_bare_hd_fc(config=create_hd_config(smartctl_path=smartctl_command), sudo=sudo)
         with pytest.raises(exception):
             fc._exec_smartctl(["-a", "/dev/sda"])
+
+    @pytest.mark.parametrize(
+        "rc, stdout, stderr",
+        [
+            # rc=1: smartctl reports OPEN_READ_ERROR / device healthy-with-warnings; output may be truncated and
+            # contain no Temperature line.
+            pytest.param(1, "smartctl warning: device opened read-only\n", "", id="rc1-warning-truncated"),
+            # rc=2: smartctl reports parse / command-line errors; stderr explains it but stdout has no data.
+            pytest.param(2, "", "smartctl: parse error", id="rc2-parse-error"),
+            # rc=1 with stderr present but lacking the literal "sudo" token (so the sudo-error branch is skipped).
+            pytest.param(1, "garbage output line 1\ngarbage line 2\n", "non-sudo stderr", id="rc1-non-sudo-stderr"),
+        ],
+    )
+    def test_get_nth_temp_passes_through_smartctl_nonzero_rc(self, mocker: MockerFixture, td: TestData, rc: int,
+                                                             stdout: str, stderr: str):
+        """Negative unit test for HdFc._get_nth_temp() method when smartctl exits non-zero (codes 1/2). It contains the
+        following steps:
+        - mock subprocess.run via mocker.patch with a MagicMock returning a CompletedProcess with the parametrized
+          returncode (1=warning, 2=parse error) and stdout/stderr that lack the literal "sudo" token
+        - create one HD hwmon file via td.create_hd_data
+        - build a bare HdFc via make_bare_hd_fc with count=1, hwmon_path=[""] (forces the smartctl branch), and
+          sudo=False so the rc != 0 path in _exec_smartctl is NOT short-circuited as a sudo error
+        - call fc._get_nth_temp(0)
+        - ASSERT: ValueError is raised (the warning / parse-error output reaches the Temperature parser, which
+          cannot find a temperature line and wraps the failure as ValueError)
+        """
+        td.create_hd_data(1, [32])
+        fc = make_bare_hd_fc(count=1, hd_device_names=td.hd_name_list, hwmon_path=[""], sudo=False)
+        result = subprocess.CompletedProcess([], returncode=rc, stdout=stdout, stderr=stderr)
+        mocker.patch("subprocess.run", MagicMock(return_value=result))
+        with pytest.raises(ValueError):
+            fc._get_nth_temp(0)
 
     @pytest.mark.parametrize(
         "count, temperatures",
@@ -176,10 +234,11 @@ class TestHdFc:
         ],
     )
     def test_get_nth_temp_reads_hwmon(self, td: TestData, count: int, temperatures: List[float]):
-        """Positive unit test for HdFc._get_nth_temp() over HWMON. It contains the steps:
-        - create HD hwmon test data with fixed per-device temperatures
-        - build a bare HdFc with hwmon_path set to those files
-        - ASSERT: _get_nth_temp(i) returns the temperature written to each device's hwmon file
+        """Positive unit test for HdFc._get_nth_temp() method over HWMON. It contains the following steps:
+        - create HD hwmon test files via td.create_hd_data with the parametrized count and temperatures
+        - build a bare HdFc via make_bare_hd_fc with hwmon_path=td.hd_files
+        - call fc._get_nth_temp(i) for each device index i
+        - ASSERT: _get_nth_temp(i) returns temperatures[i] for every device
         """
         td.create_hd_data(count, temperatures)
         fc = make_bare_hd_fc(hwmon_path=td.hd_files)
@@ -197,10 +256,15 @@ class TestHdFc:
     )
     def test_get_nth_temp_reads_smartctl(self, mocker: MockerFixture, td: TestData, count: int,
                                          temperatures: List[float]):
-        """Positive unit test for HdFc._get_nth_temp() over the smartctl fallback (empty hwmon path). The steps:
-        - build a bare HdFc with empty hwmon paths so the smartctl branch is used
-        - mock _exec_smartctl() to return SCSI/SATA temperature output for each device
-        - ASSERT: _get_nth_temp(i) parses the expected temperature from the smartctl output
+        """Positive unit test for HdFc._get_nth_temp() method over the smartctl fallback. It contains the
+        following steps:
+        - mock smfc.HdFc._exec_smartctl via mocker.patch with a MagicMock whose return value is set per iteration
+        - create HD hwmon test files via td.create_hd_data with the parametrized count and temperatures
+        - build a bare HdFc via make_bare_hd_fc with hwmon_path=[""] * count to force the smartctl branch
+        - for each device index i, randomly pick one of three smartctl output templates (SCSI, SATA-190, SATA-194),
+          substitute the per-device temperature, and assign it as the mocked return value
+        - call fc._get_nth_temp(i)
+        - ASSERT: _get_nth_temp(i) returns the temperature parsed out of the mocked smartctl output
         """
         # pylint: disable=line-too-long
         smartctl_output = [
@@ -243,10 +307,16 @@ class TestHdFc:
     )
     def test_get_nth_temp_raises_on_io_errors(self, mocker: MockerFixture, td: TestData, operation: int,
                                               exception: Any):
-        """Negative unit test for HdFc._get_nth_temp() error handling (HWMON and smartctl). It contains the steps:
-        - build a bare HdFc over a single device
-        - trigger one HWMON or smartctl failure (missing file/command, index overflow, invalid/absent value)
-        - ASSERT: _get_nth_temp() raises the matching exception
+        """Negative unit test for HdFc._get_nth_temp() method error handling. It contains the following steps:
+        - create one HD hwmon file at 32C via td.create_hd_data
+        - build a bare HdFc via make_bare_hd_fc with count=1 and hwmon_path=td.hd_files
+        - rewrite fc.hwmon_path / fc.config / index per the operation to provoke one failure mode:
+          missing hwmon file, hwmon index overflow, invalid hwmon contents, missing smartctl command,
+          smartctl index overflow, or smartctl output with no temperature line
+        - for the "no temperature" case, mock subprocess.run via mocker.patch with a MagicMock returning a
+          CompletedProcess whose stdout has no temperature line
+        - call fc._get_nth_temp(index)
+        - ASSERT: _get_nth_temp raises the expected exception (FileNotFoundError, IndexError, or ValueError)
         """
         td.create_hd_data(1, [32])
         fc = make_bare_hd_fc(count=1, hd_device_names=td.hd_name_list, hwmon_path=td.hd_files)
@@ -286,9 +356,10 @@ class TestHdFc:
         ],
     )
     def test_get_standby_state_str(self, states: List[bool], result: str):
-        """Positive unit test for HdFc.get_standby_state_str(). It contains the steps:
-        - build a bare HdFc with the given standby_array_states
-        - ASSERT: get_standby_state_str() renders S/A per drive matching the expected string
+        """Positive unit test for HdFc.get_standby_state_str() method. It contains the following steps:
+        - build a bare HdFc via make_bare_hd_fc with count=8 and the parametrized standby_array_states
+        - call fc.get_standby_state_str()
+        - ASSERT: the returned string equals the expected S/A pattern (S per standby drive, A per active drive)
         """
         fc = make_bare_hd_fc(count=8, standby_array_states=states)
         assert fc.get_standby_state_str() == result
@@ -316,9 +387,15 @@ class TestHdFc:
     )
     def test_check_standby_state_counts_standby(self, mocker: MockerFixture, td: TestData, states: List[bool],
                                                 in_standby: int):
-        """Positive unit test for HdFc.check_standby_state(). It contains the steps:
-        - build a bare HdFc and mock _exec_smartctl() to report STANDBY/ACTIVE per drive
-        - ASSERT: check_standby_state() returns the number of drives reported in STANDBY
+        """Positive unit test for HdFc.check_standby_state() method. It contains the following steps:
+        - build per-drive CompletedProcess results with STANDBY or ACTIVE stdout matching the parametrized states
+        - create eight HD hwmon files via td.create_hd_data
+        - build a bare HdFc via make_bare_hd_fc with count=8, hd_device_names=td.hd_name_list, hwmon_path=[""]*8,
+          standby_array_states=[True]*8, and a DEBUG Log
+        - mock smfc.HdFc._exec_smartctl via mocker.patch with a MagicMock whose side_effect iterates the prebuilt
+          CompletedProcess results
+        - call fc.check_standby_state()
+        - ASSERT: check_standby_state returns the count of drives reported in STANDBY
         """
         standby_out = "Device is in STANDBY mode, exit(2)\n"
         active_out = "Power mode is:    ACTIVE or IDLE\n"
@@ -347,10 +424,14 @@ class TestHdFc:
     )
     def test_go_standby_state_sends_commands(self, mocker: MockerFixture, td: TestData, states: List[bool],
                                              expected_calls: int):
-        """Positive unit test for HdFc.go_standby_state(). It contains the steps:
-        - build a bare HdFc with the given standby_array_states and mock _exec_smartctl()
-        - ASSERT: a standby command is issued only for each ACTIVE drive (expected_calls total)
-        - ASSERT: the whole array ends up in STANDBY
+        """Positive unit test for HdFc.go_standby_state() method. It contains the following steps:
+        - create eight HD hwmon files via td.create_hd_data
+        - build a bare HdFc via make_bare_hd_fc with count=8, hd_device_names=td.hd_name_list, and the parametrized
+          standby_array_states
+        - mock smfc.HdFc._exec_smartctl via mocker.patch with a MagicMock returning a CompletedProcess(returncode=0)
+        - call fc.go_standby_state()
+        - ASSERT: _exec_smartctl is called exactly expected_calls times (once per drive that was still ACTIVE)
+        - ASSERT: fc.standby_array_states is [True] * 8 after the call
         """
         td.create_hd_data(8)
         fc = make_bare_hd_fc(count=8, hd_device_names=td.hd_name_list, standby_array_states=states)
@@ -374,10 +455,16 @@ class TestHdFc:
     )
     def test_run_standby_guard_updates_flag(self, mocker: MockerFixture, td: TestData, old_state: bool,
                                             states: List[bool], new_state: bool):
-        """Positive unit test for HdFc.run_standby_guard(). It contains the steps:
-        - build a bare HdFc with standby_hd_limit=1 and stub check_standby_state()/go_standby_state()
-        - run_standby_guard() against the given prior standby_flag and array states
-        - ASSERT: standby_flag transitions to the expected new state
+        """Positive unit test for HdFc.run_standby_guard() method. It contains the following steps:
+        - create eight HD hwmon files via td.create_hd_data
+        - build a bare HdFc via make_bare_hd_fc with standby_hd_limit=1, count=8, hd_device_names=td.hd_name_list,
+          the parametrized standby_array_states, and a DEBUG Log
+        - seed fc.standby_flag with old_state and fc.standby_change_timestamp with time.monotonic()
+        - replace fc.go_standby_state and fc.check_standby_state with MagicMock stubs (check returns the standby
+          count from states)
+        - mock smfc.HdFc._exec_smartctl via mocker.patch with a MagicMock returning a CompletedProcess(returncode=0)
+        - call fc.run_standby_guard()
+        - ASSERT: fc.standby_flag equals the expected new_state after the call
         """
         td.create_hd_data(8)
         log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
@@ -393,10 +480,14 @@ class TestHdFc:
         assert fc.standby_flag == new_state
 
     def test_get_nth_temp_smartctl_debug_logging(self, mocker: MockerFixture):
-        """Positive unit test for HdFc._get_nth_temp() smartctl fallback with DEBUG logging. It contains the steps:
-        - build a bare HdFc at DEBUG log level with an empty hwmon path (smartctl branch)
-        - mock _exec_smartctl() to return an SCSI temperature line
-        - ASSERT: _get_nth_temp(0) returns the parsed temperature (37.0 C)
+        """Positive unit test for HdFc._get_nth_temp() method with the smartctl fallback under DEBUG logging.
+        It contains the following steps:
+        - mock smfc.HdFc._exec_smartctl via mocker.patch with a MagicMock returning a CompletedProcess whose stdout
+          carries an SCSI "Current Drive Temperature: 37 C" line
+        - build a bare HdFc via make_bare_hd_fc with hwmon_path=[""], hd_device_names=["/dev/sda"] and a DEBUG Log
+          so the smartctl branch logs the parse path
+        - call fc._get_nth_temp(0)
+        - ASSERT: _get_nth_temp(0) returns 37.0
         """
         log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         scsi_out = subprocess.CompletedProcess([], returncode=0, stdout="Current Drive Temperature:     37 C\n")

@@ -20,8 +20,9 @@ from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, CpuFc, HdFc, NvmeFc, GpuFc
 from smfc.fancontroller import FanController
 from smfc.config import Config
-from .test_data import (TestData, MockDevices, factory_mockdevice, create_cpu_config, create_hd_config,
-                        create_nvme_config, create_gpu_config)
+from .test_config_builders import create_cpu_config, create_hd_config, create_nvme_config, create_gpu_config
+from .test_fixtures import TestData
+from .test_mocks import MockDevices, factory_mockdevice
 
 # Config fields set on every FanController subclass; checked by assert_fc_base_contract().
 BASE_CONFIG_FIELDS = ["ipmi_zone", "temp_calc", "steps", "sensitivity", "polling", "min_temp", "max_temp",
