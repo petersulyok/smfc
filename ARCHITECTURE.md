@@ -1048,7 +1048,7 @@ The signing key never lives in the `smfc` source repository or in `smfc/packages
 ## 16. Where to look next
 
 - `test/test_*.py` — unit tests structured per source file; the
-  `MockDevices` / `factory_mockdevice` helpers in `test/test_data.py`
+  `MockDevices` / `factory_mockdevice` helpers in `test/test_mocks.py`
   illustrate how the udev path is exercised without real hardware.
 - `config/samples/*.conf` — nine canonical configurations covering the
   common deployment shapes (CPU-only, HD-only, mixed, multi-curve, GPU,
