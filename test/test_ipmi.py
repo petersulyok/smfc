@@ -685,8 +685,8 @@ class TestIpmi:
     def test_init_waits_for_fan_sensors(self, mocker: MockerFixture, td: TestData, settles: bool,
                                         expected_waits: float, expected_sdr_calls: int) -> None:
         """Unit test for Ipmi.__init__() fan-subsystem readiness gate. It contains the following steps:
-        - mock builtins.print, time.sleep (accumulates wait_time), GenericPlatform.start, and
-          Ipmi._exec_ipmitool so that `sdr` reports `ns` (not ready) until it settles or the timeout hits
+        - mock builtins.print, time.sleep (accumulates wait_time), and Ipmi._exec_ipmitool so that
+          `sdr` reports `ns` (not ready) until it settles or the timeout hits
         - call Ipmi(my_log, cfg, False, bmc_init_timeout=30.0)
         - ASSERT: the loop waits in 5 s steps until a fan sensor reports live data (settles case) or the
           bmc_init_timeout is reached (never-settles case, which proceeds without raising)
@@ -698,14 +698,13 @@ class TestIpmi:
         # pylint: disable=W0613
         def mocked_ipmi_exec(self, args: List[str]) -> subprocess.CompletedProcess:
             nonlocal sdr_calls
-            if args == ["bmc", "info"]:
-                return subprocess.CompletedProcess([], returncode=0, stdout=BMC_INFO_OUTPUT)
             if args == ["sdr"]:
                 sdr_calls += 1
                 if settles and sdr_calls >= 3:
                     return subprocess.CompletedProcess([], returncode=0, stdout=SDR_READY_OUTPUT)
                 return subprocess.CompletedProcess([], returncode=0, stdout=SDR_NOTREADY_OUTPUT)
-            return subprocess.CompletedProcess([], returncode=0)
+            # The only other call in __init__ is `bmc info` (GenericPlatform.start() is a no-op).
+            return subprocess.CompletedProcess([], returncode=0, stdout=BMC_INFO_OUTPUT)
         # pylint: enable=W0613
 
         def mocked_time_sleep(second: float) -> None:
@@ -716,7 +715,6 @@ class TestIpmi:
         mocker.patch("builtins.print", MagicMock())
         mocker.patch("time.sleep", mocked_time_sleep)
         mocker.patch("smfc.Ipmi._exec_ipmitool", mocked_ipmi_exec)
-        mocker.patch("smfc.generic.GenericPlatform.start", MagicMock())
         cfg = create_ipmi_config(command=command)
         my_log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
         my_ipmi = Ipmi(my_log, cfg, False, bmc_init_timeout=30.0)
