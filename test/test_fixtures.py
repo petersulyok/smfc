@@ -149,7 +149,9 @@ class TestData:
 # ipmitool emulation
 
 if [[ $1 = "sdr" ]] ; then
-	echo OK
+	echo "CPU Temp         | 45 degrees C      | ok"
+	echo "FAN1             | 500 RPM           | ok"
+	echo "FANA             | 500 RPM           | ok"
 	exit 0
 fi
 

@@ -49,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sample Grafana dashboard [`grafana/smfc.json`](https://github.com/petersulyok/smfc/blob/main/grafana/smfc.json) with three collapsible row sections: service identity (version, uptime, BMC product, fan-mode enforcement count, zone–controller mapping), and one zone row per IPMI zone (fan-level time-series, temperature time-series, applied-level stat, and per-controller temp+level table).
 - Grafana integration documentation [`grafana/GRAFANA.md`](https://github.com/petersulyok/smfc/blob/main/grafana/GRAFANA.md): HTTP exporter overview, full exported metrics reference, sample `/metrics` output, and a step-by-step Docker Compose stack guide (Prometheus + Grafana).
 
+### Fixed
+- Cold-boot fan-control race: after a full power-cycle the BMC answers `ipmitool sdr` (its IPMI command interface is up) up to ~2 minutes before the fan subsystem settles. During that transitional window every sensor reads `no reading`/`disabled` with state `ns` and fan-level writes are silently forced to 100%. smfc previously proceeded as soon as `sdr` returned rc=0, so a low-polling zone (e.g. the HD zone with `polling=960`) could be left pinned at 100% until its next poll (up to 16 minutes). The startup BMC-readiness check (`Ipmi.__init__`) now additionally waits — up to the existing 120 s BMC-init budget, in 5 s steps — until at least one fan sensor reports live data before any fan level is configured. The wait is read-only (it never writes during the fragile window) and is skipped for read-only clients (`smfc-client`).
+
 ## [5.4.0] - 2026.04.30
 
 ### New

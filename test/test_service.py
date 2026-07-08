@@ -380,6 +380,9 @@ class TestService:
         conf_file = td.create_config_file(my_config)
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
+        # A bad/empty ipmitool answers `sdr` with rc=0 but no fan sensors, so the BMC fan-readiness gate
+        # would spin its full retry budget in real 5 s sleeps before failing at `bmc info`; mock it out.
+        mocker.patch("time.sleep", MagicMock())
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
         sys.argv = ("smfc.py -o 0 -nd -ne -c " + conf_file).split()
         service = Service()
@@ -563,6 +566,12 @@ class TestService:
             "BMCEOF\n"
             "exit 0\n"
             "fi\n"
+            # `sdr` must report a live fan sensor so the BMC fan-readiness gate passes without sleeping
+            # (otherwise its retry sleeps would be counted by mocked_sleep and exit before the main loop).
+            'if [[ $1 = "sdr" ]] ; then\n'
+            'echo "FAN1             | 500 RPM           | ok"\n'
+            "exit 0\n"
+            "fi\n"
             'echo "0"'
         )
         cmd_smart = td.create_smart_command()
@@ -689,6 +698,12 @@ class TestService:
             'if [[ $1 = "bmc" && $2 = "info" ]] ; then\n'
             "cat << 'BMCEOF'\n" + BMC_INFO_OUTPUT +
             "BMCEOF\n"
+            "exit 0\n"
+            "fi\n"
+            # `sdr` must report a live fan sensor so the BMC fan-readiness gate passes without sleeping
+            # (otherwise its retry sleeps would be counted by mocked_sleep and exit before the main loop).
+            'if [[ $1 = "sdr" ]] ; then\n'
+            'echo "FAN1             | 500 RPM           | ok"\n'
             "exit 0\n"
             "fi\n"
             'echo "0"'

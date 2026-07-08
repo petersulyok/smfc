@@ -27,6 +27,20 @@ BMC_INFO_OUTPUT = (
     "Provides Device SDRs      : yes\n"
 )
 
+# `ipmitool sdr` output once the fan subsystem has settled: fan sensors report live RPM values.
+SDR_READY_OUTPUT = (
+    "CPU Temp         | 45 degrees C      | ok\n"
+    "FAN1             | 500 RPM           | ok\n"
+    "FANA             | 500 RPM           | ok\n"
+)
+
+# `ipmitool sdr` output during the post-cold-boot transitional window: every sensor still reads `ns`.
+SDR_NOTREADY_OUTPUT = (
+    "CPU Temp         | disabled          | ns\n"
+    "FAN1             | disabled          | ns\n"
+    "FANA             | no reading        | ns\n"
+)
+
 
 def _make_bare_ipmi(mocker: MockerFixture, mock_ipmi_exec: MagicMock, **cfg_kwargs) -> Ipmi:
     """Build a bare Ipmi instance (no __init__) wired with the given exec mock and a default config.
@@ -75,7 +89,7 @@ class TestIpmi:
         mocker.patch("builtins.print", mock_print)
         mock_ipmi_exec = MagicMock()
         mock_ipmi_exec.side_effect = [
-            subprocess.CompletedProcess([], returncode=0),
+            subprocess.CompletedProcess([], returncode=0, stdout=SDR_READY_OUTPUT),
             subprocess.CompletedProcess([], returncode=0, stdout=BMC_INFO_OUTPUT),
         ]
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
@@ -138,7 +152,7 @@ class TestIpmi:
                     raise RuntimeError("ipmitool error (1): error.")
             if case == 5:
                 raise RuntimeError("ipmitool error (1): error.")
-            return subprocess.CompletedProcess([], returncode=0)
+            return subprocess.CompletedProcess([], returncode=0, stdout=SDR_READY_OUTPUT)
 
         # pylint: enable=W0613
 
@@ -596,7 +610,7 @@ class TestIpmi:
         mocker.patch("builtins.print", MagicMock())
         mock_ipmi_exec = MagicMock()
         mock_ipmi_exec.side_effect = [
-            subprocess.CompletedProcess([], returncode=0),
+            subprocess.CompletedProcess([], returncode=0, stdout=SDR_READY_OUTPUT),
             subprocess.CompletedProcess([], returncode=0, stdout=BMC_INFO_OUTPUT),
         ]
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
@@ -642,6 +656,73 @@ class TestIpmi:
         # Loop sleeps in 5 s steps; with timeout=10 it should exit at 10..15 s, far below 120 s.
         assert wait_time < 20.0, "bmc_init_timeout did not bound the retry loop"
         assert wait_time >= 10.0, "bmc_init_timeout exited too early"
+
+    @pytest.mark.parametrize(
+        "sdr_output, expected",
+        [
+            pytest.param(SDR_READY_OUTPUT, True, id="fan-ok"),
+            pytest.param(SDR_NOTREADY_OUTPUT, False, id="all-ns"),
+            pytest.param("garbage line without pipes\nFAN1 | 500 RPM | ok\n", True, id="malformed-then-fan-ok"),
+            pytest.param("OTHER Temp | 40 degrees C | ok\n", False, id="no-fan-sensor"),
+            pytest.param("", False, id="empty"),
+        ],
+    )
+    def test_fan_sensors_ready(self, sdr_output: str, expected: bool) -> None:
+        """Unit test for Ipmi._fan_sensors_ready(). It contains the following steps:
+        - call Ipmi._fan_sensors_ready(sdr_output) on representative `ipmitool sdr` outputs
+        - ASSERT: True only when at least one FAN* sensor reports a live reading (state != `ns`);
+          malformed lines (fewer than 3 fields) are skipped, `ns`/no-fan outputs return False
+        """
+        assert Ipmi._fan_sensors_ready(sdr_output) is expected  # pylint: disable=protected-access
+
+    @pytest.mark.parametrize(
+        "settles, expected_waits, expected_sdr_calls",
+        [
+            pytest.param(True, 10.0, 3, id="fan-settles-after-two-waits"),
+            pytest.param(False, 30.0, 7, id="fan-never-settles-hits-timeout"),
+        ],
+    )
+    def test_init_waits_for_fan_sensors(self, mocker: MockerFixture, td: TestData, settles: bool,
+                                        expected_waits: float, expected_sdr_calls: int) -> None:
+        """Unit test for Ipmi.__init__() fan-subsystem readiness gate. It contains the following steps:
+        - mock builtins.print, time.sleep (accumulates wait_time), GenericPlatform.start, and
+          Ipmi._exec_ipmitool so that `sdr` reports `ns` (not ready) until it settles or the timeout hits
+        - call Ipmi(my_log, cfg, False, bmc_init_timeout=30.0)
+        - ASSERT: the loop waits in 5 s steps until a fan sensor reports live data (settles case) or the
+          bmc_init_timeout is reached (never-settles case, which proceeds without raising)
+        - ASSERT: the accumulated wait_time and number of `sdr` calls match the expected retry counts
+        """
+        wait_time: float = 0.0
+        sdr_calls = 0
+
+        # pylint: disable=W0613
+        def mocked_ipmi_exec(self, args: List[str]) -> subprocess.CompletedProcess:
+            nonlocal sdr_calls
+            if args == ["bmc", "info"]:
+                return subprocess.CompletedProcess([], returncode=0, stdout=BMC_INFO_OUTPUT)
+            if args == ["sdr"]:
+                sdr_calls += 1
+                if settles and sdr_calls >= 3:
+                    return subprocess.CompletedProcess([], returncode=0, stdout=SDR_READY_OUTPUT)
+                return subprocess.CompletedProcess([], returncode=0, stdout=SDR_NOTREADY_OUTPUT)
+            return subprocess.CompletedProcess([], returncode=0)
+        # pylint: enable=W0613
+
+        def mocked_time_sleep(second: float) -> None:
+            nonlocal wait_time
+            wait_time += second
+
+        command = td.create_command_file()
+        mocker.patch("builtins.print", MagicMock())
+        mocker.patch("time.sleep", mocked_time_sleep)
+        mocker.patch("smfc.Ipmi._exec_ipmitool", mocked_ipmi_exec)
+        mocker.patch("smfc.generic.GenericPlatform.start", MagicMock())
+        cfg = create_ipmi_config(command=command)
+        my_log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
+        my_ipmi = Ipmi(my_log, cfg, False, bmc_init_timeout=30.0)
+        assert my_ipmi.bmc_product_name == "X11SCH-LN4F"
+        assert wait_time == expected_waits
+        assert sdr_calls == expected_sdr_calls
 
 
 # End.

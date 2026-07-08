@@ -74,13 +74,21 @@ class Ipmi:
         # Check 2: fan_level_delay must be positive.
         if cfg.fan_level_delay < 0:
             raise ValueError(f"Negative fan_level_delay= parameter ({cfg.fan_level_delay})")
-        # Check 3: a valid command can be executed successfully and wait if BMC is not ready.
+        # Check 3: wait until the BMC is ready. Two conditions must hold, because after a cold boot the
+        # IPMI command interface answers well before the fan subsystem has settled:
+        #   (a) `sdr` executes successfully (rc=0)  -> the IPMI command interface is up;
+        #   (b) a fan sensor reports live data       -> the fan subsystem has settled.
+        # During the (a)-but-not-(b) window (up to ~2 minutes on a cold BMC) every sensor reads
+        # `disabled`/`no reading` with state `ns`, and fan-level writes are silently forced to 100%.
+        # Starting the control loop then leaves a low-polling zone stuck at 100% until its next poll.
+        # The read-only `sdr` poll waits this out without touching the fans (a write-readback probe could
+        # itself be clobbered mid-window; a fixed sleep is fragile). Read-only clients skip (b) so they
+        # never block on a cold BMC. Both conditions share the 120 second budget in 5 second steps.
         bmc_timeout = 0.0
         while True:
             try:
                 # May raise FileNotFoundError if ipmitool is not found.
-                self._exec_ipmitool(["sdr"])
-                break
+                r = self._exec_ipmitool(["sdr"])
             except RuntimeError as e:
                 # In case of ipmitool error we try to wait BMC initialization in maximum 120 seconds
                 # (in 5 seconds steps), otherwise reraise the exception.
@@ -91,6 +99,16 @@ class Ipmi:
                     if bmc_timeout < bmc_init_timeout:
                         continue
                 raise
+            # (a) holds (no exception). Now wait for (b): the fan subsystem to settle. The except branch
+            # above never falls through here (it either re-raises or `continue`s). Clients skip (b).
+            if in_client or self._fan_sensors_ready(r.stdout):
+                break
+            if bmc_timeout >= bmc_init_timeout:
+                self.log.msg(Log.LOG_INFO, "BMC fan sensors still not ready after timeout, continuing.")
+                break
+            self.log.msg(Log.LOG_INFO, "BMC fan sensors are not ready, waiting 5 seconds.")
+            time.sleep(5)
+            bmc_timeout += 5
 
         # Retrieve and parse BMC information.
         r = self._exec_ipmitool(["bmc", "info"])
@@ -137,6 +155,29 @@ class Ipmi:
             self.log.msg(Log.LOG_CONFIG, f"   product name (id) = {self.bmc_product_name} ({self.bmc_product_id})")
             self.log.msg(Log.LOG_CONFIG, f"   IPMI version = {self.bmc_ipmi_version}")
             self.log.msg(Log.LOG_CONFIG, f"   firmware revision = {self.bmc_firmware_rev}")
+
+    @staticmethod
+    def _fan_sensors_ready(sdr_output: str) -> bool:
+        """Return True if the BMC fan sensors report live data in `ipmitool sdr` output.
+
+        After a cold boot `sdr` returns rc=0 while every sensor still reads `disabled`/`no reading`
+        with state `ns` and fan-level writes are silently forced to 100%. A fan sensor reporting a
+        live reading (any state other than `ns`, e.g. `500 RPM | ok`) marks the fan subsystem as
+        settled. At least one fan sensor is required so that an unpopulated header that stays `ns`
+        forever does not force us to wait for the full timeout.
+        Args:
+            sdr_output (str): stdout of `ipmitool sdr`
+        Returns:
+            bool: True if at least one fan sensor reports live data
+        """
+        for line in sdr_output.splitlines():
+            fields = [f.strip() for f in line.split("|")]
+            if len(fields) < 3:
+                continue
+            name, state = fields[0], fields[2]
+            if name.upper().startswith("FAN") and state.lower() != "ns":
+                return True
+        return False
 
     def _exec_ipmitool(self, args: List[str]) -> subprocess.CompletedProcess:
         """Execute `ipmitool` command.
