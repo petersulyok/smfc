@@ -252,9 +252,10 @@ A message is emitted only if `level <= self.log_level`.
 
 `Ipmi` is the only place that spawns `ipmitool`. It:
 
-- waits up to `BMC_INIT_TIMEOUT = 120 s` for the BMC to become responsive
-  (5-second retry loop around `ipmitool sdr`) — covers the cold-boot case
-  where Linux finishes booting before the BMC is ready to answer,
+- waits up to `BMC_INIT_TIMEOUT = 180 s` for the BMC *and its fan subsystem*
+  to become ready (5-second retry loop around `ipmitool sdr`) — covers the
+  cold-boot race where the IPMI command interface answers before fan-level
+  writes actually hold (see §6.4),
 - parses `ipmitool bmc info` into `bmc_*` attributes,
 - selects the appropriate `Platform` implementation,
 - calls `platform.start()` to prepare manual fan control (no-op on most platforms; enables per-zone manual mode on `GenericX14Platform`, programs NCT7904D registers on `X10QBi`),
@@ -316,6 +317,90 @@ shutdown via `Service.exit_func()`:
   (T1FMR–T10FMR) and sets PWM output mode (FOMC); `end()` is a no-op (configuration
   persists until BMC restart). `start()` is also re-invoked before each `set_fan_level` /
   `set_multiple_fan_levels` call because the chip can drift back to SmartFan mode on its own.
+
+### 6.4 Cold-boot BMC readiness gate (`Ipmi._fan_sensors_ready`)
+
+On a cold power-on the IPMI command interface comes up **well before** the fan
+subsystem has settled. During that gap the BMC answers `ipmitool` commands
+normally, yet silently forces every fan to 100% and ignores fan-level writes.
+If `smfc` starts the control loop inside this window, a low-polling zone can
+latch at 100% until its next poll — for the HD zone (`polling = 960 s`) that is
+up to 16 minutes of full-speed fans. This was the original cold-boot bug the
+gate fixes.
+
+A cold power-on is the common trigger, but it is **not the only one**. The same
+settling window opens after *any* event that re-initializes the BMC and its fan
+subsystem: an explicit BMC cold reset (`ipmitool mc reset cold`), and — notably
+— a change to **BIOS/BMC settings** (entering BIOS setup, altering fan-mode or
+hardware-monitor options, or a BIOS/firmware update). In these cases the host
+may already be running when the BMC restarts, so `smfc` can be restarted (or
+started) with *no* OS-boot overlap to absorb the delay — the gate must then wait
+out the full settling time on its own, which is why the 180 s budget is sized
+for the worst-case ~102 s rather than the ~10–15 s tail seen on a normal boot.
+
+**Measured timeline.** An `ipmitool mc reset cold` on an X11SCH-LN4F (which
+resets only the BMC, host stays up — the same settling behavior as a cold boot,
+minus the OS-boot overlap) exposes two distinct phases before the fans report
+live data:
+
+| Phase | Duration | `ipmitool sdr` | FAN rows |
+|---|---|---|---|
+| Command interface down | ~30 s | `rc != 0` (`Device or resource busy`) | — |
+| Fan subsystem not settled | ~69 s | `rc = 0` | `no reading \| ns` |
+| Settled | — | `rc = 0` | `1300–1500 RPM \| ok` |
+
+Total ≈ 102 s of pure BMC settling. On a real power-on boot most of this
+overlaps BIOS/POST/kernel/systemd startup, so by the time `smfc` runs the gate
+typically only has to wait out the tail (~10–15 s observed).
+
+**Two-condition gate.** `Ipmi.__init__` (Check 3) loops until **both** hold,
+sharing a single 180 s budget in 5 s steps:
+
+```mermaid
+flowchart TD
+    A["_exec_ipmitool(['sdr'])"] --> B{raised RuntimeError<br/>containing 'ipmitool'?}
+    B -- yes --> C[interface still down:<br/>sleep 5s, retry]
+    C --> A
+    B -- no --> D{"in_client?"}
+    D -- yes --> OK([break: clients skip fan check])
+    D -- no --> E{"_fan_sensors_ready(stdout)?"}
+    E -- yes --> OK2([break: fan subsystem settled])
+    E -- no --> F{budget exhausted?}
+    F -- yes --> G([break: log 'still not ready, continuing'])
+    F -- no --> H[sleep 5s, retry] --> A
+```
+
+- **(a) interface up** — `sdr` returns `rc = 0`. A non-zero rc raises
+  `RuntimeError("ipmitool error …")`; the loop catches it (message contains
+  `"ipmitool"`), sleeps, and retries — this is what rides out the ~30 s
+  interface-down phase.
+- **(b) fan subsystem settled** — `_fan_sensors_ready()` scans the `sdr`
+  output for at least one `FAN*` sensor whose state column is **not** `ns`.
+
+**Why read-only.** The gate never writes during the fragile window. A
+write-readback probe would be self-defeating — writing a fan level mid-window
+triggers the very 100% clobber it is trying to detect. A fixed sleep was
+rejected as fragile (too short risks the bug, too long delays every boot). The
+read-only `sdr` poll waits exactly as long as needed and no longer.
+
+**Why the predicate is `state != "ns"`, not `state == "ok"`.** In ipmitool's
+`lib/ipmi_sdr.c`, `ipmi_sdr_get_thresh_status()` returns `ns` **if and only
+if** the sensor reading is invalid (`!s_reading_valid`). So the biconditional
+holds: `ns` ⇔ no valid reading. Any other state — including the threshold
+alarms `nc`/`cr`/`nr` (and their extended `lnc`/`unc`/`lcr`/`ucr`/`lnr`/`unr`
+forms) — means the tachometer was actually read, i.e. the subsystem has
+settled. A fan that boots straight into an alarm state must count as ready;
+narrowing the check to `== "ok"` would re-hang on it until the timeout. The
+sibling reading-column strings (`disabled`, `no reading`, `Not Readable`) are
+never inspected — they always co-occur with `ns` and vary by board, so keying
+on the state column keeps the gate board-agnostic. At least one `FAN*` sensor
+is required so an unpopulated header that stays `ns` forever cannot hold the
+gate open.
+
+**Clients skip (b).** Read-only consumers (`smfc-client`) pass
+`in_client=True` and a short `CLIENT_BMC_INIT_TIMEOUT = 5 s`: they never mutate
+BMC state, so they must not block on a cold fan subsystem — they satisfy (a)
+and return.
 
 ---
 
