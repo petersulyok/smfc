@@ -10,7 +10,7 @@ Supermicro fan control for Linux (home) servers.
 
 ## TL;DR
 
-This is a `systemd service` running on Linux that can control fans with the help of IPMI on Supermicro X10-X13/H10-H13 (and some X9) motherboards.
+This is a `systemd service` running on Linux that can control fans with the help of IPMI on Supermicro X10-X13/H10-H13, some X9, and X14/H14 (experimental) motherboards.
 
 ### 1. Prerequisites
  - a Supermicro motherboard with IPMI 2.0 (ASPEED AST2400/2500/2600 chip)
@@ -56,7 +56,7 @@ Key features:
  - Standby guard feature for SATA hard disk arrays organized in RAID
  - Support for SATA, SAS/SCSI, and NVMe disks with automatic HWMON/smartctl fallback
  - Nvidia or AMD GPU temperature monitoring via `nvidia-smi` or `rocm-smi`
- - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13) and edge cases (X10QBi)
+ - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13, X14) and edge cases (X10QBi)
  - Remote IPMI access via `remote_parameters=` for VM setups (e.g. TrueNAS on Proxmox with PCI passthrough)
  - Distributed as a `systemd` service, Docker image, DEB/RPM package, or PyPI package
  - Optional HTTP exporter for live monitoring: powers `smfc-client` and enables Grafana dashboard integration
@@ -271,20 +271,22 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 | `auto`                     | automatic discovery based on BMC information | Reads BMC product name; selects `generic_x14` if it starts with `X14`, `X10QBi` if it starts with `X10QBi`, `generic_x9` if it starts with `X9`, otherwise falls back to `generic` |
 | `generic`                  | Generic X10-X13/H10-H13 Supermicro boards    | Uses standard Supermicro IPMI raw commands                                                       |
 | `generic_x9`               | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                  |
-| `generic_x14`              | Generic Supermicro X14 boards                | OpenBMC-based, 6 fan zones (0-5), duty cycle 0-100% — **experimental**, see [issue #98](https://github.com/petersulyok/smfc/issues/98), [discussion #92](https://github.com/petersulyok/smfc/discussions/92), [discussion #106](https://github.com/petersulyok/smfc/discussions/106) |
+| `generic_x14`              | Generic Supermicro X14 boards                | OpenBMC-based, 6 fan zones (0-5), duty cycle 0-100% — **experimental**, see [issue #98](https://github.com/petersulyok/smfc/issues/98), [discussion #106](https://github.com/petersulyok/smfc/discussions/106) |
 | `X10QBi`                   | Supermicro X10QBi motherboard                | Nuvoton NCT7904D fan controller, 4 fan zones (0x10-0x13), see [issue #69](https://github.com/petersulyok/smfc/issues/69) and [PR #97](https://github.com/petersulyok/smfc/pull/97) |
 
 With this abstraction layer, new Supermicro motherboards can also be added to `smfc` with a good understanding of their IPMI raw commands and fan control logic.
 
 Some X9 motherboards are supported (since `smfc v5.2.0`) via the `generic_x9` platform, provided they support the specific IPMI raw commands used for fan control. X9 boards are auto-detected when the BMC product name starts with `X9`; you can also force the platform by setting `platform_name=generic_x9`. The `X10QBi` platform is auto-detected when the BMC product name starts with `X10QBi`.
 
-X14/H14 motherboard support (`generic_x14`) was introduced in `smfc v6.0.0` and is currently **in testing phase**. The X14 BMC is OpenBMC-based and uses different IPMI raw commands from older platforms. If you own an X14 board and test `smfc`, please share your experience in [discussion #92](https://github.com/petersulyok/smfc/discussions/92) or [discussion #106](https://github.com/petersulyok/smfc/discussions/106) — your feedback is essential to stabilize this support.
+X14/H14 motherboard support (`generic_x14`) was introduced in `smfc v6.0.0` and is currently **in testing phase**. The X14 BMC is OpenBMC-based and uses different IPMI raw commands from older platforms. If you own an X14 board and test `smfc`, please share your experience in [discussion #106](https://github.com/petersulyok/smfc/discussions/106) — your feedback is essential to stabilize this support.
 
 The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
 
 Feel free to create a short feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55) on your compatibility experience.
 
 ### 6. IPMI fan control and sensor thresholds
+> This chapter describes the RPM sensor-threshold/assertion model of the older AST2400/2500/2600-based BMCs (`generic`, `generic_x9`, `X10QBi` platforms). Whether and how it applies to the OpenBMC-based X14/H14 boards (`generic_x14` platform) is not yet confirmed — see [chapter 5](https://github.com/petersulyok/smfc/blob/main/README.md#5-supermicro-compatibility) and share your findings in [discussion #106](https://github.com/petersulyok/smfc/discussions/106).
+
 On Supermicro X10-X11 motherboards IPMI uses six sensor thresholds to specify the safe and unsafe fan rotational speed intervals (these are RPM values rounded to the nearest hundreds, defined for each fan separately):
 
 ```
