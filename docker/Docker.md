@@ -1,6 +1,8 @@
 # smfc in docker
 This page describes the most important docker-specific information for `smfc`. Please visit the [GitHub repository](https://github.com/petersulyok/smfc) of `smfc` for more details or for reporting issues.
 
+> ⚠️ **Runtime configuration changed:** the host mount was narrowed from `/run:/run:ro` to `/run/udev:/run/udev:ro` (see [issue #107](https://github.com/petersulyok/smfc/issues/107)). If you are upgrading an existing setup, update the `volumes` section of your `docker run` command / compose file accordingly. The old wide `/run:/run:ro` mount prevents the GPU images from starting under the NVIDIA Container Toolkit (`mkdirat run/nvidia-ctk-hook: read-only file system`).
+
 # Content
 There are three images created for `smfc`:
 
