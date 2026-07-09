@@ -43,8 +43,11 @@ class Ipmi:
     SUCCESS: int = 0
     ERROR: int = -1
 
-    # Timeout value for BMC initialization (seconds).
-    BMC_INIT_TIMEOUT: float = 120.0
+    # Timeout value for BMC initialization (seconds). A real `mc reset cold` on an X11SCH-LN4F takes
+    # ~102 s (≈30 s interface-down + ≈69 s sensors `ns`) before the fan subsystem settles; 180 s leaves
+    # headroom for a no-overlap reset while costing nothing on the happy path (the gate exits as soon as
+    # the fans report live data).
+    BMC_INIT_TIMEOUT: float = 180.0
 
     def __init__(self, log: Log, cfg: IpmiConfig, sudo: bool, *,
                  in_client: bool = False, bmc_init_timeout: float = BMC_INIT_TIMEOUT) -> None:
@@ -56,7 +59,7 @@ class Ipmi:
             in_client (bool): if True, do not switch the BMC into manual fan mode (read-only consumers
                               like smfc-client should set this to avoid mutating BMC state)
             bmc_init_timeout (float): override for the BMC-not-ready retry timeout (seconds);
-                                      defaults to Ipmi.BMC_INIT_TIMEOUT (120 s); pass 0 to disable retries
+                                      defaults to Ipmi.BMC_INIT_TIMEOUT (180 s); pass 0 to disable retries
         Raises:
             ValueError: invalid input parameters
             FileNotFoundError: ipmitool not found
@@ -83,14 +86,14 @@ class Ipmi:
         # Starting the control loop then leaves a low-polling zone stuck at 100% until its next poll.
         # The read-only `sdr` poll waits this out without touching the fans (a write-readback probe could
         # itself be clobbered mid-window; a fixed sleep is fragile). Read-only clients skip (b) so they
-        # never block on a cold BMC. Both conditions share the 120 second budget in 5 second steps.
+        # never block on a cold BMC. Both conditions share the 180 second budget in 5 second steps.
         bmc_timeout = 0.0
         while True:
             try:
                 # May raise FileNotFoundError if ipmitool is not found.
                 r = self._exec_ipmitool(["sdr"])
             except RuntimeError as e:
-                # In case of ipmitool error we try to wait BMC initialization in maximum 120 seconds
+                # In case of ipmitool error we try to wait BMC initialization in maximum 180 seconds
                 # (in 5 seconds steps), otherwise reraise the exception.
                 if "ipmitool" in e.args[0]:
                     self.log.msg(Log.LOG_INFO, "BMC is not ready, waiting 5 seconds.")

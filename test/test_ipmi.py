@@ -35,9 +35,11 @@ SDR_READY_OUTPUT = (
 )
 
 # `ipmitool sdr` output during the post-cold-boot transitional window: every sensor still reads `ns`.
+# Matches a real `mc reset cold` capture on the X11SCH-LN4F, where all sensors show `no reading | ns`
+# for ~69 s after the command interface returns rc=0, before the fan subsystem settles.
 SDR_NOTREADY_OUTPUT = (
-    "CPU Temp         | disabled          | ns\n"
-    "FAN1             | disabled          | ns\n"
+    "CPU Temp         | no reading        | ns\n"
+    "FAN1             | no reading        | ns\n"
     "FANA             | no reading        | ns\n"
 )
 
@@ -631,7 +633,7 @@ class TestIpmi:
           RuntimeError("ipmitool error ...")), and the td fixture's create_command_file (fake ipmitool binary)
         - build an ipmi Config via create_ipmi_config(command=...)
         - call Ipmi(my_log, cfg, False, bmc_init_timeout=10.0) inside pytest.raises(RuntimeError)
-        - ASSERT: wait_time stays below 20.0 (the override bounded the retry loop, well under the 120 s default)
+        - ASSERT: wait_time stays below 20.0 (the override bounded the retry loop, well under the 180 s default)
         - ASSERT: wait_time is at least 10.0 (the loop did not exit before the override timeout)
         """
         wait_time: float = 0.0
@@ -653,7 +655,7 @@ class TestIpmi:
         my_log = Log(Log.LOG_NONE, Log.LOG_STDOUT)
         with pytest.raises(RuntimeError):
             Ipmi(my_log, cfg, False, bmc_init_timeout=10.0)
-        # Loop sleeps in 5 s steps; with timeout=10 it should exit at 10..15 s, far below 120 s.
+        # Loop sleeps in 5 s steps; with timeout=10 it should exit at 10..15 s, far below 180 s.
         assert wait_time < 20.0, "bmc_init_timeout did not bound the retry loop"
         assert wait_time >= 10.0, "bmc_init_timeout exited too early"
 

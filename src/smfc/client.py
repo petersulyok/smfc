@@ -29,7 +29,7 @@ EXIT_CONFIG_ERROR: int = 6
 EXIT_IPMI_ERROR: int = 8
 EXIT_UDEV_ERROR: int = 9
 
-# BMC init timeout for the client (default service uses 120 s).
+# BMC init timeout for the client (default service uses 180 s).
 CLIENT_BMC_INIT_TIMEOUT: float = 5.0
 
 # Snapshot fetch timeout (used when the exporter is enabled in config).
