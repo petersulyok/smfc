@@ -1140,7 +1140,7 @@ flowchart LR
 
 Sequence on release:
 
-1. `release: published` event fires `packages.yml` in `smfc`.
+1. `release: published` event fires `packages.yml` in `smfc` (it can also be run manually — see §15.5).
 2. `build-deb` and `build-rpm` jobs run in parallel, producing `smfc_X.Y.Z_all.deb` and `smfc-X.Y.Z-1.noarch.rpm`.
 3. The `publish` job (after both builds succeed) downloads both artifacts, attaches them as **release assets** (public, version-pinned downloads), and fires a `repository_dispatch` event of type `package-published` with `client_payload.release_tag` set, to both downstream repos.
 4. Each downstream workflow downloads its package from the release page, refreshes the repository metadata, and pushes to `gh-pages`. GitHub Pages auto-deploys.
@@ -1172,6 +1172,16 @@ A single dedicated GPG key (RSA 4096, 5-year expiry) signs both repositories. Th
 | Key ID | Embedded in `conf/distributions` (DEB) and `_gpg_name` macro (RPM) | Public |
 
 The signing key never lives in the `smfc` source repository or in `smfc/packages.yml`. A compromise of `smfc` source alone cannot produce signed packages — the trust boundary is the downstream publishing repositories.
+
+### 15.5 Operating and testing the pipeline
+
+`packages.yml` also accepts a manual **`workflow_dispatch`** trigger with a `release_tag` input, so the full build → attach → dispatch → downstream-publish chain can be run against any existing release without cutting a new version. Both downstream publishes are idempotent (reprepro re-exports if the version is already present; `createrepo_c --update` is idempotent) and the asset attach uses `--clobber`, so re-running against an already-published tag is safe. Use this to validate the pipeline — including the cross-repo `PACKAGE_REPO_DISPATCH_TOKEN` — after any workflow change.
+
+Non-obvious constraints:
+
+- **Re-running a failed *release* run reuses the workflow file pinned to the release tag's commit, not `main`.** A fix committed to `main` does not apply to a re-run of the original release run; re-trigger via `workflow_dispatch` (which uses `main`) or cut a new release.
+- **PyPI publishing (`publish.yml`) also fires on `release: published` and rejects re-uploading an existing version**, so deleting and recreating a release to retry package publishing fails at the PyPI step. The `workflow_dispatch` path does not touch PyPI.
+- **The `publish` job runs on a bare runner with no `actions/checkout`**, so `gh release upload` needs an explicit `-R ${{ github.repository }}` (otherwise `gh` fails to detect the repo with `fatal: not a git repository`), and the job declares `permissions: contents: write` for the upload.
 
 ---
 
