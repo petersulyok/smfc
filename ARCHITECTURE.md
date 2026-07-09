@@ -353,18 +353,30 @@ Total ≈ 102 s of pure BMC settling. On a real power-on boot most of this
 overlaps BIOS/POST/kernel/systemd startup, so by the time `smfc` runs the gate
 typically only has to wait out the tail (~10–15 s observed).
 
-**Observed on real reboots (X11SCH-LN4F).** Two things differ from the
-`mc reset cold` capture and confirm why the gate keys on the *state* column
-only. First, the reading-column string varies by trigger: a real cold boot and
-a BIOS-change reboot both present the fans as **`disabled | ns`**, whereas
-`mc reset cold` shows **`no reading | ns`** — same `ns` state, different sibling
-string. Second, on both real reboots the command interface was already up when
-`smfc` started (no `rc != 0` phase at all), and only ~17 s of `disabled | ns`
-settling remained (three 5 s steps), because POST/boot had absorbed the rest.
-In every case the BMC came up already in `FULL` mode with both zones at 100%, so
-the conditional startup set (§8.1) correctly skipped the redundant write while
-the gate still absorbed the settling window and zone levels applied without a
-zone-1 clobber.
+**Observed across real triggers (X11SCH-LN4F).** Field testing confirmed why the
+gate keys on the *state* column only: the sibling reading-column string tracks
+whether the BMC genuinely re-initialized, not "boot vs reset", and even varies by
+sensor type within one capture. The `ns` state is invariant across all of them.
+
+| Trigger | BMC re-init? | Fan rows during window | Gate wait |
+|---|---|---|---|
+| Warm OS reboot | no (BMC stayed powered) | `disabled \| ns` | ~17 s |
+| BIOS-change reboot | no (BMC stayed powered) | `disabled \| ns` | ~17 s |
+| Full PSU-off cold start | **yes** | `no reading \| ns` (fans); `disabled \| ns` (other sensors) | ~12 s |
+| `ipmitool mc reset cold` | yes | `no reading \| ns` | ~102 s |
+
+A genuinely cold BMC reports fans as **`no reading`** (matching `mc reset cold`);
+a host reboot that leaves the BMC powered reports **`disabled`** (sensor scanning
+briefly suspended). Note that merely flipping a rear AC switch may *not* cold-start
+the BMC — it runs on 5 V standby, so a brief cut can be absorbed by standby
+capacitors, leaving the BMC (and its `FULL`/100% state) untouched; only a full PSU
+power-down reliably re-initializes it. On every real boot the command interface was
+already up when `smfc` started (no `rc != 0` phase — that only appears with an
+in-band `mc reset cold`), and POST/boot absorbed most of the settling, so only a
+~12–17 s tail remained. In every case the BMC came up already in `FULL` with both
+zones at 100%, so the conditional startup set (§8.1) correctly skipped the redundant
+write while the gate absorbed the remaining settling and zone levels applied without
+a zone-1 clobber.
 
 **Two-condition gate.** `Ipmi.__init__` (Check 3) loops until **both** hold,
 sharing a single 180 s budget in 5 s steps:
@@ -405,9 +417,10 @@ forms) — means the tachometer was actually read, i.e. the subsystem has
 settled. A fan that boots straight into an alarm state must count as ready;
 narrowing the check to `== "ok"` would re-hang on it until the timeout. The
 sibling reading-column strings (`disabled`, `no reading`, `Not Readable`) are
-never inspected — they always co-occur with `ns` and vary by board and trigger
-(a real cold boot shows `disabled`, an `mc reset cold` shows `no reading` on the
-same board), so keying on the state column keeps the gate board-agnostic. At least one `FAN*` sensor
+never inspected — they always co-occur with `ns` and vary by board, trigger, and
+even sensor type (on the same board a genuinely cold BMC shows `no reading` for
+fans but `disabled` for other sensors, while a reboot that leaves the BMC powered
+shows `disabled`), so keying on the state column keeps the gate board-agnostic. At least one `FAN*` sensor
 is required so an unpopulated header that stays `ns` forever cannot hold the
 gate open.
 

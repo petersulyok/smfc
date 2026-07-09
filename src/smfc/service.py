@@ -366,8 +366,9 @@ class Service:
         # transitional state that once forced an unconditional re-set. Skipping the redundant write avoids
         # a needless fan_mode_delay sleep (and the momentary fan blip some firmware produces when FULL is
         # re-latched) on warm restarts; runtime drift is still caught by _check_fan_mode(). The set still
-        # fires on firmware that boots into a non-FULL default; the X11SCH-LN4F comes up already in FULL
-        # (verified across a warm reboot and a BIOS-change/BMC-reset boot), so this branch routinely skips.
+        # fires on firmware that boots into a non-FULL default; the X11SCH-LN4F comes up already in FULL even
+        # after a full PSU-off cold start (verified across warm, BIOS-change, and PSU-off boots), so this
+        # branch routinely skips on this board.
         if self.last_fan_mode != Ipmi.FULL_MODE:
             self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
             self.last_fan_mode = Ipmi.FULL_MODE
