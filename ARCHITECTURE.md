@@ -276,23 +276,29 @@ flowchart TD
     B -- no --> D[use config value as-is]
     C --> F[create_platform name]
     D --> F
-    F --> G{name startswith X14?}
-    G -- yes --> X14[GenericX14Platform]
-    G -- no --> H{name startswith X9?}
-    H -- yes --> X9[GenericX9Platform]
-    H -- no --> I{matches PlatformName enum?}
-    I -- GENERIC_X14 --> X14
-    I -- GENERIC_X9 --> X9
+    F --> I{exact PlatformName enum match?}
+    I -- GENERIC_X14 --> X14[GenericX14Platform]
+    I -- GENERIC_X9 --> X9[GenericX9Platform]
     I -- X10QBI --> XQ[X10QBi]
     I -- GENERIC --> GP[GenericPlatform]
-    I -- no match --> GP
+    I -- no match --> G{name startswith X14?}
+    G -- yes --> X14
+    G -- no --> J{name startswith X10QBi?}
+    J -- yes --> XQ
+    J -- no --> H{name startswith X9?}
+    H -- yes --> X9
+    H -- no --> GP
 ```
 
-Auto-detection is purely string-prefix matching against the BMC product name.
-Boards whose names start with `X14` get the X14 platform; boards starting with
-`X9` get the X9 platform; everything else (X10, X11, X12, X13, H1x, …) gets
-the generic platform. `X10QBi` must be opted into explicitly via
-`platform_name=X10QBi`.
+`create_platform()` first tries an exact match against the `PlatformName` enum
+(this is how an explicit `platform_name=generic_x9` / `generic_x14` / `X10QBi`
+value is honoured). When there is no exact match — the normal `auto` path, where
+the raw BMC product name is passed in — it falls back to string-prefix matching:
+names starting with `X14` get the X14 platform, names starting with `X10QBi` get
+the X10QBi platform, names starting with `X9` get the X9 platform, and everything
+else (X10, X11, X12, X13, H1x, …) gets the generic platform. So `X10QBi` is
+auto-detected from the BMC product-name prefix, exactly like X14 and X9 — no
+explicit opt-in is required.
 
 ### 6.3 Platform implementations
 
@@ -873,7 +879,7 @@ guards the fetch; any failure falls back to the standalone path.
 (same classes as the service), reads temperatures live, and queries IPMI for
 fan levels and fan mode. Slower than the online path and requires access to
 `ipmitool` (and optionally `sudo`). The data source line reads
-`source: standalone (direct read)`.
+`source: ipmitool (smfc service is not reachable)`.
 
 Both paths produce the same output structure:
 
