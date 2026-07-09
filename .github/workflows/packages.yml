@@ -74,7 +74,7 @@ jobs:
       - name: Attach packages to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.event.release.tag_name }}" smfc_*.deb smfc-*.rpm --clobber
+        run: gh release upload "${{ github.event.release.tag_name }}" smfc_*.deb smfc-*.rpm --clobber -R ${{ github.repository }}
 
       - name: Dispatch to smfc-deb
         env:
