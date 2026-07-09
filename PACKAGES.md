@@ -2,7 +2,7 @@
 
 This document covers **building** `.deb` and `.rpm` packages from source.
 
-> **Just want to install smfc?** Use the signed APT and DNF repositories instead — no building required. See [README §9.1 (DEB)](README.md#91-deb-package-installation) and [§9.2 (RPM)](README.md#92-rpm-package-installation), or the standalone repos:
+> **Just want to install smfc?** Use the signed APT and DNF repositories instead — no building required. See [README §9.1 (DEB)](https://github.com/petersulyok/smfc/blob/main/README.md#91-deb-package-installation) and [§9.2 (RPM)](https://github.com/petersulyok/smfc/blob/main/README.md#92-rpm-package-installation), or the standalone repos:
 > - DEB: [petersulyok/smfc-deb](https://github.com/petersulyok/smfc-deb) — `https://petersulyok.github.io/smfc-deb/`
 > - RPM: [petersulyok/smfc-rpm](https://github.com/petersulyok/smfc-rpm) — `https://petersulyok.github.io/smfc-rpm/`
 >

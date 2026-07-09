@@ -358,7 +358,7 @@ The dashboard is organised into three collapsible row sections.
 
 The top row shows service-level status at a glance:
 
-![smfc current state](grafana_smfc_overview.png)
+![smfc current state](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/grafana/grafana_smfc_overview.png)
 
 - **smfc version** — the running version string from `smfc_up{version}`.
 - **Service uptime** — derived from `smfc_start_time_seconds`.
@@ -370,7 +370,7 @@ The top row shows service-level status at a glance:
 
 One row section per IPMI zone. The example below shows Zone 0 with CPU and NVME controllers assigned:
 
-![Zone 0](grafana_zone_0.png)
+![Zone 0](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/grafana/grafana_zone_0.png)
 
 - **Fan level (%) — zone 0** — time-series of `smfc_zone_level_percent{zone="0"}` (the arbitrated applied level).
 - **Temperature (°C) — zone 0** — time-series of `smfc_controller_temperature_celsius` for all controllers targeting zone 0.
@@ -381,7 +381,7 @@ One row section per IPMI zone. The example below shows Zone 0 with CPU and NVME 
 
 Same layout as Zone 0, here with only the HD controller assigned:
 
-![Zone 1](grafana_zone_1.png)
+![Zone 1](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/grafana/grafana_zone_1.png)
 
 The HD temperature trace shows the stepped profile typical of spinning disks: temperature rises slowly under load and drops sharply once the array spins down. The fan level follows with the same steps.
 

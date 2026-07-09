@@ -1,7 +1,7 @@
 # Automatic smoke runner
 
 This folder holds the **non-interactive** driver for the smoke-test scenarios
-defined in [`test/smoke_runner.py`](../smoke_runner.py).
+defined in [`test/smoke_runner.py`](https://github.com/petersulyok/smfc/blob/main/test/smoke_runner.py).
 
 The interactive harness (`./test/run_smoke.sh <scenario>`) is designed to run
 until the user presses **CTRL-C**, which makes it awkward for regression
@@ -102,8 +102,8 @@ no_enforce_fan_mode    exit=1    set_level=4   distinct=2  temp_read=8   temps_s
 
 ## Keeping things in sync
 
-The `SCENARIOS` dict in [`check_smoke.py`](check_smoke.py) is a copy of the one
-in [`test/smoke_runner.py`](../smoke_runner.py). When you add or remove a
+The `SCENARIOS` dict in [`check_smoke.py`](https://github.com/petersulyok/smfc/blob/main/test/automatic_smoke_runner/check_smoke.py) is a copy of the one
+in [`test/smoke_runner.py`](https://github.com/petersulyok/smfc/blob/main/test/smoke_runner.py). When you add or remove a
 scenario, update both. The driver also has per-scenario assertions; if you add
 a scenario that exercises a specific feature (a new platform, a new config
 mode, etc.) consider extending the `check()` function with the matching
@@ -113,8 +113,8 @@ assertions so a regression in that feature surfaces as a smoke failure.
 
 | File | Purpose |
 |------|---------|
-| [`check_smoke.py`](check_smoke.py) | The Python driver. Self-contained; no external deps beyond what the project already pulls in for `uv run pytest`. |
-| [`run_all.sh`](run_all.sh) | Convenience wrapper that `cd`s to the project root and forwards extra args to `check_smoke.py`. |
+| [`check_smoke.py`](https://github.com/petersulyok/smfc/blob/main/test/automatic_smoke_runner/check_smoke.py) | The Python driver. Self-contained; no external deps beyond what the project already pulls in for `uv run pytest`. |
+| [`run_all.sh`](https://github.com/petersulyok/smfc/blob/main/test/automatic_smoke_runner/run_all.sh) | Convenience wrapper that `cd`s to the project root and forwards extra args to `check_smoke.py`. |
 | `README.md` | This file. |
 
 ## Limitations

@@ -1,6 +1,6 @@
 ﻿# Development
 
-> For an overview of the internal structure (classes, execution order, shared IPMI zones, etc.) see [ARCHITECTURE.md](ARCHITECTURE.md).
+> For an overview of the internal structure (classes, execution order, shared IPMI zones, etc.) see [ARCHITECTURE.md](https://github.com/petersulyok/smfc/blob/main/ARCHITECTURE.md).
 
 ## Development environment setup
 
@@ -89,13 +89,13 @@ dist/smfc-<version>-py3-none-any.whl
 ```
 
 The version number is read from the `version = "..."` field in
-`pyproject.toml`. Bump it with [`./bin/update_version_number.sh X.Y.Z`](bin/update_version_number.sh)
+`pyproject.toml`. Bump it with [`./bin/update_version_number.sh X.Y.Z`](https://github.com/petersulyok/smfc/blob/main/bin/update_version_number.sh)
 when you want a distinct local build, otherwise the existing version is reused.
 
 ### Local system install
 
 After the source distribution (`dist/smfc-<version>.tar.gz`) has been built, install it onto the local machine with the
-[`./bin/install.sh`](bin/install.sh) wrapper:
+[`./bin/install.sh`](https://github.com/petersulyok/smfc/blob/main/bin/install.sh) wrapper:
 
 ```commandline
 sudo ./bin/install.sh --local --keep-config --verbose
@@ -105,11 +105,11 @@ What it does:
 
 - Reads the version from `./pyproject.toml` and runs
   `pip install ./dist/smfc-<version>.tar.gz`.
-- Drops [`config/smfc.conf`](config/smfc.conf) into `/etc/smfc/`, with the
+- Drops [`config/smfc.conf`](https://github.com/petersulyok/smfc/blob/main/config/smfc.conf) into `/etc/smfc/`, with the
   existing one backed up as `/etc/smfc/smfc.conf.<timestamp>` (unless
   `--keep-config` is passed).
-- Installs [`config/smfc`](config/smfc) into `/etc/default/`.
-- Installs [`config/smfc.service`](config/smfc.service) as a systemd unit at
+- Installs [`config/smfc`](https://github.com/petersulyok/smfc/blob/main/config/smfc) into `/etc/default/`.
+- Installs [`config/smfc.service`](https://github.com/petersulyok/smfc/blob/main/config/smfc.service) as a systemd unit at
   `/etc/systemd/system/smfc.service`.
 - Installs the man pages from `doc/`.
 
@@ -121,14 +121,14 @@ sudo systemctl enable --now smfc
 sudo journalctl -fu smfc
 ```
 
-Reverse the install with [`./bin/uninstall.sh`](bin/uninstall.sh) (the same
+Reverse the install with [`./bin/uninstall.sh`](https://github.com/petersulyok/smfc/blob/main/bin/uninstall.sh) (the same
 `--keep-config` flag is supported).
 
 # Testing
 
 All test-related material — unit tests, smoke tests, the scenario matrix,
 shared infrastructure, and how to invoke each layer — lives in
-[`TESTING.md`](TESTING.md).
+[`TESTING.md`](https://github.com/petersulyok/smfc/blob/main/TESTING.md).
 
 # GitHub
 
@@ -149,7 +149,7 @@ The project implemented the following GitHub workflows:
    * build DEB package on `debian:trixie`
    * build RPM package on `fedora:latest`
    * upload both packages as CI artifacts (90-day retention) and attach them to the GitHub release as assets
-   * dispatch a `package-published` event to [`smfc-deb`](https://github.com/petersulyok/smfc-deb) and [`smfc-rpm`](https://github.com/petersulyok/smfc-rpm), which then republish the packages into their signed APT and DNF repositories on GitHub Pages (see [`ARCHITECTURE.md` chapter 14](ARCHITECTURE.md#14-release-and-distribution))
+   * dispatch a `package-published` event to [`smfc-deb`](https://github.com/petersulyok/smfc-deb) and [`smfc-rpm`](https://github.com/petersulyok/smfc-rpm), which then republish the packages into their signed APT and DNF repositories on GitHub Pages (see [`ARCHITECTURE.md` chapter 15](https://github.com/petersulyok/smfc/blob/main/ARCHITECTURE.md#15-release-and-distribution))
 
 
 # Release process

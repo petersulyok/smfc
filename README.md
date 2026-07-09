@@ -26,12 +26,12 @@ This is a `systemd service` running on Linux that can control fans with the help
 
 
 ### 2. Installation and configuration
- 1. Set up the IPMI threshold values for your fans (see [chapter 6.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#6-ipmi-fan-control-and-sensor-thresholds) for more details) 
+ 1. Set up the IPMI threshold values for your fans (see [chapter 6.](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds) for more details) 
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`)
- 4. Install `smfc` service or run it in docker (see [chapter 9.](https://github.com/petersulyok/smfc?tab=readme-ov-file#9-installation-and-uninstallation) for more details)
- 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapter 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration) for more details).
- 6. Start `smfc` service (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc) for more details)
+ 4. Install `smfc` service or run it in docker (see [chapter 9.](https://github.com/petersulyok/smfc/blob/main/README.md#9-installation-and-uninstallation) for more details)
+ 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration) for more details).
+ 6. Start `smfc` service (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc) for more details)
  7. Check results in system log
  8. Leave feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
 
@@ -88,7 +88,7 @@ In `smfc`, the following fan controllers are implemented:
 | CONST          | None                    | Constant fan level can be specified in `[CONST] level=` parameter     | 1 (Peripheral zone) |
 
 These fan controllers can be enabled and disabled independently. They can be used in a free combination with one or more IPMI zones. Multiple fan controllers
-can share the same IPMI zone -- `smfc` will automatically apply the **highest** fan level requested by any controller in that zone (see [chapter 1.3](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#13-shared-ipmi-zone-arbitration) for details).
+can share the same IPMI zone -- `smfc` will automatically apply the **highest** fan level requested by any controller in that zone (see [chapter 1.3](https://github.com/petersulyok/smfc/blob/main/README.md#13-shared-ipmi-zone-arbitration) for details).
 _CONST fan controller_ is an exception here, it does not require a temperature source, it can provide a constant fan level for one or more IPMI zones.
 In `smfc` configuration file each fan controller has an individual section.
 
@@ -166,7 +166,7 @@ Three naming styles are supported and can be freely mixed:
 
 The suffix number after `:` is used only for ordering and logging — it has no relationship to the `ipmi_zone=` value inside the section. Each instance is a complete, independent fan controller with its own full set of parameters, sharing only the physical temperature source.
 
-Multiple instances on the same IPMI zone participate in the shared zone arbitration described in [chapter 1.3](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#13-shared-ipmi-zone-arbitration).
+Multiple instances on the same IPMI zone participate in the shared zone arbitration described in [chapter 1.3](https://github.com/petersulyok/smfc/blob/main/README.md#13-shared-ipmi-zone-arbitration).
 
 ### 2. User-defined control function
 Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval. Two forms are supported in each temperature-driven section: a **simple linear** mapping (chapter 2.1) or an **advanced multi-segment** piecewise-linear curve (chapter 2.2). When both are present in the same section, `control_function=` takes precedence and the `min_temp/max_temp/min_level/max_level` keys are ignored.
@@ -264,7 +264,7 @@ an X13SAE-F motherboard). The only difference is in the implementation of thresh
 
 Some motherboards require platform-specific IPMI raw commands for fan control. `smfc` implements a **platform abstraction**
 (since `smfc v5.1.0`) that handles these differences. The platform is auto-detected from BMC product name, or can be overridden with the
-`platform_name=` configuration parameter (see [chapter 10.2](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#102-sample-configuration-file)). Currently supported platforms:
+`platform_name=` configuration parameter (see [chapter 10.2](https://github.com/petersulyok/smfc/blob/main/README.md#102-sample-configuration-file)). Currently supported platforms:
 
 | `platform_name=` parameter | Platform                                     | Notes                                                                                            |
 |----------------------------|----------------------------------------------|--------------------------------------------------------------------------------------------------|
@@ -462,8 +462,8 @@ sudo apt remove smfc
 sudo rm /etc/apt/sources.list.d/smfc.list /etc/apt/keyrings/smfc-repo.gpg
 ```
 
-Compatible with Debian 12+, Ubuntu 22.04+. See the [smfc-deb README](https://github.com/petersulyok/smfc-deb) for the full distribution list. The package installs the same files as the manual installation (service unit, configuration, man page, sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](PACKAGES.md) for build-from-source instructions.
-The DEB package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc)); from then on it starts automatically on every boot.
+Compatible with Debian 12+, Ubuntu 22.04+. See the [smfc-deb README](https://github.com/petersulyok/smfc-deb) for the full distribution list. The package installs the same files as the manual installation (service unit, configuration, man page, sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
+The DEB package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc)); from then on it starts automatically on every boot.
 
 
 #### 9.2. RPM package installation
@@ -487,11 +487,11 @@ sudo dnf remove smfc
 sudo rm /etc/yum.repos.d/smfc.repo
 ```
 
-Compatible with Fedora 39+, RHEL/Rocky/AlmaLinux 9+ (with EPEL), CentOS Stream 9+, openSUSE Leap 15.5+. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for the full distribution list. The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](PACKAGES.md) for build-from-source instructions.
-The RPM package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#11-how-to-run-smfc)); from then on it starts automatically on every boot.
+Compatible with Fedora 39+, RHEL/Rocky/AlmaLinux 9+ (with EPEL), CentOS Stream 9+, openSUSE Leap 15.5+. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for the full distribution list. The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
+The RPM package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc)); from then on it starts automatically on every boot.
 
 #### 9.3. Docker installation
-`smfc` is also available as a docker image, see more details in [Docker.md](docker/Docker.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting.
+`smfc` is also available as a docker image, see more details in [Docker.md](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting.
 
 #### 9.4. Manual installation and uninstallation
 There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` in two different ways:
@@ -802,8 +802,8 @@ Important notes:
 2. `[HD] hd_names=` is a compulsory parameter for HD fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent and could change after a reboot!
 3. `[NVME] nvme_names=` is a compulsory parameter for NVME fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/nvme0n1` form is not persistent and could change after a reboot!
 4. `[CPU] / [HD] / [NVME] min_level= / max_level=` should be configured in alignment with threshold configuration (see more details in [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)). Be patient, several refinement cycles could happen.
-5. `[CPU] / [HD] / [NVME] / [GPU] control_function=` defines an advanced multi-segment user-defined control function as a list of `temp-level` value pairs (at least 2 pairs, temperatures strictly ascending). When specified, it overrides the linear `min_temp/max_temp/min_level/max_level` form. See [chapter 2.2](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#22-advanced-multi-segment-user-defined-control-function) for details.
-6. Multiple instances of the same fan controller can be created using numbered section names (e.g. `[CPU:0]`, `[CPU:1]`). Each instance has its own full set of parameters and can be assigned to a different IPMI zone with a different fan curve. Two enabled instances of the same type must not share the same IPMI zone. See [chapter 1.4](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#14-multiple-fan-curves-per-ipmi-zone) for details.
+5. `[CPU] / [HD] / [NVME] / [GPU] control_function=` defines an advanced multi-segment user-defined control function as a list of `temp-level` value pairs (at least 2 pairs, temperatures strictly ascending). When specified, it overrides the linear `min_temp/max_temp/min_level/max_level` form. See [chapter 2.2](https://github.com/petersulyok/smfc/blob/main/README.md#22-advanced-multi-segment-user-defined-function) for details.
+6. Multiple instances of the same fan controller can be created using numbered section names (e.g. `[CPU:0]`, `[CPU:1]`). Each instance has its own full set of parameters and can be assigned to a different IPMI zone with a different fan curve. Two enabled instances of the same type must not share the same IPMI zone. See [chapter 1.4](https://github.com/petersulyok/smfc/blob/main/README.md#14-multiple-fan-curves-per-ipmi-zone) for details.
 7. Several sample configuration files are provided in `./config/samples` folder.
 8. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
 
@@ -909,7 +909,7 @@ For Grafana integration with a ready-to-import dashboard and a full monitoring s
 
 It reads the **same configuration file** as the service (`/etc/smfc/smfc.conf` by default), so it always reports on the same controllers and zones the service manages. There are two data sources, selected automatically:
 
-- **Online (via the service):** if the `[Exporter]` section is enabled in the configuration (see [chapter 13.](https://github.com/petersulyok/smfc/tree/main?tab=readme-ov-file#13-remote-monitoring-http-exporter)), `smfc-client` fetches the `/snapshot` JSON from the running service. This is dramatically faster because it serves already-cached state and spawns no `ipmitool`/`smartctl` subprocesses (so it can never wake disks the daemon has put to sleep).
+- **Online (via the service):** if the `[Exporter]` section is enabled in the configuration (see [chapter 13.](https://github.com/petersulyok/smfc/blob/main/README.md#13-remote-monitoring-http-exporter)), `smfc-client` fetches the `/snapshot` JSON from the running service. This is dramatically faster because it serves already-cached state and spawns no `ipmitool`/`smartctl` subprocesses (so it can never wake disks the daemon has put to sleep).
 - **Offline (standalone):** if the exporter is disabled, unreachable, or `--standalone` is given, `smfc-client` reads the BMC and disks directly via `ipmitool`/hwmon/`smartctl`. This path typically needs root, so run it with `sudo smfc-client -s`.
 
 The first lines of the output state which source was used: `source: smfc service (live snapshot)` online, or `source: ipmitool (smfc service is not reachable)` offline (it says "not reachable" rather than "not running" because offline mode is also reached when the exporter is simply disabled or `--standalone` is passed). The online report additionally shows the service `uptime` (verbose only) and annotates the fan-mode line with how many times FULL mode was re-enforced and how old the reading is; the offline report reads the IPMI fan mode live and warns if the BMC is not in FULL mode.
@@ -1048,7 +1048,7 @@ root@home:~# ipmitool sel list
 ```
 
 If the problematic fan (causing the alert) is identified, then you must adjust its threshold. This process could take several adjustment cycles. Be patient :)
-You may read [this chapter](https://github.com/petersulyok/smfc#6-ipmi-fan-control-and-sensor-thresholds) for more details. 
+You may read [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds) for more details. 
 
 ### Q: How does the author test/use this service?
 The configuration is the following:

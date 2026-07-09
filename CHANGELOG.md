@@ -5,27 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [6.0.0] - TBD
+## [6.0.0] - 2026.07.09
 
 ### New
-- Signed [APT repository](https://petersulyok.github.io/smfc-deb/) for DEB packages, hosted at [`petersulyok/smfc-deb`](https://github.com/petersulyok/smfc-deb). Users on Debian/Ubuntu/Proxmox/Mint/Raspberry Pi OS can now install `smfc` directly with `apt install smfc` after adding the repository — see [README chapter 9.1](https://github.com/petersulyok/smfc?tab=readme-ov-file#91-deb-package-installation).
-- Signed [DNF repository](https://petersulyok.github.io/smfc-rpm/) for RPM packages, hosted at [`petersulyok/smfc-rpm`](https://github.com/petersulyok/smfc-rpm). Users on Fedora/RHEL/Rocky/AlmaLinux/CentOS Stream/openSUSE can now install `smfc` directly with `dnf install smfc` after adding the repository — see [README chapter 9.2](https://github.com/petersulyok/smfc?tab=readme-ov-file#92-rpm-package-installation).
-- New companion CLI tool `smfc-client`: instant, read-only status (temperatures, fan levels, IPMI zones, standby) from the command line — see [README chapter 14](https://github.com/petersulyok/smfc?tab=readme-ov-file#14-smfc-client).
+- Signed [APT repository](https://petersulyok.github.io/smfc-deb/) for DEB packages, hosted at [`petersulyok/smfc-deb`](https://github.com/petersulyok/smfc-deb). Users on Debian/Ubuntu/Proxmox/Mint/Raspberry Pi OS can now install `smfc` directly with `apt install smfc` after adding the repository — see [README chapter 9.1](https://github.com/petersulyok/smfc/blob/main/README.md#91-deb-package-installation).
+- Signed [DNF repository](https://petersulyok.github.io/smfc-rpm/) for RPM packages, hosted at [`petersulyok/smfc-rpm`](https://github.com/petersulyok/smfc-rpm). Users on Fedora/RHEL/Rocky/AlmaLinux/CentOS Stream/openSUSE can now install `smfc` directly with `dnf install smfc` after adding the repository — see [README chapter 9.2](https://github.com/petersulyok/smfc/blob/main/README.md#92-rpm-package-installation).
+- New companion `smfc-client` tool showing a live read-only snapshot of controllers, fan levels, IPMI zones, and standby state — works either against a running `smfc` service or fully standalone. See [README chapter 14](https://github.com/petersulyok/smfc/blob/main/README.md#14-smfc-client).
 - New platform support for Supermicro X14 motherboards (`generic_x14`), auto-detected from the BMC product name — **experimental**, see [issue #98](https://github.com/petersulyok/smfc/issues/98).
 - New Grafana integration: sample dashboard and step-by-step guide for visualizing live and historical fan/temperature data — see [`grafana/GRAFANA.md`](https://github.com/petersulyok/smfc/blob/main/grafana/GRAFANA.md).
 - New documentation: [`ARCHITECTURE.md`](https://github.com/petersulyok/smfc/blob/main/ARCHITECTURE.md) (internal design for contributors), [`TESTING.md`](https://github.com/petersulyok/smfc/blob/main/TESTING.md) (test suite guide), [`grafana/GRAFANA.md`](https://github.com/petersulyok/smfc/blob/main/grafana/GRAFANA.md) (Grafana integration guide).
-- Advanced multi-segment user-defined control function: `control_function=` now accepts a sequence of `temp-level` points defining an arbitrary piecewise-linear curve, instead of a single linear segment between `min_temp/max_temp` and `min_level/max_level` — see [README chapter 2.2](https://github.com/petersulyok/smfc?tab=readme-ov-file#22-advanced-multi-segment-user-defined-function).
-- Fan mode enforcement: `smfc` now detects when an external event (BMC web UI, a manual `ipmitool` command, a firmware quirk) silently flips the BMC out of FULL mode, and reacts via the new `[Ipmi] enforce_fan_mode=` parameter — re-asserting FULL mode and all zone levels by default (`1`), or exiting with code 11 (`0`) — pair with `Restart=on-failure` in the systemd unit if you want automatic recovery in that mode. See [README chapter 6](https://github.com/petersulyok/smfc?tab=readme-ov-file#6-ipmi-fan-control-and-sensor-thresholds).
+- Advanced multi-segment user-defined control function: `control_function=` now accepts a sequence of `temp-level` points defining an arbitrary piecewise-linear curve, instead of a single linear segment between `min_temp/max_temp` and `min_level/max_level` — see [README chapter 2.2](https://github.com/petersulyok/smfc/blob/main/README.md#22-advanced-multi-segment-user-defined-function).
+- New fan mode enforcement: `smfc` now detects and restores when the BMC drifts out of FULL mode, see new `[Ipmi] enforce_fan_mode=` parameter. More details in [README chapter 6](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds).
 - Multiple fan curves per controller type: numbered sections (e.g. `[CPU]` + `[CPU:1]`) let a single controller family drive independent fan curves across different IPMI zones.
+- Install script now auto-prefills `nvme_names=` with detected NVMe devices (matching the existing `hd_names=` prefill), skipping duplicate `nvme-nvme.*` (NGUID) links.
+- Startup log now shows the active control function as a plateau list, making it easy to confirm the configured temperature-to-fan-level curve at a glance.
 
 ### Changed
 - `platform_name=` values reworked: `genericx9` renamed to `generic_x9` (old value still accepted for compatibility), unrecognized values now rejected at config-parse time, and `auto` detection now matches the BMC product name by prefix (`X14` → `generic_x14`, `X10QBi` → `X10QBi`, `X9` → `generic_x9`, otherwise `generic`).
 - Default polling interval for the NVMe fan controller lowered from 10s to 2s, matching CPU/GPU defaults.
 - Unit and smoke test suites reorganized and expanded for maintainability; source code now holds 100% test coverage — see [`TESTING.md`](https://github.com/petersulyok/smfc/blob/main/TESTING.md).
-- Installation docs reorganized: DEB/RPM repository installs are now the preferred path, ahead of Docker and the manual install script — see [README chapter 9](https://github.com/petersulyok/smfc?tab=readme-ov-file#9-installation-and-uninstallation).
+- Installation docs reorganized: DEB/RPM repository installs are now the preferred path, ahead of Docker and the manual install script — see [README chapter 9](https://github.com/petersulyok/smfc/blob/main/README.md#9-installation-and-uninstallation).
+- DEB/RPM packages now enable (but do not start) the `smfc` systemd unit on install, so you can review your configuration before the service first runs — see [README chapter 9.1](https://github.com/petersulyok/smfc/blob/main/README.md#91-deb-package-installation)/[9.2](https://github.com/petersulyok/smfc/blob/main/README.md#92-rpm-package-installation).
 
 ### Fixed
 - Cold-boot race: after a full power cycle, fans could be pinned at 100% on low-polling zones (e.g. HD) for as long as their polling interval, while the BMC's fan subsystem was still settling. smfc now waits for live sensor data before applying any fan level at startup.
+
 
 ## [5.4.0] - 2026.04.30
 

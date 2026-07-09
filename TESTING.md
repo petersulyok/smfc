@@ -263,7 +263,7 @@ scenario, use the non-interactive driver:
 ./test/automatic_smoke_runner/run_all.sh --quiet   # PASS/FAIL only, no log tails
 ```
 
-See [`test/automatic_smoke_runner/README.md`](test/automatic_smoke_runner/README.md)
+See [`test/automatic_smoke_runner/README.md`](https://github.com/petersulyok/smfc/blob/main/test/automatic_smoke_runner/README.md)
 for the full flag list and what each scenario's checks look for.
 
 ### Layered structure
@@ -428,7 +428,7 @@ assertions (e.g. the X9 raw byte sequence for `platform_x9`, the
 autonomous-exit log line for `no_enforce_fan_mode`). It is used by
 contributors to confirm a change hasn't regressed any scenario; CI does not
 run it (CI runs the unit suite only). See
-[`test/automatic_smoke_runner/README.md`](test/automatic_smoke_runner/README.md)
+[`test/automatic_smoke_runner/README.md`](https://github.com/petersulyok/smfc/blob/main/test/automatic_smoke_runner/README.md)
 for full details on assertions and flags.
 
 ### Where to add new smoke tests
