@@ -232,7 +232,7 @@ on a platform, broken fan-zone arbitration — that unit tests cannot see.
   turn with a bounded time window and asserts the expected end-to-end
   signals appear in each log.
 
-### Running
+### Running smoke tests
 
 A single scenario runs from the project root via the wrapper script:
 
