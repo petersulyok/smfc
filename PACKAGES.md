@@ -39,7 +39,7 @@ The `.deb` file will be created in the parent directory (`../`).
   - `/usr/share/man/man1/smfc.1.gz` — man page
   - `/usr/share/doc/smfc/examples/` — sample configuration files
 - Configuration files under `/etc/` are marked as conffiles. On upgrade, `dpkg` will prompt the user if they have been modified locally.
-- The `smfc.service` systemd unit is automatically enabled and started on install, stopped on removal.
+- The `smfc.service` systemd unit is automatically enabled (but not started) on install, so the configuration can be reviewed before the service first runs; it is stopped on removal.
 - Run `lintian ../smfc_*.deb` after building to check for packaging policy violations.
 
 ### Compatible distributions
@@ -83,7 +83,7 @@ The `.rpm` file will be created in `~/rpmbuild/RPMS/noarch/`.
   - `/usr/share/man/man1/smfc.1.gz` — man page
   - `/usr/share/doc/smfc/examples/` — sample configuration files
 - Configuration files are marked with `%config(noreplace)`. On upgrade, `rpm` will not overwrite locally modified files.
-- The `smfc.service` systemd unit is automatically enabled and started on install, stopped on removal.
+- The `smfc.service` systemd unit is automatically enabled (but not started) on install, so the configuration can be reviewed before the service first runs; it is stopped on removal.
 - The build commands above extract the version from `smfc.spec` automatically, so the tarball name always matches.
 - On RHEL, CentOS Stream, Rocky Linux, and AlmaLinux the [EPEL](https://docs.fedoraproject.org/en-US/epel/) repository is required for the `python3-pyudev` dependency.
 
