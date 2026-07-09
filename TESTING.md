@@ -59,10 +59,12 @@ and the layer CI runs on every push.
 ### Design principles
 
 - **Test full functionality with 100% code coverage.** Every branch in every
-  source module is exercised by at least one unit test. Coverage is enforced
-  in CI via `pytest --cov=src --cov=test` and uploaded to Codecov on every
-  push (see [Running](#running) below for the local equivalent). A new
-  feature is not complete until the new branches are covered.
+  source module is exercised by at least one unit test. Coverage is measured
+  against `src/smfc` only (test code itself is not a coverage target — see
+  `[tool.coverage.run]` in `pyproject.toml`), enforced in CI via `pytest --cov`
+  and uploaded to Codecov on every push (see [Running](#running) below for the
+  local equivalent). A new feature is not complete until the new branches are
+  covered.
 - **Tests are data-driven, not duplicated.** Anywhere multiple cases differ
   only in input/output, they are expressed as `@pytest.mark.parametrize` rows
   with `pytest.param(..., id="...")`, not as separate test methods. Test ids
@@ -100,18 +102,20 @@ pytest
 Add coverage to see per-module statement and branch coverage:
 
 ```commandline
-pytest --cov=src --cov=test
+pytest --cov
 ```
 
 For a detailed HTML coverage report (which lines are / aren't covered, with
 syntax highlighting) use:
 
 ```commandline
-pytest --cov=src --cov=test --cov-report=html
+pytest --cov --cov-report=html
 ```
 
 The report lands in `htmlcov/index.html`. The same `--cov` invocation is what
-CI uses (with `--cov-report=xml` for Codecov upload). Target is 100%.
+CI uses (with `--cov-report=xml` for Codecov upload). Coverage is scoped to
+`src/smfc` (see `[tool.coverage.run]` in `pyproject.toml`) — test code is not
+itself a coverage target. Target is 100%.
 
 ### Layered structure
 
