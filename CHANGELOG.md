@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.x.x] - Future release
+
+### Fixed
+- NVIDIA Docker image (`-nvidia`) failed to start under the NVIDIA Container Toolkit with `mkdirat run/nvidia-ctk-hook: read-only file system`, because the wide `/run:/run:ro` bind mount shadowed the container's writable `/run` and blocked the toolkit's `createContainer` hook. All Docker examples (compose files, `docker run` scripts, `Docker.md`) now bind-mount only `/run/udev:/run/udev:ro` — all `smfc` needs there is the udev database for `pyudev` — which leaves `/run` writable. See [issue #107](https://github.com/petersulyok/smfc/issues/107).
+
+
 ## [6.0.0] - 2026.07.09
 
 ### New
