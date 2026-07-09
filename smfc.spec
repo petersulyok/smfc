@@ -97,16 +97,33 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
-* Mon Jun 22 2026 Peter Sulyok <peter@sulyok.net> - 6.0.0-1
+* Thu Jul 09 2026 Peter Sulyok <peter@sulyok.net> - 6.0.0-1
 - New: Advanced multi-segment user-defined control_function= parameter for
   arbitrary piecewise-linear fan curves
 - New: Multiple fan curve instances per controller type (e.g. [CPU] + [CPU:1])
 - New: smfc-client console script for a one-shot read-only snapshot of
   controllers, fan levels, IPMI zones, and standby state
 - New: signed APT and DNF repositories for direct apt/dnf install
+- New: platform support for Supermicro X14 motherboards (generic_x14),
+  auto-detected from the BMC product name (experimental)
+- New: fan mode enforcement via [Ipmi] enforce_fan_mode= parameter to detect
+  and restore when the BMC drifts out of FULL mode
+- New: Grafana integration with a sample dashboard and guide
+  (grafana/GRAFANA.md)
+- New: install.sh auto-prefills nvme_names= with detected NVMe devices
+- New: startup log shows the active control function as a plateau list
 - Changed: configuration parsing centralized in a new Config class
 - Changed: ConstConfig.level validation tightened to [1..100]
 - Changed: NVME polling default lowered from 10 to 2 seconds
+- Changed: platform_name= value genericx9 renamed to generic_x9 (old value
+  still accepted); unrecognized values rejected at config-parse time
+- Changed: installation docs reorganized, DEB/RPM repository installs now
+  the preferred path
+- Changed: DEB/RPM packages now enable (but do not start) the smfc systemd
+  unit on install
+- Fixed: cold-boot race where fans could be pinned at 100% on low-polling
+  zones after a full power cycle; smfc now waits for live sensor data
+  before applying any fan level at startup
 
 * Thu Apr 30 2026 Peter Sulyok <peter@sulyok.net> - 5.4.0-1
 - New: AMD GPU support: gpu_type=amd enables temperature monitoring via rocm-smi

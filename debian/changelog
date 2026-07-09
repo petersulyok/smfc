@@ -12,6 +12,16 @@ smfc (6.0.0) unstable; urgency=medium
   * New: Signed APT and DNF repositories for direct apt/dnf install on
     Debian/Ubuntu/Proxmox/Mint/Raspberry Pi OS and Fedora/RHEL/Rocky/Alma/
     CentOS/openSUSE.
+  * New: Platform support for Supermicro X14 motherboards (generic_x14),
+    auto-detected from the BMC product name (experimental).
+  * New: Fan mode enforcement via [Ipmi] enforce_fan_mode= parameter; smfc
+    now detects and restores when the BMC drifts out of FULL mode.
+  * New: Grafana integration with a sample dashboard and step-by-step guide
+    (grafana/GRAFANA.md) for visualizing live and historical fan/temperature
+    data.
+  * New: install.sh auto-prefills nvme_names= with detected NVMe devices,
+    matching the existing hd_names= prefill.
+  * New: Startup log shows the active control function as a plateau list.
   * Changed: Configuration parsing centralized in a new Config class with
     per-controller @dataclass instances.
   * Changed: ConstConfig.level validation tightened to [1..100]; ConstFc
@@ -19,8 +29,19 @@ smfc (6.0.0) unstable; urgency=medium
   * Changed: NVME default polling interval lowered from 10 to 2 seconds.
   * Changed: Platform auto-detection improved (BMC product name matched by
     prefix; X9 → GenericX9Platform, everything else → GenericPlatform).
+    platform_name= value genericx9 renamed to generic_x9 (old value still
+    accepted); unrecognized values now rejected at config-parse time.
+  * Changed: Installation docs reorganized: DEB/RPM repository installs are
+    now the preferred path, ahead of Docker and the manual install script.
+  * Changed: DEB/RPM packages now enable (but do not start) the smfc
+    systemd unit on install, so the configuration can be reviewed before
+    the service first runs.
+  * Fixed: Cold-boot race where fans could be pinned at 100% on low-polling
+    zones (e.g. HD) after a full power cycle, while the BMC's fan subsystem
+    was still settling; smfc now waits for live sensor data before applying
+    any fan level at startup.
 
- -- Peter Sulyok <peter@sulyok.net>  Mon, 22 Jun 2026 23:22:16 +0200
+ -- Peter Sulyok <peter@sulyok.net>  Thu, 09 Jul 2026 16:24:53 +0200
 
 smfc (5.4.0) unstable; urgency=medium
 
