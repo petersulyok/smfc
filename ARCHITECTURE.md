@@ -627,10 +627,12 @@ re-latched on a running system); runtime drift away from `FULL` is still caught
 every iteration by `_check_fan_mode()`. On real X11SCH-LN4F reboots the BMC comes
 up already in `FULL`, so this step routinely skips.
 
-Important: between every controller construction the service sleeps for
-`ipmi.fan_level_delay` (default 2 s). Each controller's `__init__` may call
-`get_temp()`, which on `HdFc` can fan out to many `smartctl` calls — startup
-time grows linearly with disk count.
+Important: controller construction issues **no** IPMI fan writes — each
+controller's `__init__` only calls `get_temp()` — so there is no inter-controller
+delay (earlier versions slept `fan_level_delay` between constructors; that was
+pure waste and was removed). Startup cost is instead dominated by `get_temp()`
+itself, which on `HdFc` can fan out to many `smartctl` calls, so startup time
+grows linearly with disk count.
 
 ### 8.2 Main loop
 
