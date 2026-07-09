@@ -353,6 +353,19 @@ Total ≈ 102 s of pure BMC settling. On a real power-on boot most of this
 overlaps BIOS/POST/kernel/systemd startup, so by the time `smfc` runs the gate
 typically only has to wait out the tail (~10–15 s observed).
 
+**Observed on real reboots (X11SCH-LN4F).** Two things differ from the
+`mc reset cold` capture and confirm why the gate keys on the *state* column
+only. First, the reading-column string varies by trigger: a real cold boot and
+a BIOS-change reboot both present the fans as **`disabled | ns`**, whereas
+`mc reset cold` shows **`no reading | ns`** — same `ns` state, different sibling
+string. Second, on both real reboots the command interface was already up when
+`smfc` started (no `rc != 0` phase at all), and only ~17 s of `disabled | ns`
+settling remained (three 5 s steps), because POST/boot had absorbed the rest.
+In every case the BMC came up already in `FULL` mode with both zones at 100%, so
+the conditional startup set (§8.1) correctly skipped the redundant write while
+the gate still absorbed the settling window and zone levels applied without a
+zone-1 clobber.
+
 **Two-condition gate.** `Ipmi.__init__` (Check 3) loops until **both** hold,
 sharing a single 180 s budget in 5 s steps:
 
@@ -392,8 +405,9 @@ forms) — means the tachometer was actually read, i.e. the subsystem has
 settled. A fan that boots straight into an alarm state must count as ready;
 narrowing the check to `== "ok"` would re-hang on it until the timeout. The
 sibling reading-column strings (`disabled`, `no reading`, `Not Readable`) are
-never inspected — they always co-occur with `ns` and vary by board, so keying
-on the state column keeps the gate board-agnostic. At least one `FAN*` sensor
+never inspected — they always co-occur with `ns` and vary by board and trigger
+(a real cold boot shows `disabled`, an `mc reset cold` shows `no reading` on the
+same board), so keying on the state column keeps the gate board-agnostic. At least one `FAN*` sensor
 is required so an unpopulated header that stays `ns` forever cannot hold the
 gate open.
 
@@ -579,7 +593,7 @@ flowchart TD
     E -. "missing tool/module" .-> X7([exit 7])
     E --> F["Construct Ipmi<br/>(wait BMC, pick Platform)"]
     F -. "init failure" .-> X8([exit 8])
-    F --> G[force FULL fan mode]
+    F --> G["set FULL fan mode<br/>only if not already FULL"]
     G --> H[pyudev.Context]
     H -. "libudev error" .-> X9([exit 9])
     H --> I[Instantiate enabled fan controllers]
@@ -589,6 +603,16 @@ flowchart TD
     K --> L["wait = min(polling) / 2"]
     L --> M([enter main loop])
 ```
+
+Step **G** sets `FULL` fan mode **only if the BMC is not already in FULL**. The
+readiness gate in `Ipmi.__init__` (§6.4) has by this point waited out the
+settling window, so the mode read is reliable — a reported `FULL` is a stable
+`FULL`, not the transitional state that once justified re-issuing the mode
+unconditionally. Skipping the redundant write avoids a needless `fan_mode_delay`
+sleep (and the momentary fan blip some firmware produces when `FULL` is
+re-latched on a running system); runtime drift away from `FULL` is still caught
+every iteration by `_check_fan_mode()`. On real X11SCH-LN4F reboots the BMC comes
+up already in `FULL`, so this step routinely skips.
 
 Important: between every controller construction the service sleeps for
 `ipmi.fan_level_delay` (default 2 s). Each controller's `__init__` may call

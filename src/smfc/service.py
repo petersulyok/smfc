@@ -360,14 +360,19 @@ class Service:
                         configured_zones.update(cfg.ipmi_zone)
             for zone in sorted(configured_zones):
                 self.log.msg(Log.LOG_DEBUG, f"Old level in IPMI zone {zone} = {self.ipmi.get_fan_level(zone)}%")
-        # Always set FULL fan mode at startup unconditionally — even if the BMC already reports FULL.
-        # On some Supermicro firmware (e.g. X11SCH-LN4F), the BMC can be in a transitional FULL state
-        # where zone-0 updates reset zone-1 to 100%. Forcing a fresh FULL mode set plus the
-        # fan_mode_delay sleep settles the BMC into a stable state before zone levels are applied.
-        self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
-        self.last_fan_mode = Ipmi.FULL_MODE
-        self.last_fan_mode_at = time.monotonic()
-        self.log.msg(Log.LOG_DEBUG, f"Set IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}")
+        # Set FULL fan mode at startup only if the BMC is not already in FULL. The BMC readiness gate in
+        # Ipmi.__init__ waits out the cold-boot settling window (interface up + fan subsystem out of `ns`),
+        # so the mode read at line 346 is a settled reading — a reported FULL is a stable FULL, not the
+        # transitional state that once forced an unconditional re-set. Skipping the redundant write avoids
+        # a needless fan_mode_delay sleep (and the momentary fan blip some firmware produces when FULL is
+        # re-latched) on warm restarts; runtime drift is still caught by _check_fan_mode(). The set still
+        # fires on firmware that boots into a non-FULL default; the X11SCH-LN4F comes up already in FULL
+        # (verified across a warm reboot and a BIOS-change/BMC-reset boot), so this branch routinely skips.
+        if self.last_fan_mode != Ipmi.FULL_MODE:
+            self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
+            self.last_fan_mode = Ipmi.FULL_MODE
+            self.last_fan_mode_at = time.monotonic()
+            self.log.msg(Log.LOG_DEBUG, f"Set IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}")
 
         # Initialize connection to udev database
         try:

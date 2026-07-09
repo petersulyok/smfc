@@ -740,6 +740,108 @@ class TestService:
             service.run()
         assert mock_run.call_count == 1
 
+    @pytest.mark.parametrize(
+        "startup_mode, expect_startup_set",
+        [
+            # BMC already settled in FULL (warm restart): the startup set is skipped.
+            pytest.param(Ipmi.FULL_MODE, False, id="already-full-skips"),
+            # BMC reports a non-FULL default (cold boot): the startup set fires once.
+            pytest.param(Ipmi.STANDARD_MODE, True, id="not-full-sets"),
+        ],
+    )
+    def test_run_startup_fan_mode_conditional(self, mocker: MockerFixture, td: TestData,
+                                              startup_mode: int, expect_startup_set: bool):
+        """Positive unit test for the conditional FULL-mode set at Service.run() startup. It contains the following
+        steps:
+        - mock print(), time.sleep() (exits with code 100 after 3 iterations), smfc.service.Exporter,
+          pyudev.Context.__init__ via MockedContextGood, and CpuFc.__init__ to skip real hwmon discovery
+        - patch smfc.Ipmi.get_fan_mode with a staged function returning `startup_mode` on the first (startup) read
+          and Ipmi.FULL_MODE afterwards, so the main loop's _check_fan_mode() sees no drift and stays quiet
+        - patch smfc.Ipmi.set_fan_mode with a MagicMock spy
+        - build a minimal CPU-only config via `td` (fake ipmitool whose `sdr` reports a live fan so the BMC gate
+          passes without sleeping) and write it to disk
+        - instantiate Service and invoke Service.run() inside pytest.raises(SystemExit)
+        - ASSERT: sys.exit() code equals 100 (the main loop ran and exited via mocked sleep)
+        - ASSERT: when startup_mode is FULL, set_fan_mode() is never called (redundant startup write skipped)
+        - ASSERT: when startup_mode is not FULL, set_fan_mode() is called exactly once with Ipmi.FULL_MODE
+        - ASSERT: service.last_fan_mode holds Ipmi.FULL_MODE after startup in both cases
+        """
+
+        # pylint: disable=unused-argument
+        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
+            nonlocal td
+            self.hwmon_path = td.cpu_files
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(td.cpu_files))
+
+        def mocked_sleep(*args):
+            """Mocked time.sleep() function. Exits at the 3rd call."""
+            self.sleep_counter += 1
+            if self.sleep_counter >= 3:
+                sys.exit(100)
+
+        def staged_get_fan_mode(_self) -> int:
+            """Return the startup mode on the first read, then a steady FULL so the loop sees no drift."""
+            if seen["first"]:
+                seen["first"] = False
+                return startup_mode
+            return Ipmi.FULL_MODE
+        # pylint: enable=unused-argument
+
+        seen = {"first": True}
+        cmd_ipmi = td.create_command_file(
+            'if [[ $1 = "bmc" && $2 = "info" ]] ; then\n'
+            "cat << 'BMCEOF'\n" + BMC_INFO_OUTPUT +
+            "BMCEOF\n"
+            "exit 0\n"
+            "fi\n"
+            # `sdr` must report a live fan sensor so the BMC fan-readiness gate passes without sleeping.
+            'if [[ $1 = "sdr" ]] ; then\n'
+            'echo "FAN1             | 500 RPM           | ok"\n'
+            "exit 0\n"
+            "fi\n"
+            'echo "0"'
+        )
+        td.create_cpu_data(1)
+        my_config = ConfigParser()
+        my_config[Config.CS_IPMI] = {
+            Config.CV_IPMI_COMMAND: cmd_ipmi,
+            Config.CV_IPMI_FAN_MODE_DELAY: "0",
+            Config.CV_IPMI_FAN_LEVEL_DELAY: "0",
+        }
+        my_config[Config.CS_CPU] = {
+            Config.CV_ENABLED: "True",
+            Config.CV_TEMP_CALC: "1",
+            Config.CV_STEPS: "5",
+            Config.CV_SENSITIVITY: "5",
+            Config.CV_POLLING: "0",
+            Config.CV_MIN_TEMP: "30",
+            Config.CV_MAX_TEMP: "60",
+            Config.CV_MIN_LEVEL: "35",
+            Config.CV_MAX_LEVEL: "100",
+        }
+        conf_file = td.create_config_file(my_config)
+        mocker.patch("builtins.print", MagicMock())
+        mocker.patch("time.sleep", MagicMock(side_effect=mocked_sleep))
+        mocker.patch("smfc.service.Exporter", MagicMock())
+        mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
+        mocker.patch("smfc.CpuFc.__init__", mocked_cpufc_init)
+        mocker.patch("smfc.Ipmi.get_fan_mode", staged_get_fan_mode)
+        mock_set = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_mode", mock_set)
+        self.sleep_counter = 0
+        sys.argv = ("smfc.py -o 0 -l 4 -ne -nd -c " + conf_file).split()
+        service = Service()
+        with pytest.raises(SystemExit) as cm:
+            service.run()
+        assert cm.value.code == 100
+        if expect_startup_set:
+            assert mock_set.call_count == 1, "non-FULL startup mode must set FULL exactly once"
+            assert mock_set.call_args.args[0] == Ipmi.FULL_MODE, "startup set must target FULL"
+        else:
+            mock_set.assert_not_called()
+        assert service.last_fan_mode == Ipmi.FULL_MODE, "last_fan_mode must hold FULL after startup"
+
     def _make_service_for_fan_mode_check(self, mocker: MockerFixture, enforce: bool) -> Service:
         """Build a minimally-initialized Service for unit-testing _check_fan_mode()."""
         mocker.patch("builtins.print", MagicMock())
