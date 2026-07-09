@@ -15,7 +15,7 @@ docker run \
     --privileged=true \
     --name "smfc" \
     -v /dev:/dev:ro \
-    -v /run:/run:ro \
+    -v /run/udev:/run/udev:ro \
     -v /etc/timezone:/etc/timezone:ro \
     -v /etc/localtime:/etc/localtime:ro \
     -v /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro \

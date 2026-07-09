@@ -19,7 +19,7 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
     volumes:
       - /dev:/dev:ro
-      - /run:/run:ro
+      - /run/udev:/run/udev:ro
       - /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro

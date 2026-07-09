@@ -14,7 +14,7 @@ There are three images created for `smfc`:
 
 Generic notes for the docker images:
   1. `smfc` is executed here as a simple foreground process (not as a `systemd` service).
-  2. `ipmitool` and `smartctl` require read-only access to host's `/dev/` and `/run` folders and admin privilege.
+  2. `ipmitool` and `smartctl` require read-only access to host's `/dev/` and `/run/udev` folders and admin privilege.
   3. The `/sys` filesystem can be accessed in the container, but the proper kernel module (i.e. `coretemp`, `k10temp`, and `drivetemp`) needs to be loaded on host side.
   4. The container can send log messages to the host's `journald` daemon (as it is configured in _Usage chapter_), but feel free to configure [other logging drivers](https://docs.docker.com/config/containers/logging/configure/).
   5. IPMI remote access can be used (see `[IPMI] remote_parameters=-U USERNAME -P PASSWORD -H HOST` parameter in the configuration file) if IPMI interface is not accessible from docker container.
@@ -31,18 +31,18 @@ This image contains the following components:
 The service can be started:
 ```
 docker run \
-  -d \
-  --rm \
-  --log-driver=journald \
-  --privileged=true \
-  --name "smfc" \
-  -v /dev:/dev:ro \
-  -v /run:/run:ro \
-  -v /etc/timezone:/etc/timezone:ro
-  -v /etc/localtime:/etc/localtime:ro
-  -v /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro \
-  -e SMFC_ARGS="-l 3" \
-  petersulyok/smfc:latest
+    -d \
+    --rm \
+    --log-driver=journald \
+    --privileged=true \
+    --name "smfc" \
+    -v /dev:/dev:ro \
+    -v /run/udev:/run/udev:ro \
+    -v /etc/timezone:/etc/timezone:ro \
+    -v /etc/localtime:/etc/localtime:ro \
+    -v /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro \
+    -e SMFC_ARGS="-l 3" \
+    petersulyok/smfc:latest
 ```
 (sample script can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-start.sh)), 
 and can be terminated:
@@ -65,7 +65,7 @@ services:
       - SMFC_ARGS=-l 3
     volumes:
       - /dev:/dev:ro
-      - /run:/run:ro
+      - /run/udev:/run/udev:ro
       - /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -110,7 +110,7 @@ docker run \
     --privileged=true \
     --name "smfc" \
     -v /dev:/dev:ro \
-    -v /run:/run:ro \
+    -v /run/udev:/run/udev:ro \
     -v /etc/timezone:/etc/timezone:ro \
     -v /etc/localtime:/etc/localtime:ro \
     -v /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro \
@@ -147,7 +147,7 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
     volumes:
       - /dev:/dev:ro
-      - /run:/run:ro
+      - /run/udev:/run/udev:ro
       - /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -191,7 +191,7 @@ docker run \
     --privileged=true \
     --name "smfc" \
     -v /dev:/dev:ro \
-    -v /run:/run:ro \
+    -v /run/udev:/run/udev:ro \
     -v /etc/timezone:/etc/timezone:ro \
     -v /etc/localtime:/etc/localtime:ro \
     -v /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro \
@@ -227,7 +227,7 @@ services:
       - SMFC_ARGS=-l 3
     volumes:
       - /dev:/dev:ro
-      - /run:/run:ro
+      - /run/udev:/run/udev:ro
       - /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
