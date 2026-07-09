@@ -6,9 +6,9 @@ There are three images created for `smfc`:
 
 | Image type          | Tags                            | Base image         | Pros                                          | Cons                                                         |
 |---------------------|---------------------------------|--------------------|-----------------------------------------------|--------------------------------------------------------------|
-| Standard            | `5.4.0` / `latest`              | Alpine Linux 3.23  | Small image size                              | GPU fan controller not supported                             |
-| NVIDIA GPU-enabled  | `5.4.0-nvidia`/ `latest-nvidia` | Debian 13 (slim)   | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
-| AMD GPU-enabled     | `5.4.0-amd` / `latest-amd`      | ROCm Ubuntu 24.04  | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
+| Standard            | `6.0.0` / `latest`              | Alpine Linux 3.24  | Small image size                              | GPU fan controller not supported                             |
+| NVIDIA GPU-enabled  | `6.0.0-nvidia`/ `latest-nvidia` | Debian 13 (slim)   | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
+| AMD GPU-enabled     | `6.0.0-amd` / `latest-amd`      | ROCm Ubuntu 24.04  | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
 
 > Docker image tags changed for GPU-enabled images with the newly implemented AMD GPU support in `smfc v5.4.0`!
 
@@ -22,8 +22,8 @@ Generic notes for the docker images:
 
 # Standard image
 This image contains the following components: 
-- `Alpine Linux` 3.23.4
-- `Python` 3.12.13-r0
+- `Alpine Linux` 3.24.1
+- `Python` 3.14.5-r0
 - `ipmitool` 1.8.19-r1
 - `smartmontools` 7.5-r0
 
@@ -163,7 +163,7 @@ docker compose -f docker-compose-nvidia.yaml down
 # AMD GPU-enabled image
 This image contains the following components:
 - `Ubuntu` 24.04 (ROCm base image)
-- `Python` 3.12.5
+- `Python` 3.12.3
 - `ipmitool` 1.8.19
 - `smartmontools` 7.4
 - `ROCm` (includes `rocm-smi`)
@@ -251,6 +251,7 @@ Use the following parameters to configure `smfc`:
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
+  - **6.0.0** (2026.07.09): Updated to smfc 6.0.0 (Alpine 3.24.1/Debian 13 slim/ROCm-ubuntu)
   - **5.4.0** (2026.04.30): Updated to smfc 5.4.0 (Alpine 3.23.4/Debian 13 slim/ROCm-ubuntu) - new tags!!
   - **5.3.0** (2026.04.02): Updated to smfc 5.3.0 (Alpine 3.23.3/Debian 13 slim)
   - **5.2.0** (2026.03.30): Updated to smfc 5.2.0 (Alpine 3.23.3/Debian 13 slim)
