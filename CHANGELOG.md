@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [6.x.x] - Future release
 
+### Changed
+- `smfc-client --help` and its documentation rewritten in plain, user-facing language: the `--help` description and option strings no longer expose internal details (`/snapshot`, `[Exporter]`), the exit-code list was dropped from `--help` (it already lives in the [man page](https://github.com/petersulyok/smfc/blob/main/doc/smfc-client.1)), and the `udev`/"HTTP exporter" jargon in `README.md` and the man page was replaced with wording a user understands. Terminology is now unified on "current fan speeds and temperatures" across the man page and `--help`.
+
 ### Fixed
 - NVIDIA Docker image (`-nvidia`) failed to start under the NVIDIA Container Toolkit with `mkdirat run/nvidia-ctk-hook: read-only file system`, because the wide `/run:/run:ro` bind mount shadowed the container's writable `/run` and blocked the toolkit's `createContainer` hook. All Docker examples (compose files, `docker run` scripts, `Docker.md`) now bind-mount only `/run/udev:/run/udev:ro` — all `smfc` needs there is the udev database for `pyudev` — which leaves `/run` writable. See [issue #107](https://github.com/petersulyok/smfc/issues/107).
 
