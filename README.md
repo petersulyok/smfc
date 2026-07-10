@@ -940,7 +940,7 @@ When stdout is a terminal and `--no-color` is not set, the report is **colourise
 | `-v`      | `--version`     | —        | —                     | Print `smfc-client X.Y.Z` and exit.                                                  |
 | `-h`      | `--help`        | —        | —                     | Show help and exit.                                                                  |
 
-Exit codes: `0` = snapshot printed (per-controller errors are non-fatal), `6` = configuration file missing or invalid, `8` = IPMI/BMC error (e.g. `ipmitool` not found or permission denied), `9` = udev unavailable.
+Exit codes: `0` = readings printed (per-controller errors are non-fatal), `6` = configuration file missing or invalid, `8` = IPMI/BMC error (e.g. `ipmitool` not found or permission denied), `9` = disk detection unavailable (`udev` missing).
 
 #### 14.2. Sample output
 

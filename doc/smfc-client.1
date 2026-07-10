@@ -1,13 +1,13 @@
 .TH SMFC\-CLIENT 1 smfc\-6.0.0
 .SH NAME
 .B smfc\-client
-\- display the current state of fans and temperature sensors managed by smfc.
+\- show the current fan speeds and temperatures managed by smfc.
 .SH SYNOPSIS
 .B smfc\-client
 [options]
 .SH DESCRIPTION
 .B smfc-client
-displays the current state of the fans and temperature sensors managed by
+shows the current fan speeds and temperatures managed by
 .BR smfc (1).
 Run it to see at a glance what your fan controllers are doing \(em what
 temperatures they see, what fan levels they have set, and whether the BMC
@@ -23,8 +23,8 @@ operates in two ways:
 .RB *
 When the
 .B smfc
-service is running and the HTTP exporter is enabled, it fetches a live
-snapshot from the service \(em no special permissions needed.
+service is running and configured to publish its status, it fetches the
+readings from the service \(em no special permissions needed.
 .RB *
 When the service is not available (or with the
 .B \-sa
@@ -120,7 +120,7 @@ Configuration file error (missing, unreadable, or invalid).
 IPMI initialization error (ipmitool not found or BMC not accessible).
 .TP
 .B 9
-udev initialization error.
+Disk detection unavailable (udev could not be initialized).
 .SH NOTES
 The standalone mode contacts the BMC directly and may require root privileges or
 .BR sudo (8)

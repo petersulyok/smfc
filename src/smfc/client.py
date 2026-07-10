@@ -64,21 +64,20 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         prog="smfc-client",
-        description="Print a one-shot snapshot of smfc-managed fans and temperatures. "
-                    "Reads /snapshot from the smfc service when [Exporter] is enabled in the "
-                    "config; otherwise (or with --standalone) reads sensors directly.",
-        epilog="Exit codes: 0=ok  6=config error  8=ipmi error  9=udev error",
+        description="Show your current fan speeds and temperatures. "
+                    "By default it asks the running smfc service for the readings; "
+                    "if smfc isn't running (or you pass --standalone), it reads the sensors itself.",
     )
     parser.add_argument("-c", "--config", action="store", dest="config_file", default=DEFAULT_CONFIG_PATH,
-                        metavar="FILE", help=f"configuration file (default: {DEFAULT_CONFIG_PATH})")
+                        metavar="FILE", help=f"config file to use (default: {DEFAULT_CONFIG_PATH})")
     parser.add_argument("-s", "--sudo", action="store_true", default=False,
-                        help="run ipmitool and smartctl with sudo")
+                        help="use sudo for ipmitool/smartctl (if not run as root)")
     parser.add_argument("-nc", "--no-color", action="store_true", default=False,
-                        dest="no_color", help="disable ANSI colors in output")
+                        dest="no_color", help="plain output, no colors")
     parser.add_argument("-V", "--verbose", action="store_true", default=False,
-                        help="show per-device temperatures")
+                        help="also list each disk's and CPU's individual temperature")
     parser.add_argument("-sa", "--standalone", action="store_true", default=False, dest="standalone",
-                        help="bypass the smfc service and read sensors directly")
+                        help="read the sensors directly, without the smfc service")
     parser.add_argument("-v", "--version", action="version", version="%(prog)s " + version("smfc"))
     return parser.parse_args(argv)
 
