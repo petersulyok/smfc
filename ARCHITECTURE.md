@@ -281,7 +281,7 @@ flowchart TD
     I -- GENERIC_X9 --> X9[GenericX9Platform]
     I -- X10QBI --> XQ[X10QBi]
     I -- GENERIC --> GP[GenericPlatform]
-    I -- no match --> G{name startswith X14?}
+    I -- no match --> G{name startswith X14 or H14?}
     G -- yes --> X14
     G -- no --> J{name startswith X10QBi?}
     J -- yes --> XQ
@@ -294,11 +294,11 @@ flowchart TD
 (this is how an explicit `platform_name=generic_x9` / `generic_x14` / `X10QBi`
 value is honoured). When there is no exact match — the normal `auto` path, where
 the raw BMC product name is passed in — it falls back to string-prefix matching:
-names starting with `X14` get the X14 platform, names starting with `X10QBi` get
-the X10QBi platform, names starting with `X9` get the X9 platform, and everything
-else (X10, X11, X12, X13, H1x, …) gets the generic platform. So `X10QBi` is
-auto-detected from the BMC product-name prefix, exactly like X14 and X9 — no
-explicit opt-in is required.
+names starting with `X14` or `H14` get the X14 platform, names starting with
+`X10QBi` get the X10QBi platform, names starting with `X9` get the X9 platform,
+and everything else (X10, X11, X12, X13, H10-H13, …) gets the generic platform.
+So `X10QBi` is auto-detected from the BMC product-name prefix, exactly like X14
+and X9 — no explicit opt-in is required.
 
 ### 6.3 Platform implementations
 

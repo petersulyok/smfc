@@ -23,7 +23,7 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
             - 'generic_x14': force the GenericX14Platform (X14 motherboards)
             - 'X10QBi': force the X10QBi platform
             - any other string: auto-detected from the BMC product name prefix
-              ('X14...' -> X14, 'X10QBi...' -> X10QBi, 'X9...' -> X9), falls back to GenericPlatform
+              ('X14...'/'H14...' -> X14, 'X10QBi...' -> X10QBi, 'X9...' -> X9), falls back to GenericPlatform
         exec_ipmitool (Callable): Function that executes ipmitool commands
     Returns:
         Platform: The platform-specific implementation (defaults to GenericPlatform)
@@ -36,7 +36,7 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
     }
     platform_class = platform_factory.get(platform_name)
     if platform_class is None:
-        if platform_name.startswith("X14"):
+        if platform_name.startswith("X14") or platform_name.startswith("H14"):
             platform_class = GenericX14Platform
         elif platform_name.startswith("X10QBi"):
             platform_class = X10QBi

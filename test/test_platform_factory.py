@@ -106,6 +106,19 @@ class TestCreatePlatform:
         assert isinstance(platform, GenericX14Platform), f"{f}: should be GenericX14Platform"
         assert platform.name == "X14DAi-T", f"{f}: platform name"
 
+    def test_create_h14_fallback(self) -> None:
+        """Positive unit test for create_platform() function. It contains the following steps:
+        - mock Exec dependency with MagicMock
+        - call `create_platform(name="H14SSL-NT", exec=mock_exec)` with a BMC product name starting with H14
+        - ASSERT: returned platform is an instance of GenericX14Platform (H14 prefix fallback)
+        - ASSERT: returned platform's name equals the supplied BMC product string "H14SSL-NT"
+        """
+        f = "TestCreatePlatform.test_create_h14_fallback"
+        mock_exec = MagicMock()
+        platform = create_platform("H14SSL-NT", mock_exec)
+        assert isinstance(platform, GenericX14Platform), f"{f}: should be GenericX14Platform"
+        assert platform.name == "H14SSL-NT", f"{f}: platform name"
+
     def test_create_x10qbi_fallback(self) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
         - mock Exec dependency with MagicMock
