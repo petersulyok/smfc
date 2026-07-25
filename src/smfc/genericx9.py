@@ -26,7 +26,8 @@ class GenericX9Platform(Platform):
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         reg = self.FANCTL_BASE_REG + zone
         r = self._exec(["raw", "0x30", "0x90", "0x5a", "0x03", f"0x{reg:x}", "0x01"])
-        return int(r.stdout, 16)
+        # X9 BMCs return duty on a 0..255 scale; the platform contract uses percent.
+        return round(int(r.stdout, 16) * 100 / 255)
 
     def start(self) -> None:
         """No manual-mode preparation needed on this platform."""
