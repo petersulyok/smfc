@@ -494,7 +494,7 @@ The RPM package enables the `smfc` service but does not start it on installation
 
 #### 9.3. Arch Linux (AUR) package installation
 An `smfc` package is available in the [AUR](https://aur.archlinux.org/packages/smfc). It is created and maintained by
-an Arch Linux community member (`urirocky`, not by this project), and it is currently based on the v6.0.0 release.
+an Arch Linux community member (`urirocky`), and it is currently based on the v6.0.0 release.
 
 Install it with your preferred AUR helper:
 

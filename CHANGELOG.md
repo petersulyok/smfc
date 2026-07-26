@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `auto` platform detection now also matches BMC product names starting with `H14` (not just `X14`), selecting `generic_x14`.
 
 ### Fixed
+- X9 fan duty readback scaling (`generic_x9` platform): `get_fan_level()` returned the raw 0-255 BMC byte as if it were a percentage, so `smfc-client` displayed values like 242% for a real 95% duty cycle and CONST controllers kept re-applying an already-correct level. The readback is now converted back to the 0-100 percent platform contract - based on [PR #117](https://github.com/petersulyok/smfc/pull/117) by @krecik, validated on a Supermicro X9DR3-LN4F+ (BMC 3.48).
 - NVIDIA Docker image (`-nvidia`) failed to start under the NVIDIA Container Toolkit with `mkdirat run/nvidia-ctk-hook: read-only file system`, because the wide `/run:/run:ro` bind mount shadowed the container's writable `/run` and blocked the toolkit's `createContainer` hook. All Docker examples (compose files, `docker run` scripts, `Docker.md`) now bind-mount only `/run/udev:/run/udev:ro` — all `smfc` needs there is the udev database for `pyudev` — which leaves `/run` writable. See [issue #107](https://github.com/petersulyok/smfc/issues/107).
 
 
