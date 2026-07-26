@@ -1,3 +1,16 @@
+smfc (6.0.1) unstable; urgency=medium
+
+  * Fixed: X9 fan duty readback scaling on the generic_x9 platform; the raw
+    0-255 BMC byte was reported as a percentage, so smfc-client displayed
+    values like 242% for a real 95% duty cycle and CONST controllers kept
+    re-applying an already-correct level.
+  * Changed: auto platform detection now also matches BMC product names
+    starting with H14 (not just X14), selecting generic_x14.
+  * Changed: smfc-client --help and its documentation (man page, README)
+    rewritten in plain, user-facing language.
+
+ -- Peter Sulyok <peter@sulyok.net>  Sun, 26 Jul 2026 09:11:10 +0200
+
 smfc (6.0.0) unstable; urgency=medium
 
   * New: Advanced multi-segment user-defined control_function= parameter for

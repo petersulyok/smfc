@@ -14,7 +14,8 @@ function print_usage() {
   echo ""
   echo "  Files updated:"
   echo "    pyproject.toml       - Python package version"
-  echo "    doc/smfc.1           - man page version"
+  echo "    doc/smfc.1           - smfc man page version"
+  echo "    doc/smfc-client.1    - smfc-client man page version"
   echo "    smfc.spec            - RPM Version field and new changelog entry"
   echo "    debian/changelog     - new DEB changelog entry"
   exit 1
@@ -54,6 +55,15 @@ if [ ! -f "${FILE}" ]; then
   exit 1
 fi
 sed -i "s/^\.TH SMFC 1 smfc\\\\-.*/.TH SMFC 1 smfc\\\\-${VERSION}/" "${FILE}"
+echo "Updated ${FILE}"
+
+# 2b. Update doc/smfc-client.1
+FILE="${PROJECT_ROOT}/doc/smfc-client.1"
+if [ ! -f "${FILE}" ]; then
+  echo "Error: ${FILE} not found."
+  exit 1
+fi
+sed -i "s/^\.TH SMFC\\\\-CLIENT 1 smfc\\\\-.*/.TH SMFC\\\\-CLIENT 1 smfc\\\\-${VERSION}/" "${FILE}"
 echo "Updated ${FILE}"
 
 # 3. Update smfc.spec (Version field and prepend changelog entry)

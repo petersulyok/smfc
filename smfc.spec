@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        6.0.0
+Version:        6.0.1
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -97,6 +97,16 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Sun Jul 26 2026 Peter Sulyok <peter@sulyok.net> - 6.0.1-1
+- Fixed: X9 fan duty readback scaling on the generic_x9 platform; the raw
+  0-255 BMC byte was reported as a percentage, so smfc-client displayed values
+  like 242% for a real 95% duty cycle and CONST controllers kept re-applying
+  an already-correct level
+- Changed: auto platform detection now also matches BMC product names starting
+  with H14 (not just X14), selecting generic_x14
+- Changed: smfc-client --help and its documentation (man page, README)
+  rewritten in plain, user-facing language
+
 * Thu Jul 09 2026 Peter Sulyok <peter@sulyok.net> - 6.0.0-1
 - New: Advanced multi-segment user-defined control_function= parameter for
   arbitrary piecewise-linear fan curves
