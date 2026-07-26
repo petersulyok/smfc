@@ -1,4 +1,4 @@
-FROM rocm/dev-ubuntu-24.04:7.14.0-full
+FROM ubuntu:noble-20260610
 ARG BUILD_IMAGE_VERSION
 LABEL org.opencontainers.image.version=${BUILD_IMAGE_VERSION}
 LABEL org.opencontainers.image.title="smfc"
@@ -7,9 +7,22 @@ LABEL org.opencontainers.image.desciption="Supermicro fan control for Linux (hom
 LABEL org.opencontainers.image.url="https://github.com/petersulyok/smfc"
 RUN echo 'APT::Keep-Downloaded-Packages "false";' > /etc/apt/apt.conf.d/01disable-cache
 RUN apt update
-RUN apt install -y ipmitool python3 python3-pyudev smartmontools
-RUN apt install -y python3-pip
-RUN pip install --prefix=/usr smfc==${BUILD_IMAGE_VERSION%%-amd}
-RUN apt autoremove --purge -y python3-pip
+RUN apt install -y --no-install-recommends curl ca-certificates gnupg
+# Only `rocm-smi` is needed from ROCm, it is installed from the official AMD package repository.
+RUN mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor -o /etc/apt/keyrings/rocm.gpg && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/7.2.4 noble main" \
+      > /etc/apt/sources.list.d/rocm.list
+RUN apt update
+RUN apt install -y --no-install-recommends rocm-smi-lib ipmitool python3 python3-pyudev smartmontools
+# `rocm-smi` is installed in /opt/rocm/bin, smfc looks for it in /usr/bin (see [GPU] rocm_smi_path=).
+RUN ln -s /opt/rocm/bin/rocm-smi /usr/bin/rocm-smi
+# python3-pip is installed, used and removed in one layer, otherwise it stays in the image.
+RUN apt install -y python3-pip && \
+    pip install --prefix=/usr --break-system-packages --no-cache-dir smfc==${BUILD_IMAGE_VERSION%%-amd} && \
+    apt autoremove --purge -y python3-pip curl gnupg && \
+    rm -rf /var/lib/apt/lists/*
+ENV ROCM_PATH=/opt/rocm
+ENV PATH="/opt/rocm/bin:${PATH}"
 ADD --chmod=755 docker/entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

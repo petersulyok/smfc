@@ -10,7 +10,7 @@ There are three images created for `smfc`:
 |---------------------|---------------------------------|------------------------------|-----------------------------------------------|--------------------------------------------------------------|
 | Standard            | `6.0.1` / `latest`              | Alpine Linux 3.24.1          | Small image size                              | GPU fan controller not supported                             |
 | NVIDIA GPU-enabled  | `6.0.1-nvidia`/ `latest-nvidia` | Debian 13.6 (slim)           | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
-| AMD GPU-enabled     | `6.0.1-amd` / `latest-amd`      | Ubuntu 24.04.4 (ROCm 7.14.0) | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
+| AMD GPU-enabled     | `6.0.1-amd` / `latest-amd`      | Ubuntu 24.04.4 (ROCm 7.2.4)  | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
 
 > Docker image tags changed for GPU-enabled images with the newly implemented AMD GPU support in `smfc v5.4.0`!
 
@@ -160,14 +160,21 @@ docker compose -f docker-compose-nvidia.yaml down
 
 # AMD GPU-enabled image
 This image contains the following components:
-- `Ubuntu` 24.04.4 (ROCm base image)
+- `Ubuntu` 24.04.4
 - `Python` 3.12.3
 - `ipmitool` 1.8.19
 - `smartmontools` 7.4
-- `ROCm` 7.14.0 (includes `rocm-smi`)
+- `rocm-smi` 7.2.4 (`rocm-smi-lib` package from the official AMD package repository)
+
+> Note: from `smfc v6.0.1` this image is built on the standard `Ubuntu` base image, and only the `rocm-smi-lib`
+> package is installed from the [AMD package repository](https://repo.radeon.com/rocm/apt/) instead of using the
+> `rocm/dev-ubuntu` base image (which contains the complete ROCm SDK). This reduces the image size from 4 GB to
+> 210 MB. The `rocm-smi` command is installed in `/opt/rocm/bin`, but it is also linked to `/usr/bin/rocm-smi`,
+> which is the default value of the `[GPU] rocm_smi_path=` configuration parameter, so no extra configuration is
+> needed.
 
 ## How to enable AMD GPU in the docker image?
-`rocm-smi` is installed **inside the Docker image** (provided by the `rocm/dev-ubuntu` base image) — it does not need to be installed on the host.
+`rocm-smi` is installed **inside the Docker image** — it does not need to be installed on the host.
 The host only needs the `amdgpu` kernel driver loaded, which exposes `/dev/kfd` and `/dev/dri`. This driver has been part of the Linux kernel since 4.5, so it is already present on most modern systems. You can verify it is loaded with:
 
 ```commandline
@@ -248,7 +255,7 @@ Use the following parameters to configure `smfc`:
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
-  - **6.0.1** (2026.07.26): Updated to smfc 6.0.1 (Alpine 3.24.1/Debian 13.6 slim/ROCm 7.14.0 on Ubuntu 24.04.4)
+  - **6.0.1** (2026.07.26): Updated to smfc 6.0.1 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.2.4) - much smaller images!
   - **6.0.0** (2026.07.09): Updated to smfc 6.0.0 (Alpine 3.24.1/Debian 13 slim/ROCm-ubuntu)
   - **5.4.0** (2026.04.30): Updated to smfc 5.4.0 (Alpine 3.23.4/Debian 13 slim/ROCm-ubuntu) - new tags!!
   - **5.3.0** (2026.04.02): Updated to smfc 5.3.0 (Alpine 3.23.3/Debian 13 slim)

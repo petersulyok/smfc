@@ -7,8 +7,9 @@ LABEL org.opencontainers.image.desciption="Supermicro fan control for Linux (hom
 LABEL org.opencontainers.image.url="https://github.com/petersulyok/smfc"
 RUN apk add --no-cache ipmitool python3 py3-udev smartmontools
 RUN ln -s /usr/sbin/ipmitool /usr/bin/ipmitool
-RUN apk add --no-cache --virtual .depends py3-pip
-RUN pip install --prefix=/usr smfc==${BUILD_IMAGE_VERSION}
-RUN apk del .depends
+# py3-pip is installed, used and removed in one layer, otherwise it stays in the image.
+RUN apk add --no-cache --virtual .depends py3-pip && \
+    pip install --prefix=/usr --no-cache-dir smfc==${BUILD_IMAGE_VERSION} && \
+    apk del .depends
 ADD --chmod=755 docker/entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

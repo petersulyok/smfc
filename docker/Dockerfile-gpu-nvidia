@@ -8,8 +8,10 @@ LABEL org.opencontainers.image.url="https://github.com/petersulyok/smfc"
 RUN echo 'APT::Keep-Downloaded-Packages "false";' > /etc/apt/apt.conf.d/01disable-cache
 RUN apt update
 RUN apt install -y ipmitool python3 python3-pyudev smartmontools
-RUN apt install -y python3-pip
-RUN pip install --prefix=/usr smfc==${BUILD_IMAGE_VERSION%%-nvidia}
-RUN apt autoremove --purge -y python3-pip
+# python3-pip is installed, used and removed in one layer, otherwise it stays in the image.
+RUN apt install -y python3-pip && \
+    pip install --prefix=/usr --no-cache-dir smfc==${BUILD_IMAGE_VERSION%%-nvidia} && \
+    apt autoremove --purge -y python3-pip && \
+    rm -rf /var/lib/apt/lists/*
 ADD --chmod=755 docker/entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
