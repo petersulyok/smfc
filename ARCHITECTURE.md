@@ -263,6 +263,11 @@ A message is emitted only if `level <= self.log_level`.
   `set_fan_level`, `set_multiple_fan_levels` — all delegating to the
   `Platform`.
 
+Fan levels crossing the `Platform` interface are always percent values (0-100%)
+in both directions. The wire encoding is platform-internal: platforms using a
+0-255 duty cycle scale (`GenericX9Platform`, `X10QBi`) convert on write and
+convert back on read, so callers never see the raw BMC byte.
+
 Every `set_*` call sleeps for `fan_mode_delay` or `fan_level_delay`
 afterwards, giving the BMC and the fans time to react before the next
 command. Negative delays are rejected at startup.

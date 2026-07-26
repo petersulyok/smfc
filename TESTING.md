@@ -164,7 +164,7 @@ contain several test classes grouped by feature.
 | `cpufc.py`                       | `test_cpufc.py`              | Hwmon discovery, ordinal `cpuN` device names |
 | `exporter.py`                    | `test_exporter.py`           | Prometheus text rendering, HTTP server endpoints (`/snapshot`, `/metrics`, `/healthz`), 404/500 handling, idempotent stop |
 | `fancontroller.py`               | `test_fancontroller.py`      | Base contract: construction, `get_hwmon_path`, `get_temp` modes, per-device temp caching, `set_fan_level`, deferred level application, `run()` mapping, smoothing algorithm, LUT construction (legacy vs. user-defined `control_function=`) |
-| `generic.py`, `genericx9.py`, `genericx14.py`, `x10qbi.py` | `test_platforms.py` | Matrix-driven: same 11-method contract for all four platforms |
+| `generic.py`, `genericx9.py`, `genericx14.py`, `x10qbi.py` | `test_platforms.py` | Matrix-driven: same 8-method contract for all four platforms |
 | `gpufc.py`                       | `test_gpufc.py`              | `exec_smi` (Nvidia/AMD), AMD sensor selection, temp parse errors |
 | `hdfc.py`                        | `test_hdfc.py`               | `exec_smartctl` (sudo / rc / exceptions), standby-state formatting, `check_standby_state`, `go_standby_state`, standby-guard `run`, smartctl debug path |
 | `ipmi.py`                        | `test_ipmi.py`               | Init (positive/negative, BMC timeout, client mode), `exec_ipmitool` (remote args, sudo, rc, exceptions), `get/set_fan_mode`, fan-mode name mapping, `get/set_fan_level`, `set_multiple_fan_levels`, exception surface |
@@ -186,7 +186,7 @@ Behind that table sit two cross-cutting topics worth knowing about:
   (`exec_smartctl`, `exec_smi`, standby handling), with `build_*` / `make_bare_*`
   helpers from `test_fc_helpers.py` absorbing the discovery-mock boilerplate.
 - **Platforms share a matrix.** All four platforms (`Generic`, `GenericX9`,
-  `GenericX14`, `X10QBi`) implement the same 11-method `Platform` interface
+  `GenericX14`, `X10QBi`) implement the same 8-method `Platform` interface
   but with very different raw IPMI byte sequences and level encodings. A
   single `test_platforms.py` module drives every platform through every
   method via a `PlatformSpec` per platform. Adding a new Supermicro platform
