@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [6.x.x] - Future release
 
+### New
+- Arch Linux users can install `smfc` from the [AUR package](https://aur.archlinux.org/packages/smfc) (community-maintained by `urirocky`, based on v6.0.0) — see new [README chapter 9.3](https://github.com/petersulyok/smfc/blob/main/README.md#93-arch-linux-aur-package-installation).
+
 ### Changed
 - `smfc-client --help` and its documentation (README, man page) rewritten in plain, user-facing language.
 - `auto` platform detection now also matches BMC product names starting with `H14` (not just `X14`), selecting `generic_x14`.

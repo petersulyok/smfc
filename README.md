@@ -58,7 +58,7 @@ Key features:
  - Nvidia or AMD GPU temperature monitoring via `nvidia-smi` or `rocm-smi`
  - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13, X14) and edge cases (X10QBi)
  - Remote IPMI access via `remote_parameters=` for VM setups (e.g. TrueNAS on Proxmox with PCI passthrough)
- - Distributed as a `systemd` service, Docker image, DEB/RPM package, or PyPI package
+ - Distributed as a `systemd` service, Docker image, DEB/RPM/AUR package, or PyPI package
  - Optional HTTP exporter for live monitoring: powers `smfc-client` and enables Grafana dashboard integration
  - Companion `smfc-client` tool showing a live read-only snapshot of controllers, fan levels, IPMI zones, and standby state  
  - Automatic FULL-mode enforcement that detects and corrects BMC fan-mode drift
@@ -492,10 +492,31 @@ sudo rm /etc/yum.repos.d/smfc.repo
 Compatible with Fedora 39+, RHEL/Rocky/AlmaLinux 9+ (with EPEL), CentOS Stream 9+, openSUSE Leap 15.5+. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for the full distribution list. The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
 The RPM package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc)); from then on it starts automatically on every boot.
 
-#### 9.3. Docker installation
+#### 9.3. Arch Linux (AUR) package installation
+An `smfc` package is available in the [AUR](https://aur.archlinux.org/packages/smfc). It is created and maintained by
+an Arch Linux community member (`urirocky`, not by this project), and it is currently based on the v6.0.0 release.
+
+Install it with your preferred AUR helper:
+
+```bash
+yay -S smfc
+```
+
+or manually:
+
+```bash
+git clone https://aur.archlinux.org/smfc.git
+cd smfc
+makepkg -si
+```
+
+Please report package-specific issues (PKGBUILD, dependencies, file locations) on the
+[AUR package page](https://aur.archlinux.org/packages/smfc).
+
+#### 9.4. Docker installation
 `smfc` is also available as a docker image, see more details in [Docker.md](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting.
 
-#### 9.4. Manual installation and uninstallation
+#### 9.5. Manual installation and uninstallation
 There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` in two different ways:
 - remotely from the GitHub repository (no cloning required)
 - locally from a git repository (GitHub repository needs to be cloned)
