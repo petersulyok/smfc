@@ -19,7 +19,7 @@ RUN apt install -y --no-install-recommends rocm-smi-lib ipmitool python3 python3
 RUN ln -s /opt/rocm/bin/rocm-smi /usr/bin/rocm-smi
 # python3-pip is installed, used and removed in one layer, otherwise it stays in the image.
 RUN apt install -y python3-pip && \
-    pip install --prefix=/usr --break-system-packages --no-cache-dir smfc==${BUILD_IMAGE_VERSION%%-amd} && \
+    pip install --prefix=/usr --no-cache-dir smfc==${BUILD_IMAGE_VERSION%%-amd} && \
     apt autoremove --purge -y python3-pip curl gnupg && \
     rm -rf /var/lib/apt/lists/*
 ENV ROCM_PATH=/opt/rocm
