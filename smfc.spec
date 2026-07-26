@@ -18,8 +18,9 @@ Requires:       ipmitool
 Recommends:     smartmontools
 
 %description
-smfc is a systemd service to control fans in Linux on Supermicro
-X10-X13/H10-H13 motherboards with IPMI fan function.
+smfc is a systemd service to control fans in Linux on Supermicro X9,
+X10-X13/H10-H13, X10QBi and X14/H14 (experimental) motherboards with
+IPMI fan function.
 
 %prep
 %autosetup
