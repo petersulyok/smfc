@@ -13,9 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `smfc-client --help` and its documentation (README, man page) rewritten in plain, user-facing language.
 - `auto` platform detection now also matches BMC product names starting with `H14` (not just `X14`), selecting `generic_x14`.
+- Docker images are now built on pinned base images (`alpine:3.24.1`, `debian:13.6-slim`, `rocm/dev-ubuntu-24.04:7.14.0-full`) instead of floating tags, so a rebuild always produces the same base. The ROCm version of the AMD image is now visible in [`Docker.md`](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md).
+- The obsolete `version: "2"` attribute was removed from all docker compose files and from the compose samples in [`Docker.md`](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md); it has been ignored by Docker Compose V2 and only produced a warning on every start.
 
 ### Fixed
 - X9 fan duty readback scaling (`generic_x9` platform): `get_fan_level()` returned the raw 0-255 BMC byte as if it were a percentage, so `smfc-client` displayed values like 242% for a real 95% duty cycle and CONST controllers kept re-applying an already-correct level. The readback is now converted back to the 0-100 percent platform contract - based on [PR #117](https://github.com/petersulyok/smfc/pull/117) by @krecik, validated on a Supermicro X9DR3-LN4F+ (BMC 3.48).
+- The same fan duty readback scaling issue was found and fixed on the `X10QBi` platform: `set_fan_level()` writes the duty cycle on the NCT7904D 0-255 scale, but `get_fan_level()` returned the raw byte as a percentage (100% duty was reported as 255%). This fix is based on the datasheet and on the symmetry with the write path, it is **not validated on real hardware yet** - X10QBi owners, please share your experience in [issue #69](https://github.com/petersulyok/smfc/issues/69).
 - NVIDIA Docker image (`-nvidia`) failed to start under the NVIDIA Container Toolkit with `mkdirat run/nvidia-ctk-hook: read-only file system`, because the wide `/run:/run:ro` bind mount shadowed the container's writable `/run` and blocked the toolkit's `createContainer` hook. All Docker examples (compose files, `docker run` scripts, `Docker.md`) now bind-mount only `/run/udev:/run/udev:ro` — all `smfc` needs there is the udev database for `pyudev` — which leaves `/run` writable. See [issue #107](https://github.com/petersulyok/smfc/issues/107).
 
 

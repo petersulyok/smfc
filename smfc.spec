@@ -102,6 +102,9 @@ fi
   0-255 BMC byte was reported as a percentage, so smfc-client displayed values
   like 242% for a real 95% duty cycle and CONST controllers kept re-applying
   an already-correct level
+- Fixed: the same duty readback scaling issue on the X10QBi platform, where 100%
+  duty cycle was reported as 255%. Based on the NCT7904D datasheet and on the
+  symmetry with the write path, not validated on real hardware yet
 - Changed: auto platform detection now also matches BMC product names starting
   with H14 (not just X14), selecting generic_x14
 - Changed: smfc-client --help and its documentation (man page, README)

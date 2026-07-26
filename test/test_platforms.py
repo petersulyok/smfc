@@ -141,7 +141,8 @@ PLATFORMS: List[PlatformSpec] = [
         make=lambda exec_fn: GenericX9Platform(PlatformName.GENERIC_X9, exec_fn),
         get_mode_values=(0, 1, 2, 4),
         get_level_cmd=_x9_get_cmd,
-        get_level_vectors=((0, " 80", 50), (1, " ff", 100), (2, " 00", 0), (3, " 40", 25)),
+        get_level_vectors=((0, " 80", 50), (1, " ff", 100), (2, " 00", 0), (3, " 40", 25),
+                           (0, " 66", 40), (1, " 87", 53), (2, " 9b", 61)),
         bad_zones=(-1, 4),
         start_calls=(),
         end_calls=(),
@@ -182,7 +183,8 @@ PLATFORMS: List[PlatformSpec] = [
         make=lambda exec_fn: X10QBi("X10QBi", exec_fn),
         get_mode_values=(0, 1, 4),
         get_level_cmd=_x10qbi_get_cmd,
-        get_level_vectors=((0, " 80", 0x80), (1, " ff", 0xFF), (2, " 00", 0x00), (3, " 40", 0x40)),
+        get_level_vectors=((0, " 80", 50), (1, " ff", 100), (2, " 00", 0), (3, " 40", 25),
+                           (0, " 66", 40), (1, " 87", 53), (2, " 9b", 61)),
         bad_zones=(-1, 4),
         start_calls=_X10QBI_START_CALLS,
         end_calls=(),
@@ -254,6 +256,23 @@ class TestPlatforms:
         platform = spec.make(mock_exec)
         assert platform.get_fan_level(zone) == expected_level
         mock_exec.assert_called_with(spec.get_level_cmd(zone))
+
+    @pytest.mark.parametrize("spec", PLATFORMS, ids=PLATFORM_IDS)
+    def test_fan_level_roundtrip(self, spec: PlatformSpec, mock_exec: MagicMock) -> None:
+        """Positive unit test for the Platform.set_fan_level()/get_fan_level() round-trip. It contains the steps:
+        - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
+        - build the platform via spec.make() and call set_fan_level() for every level in [0..100]
+        - read back the duty cycle byte written to the BMC from the recorded ipmitool command
+        - mock the exec callback to return that byte, and invoke get_fan_level() with it
+        - ASSERT: get_fan_level() returns the level originally passed to set_fan_level() for every level in [0..100]
+        """
+        platform = spec.make(mock_exec)
+        for level in range(101):
+            mock_exec.reset_mock()
+            platform.set_fan_level(0, level)
+            wire_byte = mock_exec.call_args[0][0][-1]
+            mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {wire_byte[2:]}")
+            assert platform.get_fan_level(0) == level
 
     @pytest.mark.parametrize("spec, zone", _cases("bad_zones"))
     def test_get_fan_level_invalid_zone(self, spec: PlatformSpec, zone: int, mock_exec: MagicMock) -> None:
