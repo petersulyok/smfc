@@ -1098,6 +1098,9 @@ Further readings:
  - [IPMI utilities overiew](https://www.supermicro.com/en/solutions/management-software/ipmi-utilities)
  - [IPMICFG User's Guide (1.18)](https://www.supermicro.com/Bios/sw_download/968/IPMICFG_UserGuide.pdf)
 
+#### Hardware datasheets
+ - [Nuvoton NCT7904D datasheet (Rev. 1.7)](https://www.nuvoton.com.cn/export/resource-files/en-us--Nuvoton_NCT7904D_Datasheet_V17.pdf) — hardware monitor and fan controller chip used on the Supermicro X10QBi motherboard
+
 #### Forums and blogs
  - [\[STH forums\] Reference Material: Supermicro X9/X10/X11 Fan Speed Control](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/)
    - [\[STH forums\] Addition to X9 motherboards](https://forums.servethehome.com/index.php?threads/supermicro-x9-x10-x11-fan-speed-control.10059/post-339801) 

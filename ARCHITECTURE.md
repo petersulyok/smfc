@@ -317,6 +317,19 @@ encodings:
 | `GenericX14Platform`   | `raw 0x30 0x70 0x88 zone level`                 | Level in %, 0x00–0x64; manual mode via OEM `0x2c 0x04 0xcf 0xc2` per zone |
 | `X10QBi`               | `raw 0x30 0x91 0x5c 0x03 reg duty` + TMFR setup| Nuvoton NCT7904D, zone → 0x10+zone, level × 255/100      |
 
+The two platforms using the 0-255 duty cycle scale (`GenericX9Platform` and
+`X10QBi`) also convert the value back to percent in `get_fan_level()`, because
+the read command targets the very same register the write command sets. On the
+X10QBi this is the `F1OV`-`F4OV` (*Fan Output Value*) register set of the Nuvoton
+NCT7904D chip: bank 3, addresses `0x10`-`0x13`, 8-bit values, read/write while the
+chip is in manual mode — see chapter 7.4.11 of the
+[NCT7904D datasheet](https://www.nuvoton.com.cn/export/resource-files/en-us--Nuvoton_NCT7904D_Datasheet_V17.pdf).
+On the X9 platform the same 0-255 scale is documented in the
+[STH forum reference material](https://forums.servethehome.com/index.php?threads/supermicro-x9-x10-x11-fan-speed-control.10059/post-339801)
+and confirmed on real hardware in [PR #117](https://github.com/petersulyok/smfc/pull/117).
+Missing this conversion means the reported fan level is the raw BMC byte (e.g. 255%
+instead of 100%), which is what `smfc-client` and the `CONST` fan controller consume.
+
 `start()` is called once during `Ipmi` init; `end()` is called once at
 shutdown via `Service.exit_func()`:
 
