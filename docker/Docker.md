@@ -253,6 +253,38 @@ Use the following parameters to configure `smfc`:
 | `smfc.conf` | volume (ro)          | configuration file for `smfc`, mapped from host side            |
 
 
+# smfc-client in docker
+All three images contain the `smfc-client` command (see [README chapter 14.](https://github.com/petersulyok/smfc/blob/main/README.md#14-smfc-client)),
+which displays a read-only snapshot of the fan controllers, fan levels, IPMI zones and standby state. The easiest way
+to use it is executing the command in the *running* container:
+
+```commandline
+docker exec smfc smfc-client
+docker exec smfc smfc-client --verbose
+```
+
+Notes:
+  1. If the HTTP exporter is enabled in the configuration file (`[Exporter] enabled=1`) then `smfc-client` reads the
+     live snapshot of the running `smfc` service. Otherwise it falls back to standalone mode and reads the sensors
+     itself (i.e. it executes `ipmitool` and `smartctl` again).
+  2. The command runs as `root` in the container, so the `--sudo` parameter is not needed.
+  3. `smfc-client` can also be started in a separate container with `--entrypoint smfc-client`. In this case only
+     standalone mode is available (the exporter of the service is not reachable from another container, unless
+     `--network container:smfc` is specified), and the container needs exactly the same command-line parameters and
+     volumes as the `docker run` command of the given image (described earlier on this page), because
+     `smfc-client` reads the very same sensors as the service.
+     In case of remote IPMI access (`[Ipmi] remote_parameters=`) the `--privileged` parameter and the `/dev` volume
+     can be omitted, because `ipmitool` uses the network instead of the local `/dev/ipmi0` device:
+
+```commandline
+docker run --rm \
+    -v /run/udev:/run/udev:ro \
+    -v /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro \
+    --entrypoint smfc-client \
+    petersulyok/smfc:latest
+```
+
+
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
   - **6.0.1** (2026.07.26): Updated to smfc 6.0.1 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.2.4) - much smaller images!
