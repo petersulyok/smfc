@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `smfc` man page lists the supported motherboards (X9, X10-X13/H10-H13, X10QBi, X14/H14) like the README and the DEB package description.
+- The APT repository can be added with a single `deb822` file (`smfc.sources`, with embedded signing key) now, the one-line format is also documented - see [README chapter 9.1](https://github.com/petersulyok/smfc/blob/main/README.md#91-deb-package-installation).
 
 ### Fixed
 - `uninstall.sh` removed `/etc/default/smfc` even with `--keep-config`; both configuration files are preserved now, like in `install.sh`.

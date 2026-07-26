@@ -445,7 +445,19 @@ For the installation and uninstallation, you need root privileges. There are sev
 #### 9.1. DEB package installation
 Pre-built `.deb` packages are available from the [smfc-deb APT repository](https://github.com/petersulyok/smfc-deb), hosted on GitHub Pages and signed with a dedicated GPG key.
 
-Add the repository and install:
+The repository can be added in two ways.
+
+**a) `deb822` format (recommended)**
+
+```bash
+sudo curl -fsSL https://petersulyok.github.io/smfc-deb/smfc.sources \
+  -o /etc/apt/sources.list.d/smfc.sources
+sudo apt update && sudo apt install smfc
+```
+
+The `smfc.sources` file contains the repository signing key, so it is a single, self-contained file and no separate keyring is needed. Embedded keys require `apt` 2.4 or newer, available on all supported distributions (Debian 12+, Ubuntu 22.04+).
+
+**b) One-line format with a separate key file**
 
 ```bash
 curl -fsSL https://petersulyok.github.io/smfc-deb/smfc-repo.gpg \
@@ -461,8 +473,11 @@ To remove:
 
 ```bash
 sudo apt remove smfc
-sudo rm /etc/apt/sources.list.d/smfc.list /etc/apt/keyrings/smfc-repo.gpg
+sudo rm -f /etc/apt/sources.list.d/smfc.sources                              # a)
+sudo rm -f /etc/apt/sources.list.d/smfc.list /etc/apt/keyrings/smfc-repo.gpg  # b)
 ```
+
+Note: if you added the repository with b) earlier and switch to a), delete the files of the old format (`smfc.list` and `smfc-repo.gpg`), otherwise the repository is configured twice.
 
 Compatible with Debian 12+, Ubuntu 22.04+. See the [smfc-deb README](https://github.com/petersulyok/smfc-deb) for the full distribution list. The package installs the same files as the manual installation (service unit, configuration, man page, sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
 The DEB package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc)); from then on it starts automatically on every boot.
