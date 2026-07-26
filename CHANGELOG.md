@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New
 - Arch Linux users can install `smfc` from the [AUR package](https://aur.archlinux.org/packages/smfc) (community-maintained by `urirocky`, based on v6.0.0) — see new [README chapter 9.3](https://github.com/petersulyok/smfc/blob/main/README.md#93-arch-linux-aur-package-installation).
+- New [`Docker.md` chapter](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md#smfc-client-in-docker) about `smfc-client` in the docker images: how to run it in the running container (`docker exec`), live snapshot vs standalone mode, and how to start it in a separate container.
 
 ### Changed
 - `smfc-client --help` and its documentation (README, man page) rewritten in plain, user-facing language.
 - `auto` platform detection now also matches BMC product names starting with `H14` (not just `X14`), selecting `generic_x14`.
 - Docker images are now built on pinned base images (`alpine:3.24.1`, `debian:13.6-slim`, `ubuntu:noble-20260610`) instead of floating tags, so a rebuild always produces the same base. The base image and component versions of all three images are listed in [`Docker.md`](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md).
+- The `--break-system-packages` pip parameter was removed from the AMD dockerfile, it was not needed (`--prefix` is enough), so all three dockerfiles use the same pip command now.
 - The obsolete `version: "2"` attribute was removed from all docker compose files and from the compose samples in [`Docker.md`](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md); it has been ignored by Docker Compose V2 and only produced a warning on every start.
 
 ### Fixed
