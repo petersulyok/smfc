@@ -159,7 +159,7 @@ The project implemented the following GitHub workflows:
 Follow these steps to create a new release:
 
 * Run `./bin/update_version_number.sh X.Y.Z` to update the version number in all release-specific files
-  (`pyproject.toml`, `doc/smfc.1`, `smfc.spec`, `debian/changelog`, `uv.lock`)
+  (`pyproject.toml`, `doc/smfc.1`, `doc/smfc-client.1`, `smfc.spec`, `debian/changelog`, `uv.lock`)
 * Update the changelog entries in `smfc.spec` and `debian/changelog` with the actual release notes
 * Commit all changes
 * Run unit tests with `pytest`, and correct all errors
@@ -178,6 +178,14 @@ The docker images can be built locally in the project root folder:
 ./docker/docker-build.sh 4.1.0 latest
 ```
 Notes:
+- All three dockerfiles pin an exact base image tag (`alpine:3.24.1`, `debian:13.6-slim`,
+  `rocm/dev-ubuntu-24.04:7.14.0-full`) instead of a floating one, so a rebuild always produces the same base.
+  Before a release, check for newer base images and bump the `FROM` lines deliberately, then update the component
+  lists in [`Docker.md`](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md) accordingly. The versions
+  of the installed components can be listed this way:
+```commandline
+docker run --rm --entrypoint sh petersulyok/smfc:latest -c 'python3 -V; ipmitool -V; smartctl -V | head -1'
+```
 - Please note that the dockerfile will install `smfc` from `pypi.org`, so the version must refer an official `smfc` release.
 - The build script will generate the following tags: `4.1.0`, `latest`, `4.1.0-nvidia`, `latest-nvidia`, `4.1.0-amd`, `latest-amd`.
 

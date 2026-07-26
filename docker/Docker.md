@@ -8,9 +8,9 @@ There are three images created for `smfc`:
 
 | Image type          | Tags                            | Base image         | Pros                                          | Cons                                                         |
 |---------------------|---------------------------------|--------------------|-----------------------------------------------|--------------------------------------------------------------|
-| Standard            | `6.0.0` / `latest`              | Alpine Linux 3.24  | Small image size                              | GPU fan controller not supported                             |
-| NVIDIA GPU-enabled  | `6.0.0-nvidia`/ `latest-nvidia` | Debian 13 (slim)   | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
-| AMD GPU-enabled     | `6.0.0-amd` / `latest-amd`      | ROCm Ubuntu 24.04  | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
+| Standard            | `6.0.1` / `latest`              | Alpine Linux 3.24  | Small image size                              | GPU fan controller not supported                             |
+| NVIDIA GPU-enabled  | `6.0.1-nvidia`/ `latest-nvidia` | Debian 13 (slim)   | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
+| AMD GPU-enabled     | `6.0.1-amd` / `latest-amd`      | ROCm Ubuntu 24.04  | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
 
 > Docker image tags changed for GPU-enabled images with the newly implemented AMD GPU support in `smfc v5.4.0`!
 
@@ -55,7 +55,6 @@ docker stop smfc
 ## Usage #2: docker-compose (recommended)
 `docker-compose` requires this file:
 ```
-version: "2"
 services:
   smfc:
     image: petersulyok/smfc:latest
@@ -82,7 +81,7 @@ docker compose down
 
 # NVIDIA GPU-enabled image
 This image contains the following components: 
-- `Debian Linux` 13 (slim)
+- `Debian Linux` 13.6 (slim)
 - `Python` 3.13.5
 - `ipmitool` 1.8.19-9
 - `smartmontools` 7.4-3
@@ -126,7 +125,6 @@ docker stop smfc
 ## Usage #2: docker-compose (recommended)
 `docker-compose` requires this file:
 ```
-version: "2"
 services:
   smfc:
     image: petersulyok/smfc:latest-nvidia
@@ -166,7 +164,7 @@ This image contains the following components:
 - `Python` 3.12.3
 - `ipmitool` 1.8.19
 - `smartmontools` 7.4
-- `ROCm` (includes `rocm-smi`)
+- `ROCm` 7.14.0 (includes `rocm-smi`)
 
 ## How to enable AMD GPU in the docker image?
 `rocm-smi` is installed **inside the Docker image** (provided by the `rocm/dev-ubuntu` base image) — it does not need to be installed on the host.
@@ -207,7 +205,6 @@ docker stop smfc
 ## Usage #2: docker-compose (recommended)
 `docker-compose` requires this file:
 ```
-version: "2"
 services:
   smfc:
     image: petersulyok/smfc:latest-amd
@@ -251,6 +248,7 @@ Use the following parameters to configure `smfc`:
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
+  - **6.0.1** (2026.07.26): Updated to smfc 6.0.1 (Alpine 3.24.1/Debian 13 slim/ROCm-ubuntu 7.14.0)
   - **6.0.0** (2026.07.09): Updated to smfc 6.0.0 (Alpine 3.24.1/Debian 13 slim/ROCm-ubuntu)
   - **5.4.0** (2026.04.30): Updated to smfc 5.4.0 (Alpine 3.23.4/Debian 13 slim/ROCm-ubuntu) - new tags!!
   - **5.3.0** (2026.04.02): Updated to smfc 5.3.0 (Alpine 3.23.3/Debian 13 slim)
