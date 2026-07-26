@@ -591,7 +591,7 @@ It has the following command line parameters:
 user@host:~$ ./uninstall.sh --help
 usage: uninstall.sh [-h|--help] [-k|--keep-config] [-v|--verbose]
            -h, --help         help text
-           -k, --keep-config  keep original configuration file
+           -k, --keep-config  keep original configuration files
            -v, --verbose      verbose output
 ```
 
@@ -601,7 +601,8 @@ It can be executed locally or remotely, just like the installation script. Examp
 curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/uninstall.sh|bash /dev/stdin --verbose
 ```
 
-The script removes the installed `smfc` files and the Python package.
+The script removes the installed `smfc` files and the Python package. With the `--keep-config` parameter, the original
+configuration files (`/etc/smfc/smfc.conf` and `/etc/default/smfc`) are preserved.
 
 ### 10. Configuration
 After successful installation, create/edit your new configuration file. Its default location is `/etc/smfc/smfc.conf` (and command line options live in `/etc/default/smfc`). If you just upgraded to a new `smfc` version, you can preserve the existing one. 

@@ -9,7 +9,7 @@ set -e
 function print_help() {
   echo "usage: $(basename $0) [-h|--help] [-k|--keep-config] [-v|--verbose]"
   echo "           -h, --help         help text"
-  echo "           -k, --keep-config  keep original configuration file"
+  echo "           -k, --keep-config  keep original configuration files"
   echo "           -v, --verbose      verbose output"
   exit 0
 }
@@ -63,7 +63,6 @@ fi
 verbose_echo "Root privilege granted."
 
 # Remove smfc files.
-remove_file /etc/default/smfc
 remove_file /etc/systemd/system/smfc.service
 remove_file /usr/share/man/man1/smfc.1.gz
 remove_file /usr/local/share/man/man1/smfc.1.gz
@@ -71,10 +70,13 @@ remove_file /usr/share/man/man1/smfc-client.1.gz
 remove_file /usr/local/share/man/man1/smfc-client.1.gz
 verbose_echo "smfc files removed."
 
-# Remove config file.
+# Remove configuration files.
 if [ -z "${KEEP_CONFIG}" ]; then
   remove_file /etc/smfc/smfc.conf
-  verbose_echo "smfc config file removed."
+  remove_file /etc/default/smfc
+  verbose_echo "smfc configuration files removed."
+else
+  verbose_echo "smfc configuration files preserved (/etc/smfc/smfc.conf, /etc/default/smfc)."
 fi
 
 # Remove smfc package with pip.
