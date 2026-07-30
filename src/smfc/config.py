@@ -45,6 +45,7 @@ class CpuConfig:
     min_level: int          # Minimum fan level (0..100%)
     max_level: int          # Maximum fan level (0..100%)
     smoothing: int          # Moving average window size for temperature readings (1=disabled)
+    error_tolerance: int    # Consecutive failed temperature reads tolerated per device (0=disabled)
     control_function: List[Tuple[int, int]] = field(default_factory=list)  # (T,L) breakpoints, empty = legacy
 
 
@@ -63,6 +64,7 @@ class HdConfig:
     min_level: int              # Minimum fan level (0..100%)
     max_level: int              # Maximum fan level (0..100%)
     smoothing: int              # Moving average window size for temperature readings (1=disabled)
+    error_tolerance: int        # Consecutive failed temperature reads tolerated per device (0=disabled)
     hd_names: List[str]         # Device names of the hard disks (e.g. '/dev/disk/by-id/...')
     smartctl_path: str          # Path for 'smartctl' command
     standby_guard_enabled: bool # Standby guard feature enabled
@@ -85,6 +87,7 @@ class NvmeConfig:
     min_level: int          # Minimum fan level (0..100%)
     max_level: int          # Maximum fan level (0..100%)
     smoothing: int          # Moving average window size for temperature readings (1=disabled)
+    error_tolerance: int    # Consecutive failed temperature reads tolerated per device (0=disabled)
     nvme_names: List[str]   # Device names of the NVMe drives (e.g. '/dev/disk/by-id/...')
     control_function: List[Tuple[int, int]] = field(default_factory=list)  # (T,L) breakpoints, empty = legacy
 
@@ -104,6 +107,7 @@ class GpuConfig:
     min_level: int              # Minimum fan level (0..100%)
     max_level: int              # Maximum fan level (0..100%)
     smoothing: int              # Moving average window size for temperature readings (1=disabled)
+    error_tolerance: int        # Consecutive failed temperature reads tolerated per device (0=disabled)
     gpu_type: str               # GPU type: 'nvidia' or 'amd'
     gpu_device_ids: List[int]   # GPU device IDs (indexes)
     nvidia_smi_path: str        # Path for 'nvidia-smi' command
@@ -154,6 +158,7 @@ class Config:
     CV_MIN_LEVEL: str = "min_level"         # Minimum fan level
     CV_MAX_LEVEL: str = "max_level"         # Maximum fan level
     CV_SMOOTHING: str = "smoothing"         # Moving average window size
+    CV_ERROR_TOLERANCE: str = "error_tolerance"  # Consecutive failed temperature reads tolerated per device
     CV_CONTROL_FUNCTION: str = "control_function"  # User-defined T-L breakpoints (overrides min/max keys)
 
     # [Ipmi] section variable names
@@ -223,6 +228,7 @@ class Config:
     DV_CPU_MIN_LEVEL: int = 35
     DV_CPU_MAX_LEVEL: int = 100
     DV_CPU_SMOOTHING: int = 1
+    DV_CPU_ERROR_TOLERANCE: int = 3
 
     # Default values — [HD] section
     DV_HD_STEPS: int = 4
@@ -233,6 +239,7 @@ class Config:
     DV_HD_MIN_LEVEL: int = 35
     DV_HD_MAX_LEVEL: int = 100
     DV_HD_SMOOTHING: int = 1
+    DV_HD_ERROR_TOLERANCE: int = 3
     DV_HD_SMARTCTL_PATH: str = "/usr/sbin/smartctl"
     DV_HD_STANDBY_HD_LIMIT: int = 1
 
@@ -245,6 +252,7 @@ class Config:
     DV_NVME_MIN_LEVEL: int = 35
     DV_NVME_MAX_LEVEL: int = 100
     DV_NVME_SMOOTHING: int = 1
+    DV_NVME_ERROR_TOLERANCE: int = 3
 
     # Default values — [GPU] section
     DV_GPU_TYPE: str = "nvidia"
@@ -256,6 +264,7 @@ class Config:
     DV_GPU_MIN_LEVEL: int = 35
     DV_GPU_MAX_LEVEL: int = 100
     DV_GPU_SMOOTHING: int = 1
+    DV_GPU_ERROR_TOLERANCE: int = 3
     DV_GPU_DEVICE_IDS: str = "0"
     DV_GPU_NVIDIA_SMI_PATH: str = "/usr/bin/nvidia-smi"
     DV_GPU_ROCM_SMI_PATH: str = "/usr/bin/rocm-smi"
@@ -514,6 +523,7 @@ class Config:
                 min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_CPU_MIN_LEVEL),
                 max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_CPU_MAX_LEVEL),
                 smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_CPU_SMOOTHING),
+                error_tolerance=parser[s].getint(self.CV_ERROR_TOLERANCE, fallback=self.DV_CPU_ERROR_TOLERANCE),
                 control_function=self._read_control_function(parser, s, steps),
             )
             self._validate_fan_controller_config(cfg, s)
@@ -561,6 +571,7 @@ class Config:
                 min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_HD_MIN_LEVEL),
                 max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_HD_MAX_LEVEL),
                 smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_HD_SMOOTHING),
+                error_tolerance=parser[s].getint(self.CV_ERROR_TOLERANCE, fallback=self.DV_HD_ERROR_TOLERANCE),
                 hd_names=hd_names,
                 smartctl_path=smartctl_path,
                 standby_guard_enabled=standby_guard_enabled,
@@ -602,6 +613,7 @@ class Config:
                 min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_NVME_MIN_LEVEL),
                 max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_NVME_MAX_LEVEL),
                 smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_NVME_SMOOTHING),
+                error_tolerance=parser[s].getint(self.CV_ERROR_TOLERANCE, fallback=self.DV_NVME_ERROR_TOLERANCE),
                 nvme_names=nvme_names,
                 control_function=self._read_control_function(parser, s, steps),
             )
@@ -648,6 +660,7 @@ class Config:
                 min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_GPU_MIN_LEVEL),
                 max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_GPU_MAX_LEVEL),
                 smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_GPU_SMOOTHING),
+                error_tolerance=parser[s].getint(self.CV_ERROR_TOLERANCE, fallback=self.DV_GPU_ERROR_TOLERANCE),
                 gpu_type=gpu_type,
                 gpu_device_ids=gpu_device_ids,
                 nvidia_smi_path=nvidia_smi_path,
@@ -738,6 +751,8 @@ class Config:
                 raise ValueError(f"[{section}] invalid value: {self.CV_MAX_LEVEL} < {self.CV_MIN_LEVEL}")
         if cfg.smoothing < 1:
             raise ValueError(f"[{section}] invalid value: {self.CV_SMOOTHING} < 1")
+        if cfg.error_tolerance < 0:
+            raise ValueError(f"[{section}] invalid value: {self.CV_ERROR_TOLERANCE} < 0")
 
 
 # End.
