@@ -697,9 +697,8 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
-# Consecutive failed temperature reads tolerated per device before smfc stops (int, default=3)
-# While inside this budget the last known good temperature of the device is reused and the
-# failure is logged. 0 = do not tolerate any read error.
+# Consecutive failed temperature reads tolerated per device (int, default=3, 0=disabled)
+# Inside this budget the last known good temperature is reused, above it smfc stops
 error_tolerance=3
 
 
@@ -731,9 +730,8 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
-# Consecutive failed temperature reads tolerated per device before smfc stops (int, default=3)
-# While inside this budget the last known good temperature of the device is reused and the
-# failure is logged. 0 = do not tolerate any read error.
+# Consecutive failed temperature reads tolerated per device (int, default=3, 0=disabled)
+# Inside this budget the last known good temperature is reused, above it smfc stops
 error_tolerance=3
 # Names of the HDs (str multi-line list, default=)
 # MUST BE specified in '/dev/disk/by-id/...' form, for example:
@@ -777,9 +775,8 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
-# Consecutive failed temperature reads tolerated per device before smfc stops (int, default=3)
-# While inside this budget the last known good temperature of the device is reused and the
-# failure is logged. 0 = do not tolerate any read error.
+# Consecutive failed temperature reads tolerated per device (int, default=3, 0=disabled)
+# Inside this budget the last known good temperature is reused, above it smfc stops
 error_tolerance=3
 # Names of the NVMe devices (str multi-line list, default=)
 # MUST BE specified in '/dev/disk/by-id/...' form, for example:
@@ -820,9 +817,8 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
-# Consecutive failed temperature reads tolerated per device before smfc stops (int, default=3)
-# While inside this budget the last known good temperature of the device is reused and the
-# failure is logged. 0 = do not tolerate any read error.
+# Consecutive failed temperature reads tolerated per device (int, default=3, 0=disabled)
+# Inside this budget the last known good temperature is reused, above it smfc stops
 error_tolerance=3
 # GPU device IDs (comma- or space-separated list of int, default=0)
 # These are indices in nvidia-smi temperature report.
