@@ -60,12 +60,12 @@ no_enforce_fan_mode    exit=1    set_level=4   distinct=2  temp_read=8   temps_s
 
 | Column | Meaning |
 |--------|---------|
-| `exit` | pytest exit code. `2` = clean Ctrl-C, `130` = signal-exit on SIGINT, `1` = pytest-failure (used by `no_enforce_fan_mode` which raises `SystemExit(11)`). |
+| `exit` | pytest exit code. `2` = clean Ctrl-C, `130` = signal-exit on SIGINT, `1` = pytest-failure (used by `no_enforce_fan_mode`, which raises `SystemExit(11)`, and by `error_tolerance_exhausted`, where the escalated read error propagates). |
 | `set_level` | Number of fan-level apply lines observed (`Setting fan level: zone=N level=N%` plus the higher-level `IPMI zone [N]: new level = N%` summaries). |
 | `distinct` | Number of distinct `(zone, level)` pairs — anything `> 1` confirms the service is computing levels dynamically rather than emitting the same line every iteration. |
 | `temp_read` | Count of `new temperature` / `calculated level=` log lines, i.e. how many times the controllers consumed temperature input. |
 | `temps_seen` | Number of distinct temperature observations. Anything `> 1` proves the drift thread's writes propagate through `TestData` and reach the controllers. |
-| `intr=Y/N` | Whether `KeyboardInterrupt` was logged at exit. `N` is only expected for `no_enforce_fan_mode` (autonomous exit). |
+| `intr=Y/N` | Whether `KeyboardInterrupt` was logged at exit. `N` is only expected for `no_enforce_fan_mode` and `error_tolerance_exhausted` (both terminate on their own). |
 | `-> PASS / FAIL: <reasons>` | Final verdict. On `FAIL`, the last 15 lines of the scenario log are printed below the line (unless `--quiet`). |
 
 ## Signals checked
@@ -80,7 +80,7 @@ no_enforce_fan_mode    exit=1    set_level=4   distinct=2  temp_read=8   temps_s
   while formatting the trace on Ctrl-C; that's not a service failure.)
 - Exit code is one of `2`, `130`, `-2`, `-SIGINT`.
 
-**Driven from the `Scenario(cpu, hd, gpu, nvme, conf)` tuple:**
+**Driven from the `Scenario(cpu, hd, gpu, nvme, conf, fault)` tuple:**
 - Every controller declared by the tuple appears with its
   `<NAME> fan controller was initialized` banner.
 - `const_level` requires the `CONST` banner (it's the only `CONST`-only
@@ -99,6 +99,30 @@ no_enforce_fan_mode    exit=1    set_level=4   distinct=2  temp_read=8   temps_s
 | `no_enforce_fan_mode` | Startup logs `enforce_fan_mode = False`; the log contains `enforce_fan_mode is disabled, smfc exiting` (the `SystemExit(11)` path); the log does **not** contain `restoring FULL`. The generic `no-clean-interrupt` / `exit=1` checks are suppressed for this scenario. |
 | `hd_split_zones` | Both `HD:0 fan controller was initialized` and `HD:1 fan controller was initialized` appear. |
 | `smoothing_window` | At least one controller logs `smoothing = N` with `N ≥ 2`. |
+| `error_tolerance` | Startup logs `error_tolerance = 3`; the log contains `temperature read failed, reusing` (the last known good value was used) and `temperature read recovered`; it does **not** contain `time(s) in a row` (the budget must not run out). |
+| `error_tolerance_exhausted` | Startup logs `error_tolerance = 1`; the log contains `temperature read failed N time(s) in a row` and the propagated `FileNotFoundError: ERROR: Cannot read temperature from HWMON file`. The generic `no-clean-interrupt` / `traceback-during-run` / `exit=1` checks are suppressed: dying on the re-raised exception *is* the documented behavior. |
+
+## Fault injection
+
+Two scenarios do not just watch the happy path, they break a device on purpose. The
+`fault` field of the `Scenario` tuple selects the injector thread in
+[`test/smoke_runner.py`](https://github.com/petersulyok/smfc/blob/main/test/smoke_runner.py),
+which renames one disk's fake hwmon file away so the controller's `open()` fails — the
+deterministic, uid-independent stand-in for the `EIO` a real `drivetemp` read returns while a
+disk is spinning up from STANDBY ([issue #87](https://github.com/petersulyok/smfc/issues/87)):
+
+| Mode | Behavior | Scenario |
+|------|----------|----------|
+| `hd_flaky` | Hides the file for 2 s out of every 5 s, starting 1.5 s after launch. With `[HD] polling=1` and `error_tolerance=3` the streak stays inside the budget. | `error_tolerance` — smfc must survive, reusing the last known good temperature. |
+| `hd_dead` | Hides the file once, permanently. With `error_tolerance=1` the second consecutive failure escalates. | `error_tolerance_exhausted` — smfc must stop with the original exception. |
+
+A sample of what the tolerated run produces:
+
+```
+ERROR: HD: temperature read failed, reusing 41.0C (device=/dev/sda, 1/3, total=1): ERROR: Cannot read temperature from HWMON file (disk=/dev/sda)!
+ERROR: HD: temperature read failed, reusing 41.0C (device=/dev/sda, 2/3, total=2): ERROR: Cannot read temperature from HWMON file (disk=/dev/sda)!
+INFO:  HD: temperature read recovered after 2 failure(s) (device=/dev/sda, total=2)
+```
 
 ## Keeping things in sync
 

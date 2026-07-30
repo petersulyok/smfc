@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The per-device read errors are also published: new `read_errors` (current consecutive streak) and `read_errors_total` (failures since startup) fields in the `/snapshot` device entries, and the matching `smfc_device_temp_read_errors` gauge and `smfc_device_temp_read_errors_total` counter in `/metrics`, so these events are visible in Grafana and not only in the log. Both counters appear in the log messages as well: `HD: temperature read failed, reusing 33.0C (device=/dev/disk/by-id/..., 2/3, total=9): ...`.
 
 ### Changed
+- Two new smoke-test scenarios with fault injection: `error_tolerance` (one disk becomes unreadable for a short window, `smfc` must survive it by reusing the last known good temperature) and `error_tolerance_exhausted` (the disk stays unreadable, the budget runs out and `smfc` must stop). The smoke runner hides the disk's fake hwmon file to reproduce the failing read of issue #87.
 - `smfc` man page lists the supported motherboards (X9, X10-X13/H10-H13, X10QBi, X14/H14) like the README and the DEB package description.
 - The APT repository can be added with a single `deb822` file (`smfc.sources`, with embedded signing key) now, the one-line format is also documented - see [README chapter 9.1](https://github.com/petersulyok/smfc/blob/main/README.md#91-deb-package-installation).
 

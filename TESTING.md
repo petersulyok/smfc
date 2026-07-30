@@ -346,6 +346,9 @@ controllers, platforms, and configuration modes:
 - **Configuration toggles**: `no_enforce_fan_mode` (service exits on BMC
   drift instead of restoring FULL), `smoothing_window` (moving-average
   temperature filter with `smoothing>1`).
+- **Fault injection**: `error_tolerance` and `error_tolerance_exhausted` make
+  one disk's hwmon file disappear while the service is running (the two sides
+  of the `error_tolerance=` contract: tolerated vs. escalated).
 
 The full table — what each scenario contains:
 
@@ -371,6 +374,8 @@ The full table — what each scenario contains:
 | `no_enforce_fan_mode`| `no_enforce_fan_mode.conf` | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
 | `hd_split_zones`     | `hd_split_zones.conf`      | disabled                    | 4 x HDs (`HD:0`, `HD:1`)    | disabled  | disabled      | disabled   | disabled      |
 | `smoothing_window`   | `smoothing_window.conf`    | 2 x CPUs (`smoothing=5`)    | 2 x HDs (`smoothing=3`)     | disabled  | disabled      | disabled   | disabled      |
+| `error_tolerance`    | `error_tolerance.conf`     | disabled                    | 4 x HDs (`error_tolerance=3`) | disabled  | disabled      | disabled   | disabled      |
+| `error_tolerance_exhausted` | `error_tolerance_exhausted.conf` | disabled           | 4 x HDs (`error_tolerance=1`) | disabled  | disabled      | disabled   | disabled      |
 
 Notes:
 
@@ -412,6 +417,18 @@ Notes:
   intervals (1–2 s) let the window fill within the smoke run while the
   drift thread keeps feeding varying values, so the moving-average output
   changes across cycles.
+- `error_tolerance` and `error_tolerance_exhausted` are the only scenarios
+  with **fault injection**: a background thread renames the hwmon file of the
+  first disk away, so the controller's `open()` fails — the deterministic,
+  uid-independent stand-in for the `EIO` that a real `drivetemp` read returns
+  while a disk is spinning up from STANDBY (issue #87). `error_tolerance`
+  hides the file for 2 s out of every 5 s with `polling=1` and
+  `error_tolerance=3`, so the streak stays inside the budget: smfc must keep
+  running, reusing the last known good temperature of that disk and logging
+  the recovery. `error_tolerance_exhausted` hides the file permanently with
+  `error_tolerance=1`, so the budget runs out and the service must stop with
+  the original exception — like `no_enforce_fan_mode`, it terminates on its
+  own, without a `KeyboardInterrupt`.
 - During smoke tests, temperature values change gradually over time to
   simulate realistic thermal behavior. A background thread updates hwmon
   temperature files (for CPU, HD, NVMe) every second, applying random

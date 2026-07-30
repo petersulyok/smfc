@@ -25,7 +25,8 @@ from .test_mocks import MockedContextGood
 
 # Smoke scenario matrix — single source of truth (replaces the per-scenario run_test_*.sh wrappers).
 # Each scenario maps a name to device counts plus the config template (in this directory) under test.
-Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf"])
+# The optional `fault` field selects a fault injector (see FAULT_INJECTORS); None = no fault.
+Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf", "fault"], defaults=(None,))
 
 SCENARIOS = {
     "cpu_1":             Scenario(1, 1, 0, 0, "cpu_1.conf"),
@@ -48,7 +49,17 @@ SCENARIOS = {
     "no_enforce_fan_mode": Scenario(1, 2, 0, 0, "no_enforce_fan_mode.conf"),
     "hd_split_zones":    Scenario(0, 4, 0, 0, "hd_split_zones.conf"),
     "smoothing_window":  Scenario(2, 2, 0, 0, "smoothing_window.conf"),
+    "error_tolerance":   Scenario(0, 4, 0, 0, "error_tolerance.conf", "hd_flaky"),
+    "error_tolerance_exhausted": Scenario(0, 4, 0, 0, "error_tolerance_exhausted.conf", "hd_dead"),
 }
+
+# Fault injection windows (seconds) of the "hd_flaky" injector: the hwmon file of one disk is
+# hidden for FAULT_WINDOW and readable again for FAULT_PERIOD - FAULT_WINDOW. With [HD] polling=1
+# and error_tolerance=3 this stays inside the budget, so smfc must reuse the last known good value
+# and recover — the issue #87 scenario.
+FAULT_WINDOW: float = 2.0
+FAULT_PERIOD: float = 5.0
+FAULT_DELAY: float = 1.5    # Grace time before the first fault, so the service can start up cleanly.
 
 
 @fixture()
@@ -150,12 +161,43 @@ def _update_hwmon_temperatures(files: List[str], min_temp: float, max_temp: floa
     """Update hwmon temperature files with gradual changes (+/- 0-3 degrees) within the given range.
     Called from the smoke-automatic_smoke_runner background thread only."""
     for path in files:
+        # The fault injector may have hidden this file (see _fault_injector); skip it for this round.
+        if not os.path.exists(path):
+            continue
         with open(path, "r", encoding="UTF-8") as f:
             current = float(f.read()) / 1000
         delta = random.choice([-3, -2, -1, 0, 1, 2, 3])
         new_temp = max(min_temp, min(max_temp, current + delta))
         with open(path, "w+t", encoding="UTF-8") as f:
             f.write(f"{new_temp * 1000:.0f}")
+
+
+def _fault_injector(mode: str, path: str, stop: threading.Event) -> None:  # pragma: no cover
+    """Make one hwmon file unreadable, reproducing a failing temperature read.
+
+    Renaming the file away is the deterministic, uid-independent way to provoke the failure: the
+    controller's open() then raises FileNotFoundError (an OSError subclass), exactly the branch that
+    the kernel's EIO also lands in. Two modes:
+      - "hd_flaky": hide the file for FAULT_WINDOW seconds every FAULT_PERIOD seconds (transient
+        failure inside the error_tolerance budget — smfc must survive it).
+      - "hd_dead":  hide the file once, permanently (the budget runs out — smfc must stop).
+    Called from the smoke-runner background thread only.
+    Args:
+        mode (str): fault mode ("hd_flaky" or "hd_dead")
+        path (str): hwmon file to hide
+        stop (threading.Event): set by the harness at exit
+    """
+    hidden = path + ".hidden"
+    stop.wait(FAULT_DELAY)
+    while not stop.is_set():
+        if os.path.exists(path):
+            os.rename(path, hidden)
+        if mode == "hd_dead":
+            return
+        stop.wait(FAULT_WINDOW)
+        if os.path.exists(hidden):
+            os.rename(hidden, path)
+        stop.wait(FAULT_PERIOD - FAULT_WINDOW)
 
 
 # pylint: disable=too-few-public-methods
@@ -168,6 +210,7 @@ class TestSmoke:
         - materialize fake hwmon files and ipmitool/smartctl/SMI commands for the scenario
         - mock pyudev.Context and each *Fc.__init__ to inject the fake devices
         - load the scenario config, inject the generated command paths / device names
+        - start the fault injector of the scenario, if it has one (error_tolerance scenarios)
         - run Service.run(); the main loop runs until CTRL-C while a thread drifts temperatures
         """
         my_td: TestData = TestData(tmp_path)
@@ -256,6 +299,13 @@ class TestSmoke:
         # Start background thread to update temperatures periodically.
         temp_thread = threading.Thread(target=temperature_updater, daemon=True)
         temp_thread.start()
+
+        # Start the fault injector of the scenario (error_tolerance scenarios only).
+        if scenario.fault:
+            fault_thread = threading.Thread(target=_fault_injector,
+                                            args=(scenario.fault, my_td.hd_files[0], temp_updater_stop),
+                                            daemon=True)
+            fault_thread.start()
 
         service.run()
 
