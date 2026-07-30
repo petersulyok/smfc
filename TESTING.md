@@ -306,19 +306,44 @@ A smoke run boots a real `Service` against fakes:
    `min_temp`/`max_temp` range). GPU temperatures drift via state files
    inside the SMI emulator scripts.
 5. **`Service.run()` is called** and runs until the operator sends Ctrl-C
-   (the documented exit path) or — for one specific scenario,
-   `no_enforce_fan_mode` — until the service self-terminates on a BMC drift
-   it is configured not to correct.
+   (the documented exit path) or — for the two self-terminating scenarios —
+   until the service stops on its own. See *How a scenario ends* below.
 
 The scenario itself is described by a single tuple:
 
 ```python
-Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf"])
+Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf", "fault"], defaults=(None,))
 ```
 
-— device counts plus a `.conf` filename under `test/scenarios/`. The full set
+— device counts, a `.conf` filename under `test/scenarios/`, and an optional
+fault injector (`None` for every scenario but the two `error_tolerance` ones).
+The full set
 lives in `test/smoke_runner.py::SCENARIOS`, which is the **single source of
 truth** for both the interactive runner and the automatic driver.
+
+### How a scenario ends
+
+Almost every smoke scenario is a **positive** test: nothing in it is supposed
+to fail, so the service runs forever and the harness decides when to stop it.
+Two scenarios break that pattern, and only one of them stops *on an error*:
+
+| Ending | Scenarios | Exit | What it means |
+|--------|-----------|------|---------------|
+| Ctrl-C / SIGINT from the operator or the automatic driver | 20 of 22 | `2` (or `130`) | Positive test: the service was still healthy when it was interrupted. Being interrupted **is** the pass condition. |
+| Clean self-termination (`sys.exit(11)`) | `no_enforce_fan_mode` | `1` | Positive test of a *configured* behaviour: `enforce_fan_mode=0` tells smfc to quit on the first BMC fan-mode drift, and it does so through its own documented exit path. |
+| Self-termination **on an error** | `error_tolerance_exhausted` | `1` | The only **negative** smoke test: the injected fault is never repaired, the `error_tolerance` budget runs out, and the re-raised read exception propagates out of the main loop. The service dies with a Python traceback and the exit handler drives all fans to 100%. |
+
+This matters when you run a scenario interactively with
+`./test/run_smoke.sh <scenario>`: for 20 of them the prompt does not come back
+until you press Ctrl-C, for `no_enforce_fan_mode` it returns within a few
+seconds, and for `error_tolerance_exhausted` it returns after ~3 seconds with a
+traceback — **that traceback is the expected result, not a broken test**.
+
+The automatic driver (`check_smoke.py`) knows about both exceptions: it polls
+every 100 ms so a self-terminating scenario is not waited out, and it suppresses
+the generic `no-clean-interrupt` / `exit=1` checks for `no_enforce_fan_mode` and
+additionally `traceback-during-run` for `error_tolerance_exhausted`. Every other
+scenario still fails if it dies early, exits non-zero, or logs a traceback.
 
 ### Scenario matrix
 
@@ -348,7 +373,10 @@ controllers, platforms, and configuration modes:
   temperature filter with `smoothing>1`).
 - **Fault injection**: `error_tolerance` and `error_tolerance_exhausted` make
   one disk's hwmon file disappear while the service is running (the two sides
-  of the `error_tolerance=` contract: tolerated vs. escalated).
+  of the `error_tolerance=` contract: tolerated vs. escalated). The first is a
+  positive test like every other scenario — smfc must survive the outage and
+  keep running until Ctrl-C. The second is the **only negative scenario in the
+  matrix**: it asserts that the service *stops*.
 
 The full table — what each scenario contains:
 
