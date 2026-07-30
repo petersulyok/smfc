@@ -44,7 +44,7 @@ def _sample_snapshot() -> Dict[str, Any]:
                 "ipmi_zones": [0], "device_count": 1, "polling": 2.0,
                 "last_temp_c": 42.3, "last_level_pct": 45, "deferred_apply": False,
                 "temp_min_c": 30.0, "temp_max_c": 70.0, "level_min_pct": 25, "level_max_pct": 100,
-                "devices": [{"name": "cpu0", "temp_c": 42.3}],
+                "devices": [{"name": "cpu0", "temp_c": 42.3, "read_errors": 0}],
             },
             {
                 "section": "HD", "type": "hd", "enabled": True,
@@ -52,10 +52,10 @@ def _sample_snapshot() -> Dict[str, Any]:
                 "last_temp_c": 34.1, "last_level_pct": 55, "deferred_apply": False,
                 "temp_min_c": 32.0, "temp_max_c": 50.0, "level_min_pct": 35, "level_max_pct": 100,
                 "devices": [
-                    {"name": "/dev/sda", "temp_c": 33.0},
-                    {"name": "/dev/sdb", "temp_c": 34.5},
-                    {"name": "/dev/sdc", "temp_c": 36.1},
-                    {"name": "/dev/sdd", "temp_c": 39.0},
+                    {"name": "/dev/sda", "temp_c": 33.0, "read_errors": 0},
+                    {"name": "/dev/sdb", "temp_c": 34.5, "read_errors": 2},
+                    {"name": "/dev/sdc", "temp_c": 36.1, "read_errors": 0},
+                    {"name": "/dev/sdd", "temp_c": 39.0, "read_errors": 0},
                 ],
                 "standby_guard": {
                     "enabled": True, "limit": 1,
@@ -114,7 +114,7 @@ class TestPrometheusRenderer:
         assert out.endswith("\n")
         for metric in ("smfc_up", "smfc_start_time_seconds", "smfc_bmc_info",
                        "smfc_controller_zone", "smfc_controller_temperature_celsius",
-                       "smfc_device_temperature_celsius",
+                       "smfc_device_temperature_celsius", "smfc_device_temp_read_errors",
                        "smfc_controller_level_percent", "smfc_zone_level_percent",
                        "smfc_controller_temperature_min_celsius", "smfc_controller_temperature_max_celsius",
                        "smfc_controller_level_min_percent", "smfc_controller_level_max_percent",
@@ -268,6 +268,35 @@ class TestPrometheusRenderer:
         out = render_prometheus(_sample_snapshot())
         block = out.split("# TYPE smfc_device_temperature_celsius", 1)[1].split("# HELP")[0]
         assert 'section="CONST"' not in block
+
+    def test_per_device_read_errors_emitted(self) -> None:
+        """Positive unit test for render_prometheus() function. It contains the following steps:
+        - build a sample snapshot dict via the _sample_snapshot() fixture helper, where the HD device
+          "/dev/sdb" is inside its error_tolerance budget with a streak of 2 failed reads
+        - call render_prometheus() with the snapshot
+        - inspect the rendered Prometheus text output
+        - ASSERT: smfc_device_temp_read_errors is 0 for the healthy CPU and HD devices
+        - ASSERT: smfc_device_temp_read_errors reports the streak of the failing HD device
+        - ASSERT: the metric is not emitted for the CONST section (it reads no temperature)
+        """
+        out = render_prometheus(_sample_snapshot())
+        assert 'smfc_device_temp_read_errors{section="CPU",type="cpu",device="cpu0"} 0' in out
+        assert 'smfc_device_temp_read_errors{section="HD",type="hd",device="/dev/sda"} 0' in out
+        assert 'smfc_device_temp_read_errors{section="HD",type="hd",device="/dev/sdb"} 2' in out
+        block = out.split("# TYPE smfc_device_temp_read_errors", 1)[1].split("# HELP")[0]
+        assert 'section="CONST"' not in block
+
+    def test_per_device_read_errors_default_zero(self) -> None:
+        """Positive unit test for render_prometheus() function with a device entry that carries no
+        read_errors key (an older snapshot). It contains the following steps:
+        - build a sample snapshot dict and drop the read_errors key from the CPU device entry
+        - call render_prometheus() with the snapshot
+        - ASSERT: smfc_device_temp_read_errors falls back to 0 for that device
+        """
+        snap = _sample_snapshot()
+        del snap["fan_controllers"][0]["devices"][0]["read_errors"]
+        out = render_prometheus(snap)
+        assert 'smfc_device_temp_read_errors{section="CPU",type="cpu",device="cpu0"} 0' in out
 
     def test_steering_window_metrics(self) -> None:
         """Positive unit test for render_prometheus() function. It contains the following steps:

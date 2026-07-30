@@ -88,10 +88,16 @@ def _build_controller_entry(controller) -> Dict[str, Any]:
         # from the controller (HD/NVMe expose configured paths; CPU/GPU synthesize ordinal labels).
         # When the loop hasn't run yet temps may be shorter than names — pad with 0.0 so the
         # array length always matches device_count.
+        # "read_errors" is the current consecutive failed-read streak of the device (see error_tolerance):
+        # 0 while the device is healthy, so a non-zero value means the reported temp_c is a reused,
+        # stale reading.
         names = list(controller.device_names())
         temps = list(getattr(controller, "last_per_device_temps", []) or [])
+        errors = list(getattr(controller, "_temp_read_errors", []) or [])
         entry["devices"] = [
-            {"name": names[i], "temp_c": float(temps[i]) if i < len(temps) else 0.0}
+            {"name": names[i],
+             "temp_c": float(temps[i]) if i < len(temps) else 0.0,
+             "read_errors": int(errors[i]) if i < len(errors) else 0}
             for i in range(len(names))
         ]
 
