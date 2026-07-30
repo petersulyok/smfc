@@ -56,7 +56,8 @@ By default (non-verbose mode), the tool shows only these high-level
 sections. Add the
 .B \-V
 (verbose) flag to expand each controller into a detailed block showing
-its temperature-to-level curve, per-device temperatures, extended BMC
+its temperature-to-level curve, per-device temperatures, per-device temperature read error
+counts (shown only when there was at least one failed read), extended BMC
 information, and (for SATA arrays) HD standby guard status.
 .PP
 Temperature and level cells are color-coded when printed to a terminal
@@ -95,6 +96,8 @@ Disable ANSI color output even when stdout is a terminal.
 Show extended output: additional BMC fields, per\-controller blocks with per\-device temperature
 rows, HD standby guard state, per\-device temperature read error counts (only when there was at
 least one failed read), and service uptime (online mode only).
+The per\-device rows (and with them the read error counts) are printed in this mode only; the
+default output is a per\-controller summary.
 .TP
 .B \-sa, \-\-standalone
 Bypass the smfc service and read sensors directly via
