@@ -479,6 +479,7 @@ State on a `FanController`:
 | `last_temp`      | Last smoothed temperature                                              |
 | `last_level`     | Last applied fan level (0 = "no level set yet")                        |
 | `_temp_history`  | `deque(maxlen=smoothing)` — moving-average window                      |
+| `_temp_read_errors` | `List[int]` — consecutive failed temperature reads per device (see §7.1.4) |
 | `deferred_apply` | If True, controller stores its desired level but doesn't talk to IPMI  |
 
 #### 7.1.1 Subclass responsibilities
@@ -587,7 +588,48 @@ The combination of smoothing (input side) and sensitivity (decision side) is
 what makes the digitalized staircase output (§7.1.2) actually steady in
 practice.
 
-#### 7.1.4 Aggregation across multiple devices
+#### 7.1.4 Tolerating transient temperature read errors
+
+A temperature read can fail transiently: the kernel's `drivetemp` driver
+issues the SMART/ATA temperature command with a hard-coded 10 s timeout, and a
+disk spinning up from STANDBY can exceed it, so `read()` on
+`.../hwmon*/temp1_input` returns `EIO` for a second or two (issue #87).
+Before 6.1.0 that single failed read propagated out of `run()` and stopped the
+service with all fans at 100%.
+
+`get_temp()` now wraps each per-device read and keeps a per-device counter of
+**consecutive** failures in `_temp_read_errors[i]`. Per device, per call:
+
+| Situation | Behavior |
+|---|---|
+| Read succeeds | Use the value; reset `_temp_read_errors[i] = 0`. A non-zero streak logs one recovery line at INFO level. |
+| Read fails, no cached value for `i` (i.e. the constructor's first read) | Re-raise — fatal, an unreadable device is a configuration error. |
+| Read fails, streak ≤ `error_tolerance` | Log at ERROR level and reuse `last_per_device_temps[i]`. |
+| Read fails, streak > `error_tolerance` | Log at ERROR level (budget exhausted), then re-raise the original exception object, so `Service` sees the same type and message as before. |
+
+The exceptions caught are `(OSError, ValueError, IndexError, RuntimeError)` —
+`IOError` is an alias of `OSError` and `FileNotFoundError` is a subclass, so
+both the HWMON and the `smartctl` / SMI branches are covered.
+
+Consequences worth stating explicitly:
+
+- The budget bounds *consecutive* failures. A sensor that fails every other
+  poll never escalates: it is readable half the time, so the curve is still
+  driven by real data.
+- The aggregation (§7.1.5) runs over the mixed vector of fresh and reused
+  values, so a stale reading on one device cannot mask a real thermal event on
+  another.
+- A reused value enters `_temp_history` like any other sample and produces a
+  zero delta for that device, so a tolerated poll typically fails the
+  sensitivity gate and generates no IPMI traffic at all.
+- `error_tolerance` is a *count*, so the wall-clock grace differs per section:
+  ≈6 s for `[CPU]` (`polling=2.0`) and ≈30 s for `[HD]` (`polling=10.0`).
+- The `smfc-client` standalone path (`client.py:_safe_nth_temp_str()`) calls
+  `_get_nth_temp()` directly and renders `ERROR` per device without touching
+  the counters: it is a one-shot display read and must not corrupt the
+  daemon's budget accounting.
+
+#### 7.1.5 Aggregation across multiple devices
 
 When `count > 1` (multiple CPUs, multiple disks, multiple GPUs), `get_temp()`
 collects all per-device temperatures and reduces them with one of:
@@ -818,8 +860,14 @@ Per-controller entry fields of note:
   LUT the service actually uses.
 - `control_function` — raw breakpoint list (`[[T, L], …]`), empty list in
   legacy mode. smfc-client renders this as the `Curve:` line in verbose mode.
-- `devices` — per-device `{"name": …, "temp_c": …}` list; populated from
-  `controller.device_names()` and `controller.last_per_device_temps`.
+- `devices` — per-device `{"name": …, "temp_c": …, "read_errors": …}` list;
+  populated from `controller.device_names()`,
+  `controller.last_per_device_temps` and `controller._temp_read_errors`.
+  `read_errors` is the *current* consecutive failed-read streak of the device
+  (§7.1.4): `0` while it is healthy, non-zero when the reported `temp_c` is a
+  reused, stale reading. The exporter renders it as the
+  `smfc_device_temp_read_errors` gauge (a gauge, not a counter: the value is
+  reset by the next successful read).
 - `standby_guard` — HD-only; `{"enabled": true, "limit": N, "states": […],
   "array_state": "AAAS", "standby_count": N}`.
 
@@ -1104,6 +1152,12 @@ just indexes into that cache. This is why GPU polling is per-controller,
 not per-device — and why the SMI tool is invoked only once even when
 monitoring multiple GPUs.
 
+This also shapes error accounting (§7.1.4): a failed or truncated SMI call
+raises from the SMI path on the first index and off the empty/partial cache
+for every further index, so one bad call costs exactly one tolerance unit per
+GPU. The counters of all GPUs in a section therefore advance in lockstep —
+`error_tolerance=3` means 3 consecutive *polls*, not 3 SMI calls per GPU.
+
 ### 14.3 First-poll behavior
 
 `last_time = monotonic() - (polling + 1)` in the base controller
@@ -1111,6 +1165,11 @@ constructor: this forces the first `run()` call to actually poll, regardless
 of how soon after startup it happens. Without this, the first iteration
 would be a no-op and the fans would sit at the BMC's default level until
 the first elapsed polling interval.
+
+The constructor's `get_temp()` call is deliberately outside the
+`error_tolerance` budget (§7.1.4): the per-device cache is still empty at that
+point, so there is no last known good value to reuse and a device that cannot
+be read at startup still aborts the service.
 
 ### 14.4 `last_level == 0` is treated as "not initialized"
 

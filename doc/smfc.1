@@ -27,7 +27,8 @@ NVMe SSDs (hwmon), Nvidia GPUs (nvidia\-smi), AMD GPUs (rocm\-smi).
 .TP
 .B Control logic
 Configurable temperature\-to\-fan\-level mapping with discrete steps, sensitivity threshold,
-polling interval, and optional moving average smoothing.
+polling interval, optional moving average smoothing, and a configurable tolerance for
+transient temperature read errors.
 .TP
 .B Shared IPMI zones
 Multiple controllers can share the same IPMI zone; the highest requested fan level wins.

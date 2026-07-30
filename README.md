@@ -53,6 +53,7 @@ Key features:
  - Temperature calculation methods: minimum, average, or maximum across multiple devices
  - Temperature smoothing with configurable moving average window to reduce fan speed oscillation
  - Sensitivity threshold to avoid unnecessary fan speed changes on small temperature fluctuations
+ - Configurable tolerance for transient temperature read errors, so a sensor hiccup does not stop the service
  - Standby guard feature for SATA hard disk arrays organized in RAID
  - Support for SATA, SAS/SCSI, and NVMe disks with automatic HWMON/smartctl fallback
  - Nvidia or AMD GPU temperature monitoring via `nvidia-smi` or `rocm-smi`
@@ -208,7 +209,7 @@ The dashed blue line shows the continuous piecewise-linear ideal described by `c
 > See [`smfc-sample9.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample9.conf) for a complete hybrid configuration using `control_function=` for both the CPU and HD fan controllers.
 
 #### 2.3 Reducing unnecessary fan speed changes
-Changing fan rotational speed is a slow physical process — depending on the fan type and the magnitude of the change it can take several seconds. Frequent or unnecessary changes also cause audible oscillation. To keep the fans steady, each temperature-driven controller combines five mechanisms that act at different stages of the control loop:
+Changing fan rotational speed is a slow physical process — depending on the fan type and the magnitude of the change it can take several seconds. Frequent or unnecessary changes also cause audible oscillation. To keep the fans steady, each temperature-driven controller combines six mechanisms that act at different stages of the control loop:
 
 | Stage | Mechanism | Parameter | Effect |
 |---|---|---|---|
@@ -216,9 +217,12 @@ Changing fan rotational speed is a slow physical process — depending on the fa
 | Smooth  | Moving-average smoothing | `smoothing=` | Averages the last N temperature readings before they enter the control function. Suppresses brief spikes; `1` (default) disables smoothing. |
 | Filter  | Sensitivity threshold | `sensitivity=` | The controller does not react until the smoothed temperature has moved by at least this many °C since the last action. |
 | Quantize | Discrete fan levels | `steps=` | The control function produces a fixed number of plateaus (linear: `steps + 1`, multi-segment: `steps + 2`) instead of a continuous curve, so small temperature drift inside a plateau yields the same fan level. |
+| Tolerate | Transient read errors | `error_tolerance=` | Reuses a device's last known good temperature for up to N consecutive failed reads instead of stopping. `0` disables. |
 | Apply   | Post-change delay | `[Ipmi] fan_level_delay=` | After every fan-level change, the controller waits this many seconds before issuing another command, giving the fan time to reach the new speed physically. |
 
 The mechanisms are independent and complementary: `polling=` and `smoothing=` work on the *input* side (how the temperature is measured), `sensitivity=` and `steps=` work on the *decision* side (whether and how a temperature maps to a fan level), and `fan_level_delay=` works on the *output* side (pacing the IPMI commands themselves).
+
+`error_tolerance=` also works on the *input* side, but it addresses a different failure: a temperature read that fails outright. The most common cause is the kernel's `drivetemp` driver, which issues the SMART/ATA temperature command with a hard-coded 10-second timeout: while a disk is spinning up from STANDBY the command can exceed that timeout, and reading `.../hwmon*/temp1_input` returns `EIO` for a second or two (see [issue #87](https://github.com/petersulyok/smfc/issues/87)). Note that the *Standby guard* feature is exactly what makes a disk array wake up in unison, so it correlates with this window. Before version 6.1.0 a single failed read stopped `smfc` and left the fans at 100%; now the last known good temperature of that device is reused for up to `error_tolerance=` consecutive failed reads (default `3`), each one logged at ERROR level. Only when the budget is exhausted — i.e. the sensor is genuinely unreadable, not just slow — does `smfc` stop. The first read at startup is deliberately outside this budget: a device that cannot be read at all is a configuration error.
 
 
 ### 3. Standby guard
@@ -693,6 +697,10 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
+# Consecutive failed temperature reads tolerated per device before smfc stops (int, default=3)
+# While inside this budget the last known good temperature of the device is reused and the
+# failure is logged. 0 = do not tolerate any read error.
+error_tolerance=3
 
 
 # HD fan controller: works based on SATA or SAS HDDs/SSDs temperature.
@@ -723,6 +731,10 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
+# Consecutive failed temperature reads tolerated per device before smfc stops (int, default=3)
+# While inside this budget the last known good temperature of the device is reused and the
+# failure is logged. 0 = do not tolerate any read error.
+error_tolerance=3
 # Names of the HDs (str multi-line list, default=)
 # MUST BE specified in '/dev/disk/by-id/...' form, for example:
 # hd_names=/dev/disk/by-id/ata-WDC_WD100EFAX-68LHPN0_8CH7T91E
@@ -765,6 +777,10 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
+# Consecutive failed temperature reads tolerated per device before smfc stops (int, default=3)
+# While inside this budget the last known good temperature of the device is reused and the
+# failure is logged. 0 = do not tolerate any read error.
+error_tolerance=3
 # Names of the NVMe devices (str multi-line list, default=)
 # MUST BE specified in '/dev/disk/by-id/...' form, for example:
 # nvme_names=/dev/disk/by-id/nvme-ADATA_LEGEND_650_2OFF29AO8DKR
@@ -804,6 +820,10 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
+# Consecutive failed temperature reads tolerated per device before smfc stops (int, default=3)
+# While inside this budget the last known good temperature of the device is reused and the
+# failure is logged. 0 = do not tolerate any read error.
+error_tolerance=3
 # GPU device IDs (comma- or space-separated list of int, default=0)
 # These are indices in nvidia-smi temperature report.
 gpu_device_ids=0

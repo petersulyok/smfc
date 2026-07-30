@@ -163,17 +163,17 @@ contain several test classes grouped by feature.
 | `constfc.py`                     | `test_constfc.py`            | Fixed-level controller init, `run`, deferred apply |
 | `cpufc.py`                       | `test_cpufc.py`              | Hwmon discovery, ordinal `cpuN` device names |
 | `exporter.py`                    | `test_exporter.py`           | Prometheus text rendering, HTTP server endpoints (`/snapshot`, `/metrics`, `/healthz`), 404/500 handling, idempotent stop |
-| `fancontroller.py`               | `test_fancontroller.py`      | Base contract: construction, `get_hwmon_path`, `get_temp` modes, per-device temp caching, `set_fan_level`, deferred level application, `run()` mapping, smoothing algorithm, LUT construction (legacy vs. user-defined `control_function=`) |
+| `fancontroller.py`               | `test_fancontroller.py`      | Base contract: construction, `get_hwmon_path`, `get_temp` modes, per-device temp caching, `set_fan_level`, deferred level application, `run()` mapping, smoothing algorithm, `error_tolerance` handling (reuse / escalation / per-device counters), LUT construction (legacy vs. user-defined `control_function=`) |
 | `generic.py`, `genericx9.py`, `genericx14.py`, `x10qbi.py` | `test_platforms.py` | Matrix-driven: same 8-method contract for all four platforms |
-| `gpufc.py`                       | `test_gpufc.py`              | `exec_smi` (Nvidia/AMD), AMD sensor selection, temp parse errors |
-| `hdfc.py`                        | `test_hdfc.py`               | `exec_smartctl` (sudo / rc / exceptions), standby-state formatting, `check_standby_state`, `go_standby_state`, standby-guard `run`, smartctl debug path |
+| `gpufc.py`                       | `test_gpufc.py`              | `exec_smi` (Nvidia/AMD), AMD sensor selection, temp parse errors, tolerated truncated SMI output |
+| `hdfc.py`                        | `test_hdfc.py`               | `exec_smartctl` (sudo / rc / exceptions), standby-state formatting, `check_standby_state`, `go_standby_state`, standby-guard `run`, smartctl debug path, tolerated transient HWMON/smartctl read errors |
 | `ipmi.py`                        | `test_ipmi.py`               | Init (positive/negative, BMC timeout, client mode), `exec_ipmitool` (remote args, sudo, rc, exceptions), `get/set_fan_mode`, fan-mode name mapping, `get/set_fan_level`, `set_multiple_fan_levels`, exception surface |
 | `log.py`                         | `test_log.py`                | Init (valid/invalid level+output combos), level/output/message-type mapping, message routing to stdout/stderr/syslog |
 | `nvmefc.py`                      | `test_nvmefc.py`             | NVMe name validation, smartctl-based temps |
 | `platform.py`                    | *(no dedicated module)*      | Exercised indirectly through `test_platforms.py` |
 | `platform_factory.py`            | `test_platform_factory.py`   | `create_platform` dispatch per platform name + fallback |
 | `service.py`                     | `test_service.py`            | Lifecycle (`exit_func`), dependency checks (CPU/HD/GPU/NVMe, AMD, invalid type), `run()` exit-code matrix, fan-mode drift enforcement, exporter start/stop wiring, **shared-zone arbitration** (`collect_desired_levels`, `apply_fan_levels` across single/shared/multi-zone, const winner/loser, caching, oscillation) |
-| `snapshot.py`                    | `test_snapshot.py`           | Schema/version, fan-mode block, per-controller entries (cpu/hd/nvme/gpu/const), curve vs. legacy min/max, zones block, applied levels, per-device temperatures |
+| `snapshot.py`                    | `test_snapshot.py`           | Schema/version, fan-mode block, per-controller entries (cpu/hd/nvme/gpu/const), curve vs. legacy min/max, zones block, applied levels, per-device temperatures and read-error counters |
 
 Behind that table sit two cross-cutting topics worth knowing about:
 
@@ -181,7 +181,8 @@ Behind that table sit two cross-cutting topics worth knowing about:
   subclasses (`CpuFc`, `HdFc`, `NvmeFc`, `GpuFc`) implement the same base
   contract but differ in how they discover devices. The shared base
   behaviours (construction, `set_fan_level`, deferred levels, the smoothing
-  algorithm, LUT construction) are tested *once* in `test_fancontroller.py`.
+  algorithm, read-error tolerance, LUT construction) are tested *once* in
+  `test_fancontroller.py`.
   Each subclass test then asserts only its device-specific surface
   (`exec_smartctl`, `exec_smi`, standby handling), with `build_*` / `make_bare_*`
   helpers from `test_fc_helpers.py` absorbing the discovery-mock boilerplate.
