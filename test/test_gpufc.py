@@ -235,6 +235,31 @@ class TestGpuFc:
         with pytest.raises(IndexError):
             fc._get_nth_temp(0)
 
+    def test_get_temp_tolerates_truncated_nvidia_output(self, mocker: MockerFixture):
+        """Positive unit test for GpuFc.get_temp() method with truncated nvidia-smi output inside the
+        error_tolerance budget. It contains the following steps:
+        - build a 2-GPU NVIDIA GpuFc via build_gpu_fc with error_tolerance=2, whose constructor read 40C for
+          both GPUs
+        - mock smfc.GpuFc._exec_smi via mocker.patch returning one truncated poll (a single temperature line for
+          two GPUs) followed by a complete one
+        - call GpuFc.get_temp() twice, expiring the SMI rate limiter (smi_called) before each call
+        - ASSERT: the truncated poll does not raise and both GPUs reuse their last known good 40C
+        - ASSERT: one bad SMI call advances the counter of both GPUs by exactly 1 (they are read from the same
+          batched call, so their counters move in lockstep)
+        - ASSERT: the next, complete poll returns the fresh average and resets both counters
+        """
+        h = build_gpu_fc(mocker, gpu_type="nvidia", gpu_device_ids=[0, 1], error_tolerance=2)
+        truncated = subprocess.CompletedProcess([], returncode=0, stdout="45\n")
+        complete = subprocess.CompletedProcess([], returncode=0, stdout="45\n46\n")
+        mocker.patch("smfc.GpuFc._exec_smi", MagicMock(side_effect=[truncated, complete]))
+        h.fc.smi_called = 0
+        assert h.fc.get_temp() == 40.0
+        assert h.fc.last_per_device_temps == [40.0, 40.0]
+        assert h.fc._temp_read_errors == [1, 1]
+        h.fc.smi_called = 0
+        assert h.fc.get_temp() == pytest.approx(45.5)
+        assert h.fc._temp_read_errors == [0, 0]
+
     # pylint: enable=protected-access
 
 

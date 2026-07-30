@@ -3,6 +3,7 @@
 #   test_hdfc.py (C) 2021-2026, Peter Sulyok
 #   Unit tests for smfc.HdFc() class.
 #
+import errno
 import os
 import random
 import subprocess
@@ -339,6 +340,68 @@ class TestHdFc:
             mocker.patch("subprocess.run", MagicMock(return_value=no_temp))
         with pytest.raises(exception):
             fc._get_nth_temp(index)
+
+    def test_run_tolerates_transient_hwmon_error(self, mocker: MockerFixture, td: TestData):
+        """Positive unit test for HdFc.run() method with a transient HWMON read error (issue #87). It contains
+        the following steps:
+        - build an HdFc via build_hd_fc with 2 disks at 33C/34C, error_tolerance=3 and a spinning-up disk
+        - mock builtins.print and smfc.FanController.set_fan_level via mocker.patch
+        - mock builtins.open so that the first read of the first disk's HWMON file fails with OSError(EIO), i.e.
+          the drivetemp timeout window of a disk waking up from STANDBY, and all further reads succeed
+        - call HdFc.run() twice with the polling timer expired
+        - ASSERT: run() completes without an exception (a transient read error does not stop smfc)
+        - ASSERT: the last known good temperature of the failing disk is reused in last_per_device_temps
+        - ASSERT: the fans are not driven to 100%
+        - ASSERT: the error counter of the failing disk is 1 after the failure and back to 0 after the next,
+          successful poll
+        """
+        h = build_hd_fc(mocker, td, count=2, temps=[33, 34], error_tolerance=3, polling=0)
+        mock_set_level = MagicMock()
+        mocker.patch("smfc.FanController.set_fan_level", mock_set_level)
+        real_open = open
+        failing_path = h.fc.hwmon_path[0]
+        failed: List[bool] = []
+
+        def _flaky_open(path, *args, **kwargs):
+            if path == failing_path and not failed:
+                failed.append(True)
+                raise OSError(errno.EIO, "Input/output error")
+            return real_open(path, *args, **kwargs)
+
+        mocker.patch("builtins.open", _flaky_open)
+        h.fc.last_time = time.monotonic() - (h.cfg.polling + 1)
+        h.fc.run()
+        assert h.fc.last_per_device_temps == [33.0, 34.0]
+        assert h.fc._temp_read_errors == [1, 0]
+        h.fc.last_time = time.monotonic() - (h.cfg.polling + 1)
+        h.fc.run()
+        assert h.fc._temp_read_errors == [0, 0]
+        assert 100 not in [c.args[0] for c in mock_set_level.call_args_list]
+
+    def test_run_tolerates_transient_smartctl_error(self, mocker: MockerFixture, td: TestData):
+        """Positive unit test for HdFc.run() method with a transient smartctl read error. It contains the
+        following steps:
+        - build an HdFc via build_hd_fc with one disk at 35C and error_tolerance=2
+        - clear fc.hwmon_path so the smartctl branch of HdFc._get_nth_temp() is taken
+        - mock smfc.FanController.set_fan_level and smfc.HdFc._exec_smartctl via mocker.patch, the latter raising
+          RuntimeError on the first call and returning an SCSI temperature line on the second
+        - call HdFc.run() twice with the polling timer expired
+        - ASSERT: run() completes without an exception and the last known good 35C is reused
+        - ASSERT: the fresh 37C is read on the next poll and the error counter is reset
+        """
+        h = build_hd_fc(mocker, td, count=1, temps=[35], error_tolerance=2, polling=0)
+        mocker.patch("smfc.FanController.set_fan_level", MagicMock())
+        h.fc.hwmon_path = [""]
+        scsi_out = subprocess.CompletedProcess([], returncode=0, stdout="Current Drive Temperature:     37 C\n")
+        mocker.patch("smfc.HdFc._exec_smartctl", MagicMock(side_effect=[RuntimeError("sudo error (1)!"), scsi_out]))
+        h.fc.last_time = time.monotonic() - (h.cfg.polling + 1)
+        h.fc.run()
+        assert h.fc.last_per_device_temps == [35.0]
+        assert h.fc._temp_read_errors == [1]
+        h.fc.last_time = time.monotonic() - (h.cfg.polling + 1)
+        h.fc.run()
+        assert h.fc.last_per_device_temps == [37.0]
+        assert h.fc._temp_read_errors == [0]
 
     @pytest.mark.parametrize(
         "states, result",
