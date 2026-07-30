@@ -134,6 +134,34 @@ def render_prometheus(snapshot: Dict[str, Any]) -> str:
                                      ("device", str(d.get("name", "")))])
             lines.append(f"smfc_device_temperature_celsius{labels} {float(d.get('temp_c', 0.0))}")
 
+    # The value is the *current* consecutive failed-read streak of the device (reset to 0 by the next
+    # successful read), not a lifetime total — hence a gauge, not a counter.
+    lines.append("")
+    lines.append("# HELP smfc_device_temp_read_errors Consecutive failed temperature reads of the device"
+                 " (0=healthy); a non-zero value means the reported temperature is a reused, stale reading.")
+    lines.append("# TYPE smfc_device_temp_read_errors gauge")
+    for c in controllers:
+        if c.get("type") == "const":
+            continue
+        section, ctype = c.get("section", ""), c.get("type", "")
+        for d in c.get("devices", []) or []:
+            labels = _format_labels([("section", section), ("type", ctype),
+                                     ("device", str(d.get("name", "")))])
+            lines.append(f"smfc_device_temp_read_errors{labels} {int(d.get('read_errors', 0))}")
+
+    lines.append("")
+    lines.append("# HELP smfc_device_temp_read_errors_total Failed temperature reads of the device since"
+                 " smfc was started.")
+    lines.append("# TYPE smfc_device_temp_read_errors_total counter")
+    for c in controllers:
+        if c.get("type") == "const":
+            continue
+        section, ctype = c.get("section", ""), c.get("type", "")
+        for d in c.get("devices", []) or []:
+            labels = _format_labels([("section", section), ("type", ctype),
+                                     ("device", str(d.get("name", "")))])
+            lines.append(f"smfc_device_temp_read_errors_total{labels} {int(d.get('read_errors_total', 0))}")
+
     lines.append("")
     lines.append("# HELP smfc_controller_level_percent Fan level requested by the controller, per targeted zone.")
     lines.append("# TYPE smfc_controller_level_percent gauge")

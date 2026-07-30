@@ -75,7 +75,7 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("-nc", "--no-color", action="store_true", default=False,
                         dest="no_color", help="plain output, no colors")
     parser.add_argument("-V", "--verbose", action="store_true", default=False,
-                        help="also list each disk's and CPU's individual temperature")
+                        help="also list each disk's and CPU's individual temperature and read errors")
     parser.add_argument("-sa", "--standalone", action="store_true", default=False, dest="standalone",
                         help="read the sensors directly, without the smfc service")
     parser.add_argument("-v", "--version", action="version", version="%(prog)s " + version("smfc"))
@@ -428,7 +428,7 @@ def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: b
 def _format_controller_block(section: str, type_label: str, zones: List[int], polling: float, deferred: bool,
                              temp_min: float, temp_max: float, level_min: int, level_max: int,
                              last_temp_str: str, last_level_str: str,
-                             devices: List[Tuple[str, str, Optional[str], str]],
+                             devices: List[Tuple[str, str, Optional[str], str, int]],
                              standby: Optional[Tuple[int, str, int, int]],
                              curve_pairs: List[Tuple[int, int]],
                              use_color: bool) -> List[str]:
@@ -437,7 +437,7 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
     Each block is a self-contained view of one controller: header line with zone / polling /
     deferred flags, a steering-window line (T window → L window), the current temperature →
     current level pair, an optional Standby Guard line (HD only), and an indented per-device
-    list with an optional STANDBY/ACTIVE column.
+    list with an optional STANDBY/ACTIVE column and an optional read-error column.
 
     Args:
         section (str): controller's section name (e.g. "CPU", "HD")
@@ -451,11 +451,13 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
         level_max (int): configured level window ceiling (%)
         last_temp_str (str): pre-formatted current temperature (e.g. "35.0 C", "ERROR")
         last_level_str (str): pre-formatted current level (e.g. "35 %", "ERROR")
-        devices (List[Tuple[str, str, Optional[str], str]]): per-device rows
-            (name, temp_str, state_str_or_None, temp_color_escape_or_empty). The temp colour
-            arrives separately from temp_str so the formatter can pad the *visible* temp_str
-            to the Temp-column width and wrap colour around the padded result — ANSI escapes
-            are otherwise zero-width and would break alignment.
+        devices (List[Tuple[str, str, Optional[str], str, int]]): per-device rows
+            (name, temp_str, state_str_or_None, temp_color_escape_or_empty, read_errors_total).
+            The temp colour arrives separately from temp_str so the formatter can pad the
+            *visible* temp_str to the Temp-column width and wrap colour around the padded
+            result — ANSI escapes are otherwise zero-width and would break alignment. The
+            read-error total is the device's lifetime failed-read count; the Errors column is
+            only rendered when at least one device of the controller has a non-zero total.
         standby (Optional[Tuple[int, str, int, int]]): HD standby guard info as
             (limit, array_state, standby_count, total) or None
         curve_pairs (List[Tuple[int, int]]): user-defined control_function breakpoints as
@@ -492,8 +494,18 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
         )
     if devices:
         has_state = any(d[2] is not None for d in devices)
+        # The Errors column is conditional on purpose: on a healthy machine every total is 0 and
+        # the column would be pure noise in every block of every run. It appears only once a
+        # device of this controller has actually failed a read (see error_tolerance=), and then
+        # it shows the lifetime total of every device of the controller, so a single failing
+        # disk is immediately visible against its healthy neighbours.
+        has_errors = any(d[4] for d in devices)
         name_w = max(len("Device"), max(len(d[0]) for d in devices))
         temp_w = 10  # matches the data-row format string below
+        state_w = 0
+        if has_state:
+            state_data_w = max((len(d[2]) for d in devices if d[2] is not None), default=0)
+            state_w = max(len("State"), state_data_w) + 2
         # Devices subsection: column headers at the same 2-space indent as every other level-1
         # row (Window:, Temp:, Standby Guard:), a dashed separator beneath, then the data rows.
         # 'State' is only shown for HD with standby guard enabled — has_state decides. Dash runs
@@ -501,28 +513,37 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
         # cover wide /dev/disk/by-id-style names and the STANDBY label (7 chars > 'State').
         dash_name = "-" * name_w
         dash_temp = "-" * max(len("Temp"), max(len(d[1]) for d in devices))
+        header = f"  {'Device':<{name_w + 2}}{'Temp':<{temp_w}}"
+        separator = f"  {dash_name:<{name_w + 2}}{dash_temp:<{temp_w}}"
         if has_state:
-            state_data_w = max((len(d[2]) for d in devices if d[2] is not None), default=0)
-            dash_state = "-" * max(len("State"), state_data_w)
-            lines.append(f"  {'Device':<{name_w + 2}}{'Temp':<{temp_w}}State")
-            lines.append(f"  {dash_name:<{name_w + 2}}{dash_temp:<{temp_w}}{dash_state}")
-        else:
-            lines.append(f"  {'Device':<{name_w + 2}}Temp")
-            lines.append(f"  {dash_name:<{name_w + 2}}{dash_temp}")
-        for name, temp_str, state_str, temp_color in devices:
+            header += f"{'State':<{state_w}}"
+            separator += f"{'-' * (state_w - 2):<{state_w}}"
+        if has_errors:
+            errors_w = max(len("Errors"), max(len(str(d[4])) for d in devices))
+            header += "Errors"
+            separator += "-" * errors_w
+        lines.append(header.rstrip())
+        lines.append(separator.rstrip())
+        for name, temp_str, state_str, temp_color, errors_total in devices:
             # Pad the visible temp_str to the column width, THEN wrap colour. ANSI escapes are
             # zero-width on screen but real characters in the string, so colouring before padding
             # over-pads and tears the grid.
-            temp_cell = _wrap(f"{temp_str:<{temp_w}}", temp_color, use_color)
+            row = f"  {name:<{name_w + 2}}" + _wrap(f"{temp_str:<{temp_w}}", temp_color, use_color)
             if has_state:
                 state_cell = state_str if state_str is not None else ""
+                # Pad only when a column follows, so a block without the Errors column renders
+                # byte-identically to the pre-error_tolerance output.
+                state_pad = f"{state_cell:<{state_w}}" if has_errors else state_cell
                 if state_cell == "STANDBY":
-                    state_cell = _wrap("STANDBY", DIM, use_color)
+                    state_pad = _wrap(state_pad, DIM, use_color)
                 elif state_cell == "ACTIVE":
-                    state_cell = _wrap("ACTIVE", GREEN, use_color)
-                lines.append(f"  {name:<{name_w + 2}}{temp_cell}{state_cell}")
-            else:
-                lines.append(f"  {name:<{name_w + 2}}{temp_cell}")
+                    state_pad = _wrap(state_pad, GREEN, use_color)
+                row += state_pad
+            if has_errors:
+                # A device that has never failed stays uncoloured; a device that has failed at
+                # least once is painted, because that is the row the operator is looking for.
+                row += _wrap(str(errors_total), YELLOW, use_color) if errors_total else "0"
+            lines.append(row.rstrip())
     return lines
 
 
@@ -614,7 +635,7 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
             states: List[bool] = []
             if type_label == "hd" and getattr(cfg, "standby_guard_enabled", False):
                 states = list(getattr(controller, "standby_array_states", None) or [])
-            device_rows: List[Tuple[str, str, Optional[str], str]] = []
+            device_rows: List[Tuple[str, str, Optional[str], str, int]] = []
             for i, name in enumerate(names):
                 temp_str = _safe_nth_temp_str(controller, i)
                 state_str: Optional[str] = None
@@ -625,7 +646,10 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
                 else:
                     t_dev = _parse_temp_cell(temp_str)
                     temp_color = _band_color(t_dev, blk_temp_min, blk_temp_max) if t_dev is not None else ""
-                device_rows.append((_display_device_name(name, type_label), temp_str, state_str, temp_color))
+                # Read-error totals are daemon state: these controllers were built by the client a
+                # moment ago and have no history, so the Errors column stays hidden on this path.
+                # A failing read here shows up as "ERROR" in the Temp cell instead.
+                device_rows.append((_display_device_name(name, type_label), temp_str, state_str, temp_color, 0))
             # Standby Guard summary line (HD only, when enabled and we have a usable state string).
             standby: Optional[Tuple[int, str, int, int]] = None
             if (type_label == "hd" and getattr(cfg, "standby_guard_enabled", False)
@@ -885,7 +909,7 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             # render DIM regardless: the reading is stale and the disk isn't contributing.
             dev_t_min = float(c.get("temp_min_c", 0.0))
             dev_t_max = float(c.get("temp_max_c", 0.0))
-            device_rows: List[Tuple[str, str, Optional[str], str]] = []
+            device_rows: List[Tuple[str, str, Optional[str], str, int]] = []
             for i, d in enumerate(devices):
                 name = str(d.get("name", ""))
                 t_dev = float(d.get("temp_c", 0.0))
@@ -894,7 +918,11 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
                 if states and i < len(states):
                     state_str = "STANDBY" if states[i] else "ACTIVE"
                 temp_color = DIM if state_str == "STANDBY" else _band_color(t_dev, dev_t_min, dev_t_max)
-                device_rows.append((_display_device_name(name, type_label), temp_str, state_str, temp_color))
+                # Lifetime failed-read count of the device (error_tolerance=); .get() default keeps
+                # older snapshots, which have no such field, rendering without the Errors column.
+                errors_total = int(d.get("read_errors_total", 0) or 0)
+                device_rows.append((_display_device_name(name, type_label), temp_str, state_str, temp_color,
+                                    errors_total))
             # Standby Guard summary line (HD with standby_guard.enabled=True only).
             standby: Optional[Tuple[int, str, int, int]] = None
             if type_label == "hd" and sb.get("enabled"):

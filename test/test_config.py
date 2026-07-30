@@ -620,6 +620,7 @@ class TestCpuConfigParsing:
         assert cpu.min_level == Config.DV_CPU_MIN_LEVEL
         assert cpu.max_level == Config.DV_CPU_MAX_LEVEL
         assert cpu.smoothing == Config.DV_CPU_SMOOTHING
+        assert cpu.error_tolerance == Config.DV_CPU_ERROR_TOLERANCE
 
     def test_cpu_custom_values(self, create_config):
         """Positive unit test for the [CPU] section parser inside Config.__init__(). It contains the following steps:
@@ -627,8 +628,8 @@ class TestCpuConfigParsing:
         - write [CPU] with every numeric/list field populated and instantiate Config
         - inspect the parsed CpuConfig
         - ASSERT: ipmi_zone equals [0, 1]
-        - ASSERT: temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, smoothing each
-          equal the written value
+        - ASSERT: temp_calc, steps, sensitivity, polling, min_temp, max_temp, min_level, max_level, smoothing,
+          error_tolerance each equal the written value
         """
         cfg = create_config("""
 [Ipmi]
@@ -644,6 +645,7 @@ max_temp = 70.0
 min_level = 30
 max_level = 95
 smoothing = 4
+error_tolerance = 5
 """)
         cpu = cfg.cpu[0]
         assert cpu.ipmi_zone == [0, 1]
@@ -656,6 +658,7 @@ smoothing = 4
         assert cpu.min_level == 30
         assert cpu.max_level == 95
         assert cpu.smoothing == 4
+        assert cpu.error_tolerance == 5
 
     def test_cpu_multi_section(self, create_config):
         """Positive unit test for the [CPU] section parser inside Config.__init__(). It contains the following steps:
@@ -718,6 +721,8 @@ class TestHdConfigParsing:
             pytest.param("polling", "-1", id="polling-negative"),
             pytest.param("smoothing", "0", id="smoothing-zero"),
             pytest.param("smoothing", "-1", id="smoothing-negative"),
+            pytest.param("error_tolerance", "-1", id="error-tolerance-negative"),
+            pytest.param("error_tolerance", "abc", id="error-tolerance-not-an-int"),
             pytest.param("min_temp", "-1", id="min-temp-negative"),
             pytest.param("max_temp", "201", id="max-temp-over-200"),
             pytest.param("min_level", "-1", id="min-level-negative"),
@@ -727,8 +732,8 @@ class TestHdConfigParsing:
     def test_hd_validation_errors(self, create_config_file, param: str, value: str):
         """Negative unit test for the [HD] section parser inside Config.__init__(). It contains the following steps:
         - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
-        - write [HD] with one invalid numeric parameter (temp_calc, steps, sensitivity, polling, smoothing, min/max
-          temp/level) and call Config(path)
+        - write [HD] with one invalid numeric parameter (temp_calc, steps, sensitivity, polling, smoothing,
+          error_tolerance, min/max temp/level) and call Config(path)
         - ASSERT: Config(path) raises ValueError
         """
         config_path = create_config_file(f"[Ipmi]\n[HD]\nenabled = 1\nhd_names = /dev/sda\n{param} = {value}\n")
@@ -802,6 +807,7 @@ class TestHdConfigParsing:
         assert hd.min_level == Config.DV_HD_MIN_LEVEL
         assert hd.max_level == Config.DV_HD_MAX_LEVEL
         assert hd.smoothing == Config.DV_HD_SMOOTHING
+        assert hd.error_tolerance == Config.DV_HD_ERROR_TOLERANCE
         assert hd.hd_names == ["/dev/sda"]
         assert hd.smartctl_path == Config.DV_HD_SMARTCTL_PATH
         assert hd.standby_guard_enabled is False
@@ -934,6 +940,8 @@ class TestNvmeConfigParsing:
             pytest.param("polling", "-1", id="polling-negative"),
             pytest.param("smoothing", "0", id="smoothing-zero"),
             pytest.param("smoothing", "-1", id="smoothing-negative"),
+            pytest.param("error_tolerance", "-1", id="error-tolerance-negative"),
+            pytest.param("error_tolerance", "abc", id="error-tolerance-not-an-int"),
             pytest.param("min_temp", "-1", id="min-temp-negative"),
             pytest.param("max_temp", "201", id="max-temp-over-200"),
             pytest.param("min_level", "-1", id="min-level-negative"),
@@ -944,7 +952,7 @@ class TestNvmeConfigParsing:
         """Negative unit test for the [NVME] section parser inside Config.__init__(). It contains the following steps:
         - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
         - write [NVME] with one invalid numeric parameter (temp_calc, steps, sensitivity, polling, smoothing,
-          min/max temp/level) and call Config(path)
+          error_tolerance, min/max temp/level) and call Config(path)
         - ASSERT: Config(path) raises ValueError
         """
         body = f"[Ipmi]\n[NVME]\nenabled = 1\nnvme_names = /dev/nvme0n1\n{param} = {value}\n"
@@ -1013,6 +1021,7 @@ class TestNvmeConfigParsing:
         assert nvme.ipmi_zone == [Config.HD_ZONE]
         assert nvme.min_temp == Config.DV_NVME_MIN_TEMP
         assert nvme.max_temp == Config.DV_NVME_MAX_TEMP
+        assert nvme.error_tolerance == Config.DV_NVME_ERROR_TOLERANCE
         assert nvme.nvme_names == ["/dev/nvme0n1"]
 
     def test_nvme_enabled_without_names_error(self, create_config_file):
@@ -1067,6 +1076,8 @@ class TestGpuConfigParsing:
             pytest.param("polling", "-1", id="polling-negative"),
             pytest.param("smoothing", "0", id="smoothing-zero"),
             pytest.param("smoothing", "-1", id="smoothing-negative"),
+            pytest.param("error_tolerance", "-1", id="error-tolerance-negative"),
+            pytest.param("error_tolerance", "abc", id="error-tolerance-not-an-int"),
             pytest.param("min_temp", "-1", id="min-temp-negative"),
             pytest.param("max_temp", "201", id="max-temp-over-200"),
             pytest.param("min_level", "-1", id="min-level-negative"),
@@ -1077,7 +1088,7 @@ class TestGpuConfigParsing:
         """Negative unit test for the [GPU] section parser inside Config.__init__(). It contains the following steps:
         - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
         - write [GPU] with one invalid numeric parameter (temp_calc, steps, sensitivity, polling, smoothing,
-          min/max temp/level) and call Config(path)
+          error_tolerance, min/max temp/level) and call Config(path)
         - ASSERT: Config(path) raises ValueError
         """
         config_path = create_config_file(f"[Ipmi]\n[GPU]\nenabled = 1\n{param} = {value}\n")
@@ -1145,6 +1156,7 @@ class TestGpuConfigParsing:
         assert gpu.amd_temp_sensor == Config.DV_GPU_AMD_TEMP_SENSOR
         assert gpu.min_temp == Config.DV_GPU_MIN_TEMP
         assert gpu.max_temp == Config.DV_GPU_MAX_TEMP
+        assert gpu.error_tolerance == Config.DV_GPU_ERROR_TOLERANCE
 
     def test_gpu_amd_type(self, create_config):
         """Positive unit test for the [GPU] section parser inside Config.__init__(). It contains the following steps:
@@ -1344,6 +1356,8 @@ class TestFanControllerValidation:
             pytest.param("polling", "-1", id="polling-negative"),
             pytest.param("smoothing", "0", id="smoothing-zero"),
             pytest.param("smoothing", "-1", id="smoothing-negative"),
+            pytest.param("error_tolerance", "-1", id="error-tolerance-negative"),
+            pytest.param("error_tolerance", "abc", id="error-tolerance-not-an-int"),
             pytest.param("min_temp", "-1", id="min-temp-negative"),
             pytest.param("max_temp", "201", id="max-temp-over-200"),
             pytest.param("min_level", "-1", id="min-level-negative"),
@@ -1355,7 +1369,7 @@ class TestFanControllerValidation:
         following steps:
         - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
         - write [CPU] with one invalid numeric parameter (temp_calc, steps, sensitivity, polling, smoothing,
-          min/max temp/level) and call Config(path)
+          error_tolerance, min/max temp/level) and call Config(path)
         - ASSERT: Config(path) raises ValueError from the shared fan-controller validator
         """
         config_path = create_config_file(f"[Ipmi]\n[CPU]\nenabled = 1\n{param} = {value}\n")
@@ -1387,6 +1401,58 @@ class TestFanControllerValidation:
         with pytest.raises(ValueError) as exc_info:
             Config(config_path)
         assert "max_level" in str(exc_info.value) and "min_level" in str(exc_info.value)
+
+
+    def test_error_tolerance_parsed_in_all_sections(self, create_config):
+        """Positive unit test for the error_tolerance parameter of all temperature-driven sections. It contains
+        the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [CPU], [HD:0], [HD:1], [NVME] and [GPU] each with a different explicit error_tolerance value
+        - instantiate Config
+        - ASSERT: the [CPU], [NVME] and [GPU] sections carry their written value
+        - ASSERT: the two [HD] instances carry their own, different values (per-instance parameter)
+        """
+        cfg = create_config("""
+[Ipmi]
+[CPU]
+enabled = 1
+error_tolerance = 1
+[HD:0]
+enabled = 1
+ipmi_zone = 1
+hd_names = /dev/sda
+error_tolerance = 2
+[HD:1]
+enabled = 1
+ipmi_zone = 2
+hd_names = /dev/sdb
+error_tolerance = 7
+[NVME]
+enabled = 1
+ipmi_zone = 3
+nvme_names = /dev/nvme0n1
+error_tolerance = 4
+[GPU]
+enabled = 1
+ipmi_zone = 4
+error_tolerance = 0
+""")
+        assert cfg.cpu[0].error_tolerance == 1
+        assert [hd.error_tolerance for hd in cfg.hd] == [2, 7]
+        assert cfg.nvme[0].error_tolerance == 4
+        assert cfg.gpu[0].error_tolerance == 0
+
+    def test_const_ignores_error_tolerance(self, create_config):
+        """Positive unit test for the [CONST] section parser inside Config.__init__(). It contains the following
+        steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [CONST] with an error_tolerance key (which is not a CONST parameter) and instantiate Config
+        - ASSERT: Config is parsed without an error, i.e. the key is silently ignored
+        - ASSERT: the parsed ConstConfig has no error_tolerance attribute (ConstFc reads no temperature)
+        """
+        cfg = create_config("[Ipmi]\n[CONST]\nenabled = 1\nerror_tolerance = 5\n")
+        assert len(cfg.const) == 1
+        assert not hasattr(cfg.const[0], "error_tolerance")
 
 
 class TestConfigConstants:

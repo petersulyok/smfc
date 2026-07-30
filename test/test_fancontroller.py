@@ -217,7 +217,7 @@ class TestFanController:
                       expected: float) -> None:
         """Positive unit test for FanController.get_temp() method. It contains the following steps:
         - mock smfc.FanController._get_nth_temp via mocker.patch with side_effect=temps
-        - instantiate FanController via FanController.__new__ and set config and count attributes
+        - instantiate FanController via FanController.__new__ and set config, count and per-device read state
         - call FanController.get_temp()
         - ASSERT: the returned aggregate equals the expected min/avg/max value for the parametrized temp_calc
         """
@@ -225,6 +225,11 @@ class TestFanController:
         my_fc = FanController.__new__(FanController)
         my_fc.config = cfg
         my_fc.count = count
+        my_fc.last_per_device_temps = []
+        # pylint: disable=protected-access
+        my_fc._temp_read_errors = [0] * count
+        my_fc._temp_read_errors_total = [0] * count
+        # pylint: enable=protected-access
         mock_temp = MagicMock()
         mock_temp.side_effect = temps
         mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
@@ -240,7 +245,7 @@ class TestFanController:
     def test_get_temp_caches_per_device(self, mocker: MockerFixture, count: int, temps: List[float]) -> None:
         """Positive unit test for FanController.get_temp() method (per-device caching). It contains the following steps:
         - mock smfc.FanController._get_nth_temp via mocker.patch with side_effect=temps
-        - instantiate FanController via FanController.__new__ and set config and count attributes
+        - instantiate FanController via FanController.__new__ and set config, count and per-device read state
         - call FanController.get_temp() to trigger the per-device read loop
         - ASSERT: last_per_device_temps equals the full list of parametrized per-device temperatures
         """
@@ -248,11 +253,229 @@ class TestFanController:
         my_fc = FanController.__new__(FanController)
         my_fc.config = cfg
         my_fc.count = count
+        my_fc.last_per_device_temps = []
+        # pylint: disable=protected-access
+        my_fc._temp_read_errors = [0] * count
+        my_fc._temp_read_errors_total = [0] * count
+        # pylint: enable=protected-access
         mock_temp = MagicMock()
         mock_temp.side_effect = list(temps)
         mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
         my_fc.get_temp()
         assert my_fc.last_per_device_temps == temps
+
+    def _create_tolerance_fc(self, mocker: MockerFixture, error_tolerance: int, count: int = 1,
+                             temp_calc: int = Config.CALC_AVG) -> Tuple[FanController, MagicMock]:
+        """Helper method to create a FanController for the error_tolerance battery. The constructor reads
+        30.0C from every device, so the per-device cache is populated when the test starts.
+
+        Args:
+            mocker (MockerFixture): pytest mocker fixture
+            error_tolerance (int): consecutive failed temperature reads tolerated per device
+            count (int): number of devices (default: 1)
+            temp_calc (int): temperature calculation method (default: avg)
+
+        Returns:
+            Tuple[FanController, MagicMock]: the controller and the mocked _get_nth_temp method
+        """
+        cfg = create_cpu_config(temp_calc=temp_calc, sensitivity=1, polling=1, error_tolerance=error_tolerance)
+        fc, _, _, mock_temp = _make_fc(mocker, cfg, count=count, temp_return=30.0)
+        return fc, mock_temp
+
+    def test_get_temp_tolerates_transient_failure(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.get_temp() method (transient read failure inside the budget).
+        It contains the following steps:
+        - build a FanController via _create_tolerance_fc with error_tolerance=3 whose constructor read 30.0C
+        - let _get_nth_temp raise OSError on the next call, then return 40.0C
+        - call FanController.get_temp() twice
+        - ASSERT: the first call does not raise and returns the reused 30.0C
+        - ASSERT: last_per_device_temps holds the reused value
+        - ASSERT: _temp_read_errors is 1 after the failed read
+        - ASSERT: the second (successful) call returns the fresh 40.0C and resets _temp_read_errors to 0
+        """
+        my_fc, mock_temp = self._create_tolerance_fc(mocker, error_tolerance=3)
+        mock_temp.side_effect = [OSError(5, "Input/output error"), 40.0]
+        assert my_fc.get_temp() == 30.0
+        assert my_fc.last_per_device_temps == [30.0]
+        assert my_fc._temp_read_errors == [1]  # pylint: disable=protected-access
+        assert my_fc.get_temp() == 40.0
+        assert my_fc._temp_read_errors == [0]  # pylint: disable=protected-access
+
+    def test_get_temp_error_total_is_cumulative(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.get_temp() method (lifetime error total). It contains the
+        following steps:
+        - build a FanController via _create_tolerance_fc with 2 devices and error_tolerance=2
+        - let device index 0 fail on the 1st, 2nd and 4th poll and device index 1 always succeed
+        - call FanController.get_temp() four times
+        - ASSERT: the consecutive streak counter of device 0 is reset by the successful third poll
+        - ASSERT: the lifetime total of device 0 counts every failure, including the ones separated by a
+          successful read (i.e. a successful read does not reset it)
+        - ASSERT: the counters of the healthy device stay 0
+        """
+        my_fc, mock_temp = self._create_tolerance_fc(mocker, error_tolerance=2, count=2)
+        failing_polls = [0, 1, 3]
+        poll = {"index": 0}
+
+        def _read(index: int) -> float:
+            if index == 0 and poll["index"] in failing_polls:
+                raise OSError(5, "Input/output error")
+            if index == 1:
+                poll["index"] += 1
+            return 40.0
+
+        mock_temp.side_effect = _read
+        for _ in range(4):
+            my_fc.get_temp()
+        # pylint: disable=protected-access
+        assert my_fc._temp_read_errors == [1, 0]
+        assert my_fc._temp_read_errors_total == [3, 0]
+        # pylint: enable=protected-access
+
+    def test_get_temp_raises_when_budget_exhausted(self, mocker: MockerFixture) -> None:
+        """Negative unit test for FanController.get_temp() method (error_tolerance budget exhausted).
+        It contains the following steps:
+        - build a FanController via _create_tolerance_fc with error_tolerance=2
+        - let _get_nth_temp raise the same OSError instance on all three following calls
+        - call FanController.get_temp() three times
+        - ASSERT: the first two calls are tolerated and return the reused 30.0C
+        - ASSERT: the third call raises
+        - ASSERT: the raised exception is the original object (same type and args)
+        """
+        my_fc, mock_temp = self._create_tolerance_fc(mocker, error_tolerance=2)
+        error = OSError(5, "Input/output error")
+        mock_temp.side_effect = error
+        assert my_fc.get_temp() == 30.0
+        assert my_fc.get_temp() == 30.0
+        with pytest.raises(OSError) as exc_info:
+            my_fc.get_temp()
+        assert exc_info.value is error
+
+    def test_get_temp_error_counter_is_consecutive(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.get_temp() method (consecutive, not cumulative counting).
+        It contains the following steps:
+        - build a FanController via _create_tolerance_fc with error_tolerance=2
+        - let _get_nth_temp fail twice, succeed, fail twice, succeed again
+        - call FanController.get_temp() six times
+        - ASSERT: no call raises, i.e. the successful read resets the budget of the device
+        - ASSERT: _temp_read_errors is 0 at the end
+        """
+        my_fc, mock_temp = self._create_tolerance_fc(mocker, error_tolerance=2)
+        mock_temp.side_effect = [ValueError("bad"), ValueError("bad"), 35.0,
+                                 ValueError("bad"), ValueError("bad"), 36.0]
+        results = [my_fc.get_temp() for _ in range(6)]
+        assert results == [30.0, 30.0, 35.0, 35.0, 35.0, 36.0]
+        assert my_fc._temp_read_errors == [0]  # pylint: disable=protected-access
+
+    def test_get_temp_error_counters_are_per_device(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.get_temp() method (per-device error counters).
+        It contains the following steps:
+        - build a FanController via _create_tolerance_fc with 3 devices and error_tolerance=3
+        - let _get_nth_temp fail for device index 1 only and return fresh values for indices 0 and 2
+        - call FanController.get_temp()
+        - ASSERT: indices 0 and 2 hold their fresh values while index 1 holds the reused 30.0C
+        - ASSERT: only the counter of index 1 was advanced
+        - ASSERT: the returned aggregate is the average over the mixed vector of fresh and reused values
+        """
+        my_fc, mock_temp = self._create_tolerance_fc(mocker, error_tolerance=3, count=3)
+        fresh = {0: 42.0, 2: 45.0}
+
+        def _read(index: int) -> float:
+            if index == 1:
+                raise OSError(5, "Input/output error")
+            return fresh[index]
+
+        mock_temp.side_effect = _read
+        assert my_fc.get_temp() == pytest.approx((42.0 + 30.0 + 45.0) / 3)
+        assert my_fc.last_per_device_temps == [42.0, 30.0, 45.0]
+        assert my_fc._temp_read_errors == [0, 1, 0]  # pylint: disable=protected-access
+
+    def test_get_temp_zero_tolerance_raises_immediately(self, mocker: MockerFixture) -> None:
+        """Negative unit test for FanController.get_temp() method (error_tolerance=0). It contains the
+        following steps:
+        - build a FanController via _create_tolerance_fc with error_tolerance=0
+        - let _get_nth_temp raise a RuntimeError on the next call
+        - call FanController.get_temp()
+        - ASSERT: the very first failed read raises (i.e. the original, intolerant behavior)
+        """
+        my_fc, mock_temp = self._create_tolerance_fc(mocker, error_tolerance=0)
+        mock_temp.side_effect = RuntimeError("smartctl failed")
+        with pytest.raises(RuntimeError):
+            my_fc.get_temp()
+
+    @pytest.mark.parametrize(
+        "error_tolerance",
+        [
+            pytest.param(0, id="tolerance-0"),
+            pytest.param(3, id="tolerance-3"),
+            pytest.param(100, id="tolerance-100"),
+        ],
+    )
+    def test_init_raises_on_startup_read_failure(self, mocker: MockerFixture, error_tolerance: int) -> None:
+        """Negative unit test for FanController.__init__() method (failed first read). It contains the
+        following steps:
+        - mock builtins.print, smfc.FanController.set_fan_level and smfc.FanController._get_nth_temp
+        - let _get_nth_temp raise an OSError on the very first (constructor) read
+        - call FanController.__init__()
+        - ASSERT: the constructor raises regardless of the configured error_tolerance, because there is
+          no cached value yet (an unreadable device remains a configuration error)
+        """
+        mocker.patch("builtins.print", MagicMock())
+        mocker.patch("smfc.FanController.set_fan_level", MagicMock())
+        mocker.patch("smfc.FanController._get_nth_temp", MagicMock(side_effect=OSError(5, "Input/output error")))
+        my_log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        my_ipmi = Ipmi.__new__(Ipmi)
+        cfg = create_cpu_config(error_tolerance=error_tolerance)
+        my_fc = FanController.__new__(FanController)
+        my_fc.config = cfg
+        with pytest.raises(OSError):
+            FanController.__init__(my_fc, my_log, my_ipmi, cfg.section, 1)
+
+    def test_get_temp_logs_failure_and_recovery(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.get_temp() method (log messages). It contains the following
+        steps:
+        - build a FanController via _create_tolerance_fc with error_tolerance=3
+        - mock builtins.print to capture the log lines of the following calls
+        - let _get_nth_temp fail twice, then succeed
+        - call FanController.get_temp() three times
+        - ASSERT: two ERROR lines report the reused temperature with the streak, the budget and the
+          lifetime error total of the device
+        - ASSERT: exactly one INFO recovery line is emitted after the successful read, reporting the
+          length of the streak that ended and the (unchanged) lifetime total
+        """
+        my_fc, mock_temp = self._create_tolerance_fc(mocker, error_tolerance=3)
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_temp.side_effect = [OSError(5, "Input/output error"), OSError(5, "Input/output error"), 40.0]
+        for _ in range(3):
+            my_fc.get_temp()
+        lines = [str(c.args[0]) for c in mock_print.call_args_list]
+        error_lines = [ln for ln in lines if "temperature read failed, reusing 30.0C" in ln]
+        recovery_lines = [ln for ln in lines if "temperature read recovered" in ln]
+        assert len(error_lines) == 2
+        assert error_lines[0].startswith("ERROR: ")
+        assert "(device=dev0, 1/3, total=1)" in error_lines[0]
+        assert "(device=dev0, 2/3, total=2)" in error_lines[1]
+        assert len(recovery_lines) == 1
+        assert recovery_lines[0].startswith("INFO: ")
+        assert "recovered after 2 failure(s)" in recovery_lines[0]
+        assert "(device=dev0, total=2)" in recovery_lines[0]
+
+    def test_run_smoothing_with_reused_temp(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.run() method (smoothing over a reused sample). It contains
+        the following steps:
+        - build a FanController via _create_test_fc with smoothing=3 and error_tolerance=2
+        - run three cycles: 30.0C, a failed read (reusing 30.0C), then 45.0C
+        - ASSERT: the reused sample enters the moving average like any other reading, so last_temp equals
+          the hand-computed (30+30+45)/3 = 35.0C
+        """
+        cfg = create_cpu_config(steps=5, sensitivity=1, polling=1, min_temp=30, max_temp=50, min_level=35,
+                                max_level=100, smoothing=3, error_tolerance=2)
+        my_fc, _, _, mock_temp = _make_fc(mocker, cfg, count=1, temp_return=30.0)
+        mock_temp.side_effect = [30.0, OSError(5, "Input/output error"), 45.0]
+        for _ in range(3):
+            my_fc.last_time = time.monotonic() - (cfg.polling + 1)
+            my_fc.run()
+        assert my_fc.last_temp == pytest.approx((30.0 + 30.0 + 45.0) / 3)
 
     def test_default_device_names(self) -> None:
         """Positive unit test for FanController.device_names() method. It contains the following steps:

@@ -1621,6 +1621,79 @@ class TestFormatReportFromSnapshot:
         assert cpu_separator.lstrip().startswith("-")
         assert cpu_header.index("Temp") == cpu_row.index("42.3 C")
 
+    def test_verbose_devices_table_hides_errors_column_when_healthy(self) -> None:
+        """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
+        - build a sample snapshot dict and set read_errors_total=0 on every device of every controller
+        - call _format_report_from_snapshot() with use_color=False and verbose=True
+        - ASSERT: no Errors column is rendered anywhere (it would be pure noise on a healthy machine)
+        - ASSERT: the HD block still renders its Device/Temp/State columns unchanged
+        """
+        snap = _sample_snapshot_dict()
+        for c in snap["fan_controllers"]:
+            for d in c.get("devices", []):
+                d["read_errors_total"] = 0
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        assert "Errors" not in out
+        hd_block = out.split("[HD]", 1)[1].split("\n\n", 1)[0]
+        hd_header = next(l for l in hd_block.splitlines() if l.lstrip().startswith("Device "))
+        assert "Device" in hd_header and "Temp" in hd_header and "State" in hd_header
+
+    def test_verbose_devices_table_omits_errors_column_for_old_snapshot(self) -> None:
+        """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
+        - build a sample snapshot dict whose device entries carry no read_errors_total key at all
+          (a snapshot produced by an older smfc service)
+        - call _format_report_from_snapshot() with use_color=False and verbose=True
+        - ASSERT: rendering succeeds and no Errors column appears (the .get() default is used)
+        """
+        snap = _sample_snapshot_dict()
+        assert all("read_errors_total" not in d
+                   for c in snap["fan_controllers"] for d in c.get("devices", []))
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        assert "Errors" not in out
+        assert "33.0 C" in out
+
+    def test_verbose_devices_table_shows_errors_column(self) -> None:
+        """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
+        - build a sample snapshot dict where the second HD device reports 9 lifetime read errors and
+          every other device of every controller reports 0
+        - call _format_report_from_snapshot() with use_color=False and verbose=True
+        - ASSERT: the HD block gains an Errors column, aligned with its data rows
+        - ASSERT: the failing device shows its total (9) while its healthy neighbours show 0
+        - ASSERT: the CPU block (no failures) keeps its two-column layout — the column is per controller
+        - ASSERT: the State column of the HD block still lines up with the ACTIVE/STANDBY values
+        """
+        snap = _sample_snapshot_dict()
+        for c in snap["fan_controllers"]:
+            for d in c.get("devices", []):
+                d["read_errors_total"] = 0
+        snap["fan_controllers"][1]["devices"][1]["read_errors_total"] = 9
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        hd_lines = out.split("[HD]", 1)[1].split("\n\n", 1)[0].splitlines()
+        hd_header_idx = next(i for i, l in enumerate(hd_lines) if l.lstrip().startswith("Device "))
+        hd_header = hd_lines[hd_header_idx]
+        rows = hd_lines[hd_header_idx + 2:hd_header_idx + 6]
+        assert "Errors" in hd_header
+        assert hd_header.index("State") == rows[0].index("ACTIVE")
+        assert [r[hd_header.index("Errors"):].strip() for r in rows] == ["0", "9", "0", "0"]
+        cpu_block = out.split("[CPU]", 1)[1].split("\n\n", 1)[0]
+        assert "Errors" not in cpu_block
+
+    def test_verbose_devices_table_colors_nonzero_errors(self) -> None:
+        """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
+        - build a sample snapshot dict where the second HD device reports 9 lifetime read errors
+        - call _format_report_from_snapshot() with use_color=True and verbose=True
+        - ASSERT: the non-zero total is wrapped in the YELLOW escape sequence
+        - ASSERT: the zero totals of the healthy devices are not coloured
+        """
+        snap = _sample_snapshot_dict()
+        for c in snap["fan_controllers"]:
+            for d in c.get("devices", []):
+                d["read_errors_total"] = 0
+        snap["fan_controllers"][1]["devices"][1]["read_errors_total"] = 9
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=True, verbose=True)
+        assert f"{client.YELLOW}9{client.RESET}" in out
+        assert f"{client.YELLOW}0{client.RESET}" not in out
+
     @pytest.mark.parametrize(
         "missing_key",
         [

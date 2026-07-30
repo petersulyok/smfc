@@ -25,6 +25,7 @@ class FanControllerConfig(Protocol):  # pylint: disable=too-few-public-methods
     min_level: int                          # Minimum fan level (0..100%)
     max_level: int                          # Maximum fan level (0..100%)
     smoothing: int                          # Moving average window size (1=disabled)
+    error_tolerance: int                    # Consecutive failed temperature reads tolerated per device (0=disabled)
     control_function: List[Tuple[int, int]] # User-defined (T,L) breakpoints; empty = legacy mode
 
 
@@ -51,6 +52,8 @@ class FanController:
     last_level: int                     # Last configured fan level (0..100%)
     deferred_apply: bool                # If True, skip IPMI calls (used for zone arbitration)
     _temp_history: deque                # Circular buffer storing recent temperature readings
+    _temp_read_errors: List[int]        # Consecutive failed temperature reads, one counter per device
+    _temp_read_errors_total: List[int]  # Failed temperature reads since startup, one counter per device
 
     def __init__(self, log: Log, ipmi: Ipmi, name: str, count: int) -> None:
         """Initialize the FanController class. Derived classes must set self.config before calling this.
@@ -72,6 +75,14 @@ class FanController:
         if self.count <= 0:
             raise ValueError("invalid value: count <= 0")
 
+        # Per-device read state must exist before the first get_temp() call below: the counters feed the
+        # error_tolerance budget, and the cache holds the values reused while a device is unreadable. At
+        # this point the cache is empty, so a device that cannot be read at startup still aborts here —
+        # an unreadable device remains a configuration error.
+        self.last_per_device_temps = []
+        self._temp_read_errors = [0] * self.count
+        self._temp_read_errors_total = [0] * self.count
+
         # Try to read device temperature (the hwmon_path[] list has already been created by a child class).
         # If there is any problem with reading temperature, the program will stop here with an exception.
         self.get_temp()
@@ -81,7 +92,6 @@ class FanController:
         self.level_step = (self.config.max_level - self.config.min_level) / self.config.steps
         self.levels_lut = FanController.build_lut(self.config)
         self.last_temp = 0
-        self.last_per_device_temps = []
         self.last_level = 0
         self.last_time = time.monotonic() - (self.config.polling + 1)
         self.deferred_apply = False
@@ -110,6 +120,7 @@ class FanController:
                 self.log.msg(Log.LOG_CONFIG, f"   max_level = {self.config.max_level}")
             self.print_temp_level_mapping()
             self.log.msg(Log.LOG_CONFIG, f"   smoothing = {self.config.smoothing}")
+            self.log.msg(Log.LOG_CONFIG, f"   error_tolerance = {self.config.error_tolerance}")
             if hasattr(self, "hwmon_path"):
                 self.log.msg(Log.LOG_CONFIG, f"   hwmon_path = {[p if p else 'smartctl' for p in self.hwmon_path]}")
 
@@ -143,16 +154,69 @@ class FanController:
         with open(self.hwmon_path[index], "r", encoding="UTF-8") as f:
             return float(f.read()) / 1000
 
+    def _reuse_last_temp(self, index: int, error: Exception) -> float:
+        """Handle a failed per-device temperature read: reuse the device's last known good value while the
+        error_tolerance budget of the device allows it, otherwise re-raise. Both the consecutive streak
+        (_temp_read_errors) and the lifetime total (_temp_read_errors_total) of the device are advanced,
+        and both are reported in the log message.
+
+        Args:
+            index (int): device index in the controller's device list
+            error (Exception): the exception raised by _get_nth_temp()
+
+        Returns:
+            float: last known good temperature of the device (C)
+
+        Raises:
+            Exception: the original exception, when there is no cached value (i.e. at startup) or the
+                       error_tolerance budget of the device is exhausted
+        """
+        self._temp_read_errors[index] += 1
+        self._temp_read_errors_total[index] += 1
+        errors = self._temp_read_errors[index]
+        total = self._temp_read_errors_total[index]
+        device = self.device_names()[index]
+        if index >= len(self.last_per_device_temps) or errors > self.config.error_tolerance:
+            self.log.msg(Log.LOG_ERROR, f"{self.name}: temperature read failed {errors} time(s) in a row "
+                         f"(device={device}, error_tolerance={self.config.error_tolerance}, "
+                         f"total={total}): {error}")
+            raise error
+        temp = self.last_per_device_temps[index]
+        self.log.msg(Log.LOG_ERROR, f"{self.name}: temperature read failed, reusing {temp:.1f}C "
+                     f"(device={device}, {errors}/{self.config.error_tolerance}, total={total}): {error}")
+        return temp
+
     def get_temp(self) -> float:
         """Get the aggregated temperature of the controlled entities using the configured calculation method.
+
+        A failed per-device read is tolerated while the error_tolerance budget of that device allows it:
+        the device's last known good temperature is reused and the failure is logged. Any successful read
+        resets the streak counter of the device (but not its lifetime error total). See _reuse_last_temp()
+        for the escalation path.
 
         Side effect: refreshes self.last_per_device_temps with the per-device readings, so the
         snapshot/exporter path can publish them without re-issuing subprocesses.
 
         Returns:
             float: aggregated temperature value (C)
+
+        Raises:
+            Exception: the exception of the failed read, when a device has no cached value (i.e. at
+                       startup) or its error_tolerance budget is exhausted
         """
-        temps = [self._get_nth_temp(i) for i in range(self.count)]
+        temps: List[float] = []
+        for i in range(self.count):
+            try:
+                temp = self._get_nth_temp(i)
+            except (OSError, ValueError, IndexError, RuntimeError) as e:
+                temp = self._reuse_last_temp(i, e)
+            else:
+                if self._temp_read_errors[i]:
+                    self.log.msg(Log.LOG_INFO, f"{self.name}: temperature read recovered after "
+                                 f"{self._temp_read_errors[i]} failure(s) (device={self.device_names()[i]}, "
+                                 f"total={self._temp_read_errors_total[i]})")
+                    self._temp_read_errors[i] = 0
+            temps.append(temp)
         self.last_per_device_temps = temps
         if self.count == 1:
             return temps[0]

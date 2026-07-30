@@ -53,6 +53,7 @@ Key features:
  - Temperature calculation methods: minimum, average, or maximum across multiple devices
  - Temperature smoothing with configurable moving average window to reduce fan speed oscillation
  - Sensitivity threshold to avoid unnecessary fan speed changes on small temperature fluctuations
+ - Configurable tolerance for transient temperature read errors, so a sensor hiccup does not stop the service
  - Standby guard feature for SATA hard disk arrays organized in RAID
  - Support for SATA, SAS/SCSI, and NVMe disks with automatic HWMON/smartctl fallback
  - Nvidia or AMD GPU temperature monitoring via `nvidia-smi` or `rocm-smi`
@@ -220,6 +221,27 @@ Changing fan rotational speed is a slow physical process — depending on the fa
 
 The mechanisms are independent and complementary: `polling=` and `smoothing=` work on the *input* side (how the temperature is measured), `sensitivity=` and `steps=` work on the *decision* side (whether and how a temperature maps to a fan level), and `fan_level_delay=` works on the *output* side (pacing the IPMI commands themselves).
 
+
+#### 2.4 Tolerating transient temperature read errors
+The mechanisms above all decide *whether* a new temperature should move the fans. `error_tolerance=` answers a different question: what should happen when the temperature cannot be read at all?
+
+The most common cause is the kernel's `drivetemp` driver, which issues the SMART/ATA temperature command with a hard-coded 10-second timeout. While a disk is spinning up from STANDBY the command can exceed that timeout, and reading `.../hwmon*/temp1_input` returns `EIO` for a second or two (see [issue #87](https://github.com/petersulyok/smfc/issues/87)). Note that the *Standby guard* feature is exactly what makes a disk array wake up in unison, so it correlates with this window.
+
+Before version 6.1.0 a single failed read was fatal: `smfc` stopped and left the fans at 100%. Now the last known good temperature of that device is reused for up to `error_tolerance=` **consecutive** failed reads (int, default `3`, `0` disables the tolerance), and the failure is logged at ERROR level with the current streak, the budget and the number of failed reads of that device since startup:
+
+```
+ERROR: HD: temperature read failed, reusing 33.0C (device=/dev/disk/by-id/..., 2/3, total=9): ...
+INFO:  HD: temperature read recovered after 2 failure(s) (device=/dev/disk/by-id/..., total=9)
+```
+
+A few properties worth knowing:
+
+ - The counter is **per device** and counts **consecutive** failures only: any successful read clears it. A disk that fails every other poll therefore never escalates — it is readable half the time, so the fan curve is still driven by real data.
+ - The budget is a *count*, so the wall-clock grace depends on the section's `polling=`: ~6 seconds for `[CPU]` (`polling=2`), ~30 seconds for `[HD]` (`polling=10`).
+ - Only when the budget is exhausted — i.e. the sensor is genuinely unreadable, not just slow — does `smfc` stop with the original error and the fans go to 100%.
+ - The very first read at startup is deliberately outside the budget: a device that cannot be read at all is a configuration error, not a transient failure.
+ - The other devices of the same controller keep steering the zone normally while one device is stale, so a reused reading cannot mask a real thermal event elsewhere in the array.
+ - Both counters are also published for monitoring: the `read_errors` / `read_errors_total` fields in the HTTP exporter's snapshot and the `smfc_device_temp_read_errors` gauge / `smfc_device_temp_read_errors_total` counter in `/metrics` (see [chapter 13.](https://github.com/petersulyok/smfc/blob/main/README.md#13-remote-monitoring-http-exporter)).
 
 ### 3. Standby guard
 For the HD fan controller, an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
@@ -693,6 +715,9 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
+# Consecutive failed temperature reads tolerated per device (int, default=3, 0=disabled)
+# Inside this budget the last known good temperature is reused, above it smfc stops
+error_tolerance=3
 
 
 # HD fan controller: works based on SATA or SAS HDDs/SSDs temperature.
@@ -723,6 +748,9 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
+# Consecutive failed temperature reads tolerated per device (int, default=3, 0=disabled)
+# Inside this budget the last known good temperature is reused, above it smfc stops
+error_tolerance=3
 # Names of the HDs (str multi-line list, default=)
 # MUST BE specified in '/dev/disk/by-id/...' form, for example:
 # hd_names=/dev/disk/by-id/ata-WDC_WD100EFAX-68LHPN0_8CH7T91E
@@ -765,6 +793,9 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
+# Consecutive failed temperature reads tolerated per device (int, default=3, 0=disabled)
+# Inside this budget the last known good temperature is reused, above it smfc stops
+error_tolerance=3
 # Names of the NVMe devices (str multi-line list, default=)
 # MUST BE specified in '/dev/disk/by-id/...' form, for example:
 # nvme_names=/dev/disk/by-id/nvme-ADATA_LEGEND_650_2OFF29AO8DKR
@@ -804,6 +835,9 @@ max_level=100
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
 smoothing=1
+# Consecutive failed temperature reads tolerated per device (int, default=3, 0=disabled)
+# Inside this budget the last known good temperature is reused, above it smfc stops
+error_tolerance=3
 # GPU device IDs (comma- or space-separated list of int, default=0)
 # These are indices in nvidia-smi temperature report.
 gpu_device_ids=0
@@ -971,7 +1005,7 @@ When stdout is a terminal and `--no-color` is not set, the report is **colourise
 |-----------|-----------------|----------|-----------------------|--------------------------------------------------------------------------------------|
 | `-c FILE` | `--config FILE` | path     | `/etc/smfc/smfc.conf` | Configuration file to read (same format the service uses).                           |
 | `-s`      | `--sudo`        | —        | off                   | Run `ipmitool` and `smartctl` via `sudo`. Required on the standalone path as non-root. |
-| `-V`      | `--verbose`     | —        | off                   | Expand each enabled fan controller into a per-controller block with window, curve, devices, and standby state. |
+| `-V`      | `--verbose`     | —        | off                   | Expand each enabled fan controller into a per-controller block with window, curve, devices, standby state, and per-device read error counts. The read error counts are shown **only** in this mode — the default summary has no per-device rows. |
 | `-nc`     | `--no-color`    | —        | auto                  | Disable ANSI colors. Colors auto-disable when stdout is not a terminal.              |
 | `-sa`     | `--standalone`  | —        | off                   | Bypass the service exporter and read sensors directly.                               |
 | `-v`      | `--version`     | —        | —                     | Print `smfc-client X.Y.Z` and exit.                                                  |
@@ -1042,12 +1076,12 @@ Fan controllers
   Window: T=[35..48]C → L=[35..100]%
   Temp:   39.0 C  →  Level:  45 %
   Standby Guard: enabled (limit=2)  Array: SAAA  (1/4 standby)
-  Device                              Temp      State
-  ----------------------------------  ------    -------
-  ata-WDC_WD120EFAX-68UNTN0_99GMFQVW  36.0 C    STANDBY
-  ata-WDC_WD120EFAX-68UNTN0_ASWRX1X8  38.0 C    ACTIVE
-  ata-WDC_WD120EFAX-68UNTN0_F9ZAPZG7  39.0 C    ACTIVE
-  ata-WDC_WD120EFAX-68UNTN0_MPZ04PTK  39.0 C    ACTIVE
+  Device                              Temp      State    Errors
+  ----------------------------------  ------    -------  ------
+  ata-WDC_WD120EFAX-68UNTN0_99GMFQVW  36.0 C    STANDBY  9
+  ata-WDC_WD120EFAX-68UNTN0_ASWRX1X8  38.0 C    ACTIVE   0
+  ata-WDC_WD120EFAX-68UNTN0_F9ZAPZG7  39.0 C    ACTIVE   0
+  ata-WDC_WD120EFAX-68UNTN0_MPZ04PTK  39.0 C    ACTIVE   0
 
 IPMI zones (live)
   Zone    Level
@@ -1064,6 +1098,7 @@ A few things to notice in the verbose block:
 - **`Temp: X → Level: Y`** is the aggregated temperature the curve was evaluated against and the resulting level that ended up on the BMC. With colours on, both cells carry the band colour against the same window — at a glance you see whether the controller is idle, working, ramping, or maxed out.
 - **`Device names`** for HD and NVMe controllers are shown as the path basename (e.g. `ata-WDC_WD120EFAX-68UNTN0_99GMFQVW` instead of `/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_99GMFQVW`) so per-disk rows stay scannable. The snapshot JSON and Prometheus labels still carry the full stable-id paths.
 - **`Standby Guard`** appears as a single line inside the `[HD]` block when the feature is enabled; the per-disk `STANDBY`/`ACTIVE` annotation lives in the right-most column of that block's device table. Disks in standby render in dim grey because the temperature reading is stale (smartctl is skipped while a disk sleeps).
+- **`Errors`** is a *conditional* column of the verbose blocks, so it needs `-V`: the default summary has no per-device rows at all. It only appears when at least one device of that controller has failed a temperature read since `smfc` started (see [chapter 2.4](https://github.com/petersulyok/smfc/blob/main/README.md#24-tolerating-transient-temperature-read-errors)). It then shows the lifetime failure count of every device of the controller, so the failing one stands out against its healthy neighbours, and non-zero values are highlighted. On a healthy machine the column is not rendered at all. Note it is only available in online mode: in `--standalone` mode the client builds its own controllers and has no history, so a failing read shows up as an `ERROR` temperature cell instead.
 
 Each fan controller is constructed independently, so a single failing controller (e.g. a missing GPU tool or a non-existent disk) shows an `ERROR` row in the Fan controllers table while the rest of the report still renders.
 

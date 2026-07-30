@@ -13,8 +13,8 @@
 #   the first BMC drift), then sends SIGINT to drive the documented Ctrl-C exit
 #   path. The captured stdout/stderr is scanned for a set of expected signals
 #   (startup banner, controller-init log lines, fan-level commands, temperature
-#   drift, clean exit, plus per-scenario assertions for the platform-override and
-#   numbered-section scenarios) and a pass/fail verdict per scenario is printed.
+#   drift, clean exit, plus per-scenario assertions for the platform-override,
+#   numbered-section and error_tolerance scenarios) and a pass/fail verdict per scenario is printed.
 #
 #   Run from the project root:
 #       uv run python test/automatic_smoke_runner/check_smoke.py
@@ -33,7 +33,7 @@ from collections import namedtuple
 from pathlib import Path
 
 # Mirrors test/smoke_runner.py::SCENARIOS. Keep this in sync when scenarios are added/removed.
-Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf"])
+Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf", "fault"], defaults=(None,))
 SCENARIOS = {
     "cpu_1":               Scenario(1, 1, 0, 0, "cpu_1.conf"),
     "cpu_2":               Scenario(2, 0, 1, 0, "cpu_2.conf"),
@@ -55,6 +55,8 @@ SCENARIOS = {
     "no_enforce_fan_mode": Scenario(1, 2, 0, 0, "no_enforce_fan_mode.conf"),
     "hd_split_zones":      Scenario(0, 4, 0, 0, "hd_split_zones.conf"),
     "smoothing_window":    Scenario(2, 2, 0, 0, "smoothing_window.conf"),
+    "error_tolerance":     Scenario(0, 4, 0, 0, "error_tolerance.conf", "hd_flaky"),
+    "error_tolerance_exhausted": Scenario(0, 4, 0, 0, "error_tolerance_exhausted.conf", "hd_dead"),
 }
 
 # Project root resolved relative to this file (test/automatic_smoke_runner/check_smoke.py).
@@ -210,6 +212,42 @@ def check(name: str, scn: Scenario, duration: int) -> tuple:
     # ----- smoothing_window: smoothing must be reported as > 1 for at least one controller -----
     if name == "smoothing_window":
         if not re.search(r"smoothing = [2-9]\d*", log):       problems.append("smoothing-not-enabled")
+
+    # ----- error_tolerance: a transient read failure must NOT stop the service -----
+    # The injector hides one disk's hwmon file for 2 s out of every 5 s while [HD] runs with
+    # polling=1 and error_tolerance=3, so the streak stays inside the budget. Required signals:
+    #   - the reuse log line (last known good temperature used instead of a fresh read)
+    #   - the recovery log line once the file is back
+    #   - NO budget-exhausted line, and the normal Ctrl-C exit (covered by the generic checks)
+    if name == "error_tolerance":
+        if "error_tolerance = 3" not in log:
+            problems.append("error-tolerance-not-configured")
+        if "temperature read failed, reusing" not in log:
+            problems.append("no-tolerated-read-failure")
+        if "temperature read recovered" not in log:
+            problems.append("no-read-recovery")
+        if "time(s) in a row" in log:
+            problems.append("budget-exhausted-unexpectedly")
+
+    # ----- error_tolerance_exhausted: smfc is DESIGNED to stop when the budget runs out -----
+    # The injector hides one disk's hwmon file permanently and [HD] runs with error_tolerance=1,
+    # so the second consecutive failure escalates. Required signals:
+    #   - the budget-exhausted log line naming the device and the budget
+    #   - the ORIGINAL exception object reaching the top unchanged (type + message), which is what
+    #     the exit handler then reacts to
+    # The service dies on that re-raised exception, so the generic Ctrl-C / exit-code / traceback
+    # checks do not apply here — that traceback IS the documented behavior. The exit handler's own
+    # "all fans set to the 100% speed" step runs at interpreter exit, after pytest has torn down its
+    # capture, so it is not visible here; it is covered by the Service.exit_func unit tests.
+    if name == "error_tolerance_exhausted":
+        if "error_tolerance = 1" not in log:
+            problems.append("error-tolerance-not-configured")
+        if not re.search(r"temperature read failed \d+ time\(s\) in a row", log):
+            problems.append("no-budget-exhausted-line")
+        if "FileNotFoundError: ERROR: Cannot read temperature from HWMON file" not in log:
+            problems.append("original-exception-not-propagated")
+        problems = [p for p in problems
+                    if p not in ("no-clean-interrupt", "traceback-during-run", "exit=1")]
 
     status = "PASS" if not problems else "FAIL: " + " ".join(problems)
     return status, sig, log

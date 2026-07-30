@@ -163,17 +163,17 @@ contain several test classes grouped by feature.
 | `constfc.py`                     | `test_constfc.py`            | Fixed-level controller init, `run`, deferred apply |
 | `cpufc.py`                       | `test_cpufc.py`              | Hwmon discovery, ordinal `cpuN` device names |
 | `exporter.py`                    | `test_exporter.py`           | Prometheus text rendering, HTTP server endpoints (`/snapshot`, `/metrics`, `/healthz`), 404/500 handling, idempotent stop |
-| `fancontroller.py`               | `test_fancontroller.py`      | Base contract: construction, `get_hwmon_path`, `get_temp` modes, per-device temp caching, `set_fan_level`, deferred level application, `run()` mapping, smoothing algorithm, LUT construction (legacy vs. user-defined `control_function=`) |
+| `fancontroller.py`               | `test_fancontroller.py`      | Base contract: construction, `get_hwmon_path`, `get_temp` modes, per-device temp caching, `set_fan_level`, deferred level application, `run()` mapping, smoothing algorithm, `error_tolerance` handling (reuse / escalation / per-device counters), LUT construction (legacy vs. user-defined `control_function=`) |
 | `generic.py`, `genericx9.py`, `genericx14.py`, `x10qbi.py` | `test_platforms.py` | Matrix-driven: same 8-method contract for all four platforms |
-| `gpufc.py`                       | `test_gpufc.py`              | `exec_smi` (Nvidia/AMD), AMD sensor selection, temp parse errors |
-| `hdfc.py`                        | `test_hdfc.py`               | `exec_smartctl` (sudo / rc / exceptions), standby-state formatting, `check_standby_state`, `go_standby_state`, standby-guard `run`, smartctl debug path |
+| `gpufc.py`                       | `test_gpufc.py`              | `exec_smi` (Nvidia/AMD), AMD sensor selection, temp parse errors, tolerated truncated SMI output |
+| `hdfc.py`                        | `test_hdfc.py`               | `exec_smartctl` (sudo / rc / exceptions), standby-state formatting, `check_standby_state`, `go_standby_state`, standby-guard `run`, smartctl debug path, tolerated transient HWMON/smartctl read errors |
 | `ipmi.py`                        | `test_ipmi.py`               | Init (positive/negative, BMC timeout, client mode), `exec_ipmitool` (remote args, sudo, rc, exceptions), `get/set_fan_mode`, fan-mode name mapping, `get/set_fan_level`, `set_multiple_fan_levels`, exception surface |
 | `log.py`                         | `test_log.py`                | Init (valid/invalid level+output combos), level/output/message-type mapping, message routing to stdout/stderr/syslog |
 | `nvmefc.py`                      | `test_nvmefc.py`             | NVMe name validation, smartctl-based temps |
 | `platform.py`                    | *(no dedicated module)*      | Exercised indirectly through `test_platforms.py` |
 | `platform_factory.py`            | `test_platform_factory.py`   | `create_platform` dispatch per platform name + fallback |
 | `service.py`                     | `test_service.py`            | Lifecycle (`exit_func`), dependency checks (CPU/HD/GPU/NVMe, AMD, invalid type), `run()` exit-code matrix, fan-mode drift enforcement, exporter start/stop wiring, **shared-zone arbitration** (`collect_desired_levels`, `apply_fan_levels` across single/shared/multi-zone, const winner/loser, caching, oscillation) |
-| `snapshot.py`                    | `test_snapshot.py`           | Schema/version, fan-mode block, per-controller entries (cpu/hd/nvme/gpu/const), curve vs. legacy min/max, zones block, applied levels, per-device temperatures |
+| `snapshot.py`                    | `test_snapshot.py`           | Schema/version, fan-mode block, per-controller entries (cpu/hd/nvme/gpu/const), curve vs. legacy min/max, zones block, applied levels, per-device temperatures and read-error counters |
 
 Behind that table sit two cross-cutting topics worth knowing about:
 
@@ -181,7 +181,8 @@ Behind that table sit two cross-cutting topics worth knowing about:
   subclasses (`CpuFc`, `HdFc`, `NvmeFc`, `GpuFc`) implement the same base
   contract but differ in how they discover devices. The shared base
   behaviours (construction, `set_fan_level`, deferred levels, the smoothing
-  algorithm, LUT construction) are tested *once* in `test_fancontroller.py`.
+  algorithm, read-error tolerance, LUT construction) are tested *once* in
+  `test_fancontroller.py`.
   Each subclass test then asserts only its device-specific surface
   (`exec_smartctl`, `exec_smi`, standby handling), with `build_*` / `make_bare_*`
   helpers from `test_fc_helpers.py` absorbing the discovery-mock boilerplate.
@@ -305,19 +306,44 @@ A smoke run boots a real `Service` against fakes:
    `min_temp`/`max_temp` range). GPU temperatures drift via state files
    inside the SMI emulator scripts.
 5. **`Service.run()` is called** and runs until the operator sends Ctrl-C
-   (the documented exit path) or — for one specific scenario,
-   `no_enforce_fan_mode` — until the service self-terminates on a BMC drift
-   it is configured not to correct.
+   (the documented exit path) or — for the two self-terminating scenarios —
+   until the service stops on its own. See *How a scenario ends* below.
 
 The scenario itself is described by a single tuple:
 
 ```python
-Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf"])
+Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf", "fault"], defaults=(None,))
 ```
 
-— device counts plus a `.conf` filename under `test/scenarios/`. The full set
+— device counts, a `.conf` filename under `test/scenarios/`, and an optional
+fault injector (`None` for every scenario but the two `error_tolerance` ones).
+The full set
 lives in `test/smoke_runner.py::SCENARIOS`, which is the **single source of
 truth** for both the interactive runner and the automatic driver.
+
+### How a scenario ends
+
+Almost every smoke scenario is a **positive** test: nothing in it is supposed
+to fail, so the service runs forever and the harness decides when to stop it.
+Two scenarios break that pattern, and only one of them stops *on an error*:
+
+| Ending | Scenarios | Exit | What it means |
+|--------|-----------|------|---------------|
+| Ctrl-C / SIGINT from the operator or the automatic driver | 20 of 22 | `2` (or `130`) | Positive test: the service was still healthy when it was interrupted. Being interrupted **is** the pass condition. |
+| Clean self-termination (`sys.exit(11)`) | `no_enforce_fan_mode` | `1` | Positive test of a *configured* behaviour: `enforce_fan_mode=0` tells smfc to quit on the first BMC fan-mode drift, and it does so through its own documented exit path. |
+| Self-termination **on an error** | `error_tolerance_exhausted` | `1` | The only **negative** smoke test: the injected fault is never repaired, the `error_tolerance` budget runs out, and the re-raised read exception propagates out of the main loop. The service dies with a Python traceback and the exit handler drives all fans to 100%. |
+
+This matters when you run a scenario interactively with
+`./test/run_smoke.sh <scenario>`: for 20 of them the prompt does not come back
+until you press Ctrl-C, for `no_enforce_fan_mode` it returns within a few
+seconds, and for `error_tolerance_exhausted` it returns after ~3 seconds with a
+traceback — **that traceback is the expected result, not a broken test**.
+
+The automatic driver (`check_smoke.py`) knows about both exceptions: it polls
+every 100 ms so a self-terminating scenario is not waited out, and it suppresses
+the generic `no-clean-interrupt` / `exit=1` checks for `no_enforce_fan_mode` and
+additionally `traceback-during-run` for `error_tolerance_exhausted`. Every other
+scenario still fails if it dies early, exits non-zero, or logs a traceback.
 
 ### Scenario matrix
 
@@ -345,6 +371,12 @@ controllers, platforms, and configuration modes:
 - **Configuration toggles**: `no_enforce_fan_mode` (service exits on BMC
   drift instead of restoring FULL), `smoothing_window` (moving-average
   temperature filter with `smoothing>1`).
+- **Fault injection**: `error_tolerance` and `error_tolerance_exhausted` make
+  one disk's hwmon file disappear while the service is running (the two sides
+  of the `error_tolerance=` contract: tolerated vs. escalated). The first is a
+  positive test like every other scenario — smfc must survive the outage and
+  keep running until Ctrl-C. The second is the **only negative scenario in the
+  matrix**: it asserts that the service *stops*.
 
 The full table — what each scenario contains:
 
@@ -370,6 +402,8 @@ The full table — what each scenario contains:
 | `no_enforce_fan_mode`| `no_enforce_fan_mode.conf` | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
 | `hd_split_zones`     | `hd_split_zones.conf`      | disabled                    | 4 x HDs (`HD:0`, `HD:1`)    | disabled  | disabled      | disabled   | disabled      |
 | `smoothing_window`   | `smoothing_window.conf`    | 2 x CPUs (`smoothing=5`)    | 2 x HDs (`smoothing=3`)     | disabled  | disabled      | disabled   | disabled      |
+| `error_tolerance`    | `error_tolerance.conf`     | disabled                    | 4 x HDs (`error_tolerance=3`) | disabled  | disabled      | disabled   | disabled      |
+| `error_tolerance_exhausted` | `error_tolerance_exhausted.conf` | disabled           | 4 x HDs (`error_tolerance=1`) | disabled  | disabled      | disabled   | disabled      |
 
 Notes:
 
@@ -411,6 +445,18 @@ Notes:
   intervals (1–2 s) let the window fill within the smoke run while the
   drift thread keeps feeding varying values, so the moving-average output
   changes across cycles.
+- `error_tolerance` and `error_tolerance_exhausted` are the only scenarios
+  with **fault injection**: a background thread renames the hwmon file of the
+  first disk away, so the controller's `open()` fails — the deterministic,
+  uid-independent stand-in for the `EIO` that a real `drivetemp` read returns
+  while a disk is spinning up from STANDBY (issue #87). `error_tolerance`
+  hides the file for 2 s out of every 5 s with `polling=1` and
+  `error_tolerance=3`, so the streak stays inside the budget: smfc must keep
+  running, reusing the last known good temperature of that disk and logging
+  the recovery. `error_tolerance_exhausted` hides the file permanently with
+  `error_tolerance=1`, so the budget runs out and the service must stop with
+  the original exception — like `no_enforce_fan_mode`, it terminates on its
+  own, without a `KeyboardInterrupt`.
 - During smoke tests, temperature values change gradually over time to
   simulate realistic thermal behavior. A background thread updates hwmon
   temperature files (for CPU, HD, NVMe) every second, applying random

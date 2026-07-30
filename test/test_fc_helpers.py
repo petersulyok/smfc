@@ -26,7 +26,7 @@ from .test_mocks import MockDevices, factory_mockdevice
 
 # Config fields set on every FanController subclass; checked by assert_fc_base_contract().
 BASE_CONFIG_FIELDS = ["ipmi_zone", "temp_calc", "steps", "sensitivity", "polling", "min_temp", "max_temp",
-                      "min_level", "max_level", "smoothing"]
+                      "min_level", "max_level", "smoothing", "error_tolerance"]
 
 
 @dataclass
