@@ -209,7 +209,7 @@ The dashed blue line shows the continuous piecewise-linear ideal described by `c
 > See [`smfc-sample9.conf`](https://github.com/petersulyok/smfc/blob/main/config/samples/smfc-sample9.conf) for a complete hybrid configuration using `control_function=` for both the CPU and HD fan controllers.
 
 #### 2.3 Reducing unnecessary fan speed changes
-Changing fan rotational speed is a slow physical process — depending on the fan type and the magnitude of the change it can take several seconds. Frequent or unnecessary changes also cause audible oscillation. To keep the fans steady, each temperature-driven controller combines six mechanisms that act at different stages of the control loop:
+Changing fan rotational speed is a slow physical process — depending on the fan type and the magnitude of the change it can take several seconds. Frequent or unnecessary changes also cause audible oscillation. To keep the fans steady, each temperature-driven controller combines five mechanisms that act at different stages of the control loop:
 
 | Stage | Mechanism | Parameter | Effect |
 |---|---|---|---|
@@ -217,13 +217,31 @@ Changing fan rotational speed is a slow physical process — depending on the fa
 | Smooth  | Moving-average smoothing | `smoothing=` | Averages the last N temperature readings before they enter the control function. Suppresses brief spikes; `1` (default) disables smoothing. |
 | Filter  | Sensitivity threshold | `sensitivity=` | The controller does not react until the smoothed temperature has moved by at least this many °C since the last action. |
 | Quantize | Discrete fan levels | `steps=` | The control function produces a fixed number of plateaus (linear: `steps + 1`, multi-segment: `steps + 2`) instead of a continuous curve, so small temperature drift inside a plateau yields the same fan level. |
-| Tolerate | Transient read errors | `error_tolerance=` | Reuses a device's last known good temperature for up to N consecutive failed reads instead of stopping. `0` disables. |
 | Apply   | Post-change delay | `[Ipmi] fan_level_delay=` | After every fan-level change, the controller waits this many seconds before issuing another command, giving the fan time to reach the new speed physically. |
 
 The mechanisms are independent and complementary: `polling=` and `smoothing=` work on the *input* side (how the temperature is measured), `sensitivity=` and `steps=` work on the *decision* side (whether and how a temperature maps to a fan level), and `fan_level_delay=` works on the *output* side (pacing the IPMI commands themselves).
 
-`error_tolerance=` also works on the *input* side, but it addresses a different failure: a temperature read that fails outright. The most common cause is the kernel's `drivetemp` driver, which issues the SMART/ATA temperature command with a hard-coded 10-second timeout: while a disk is spinning up from STANDBY the command can exceed that timeout, and reading `.../hwmon*/temp1_input` returns `EIO` for a second or two (see [issue #87](https://github.com/petersulyok/smfc/issues/87)). Note that the *Standby guard* feature is exactly what makes a disk array wake up in unison, so it correlates with this window. Before version 6.1.0 a single failed read stopped `smfc` and left the fans at 100%; now the last known good temperature of that device is reused for up to `error_tolerance=` consecutive failed reads (default `3`), each one logged at ERROR level with the current streak, the budget and the number of failed reads of that device since startup (`HD: temperature read failed, reusing 33.0C (device=/dev/disk/by-id/..., 2/3, total=9): ...`). Only when the budget is exhausted — i.e. the sensor is genuinely unreadable, not just slow — does `smfc` stop. The first read at startup is deliberately outside this budget: a device that cannot be read at all is a configuration error.
 
+#### 2.4 Tolerating transient temperature read errors
+The mechanisms above all decide *whether* a new temperature should move the fans. `error_tolerance=` answers a different question: what should happen when the temperature cannot be read at all?
+
+The most common cause is the kernel's `drivetemp` driver, which issues the SMART/ATA temperature command with a hard-coded 10-second timeout. While a disk is spinning up from STANDBY the command can exceed that timeout, and reading `.../hwmon*/temp1_input` returns `EIO` for a second or two (see [issue #87](https://github.com/petersulyok/smfc/issues/87)). Note that the *Standby guard* feature is exactly what makes a disk array wake up in unison, so it correlates with this window.
+
+Before version 6.1.0 a single failed read was fatal: `smfc` stopped and left the fans at 100%. Now the last known good temperature of that device is reused for up to `error_tolerance=` **consecutive** failed reads (int, default `3`, `0` disables the tolerance), and the failure is logged at ERROR level with the current streak, the budget and the number of failed reads of that device since startup:
+
+```
+ERROR: HD: temperature read failed, reusing 33.0C (device=/dev/disk/by-id/..., 2/3, total=9): ...
+INFO:  HD: temperature read recovered after 2 failure(s) (device=/dev/disk/by-id/..., total=9)
+```
+
+A few properties worth knowing:
+
+ - The counter is **per device** and counts **consecutive** failures only: any successful read clears it. A disk that fails every other poll therefore never escalates — it is readable half the time, so the fan curve is still driven by real data.
+ - The budget is a *count*, so the wall-clock grace depends on the section's `polling=`: ~6 seconds for `[CPU]` (`polling=2`), ~30 seconds for `[HD]` (`polling=10`).
+ - Only when the budget is exhausted — i.e. the sensor is genuinely unreadable, not just slow — does `smfc` stop with the original error and the fans go to 100%.
+ - The very first read at startup is deliberately outside the budget: a device that cannot be read at all is a configuration error, not a transient failure.
+ - The other devices of the same controller keep steering the zone normally while one device is stale, so a reused reading cannot mask a real thermal event elsewhere in the array.
+ - Both counters are also published for monitoring: the `read_errors` / `read_errors_total` fields in the HTTP exporter's snapshot and the `smfc_device_temp_read_errors` gauge / `smfc_device_temp_read_errors_total` counter in `/metrics` (see [chapter 13.](https://github.com/petersulyok/smfc/blob/main/README.md#13-remote-monitoring-http-exporter)).
 
 ### 3. Standby guard
 For the HD fan controller, an additional optional feature was implemented, called *Standby guard*, with the following assumptions:
