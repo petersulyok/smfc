@@ -44,7 +44,7 @@ def _sample_snapshot() -> Dict[str, Any]:
                 "ipmi_zones": [0], "device_count": 1, "polling": 2.0,
                 "last_temp_c": 42.3, "last_level_pct": 45, "deferred_apply": False,
                 "temp_min_c": 30.0, "temp_max_c": 70.0, "level_min_pct": 25, "level_max_pct": 100,
-                "devices": [{"name": "cpu0", "temp_c": 42.3, "read_errors": 0}],
+                "devices": [{"name": "cpu0", "temp_c": 42.3, "read_errors": 0, "read_errors_total": 0}],
             },
             {
                 "section": "HD", "type": "hd", "enabled": True,
@@ -52,10 +52,10 @@ def _sample_snapshot() -> Dict[str, Any]:
                 "last_temp_c": 34.1, "last_level_pct": 55, "deferred_apply": False,
                 "temp_min_c": 32.0, "temp_max_c": 50.0, "level_min_pct": 35, "level_max_pct": 100,
                 "devices": [
-                    {"name": "/dev/sda", "temp_c": 33.0, "read_errors": 0},
-                    {"name": "/dev/sdb", "temp_c": 34.5, "read_errors": 2},
-                    {"name": "/dev/sdc", "temp_c": 36.1, "read_errors": 0},
-                    {"name": "/dev/sdd", "temp_c": 39.0, "read_errors": 0},
+                    {"name": "/dev/sda", "temp_c": 33.0, "read_errors": 0, "read_errors_total": 1},
+                    {"name": "/dev/sdb", "temp_c": 34.5, "read_errors": 2, "read_errors_total": 9},
+                    {"name": "/dev/sdc", "temp_c": 36.1, "read_errors": 0, "read_errors_total": 0},
+                    {"name": "/dev/sdd", "temp_c": 39.0, "read_errors": 0, "read_errors_total": 0},
                 ],
                 "standby_guard": {
                     "enabled": True, "limit": 1,
@@ -107,6 +107,8 @@ class TestPrometheusRenderer:
         - ASSERT: every expected gauge metric has a "# TYPE ... gauge" line in the output
         - ASSERT: the enforcement metric has a "# HELP smfc_fan_mode_enforced_total" line
         - ASSERT: the enforcement metric has a "# TYPE smfc_fan_mode_enforced_total counter" line
+        - ASSERT: the per-device error metric has "# HELP"/"# TYPE ... counter" lines
+          (smfc_device_temp_read_errors_total is cumulative, so it is a counter, not a gauge)
         - ASSERT: removed metric "smfc_fan_mode " does not reappear in the output
         - ASSERT: removed metric "smfc_fan_mode_age_seconds" does not reappear in the output
         """
@@ -121,9 +123,11 @@ class TestPrometheusRenderer:
                        "smfc_disk_standby"):
             assert f"# HELP {metric} " in out, f"missing HELP for {metric}"
             assert f"# TYPE {metric} gauge" in out, f"missing TYPE for {metric}"
-        # The enforcement metric is a counter, not a gauge.
+        # The enforcement and per-device error metrics are counters, not gauges.
         assert "# HELP smfc_fan_mode_enforced_total " in out
         assert "# TYPE smfc_fan_mode_enforced_total counter" in out
+        assert "# HELP smfc_device_temp_read_errors_total " in out
+        assert "# TYPE smfc_device_temp_read_errors_total counter" in out
         # Removed metrics must not reappear.
         assert "smfc_fan_mode " not in out
         assert "smfc_fan_mode_age_seconds" not in out
@@ -272,31 +276,41 @@ class TestPrometheusRenderer:
     def test_per_device_read_errors_emitted(self) -> None:
         """Positive unit test for render_prometheus() function. It contains the following steps:
         - build a sample snapshot dict via the _sample_snapshot() fixture helper, where the HD device
-          "/dev/sdb" is inside its error_tolerance budget with a streak of 2 failed reads
+          "/dev/sdb" is inside its error_tolerance budget with a streak of 2 failed reads (9 in total)
+          and "/dev/sda" has already recovered from 1 earlier failure
         - call render_prometheus() with the snapshot
         - inspect the rendered Prometheus text output
         - ASSERT: smfc_device_temp_read_errors is 0 for the healthy CPU and HD devices
         - ASSERT: smfc_device_temp_read_errors reports the streak of the failing HD device
-        - ASSERT: the metric is not emitted for the CONST section (it reads no temperature)
+        - ASSERT: smfc_device_temp_read_errors_total reports the lifetime totals, which stay non-zero
+          for a device that has already recovered ("/dev/sda": streak 0, total 1)
+        - ASSERT: neither metric is emitted for the CONST section (it reads no temperature)
         """
         out = render_prometheus(_sample_snapshot())
         assert 'smfc_device_temp_read_errors{section="CPU",type="cpu",device="cpu0"} 0' in out
         assert 'smfc_device_temp_read_errors{section="HD",type="hd",device="/dev/sda"} 0' in out
         assert 'smfc_device_temp_read_errors{section="HD",type="hd",device="/dev/sdb"} 2' in out
-        block = out.split("# TYPE smfc_device_temp_read_errors", 1)[1].split("# HELP")[0]
-        assert 'section="CONST"' not in block
+        assert 'smfc_device_temp_read_errors_total{section="CPU",type="cpu",device="cpu0"} 0' in out
+        assert 'smfc_device_temp_read_errors_total{section="HD",type="hd",device="/dev/sda"} 1' in out
+        assert 'smfc_device_temp_read_errors_total{section="HD",type="hd",device="/dev/sdb"} 9' in out
+        for metric in ("# TYPE smfc_device_temp_read_errors ", "# TYPE smfc_device_temp_read_errors_total"):
+            block = out.split(metric, 1)[1].split("# HELP")[0]
+            assert 'section="CONST"' not in block
 
     def test_per_device_read_errors_default_zero(self) -> None:
         """Positive unit test for render_prometheus() function with a device entry that carries no
         read_errors key (an older snapshot). It contains the following steps:
-        - build a sample snapshot dict and drop the read_errors key from the CPU device entry
+        - build a sample snapshot dict and drop both read-error keys from the CPU device entry
         - call render_prometheus() with the snapshot
-        - ASSERT: smfc_device_temp_read_errors falls back to 0 for that device
+        - ASSERT: both smfc_device_temp_read_errors and smfc_device_temp_read_errors_total fall back
+          to 0 for that device
         """
         snap = _sample_snapshot()
         del snap["fan_controllers"][0]["devices"][0]["read_errors"]
+        del snap["fan_controllers"][0]["devices"][0]["read_errors_total"]
         out = render_prometheus(snap)
         assert 'smfc_device_temp_read_errors{section="CPU",type="cpu",device="cpu0"} 0' in out
+        assert 'smfc_device_temp_read_errors_total{section="CPU",type="cpu",device="cpu0"} 0' in out
 
     def test_steering_window_metrics(self) -> None:
         """Positive unit test for render_prometheus() function. It contains the following steps:

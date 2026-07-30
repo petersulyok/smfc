@@ -150,6 +150,19 @@ def render_prometheus(snapshot: Dict[str, Any]) -> str:
             lines.append(f"smfc_device_temp_read_errors{labels} {int(d.get('read_errors', 0))}")
 
     lines.append("")
+    lines.append("# HELP smfc_device_temp_read_errors_total Failed temperature reads of the device since"
+                 " smfc was started.")
+    lines.append("# TYPE smfc_device_temp_read_errors_total counter")
+    for c in controllers:
+        if c.get("type") == "const":
+            continue
+        section, ctype = c.get("section", ""), c.get("type", "")
+        for d in c.get("devices", []) or []:
+            labels = _format_labels([("section", section), ("type", ctype),
+                                     ("device", str(d.get("name", "")))])
+            lines.append(f"smfc_device_temp_read_errors_total{labels} {int(d.get('read_errors_total', 0))}")
+
+    lines.append("")
     lines.append("# HELP smfc_controller_level_percent Fan level requested by the controller, per targeted zone.")
     lines.append("# TYPE smfc_controller_level_percent gauge")
     for c in controllers:

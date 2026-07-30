@@ -226,7 +226,10 @@ class TestFanController:
         my_fc.config = cfg
         my_fc.count = count
         my_fc.last_per_device_temps = []
-        my_fc._temp_read_errors = [0] * count  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        my_fc._temp_read_errors = [0] * count
+        my_fc._temp_read_errors_total = [0] * count
+        # pylint: enable=protected-access
         mock_temp = MagicMock()
         mock_temp.side_effect = temps
         mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
@@ -251,7 +254,10 @@ class TestFanController:
         my_fc.config = cfg
         my_fc.count = count
         my_fc.last_per_device_temps = []
-        my_fc._temp_read_errors = [0] * count  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        my_fc._temp_read_errors = [0] * count
+        my_fc._temp_read_errors_total = [0] * count
+        # pylint: enable=protected-access
         mock_temp = MagicMock()
         mock_temp.side_effect = list(temps)
         mocker.patch("smfc.FanController._get_nth_temp", mock_temp)
@@ -294,6 +300,36 @@ class TestFanController:
         assert my_fc._temp_read_errors == [1]  # pylint: disable=protected-access
         assert my_fc.get_temp() == 40.0
         assert my_fc._temp_read_errors == [0]  # pylint: disable=protected-access
+
+    def test_get_temp_error_total_is_cumulative(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.get_temp() method (lifetime error total). It contains the
+        following steps:
+        - build a FanController via _create_tolerance_fc with 2 devices and error_tolerance=2
+        - let device index 0 fail on the 1st, 2nd and 4th poll and device index 1 always succeed
+        - call FanController.get_temp() four times
+        - ASSERT: the consecutive streak counter of device 0 is reset by the successful third poll
+        - ASSERT: the lifetime total of device 0 counts every failure, including the ones separated by a
+          successful read (i.e. a successful read does not reset it)
+        - ASSERT: the counters of the healthy device stay 0
+        """
+        my_fc, mock_temp = self._create_tolerance_fc(mocker, error_tolerance=2, count=2)
+        failing_polls = [0, 1, 3]
+        poll = {"index": 0}
+
+        def _read(index: int) -> float:
+            if index == 0 and poll["index"] in failing_polls:
+                raise OSError(5, "Input/output error")
+            if index == 1:
+                poll["index"] += 1
+            return 40.0
+
+        mock_temp.side_effect = _read
+        for _ in range(4):
+            my_fc.get_temp()
+        # pylint: disable=protected-access
+        assert my_fc._temp_read_errors == [1, 0]
+        assert my_fc._temp_read_errors_total == [3, 0]
+        # pylint: enable=protected-access
 
     def test_get_temp_raises_when_budget_exhausted(self, mocker: MockerFixture) -> None:
         """Negative unit test for FanController.get_temp() method (error_tolerance budget exhausted).
@@ -401,8 +437,10 @@ class TestFanController:
         - mock builtins.print to capture the log lines of the following calls
         - let _get_nth_temp fail twice, then succeed
         - call FanController.get_temp() three times
-        - ASSERT: two ERROR lines report the reused temperature with the streak and the budget
-        - ASSERT: exactly one INFO recovery line is emitted, after the successful read
+        - ASSERT: two ERROR lines report the reused temperature with the streak, the budget and the
+          lifetime error total of the device
+        - ASSERT: exactly one INFO recovery line is emitted after the successful read, reporting the
+          length of the streak that ended and the (unchanged) lifetime total
         """
         my_fc, mock_temp = self._create_tolerance_fc(mocker, error_tolerance=3)
         mock_print = MagicMock()
@@ -415,10 +453,12 @@ class TestFanController:
         recovery_lines = [ln for ln in lines if "temperature read recovered" in ln]
         assert len(error_lines) == 2
         assert error_lines[0].startswith("ERROR: ")
-        assert "(device=dev0, 1/3)" in error_lines[0]
-        assert "(device=dev0, 2/3)" in error_lines[1]
+        assert "(device=dev0, 1/3, total=1)" in error_lines[0]
+        assert "(device=dev0, 2/3, total=2)" in error_lines[1]
         assert len(recovery_lines) == 1
         assert recovery_lines[0].startswith("INFO: ")
+        assert "recovered after 2 failure(s)" in recovery_lines[0]
+        assert "(device=dev0, total=2)" in recovery_lines[0]
 
     def test_run_smoothing_with_reused_temp(self, mocker: MockerFixture) -> None:
         """Positive unit test for FanController.run() method (smoothing over a reused sample). It contains

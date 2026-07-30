@@ -480,6 +480,7 @@ State on a `FanController`:
 | `last_level`     | Last applied fan level (0 = "no level set yet")                        |
 | `_temp_history`  | `deque(maxlen=smoothing)` — moving-average window                      |
 | `_temp_read_errors` | `List[int]` — consecutive failed temperature reads per device (see §7.1.4) |
+| `_temp_read_errors_total` | `List[int]` — failed temperature reads per device since startup (never reset) |
 | `deferred_apply` | If True, controller stores its desired level but doesn't talk to IPMI  |
 
 #### 7.1.1 Subclass responsibilities
@@ -602,10 +603,17 @@ service with all fans at 100%.
 
 | Situation | Behavior |
 |---|---|
-| Read succeeds | Use the value; reset `_temp_read_errors[i] = 0`. A non-zero streak logs one recovery line at INFO level. |
+| Read succeeds | Use the value; reset `_temp_read_errors[i] = 0` (the lifetime total is *not* reset). A non-zero streak logs one recovery line at INFO level, reporting the length of the streak that ended and the lifetime total. |
 | Read fails, no cached value for `i` (i.e. the constructor's first read) | Re-raise — fatal, an unreadable device is a configuration error. |
-| Read fails, streak ≤ `error_tolerance` | Log at ERROR level and reuse `last_per_device_temps[i]`. |
+| Read fails, streak ≤ `error_tolerance` | Log at ERROR level (streak, budget and lifetime total) and reuse `last_per_device_temps[i]`. |
 | Read fails, streak > `error_tolerance` | Log at ERROR level (budget exhausted), then re-raise the original exception object, so `Service` sees the same type and message as before. |
+
+Two counters are kept per device: `_temp_read_errors[i]` is the **consecutive**
+streak that feeds the budget and is cleared by any successful read, while
+`_temp_read_errors_total[i]` is the **monotonic lifetime** count of failed reads
+since startup, which nothing resets. Both appear in every failure log line
+(`… (device=…, 2/3, total=9): …`), so the journal shows at a glance whether a
+disk fails once a week or once a minute.
 
 The exceptions caught are `(OSError, ValueError, IndexError, RuntimeError)` —
 `IOError` is an alias of `OSError` and `FileNotFoundError` is a subclass, so
@@ -860,14 +868,18 @@ Per-controller entry fields of note:
   LUT the service actually uses.
 - `control_function` — raw breakpoint list (`[[T, L], …]`), empty list in
   legacy mode. smfc-client renders this as the `Curve:` line in verbose mode.
-- `devices` — per-device `{"name": …, "temp_c": …, "read_errors": …}` list;
+- `devices` — per-device
+  `{"name": …, "temp_c": …, "read_errors": …, "read_errors_total": …}` list;
   populated from `controller.device_names()`,
-  `controller.last_per_device_temps` and `controller._temp_read_errors`.
-  `read_errors` is the *current* consecutive failed-read streak of the device
-  (§7.1.4): `0` while it is healthy, non-zero when the reported `temp_c` is a
-  reused, stale reading. The exporter renders it as the
-  `smfc_device_temp_read_errors` gauge (a gauge, not a counter: the value is
-  reset by the next successful read).
+  `controller.last_per_device_temps`, `controller._temp_read_errors` and
+  `controller._temp_read_errors_total`. `read_errors` is the *current*
+  consecutive failed-read streak of the device (§7.1.4): `0` while it is
+  healthy, non-zero when the reported `temp_c` is a reused, stale reading;
+  `read_errors_total` is the lifetime count since startup. The exporter renders
+  the first as the `smfc_device_temp_read_errors` **gauge** (it is reset by the
+  next successful read) and the second as the
+  `smfc_device_temp_read_errors_total` **counter** (monotonic, so `rate()` and
+  `increase()` work on it).
 - `standby_guard` — HD-only; `{"enabled": true, "limit": N, "states": […],
   "array_state": "AAAS", "standby_count": N}`.
 
@@ -900,6 +912,8 @@ header. Label values are escaped per the exposition format spec
 | `smfc_controller_zone` | `section, type, zone` | Controller-to-zone mapping (value always 1) |
 | `smfc_controller_temperature_celsius` | `section, type, zone` | Per-controller aggregated temperature |
 | `smfc_device_temperature_celsius` | `section, type, device` | Per-device individual temperature |
+| `smfc_device_temp_read_errors` | `section, type, device` | Consecutive failed temperature reads (0=healthy) |
+| `smfc_device_temp_read_errors_total` | `section, type, device` | Counter of failed temperature reads since startup |
 | `smfc_controller_level_percent` | `section, type, zone` | Fan level requested by controller |
 | `smfc_controller_temperature_min_celsius` | `section, type, zone` | Steering window floor |
 | `smfc_controller_temperature_max_celsius` | `section, type, zone` | Steering window ceiling |

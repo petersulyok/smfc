@@ -53,7 +53,8 @@ def _make_cpu_fc(zones=None, last_temp=42.3, last_level=45, polling=2.0,
 
 
 def _make_hd_fc(zones=None, count=4, last_temp=34.1, last_level=55, standby_enabled=False,
-                standby_states=None, hd_names=None, per_device_temps=None, read_errors=None) -> MagicMock:
+                standby_states=None, hd_names=None, per_device_temps=None, read_errors=None,
+                read_errors_total=None) -> MagicMock:
     """Build a fake HdFc-like controller. To make isinstance(fc, HdFc) work, use a real HdFc spec."""
     from smfc.hdfc import HdFc as _HdFc  # pylint: disable=import-outside-toplevel
     zones = zones or [1]
@@ -79,6 +80,7 @@ def _make_hd_fc(zones=None, count=4, last_temp=34.1, last_level=55, standby_enab
                                 else [last_temp + i * 0.5 for i in range(count)])
     fc.device_names.return_value = list(hd_names)
     fc._temp_read_errors = read_errors if read_errors is not None else [0] * count
+    fc._temp_read_errors_total = read_errors_total if read_errors_total is not None else list(fc._temp_read_errors)
     if standby_enabled and standby_states is not None:
         fc.standby_array_states = standby_states
     return fc
@@ -498,43 +500,50 @@ class TestBuildSnapshot:
         - mock an HdFc controller (via _make_hd_fc) with 4 disks where the second disk is inside its
           error_tolerance budget with a streak of 2 failed reads, plus a Service (via _make_service)
         - call build_snapshot() with the fake service
-        - ASSERT: entry.devices[].read_errors matches the per-device counters element-wise
+        - ASSERT: entry.devices[].read_errors matches the per-device streak counters element-wise
+        - ASSERT: entry.devices[].read_errors_total matches the per-device lifetime totals element-wise,
+          including the first disk which has recovered (streak 0, total 1)
         """
-        hd = _make_hd_fc(zones=[1], count=4, read_errors=[0, 2, 0, 0])
+        hd = _make_hd_fc(zones=[1], count=4, read_errors=[0, 2, 0, 0], read_errors_total=[1, 7, 0, 0])
         service = _make_service(controllers=[hd])
         snap = build_snapshot(service)
         devices = snap["fan_controllers"][0]["devices"]
         assert [d["read_errors"] for d in devices] == [0, 2, 0, 0]
+        assert [d["read_errors_total"] for d in devices] == [1, 7, 0, 0]
 
     def test_hd_per_device_read_errors_default_zero(self) -> None:
         """Positive unit test for build_snapshot() function with a controller that has no per-device
         error counters yet. It contains the following steps:
-        - mock an HdFc controller (via _make_hd_fc) with 2 disks and delete its _temp_read_errors
-          attribute, plus a Service (via _make_service)
+        - mock an HdFc controller (via _make_hd_fc) with 2 disks and delete both its _temp_read_errors
+          and _temp_read_errors_total attributes, plus a Service (via _make_service)
         - call build_snapshot() with the fake service
-        - ASSERT: entry.devices[].read_errors falls back to 0 for every device
+        - ASSERT: entry.devices[].read_errors and .read_errors_total fall back to 0 for every device
         """
         hd = _make_hd_fc(zones=[1], count=2, hd_names=["/dev/sda", "/dev/sdb"])
         del hd._temp_read_errors
+        del hd._temp_read_errors_total
         service = _make_service(controllers=[hd])
         snap = build_snapshot(service)
         devices = snap["fan_controllers"][0]["devices"]
         assert [d["read_errors"] for d in devices] == [0, 0]
+        assert [d["read_errors_total"] for d in devices] == [0, 0]
 
     def test_cpu_per_device_temperatures(self) -> None:
         """Positive unit test for build_snapshot() function. It contains the following steps:
         - mock a CpuFc controller (via _make_cpu_fc) with count=1 and per_device_temps=[42.3],
           plus a Service (via _make_service)
         - call build_snapshot() with the fake service
-        - ASSERT: entry.devices equals [{"name": "cpu0", "temp_c": 42.3, "read_errors": 0}]
-          (synthesized cpu<index> label paired with the cached temperature and its read-error streak)
+        - ASSERT: entry.devices equals [{"name": "cpu0", "temp_c": 42.3, "read_errors": 0,
+          "read_errors_total": 0}] (synthesized cpu<index> label paired with the cached temperature and
+          its read-error counters)
         """
         cpu = _make_cpu_fc(zones=[0], per_device_temps=[42.3])
         cpu.count = 1
         service = _make_service(controllers=[cpu])
         snap = build_snapshot(service)
         devices = snap["fan_controllers"][0]["devices"]
-        assert devices == [{"name": "cpu0", "temp_c": pytest.approx(42.3), "read_errors": 0}]
+        assert devices == [{"name": "cpu0", "temp_c": pytest.approx(42.3), "read_errors": 0,
+                            "read_errors_total": 0}]
 
     def test_nvme_per_device_temperatures(self) -> None:
         """Positive unit test for build_snapshot() function. It contains the following steps:

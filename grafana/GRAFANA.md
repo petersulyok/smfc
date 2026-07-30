@@ -70,6 +70,8 @@ Each enabled controller emits one row per IPMI zone it targets (controllers can 
 |---|---|---|
 | `smfc_controller_temperature_celsius` | `section`, `type`, `zone` | Aggregated temperature driving the controller; one row per targeted zone; skipped for `const` |
 | `smfc_device_temperature_celsius` | `section`, `type`, `device` | Per-device temperature (individual CPU core, disk path, NVMe device, GPU index) |
+| `smfc_device_temp_read_errors` | `section`, `type`, `device` | Consecutive failed temperature reads of the device (0 = healthy); a non-zero value means the reported temperature is a reused, stale reading |
+| `smfc_device_temp_read_errors_total` | `section`, `type`, `device` | Counter of failed temperature reads of the device since `smfc` was started |
 | `smfc_controller_level_percent` | `section`, `type`, `zone` | Fan level (0–100) requested by the controller per targeted zone |
 | `smfc_zone_level_percent` | `zone` | Fan level actually applied to the IPMI zone after multi-controller arbitration (winner = max) |
 | `smfc_disk_standby` | `section`, `device` | Disk standby state: 1 = standby, 0 = active (only emitted when standby guard is enabled) |
@@ -149,6 +151,20 @@ smfc_device_temperature_celsius{section="NVME",type="nvme",device="/dev/disk/by-
 smfc_device_temperature_celsius{section="NVME",type="nvme",device="/dev/disk/by-id/nvme-KINGSTON_SKC3000D_2048G_50026B768604C5D6"} 38.0
 smfc_device_temperature_celsius{section="NVME",type="nvme",device="/dev/disk/by-id/nvme-KINGSTON_SKC3000D_2048G_50026B768607E8F9"} 42.0
 smfc_device_temperature_celsius{section="NVME",type="nvme",device="/dev/disk/by-id/nvme-KINGSTON_SKC3000D_2048G_50026B76860A1B2C"} 40.0
+
+# HELP smfc_device_temp_read_errors Consecutive failed temperature reads of the device (0=healthy); a non-zero value means the reported temperature is a reused, stale reading.
+# TYPE smfc_device_temp_read_errors gauge
+# (one row per device, like smfc_device_temperature_celsius above; only three rows are shown here)
+smfc_device_temp_read_errors{section="CPU",type="cpu",device="cpu0"} 0
+smfc_device_temp_read_errors{section="HD",type="hd",device="/dev/disk/by-id/ata-ST16000VN001-2KW103_ZR2A1B3C"} 0
+smfc_device_temp_read_errors{section="HD",type="hd",device="/dev/disk/by-id/ata-ST16000VN001-2KW103_ZR2D4E5F"} 2
+
+# HELP smfc_device_temp_read_errors_total Failed temperature reads of the device since smfc was started.
+# TYPE smfc_device_temp_read_errors_total counter
+# (one row per device; only three rows are shown here)
+smfc_device_temp_read_errors_total{section="CPU",type="cpu",device="cpu0"} 0
+smfc_device_temp_read_errors_total{section="HD",type="hd",device="/dev/disk/by-id/ata-ST16000VN001-2KW103_ZR2A1B3C"} 1
+smfc_device_temp_read_errors_total{section="HD",type="hd",device="/dev/disk/by-id/ata-ST16000VN001-2KW103_ZR2D4E5F"} 9
 
 # HELP smfc_controller_level_percent Fan level requested by the controller, per targeted zone.
 # TYPE smfc_controller_level_percent gauge
@@ -322,6 +338,12 @@ smfc_controller_level_percent
 
 # Disk standby states
 smfc_disk_standby
+
+# Devices currently unreadable (reusing their last known good temperature)
+smfc_device_temp_read_errors > 0
+
+# Temperature read failures per hour, per device
+increase(smfc_device_temp_read_errors_total[1h])
 
 # How many times did smfc have to re-assert FULL mode?
 smfc_fan_mode_enforced_total
