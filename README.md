@@ -1076,12 +1076,12 @@ Fan controllers
   Window: T=[35..48]C → L=[35..100]%
   Temp:   39.0 C  →  Level:  45 %
   Standby Guard: enabled (limit=2)  Array: SAAA  (1/4 standby)
-  Device                              Temp      State
-  ----------------------------------  ------    -------
-  ata-WDC_WD120EFAX-68UNTN0_99GMFQVW  36.0 C    STANDBY
-  ata-WDC_WD120EFAX-68UNTN0_ASWRX1X8  38.0 C    ACTIVE
-  ata-WDC_WD120EFAX-68UNTN0_F9ZAPZG7  39.0 C    ACTIVE
-  ata-WDC_WD120EFAX-68UNTN0_MPZ04PTK  39.0 C    ACTIVE
+  Device                              Temp      State    Errors
+  ----------------------------------  ------    -------  ------
+  ata-WDC_WD120EFAX-68UNTN0_99GMFQVW  36.0 C    STANDBY  9
+  ata-WDC_WD120EFAX-68UNTN0_ASWRX1X8  38.0 C    ACTIVE   0
+  ata-WDC_WD120EFAX-68UNTN0_F9ZAPZG7  39.0 C    ACTIVE   0
+  ata-WDC_WD120EFAX-68UNTN0_MPZ04PTK  39.0 C    ACTIVE   0
 
 IPMI zones (live)
   Zone    Level
@@ -1098,6 +1098,7 @@ A few things to notice in the verbose block:
 - **`Temp: X → Level: Y`** is the aggregated temperature the curve was evaluated against and the resulting level that ended up on the BMC. With colours on, both cells carry the band colour against the same window — at a glance you see whether the controller is idle, working, ramping, or maxed out.
 - **`Device names`** for HD and NVMe controllers are shown as the path basename (e.g. `ata-WDC_WD120EFAX-68UNTN0_99GMFQVW` instead of `/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_99GMFQVW`) so per-disk rows stay scannable. The snapshot JSON and Prometheus labels still carry the full stable-id paths.
 - **`Standby Guard`** appears as a single line inside the `[HD]` block when the feature is enabled; the per-disk `STANDBY`/`ACTIVE` annotation lives in the right-most column of that block's device table. Disks in standby render in dim grey because the temperature reading is stale (smartctl is skipped while a disk sleeps).
+- **`Errors`** is a *conditional* column: it only appears when at least one device of that controller has failed a temperature read since `smfc` started (see [chapter 2.4](https://github.com/petersulyok/smfc/blob/main/README.md#24-tolerating-transient-temperature-read-errors)). It then shows the lifetime failure count of every device of the controller, so the failing one stands out against its healthy neighbours, and non-zero values are highlighted. On a healthy machine the column is not rendered at all. Note it is only available in online mode: in `--standalone` mode the client builds its own controllers and has no history, so a failing read shows up as an `ERROR` temperature cell instead.
 
 Each fan controller is constructed independently, so a single failing controller (e.g. a missing GPU tool or a non-existent disk) shows an `ERROR` row in the Fan controllers table while the rest of the report still renders.
 

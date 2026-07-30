@@ -93,7 +93,8 @@ Disable ANSI color output even when stdout is a terminal.
 .TP
 .B \-V, \-\-verbose
 Show extended output: additional BMC fields, per\-controller blocks with per\-device temperature
-rows, HD standby guard state, and service uptime (online mode only).
+rows, HD standby guard state, per\-device temperature read error counts (only when there was at
+least one failed read), and service uptime (online mode only).
 .TP
 .B \-sa, \-\-standalone
 Bypass the smfc service and read sensors directly via

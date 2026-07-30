@@ -972,7 +972,13 @@ Both paths produce the same output structure:
 4. **Verbose per-controller blocks** (with `--verbose`) — Window line
    (`T=[min..max]C → L=[min..max]%`), optional Curve line for advanced
    control functions, current Temp/Level, optional Standby Guard line (HD),
-   indented per-device temperature list.
+   indented per-device temperature list. The device table has two conditional
+   columns: `State` (HD with standby guard) and `Errors`, the device's lifetime
+   failed-read count (§7.1.4), rendered only when at least one device of that
+   controller has a non-zero total — on a healthy machine it would be a column
+   of zeros in every block. The standalone path always passes `0` there: its
+   controllers are built per invocation and carry no history, so the column
+   never appears and a failing read surfaces as an `ERROR` temperature cell.
 5. **IPMI zones (live)** table — zone-to-applied-level mapping (standalone
    path reads live; online path uses the snapshot's `zones` section).
 
