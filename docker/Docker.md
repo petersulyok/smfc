@@ -10,7 +10,7 @@ There are three images created for `smfc`:
 |---------------------|---------------------------------|------------------------------|-----------------------------------------------|--------------------------------------------------------------|
 | Standard            | `6.1.0` / `latest`              | Alpine Linux 3.24.1          | Small image size                              | GPU fan controller not supported                             |
 | NVIDIA GPU-enabled  | `6.1.0-nvidia`/ `latest-nvidia` | Debian 13.6 (slim)           | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
-| AMD GPU-enabled     | `6.1.0-amd` / `latest-amd`      | Ubuntu 24.04.4 (ROCm 7.2.4)  | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
+| AMD GPU-enabled     | `6.1.0-amd` / `latest-amd`      | Ubuntu 24.04.4 (ROCm 7.8.0)  | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
 
 > Docker image tags changed for GPU-enabled images with the newly implemented AMD GPU support in `smfc v5.4.0`!
 
@@ -164,12 +164,12 @@ This image contains the following components:
 - `Python` 3.12.3
 - `ipmitool` 1.8.19
 - `smartmontools` 7.4
-- `rocm-smi` 7.2.4 (`rocm-smi-lib` package from the official AMD package repository)
+- `rocm-smi` 7.8.0 (`rocm-smi-lib` package from the `7.2.4` repository of the official AMD package repository)
 
 > Note: from `smfc v6.0.1` this image is built on the standard `Ubuntu` base image, and only the `rocm-smi-lib`
 > package is installed from the [AMD package repository](https://repo.radeon.com/rocm/apt/) instead of using the
 > `rocm/dev-ubuntu` base image (which contains the complete ROCm SDK). This reduces the image size from 4 GB to
-> 210 MB. The `rocm-smi` command is installed in `/opt/rocm/bin`, but it is also linked to `/usr/bin/rocm-smi`,
+> 233 MB. The `rocm-smi` command is installed in `/opt/rocm/bin`, but it is also linked to `/usr/bin/rocm-smi`,
 > which is the default value of the `[GPU] rocm_smi_path=` configuration parameter, so no extra configuration is
 > needed.
 
@@ -287,7 +287,7 @@ docker run --rm \
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
-  - **6.1.0** (2026.07.31): Updated to smfc 6.1.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.2.4) - base images and their components are unchanged
+  - **6.1.0** (2026.07.31): Updated to smfc 6.1.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0) - base images are unchanged
   - **6.0.1** (2026.07.26): Updated to smfc 6.0.1 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.2.4) - much smaller images!
   - **6.0.0** (2026.07.09): Updated to smfc 6.0.0 (Alpine 3.24.1/Debian 13 slim/ROCm-ubuntu)
   - **5.4.0** (2026.04.30): Updated to smfc 5.4.0 (Alpine 3.23.4/Debian 13 slim/ROCm-ubuntu) - new tags!!
