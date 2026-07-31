@@ -1,3 +1,22 @@
+smfc (6.1.0) unstable; urgency=medium
+
+  * New: error_tolerance= parameter for the [CPU], [HD], [NVME] and [GPU]
+    sections (int, default=3), the number of consecutive failed temperature
+    reads tolerated per device. A transient read error does not stop smfc any
+    more: while a device is inside its budget its last known good temperature
+    is reused and the failure is logged at ERROR level, only an exhausted
+    budget stops the service. Use error_tolerance=0 for the old behavior.
+  * New: smfc-client --verbose shows the per-device read error counts in a new
+    Errors column, displayed only when a device has failed a read since smfc
+    was started.
+  * New: read_errors and read_errors_total fields in the /snapshot device
+    entries, plus the smfc_device_temp_read_errors gauge and
+    smfc_device_temp_read_errors_total counter in /metrics.
+  * Changed: smfc man page lists the supported motherboards (X9, X10-X13/
+    H10-H13, X10QBi, X14/H14) like the README and the package description.
+
+ -- Peter Sulyok <peter@sulyok.net>  Fri, 31 Jul 2026 08:31:15 +0200
+
 smfc (6.0.1) unstable; urgency=medium
 
   * Fixed: X9 fan duty readback scaling on the generic_x9 platform; the raw

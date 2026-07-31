@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        6.0.1
+Version:        6.1.0
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -98,6 +98,22 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Fri Jul 31 2026 Peter Sulyok <peter@sulyok.net> - 6.1.0-1
+- New: error_tolerance= parameter for the [CPU], [HD], [NVME] and [GPU] sections
+  (int, default=3), the number of consecutive failed temperature reads tolerated
+  per device. A transient read error does not stop smfc any more: while a device
+  is inside its budget its last known good temperature is reused and the failure
+  is logged at ERROR level, only an exhausted budget stops the service. Use
+  error_tolerance=0 for the old behavior
+- New: smfc-client --verbose shows the per-device read error counts in a new
+  Errors column, displayed only when a device has failed a read since smfc was
+  started
+- New: read_errors and read_errors_total fields in the /snapshot device entries,
+  plus the smfc_device_temp_read_errors gauge and
+  smfc_device_temp_read_errors_total counter in /metrics
+- Changed: smfc man page lists the supported motherboards (X9, X10-X13/H10-H13,
+  X10QBi, X14/H14) like the README and the package description
+
 * Sun Jul 26 2026 Peter Sulyok <peter@sulyok.net> - 6.0.1-1
 - Fixed: X9 fan duty readback scaling on the generic_x9 platform; the raw
   0-255 BMC byte was reported as a percentage, so smfc-client displayed values

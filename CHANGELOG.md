@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [6.1.0] - unreleased
+## [6.1.0] - 2026.07.31
 
 ### New
 - New `error_tolerance=` parameter for the `[CPU]`, `[HD]`, `[NVME]` and `[GPU]` sections (int, default=3): the number of consecutive failed temperature reads tolerated per device. Behavior change: a transient temperature read error does not stop `smfc` any more. While a device is inside its budget its last known good temperature is reused and the failure is logged at ERROR level; only an exhausted budget stops the service with the original error, as before. Use `error_tolerance=0` for the old, intolerant behavior. This fixes the crash reported for disks waking up from STANDBY, where the kernel's `drivetemp` driver returns `EIO` for a second or two - see [issue #87](https://github.com/petersulyok/smfc/issues/87).
