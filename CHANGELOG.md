@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- `smfc-client` reported the wrong fan level for controllers that lose a [shared IPMI zone arbitration](https://github.com/petersulyok/smfc/blob/main/README.md#13-shared-ipmi-zone-arbitration). Both the `Fan controllers` table and the `--verbose` block showed the level applied to the zone instead of the level the controller itself requested, so a losing controller contradicted its own `Window:`/`Curve:` lines (e.g. an NVME controller at 39.9C displaying `Level: 74 %` while its curve maps that temperature to 35%). Each controller now reports its own request, and when the zone ended up at a different level that value is appended explicitly as `(zone N applied: Z %)`. Controllers on non-shared zones and the winner of a shared zone are unchanged.
+- Documentation of `smfc-client --verbose`: `shared=yes` was described as meaning that *another* controller is currently driving the row's IPMI zone. It marks participation in zone arbitration and is reported for every controller on a shared zone, the current winner included.
+
 ## [6.1.0] - 2026.07.31
 
 ### New

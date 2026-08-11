@@ -473,8 +473,11 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
     shared_str = "yes" if deferred else "no"
     # Cyan-paint just the [SECTION] tag — it carries the navigational signal. The rest of the
     # header line (type, zones, shared, polling) stays in default colour so the eye lands on
-    # the section name first instead of the whole row. 'shared=yes' means another controller
-    # is driving this row's zone right now (the deferred_apply flag is set internally).
+    # the section name first instead of the whole row. 'shared=yes' means this controller shares
+    # an IPMI zone with at least one other controller and therefore goes through zone arbitration
+    # (the deferred_apply flag, set once at startup). It is set for *every* participant including
+    # the one currently winning the zone — it is not a winner/loser indicator. To see who won,
+    # compare the block's Level with the "(zone N applied: …)" note next to it.
     tag = _wrap(f"[{section}]", BLUE, use_color)
     lines.append(f"{tag}  {type_label}  zone(s)={zones_str}  shared={shared_str}  "
                  f"polling={polling:.1f}s")
@@ -847,16 +850,18 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
         else:
             devices_str = str(int(c.get("device_count", 0)))
             temp_str = f"{float(c.get('last_temp_c', 0.0)):.1f} C"
-            first_zone = ipmi_zones[0] if ipmi_zones else None
-            zone_info = zones.get(str(first_zone), {}) if first_zone is not None else {}
-            level = zone_info.get("applied_level_pct")
-            level_str = f"{int(level):3d} %" if level is not None else f"{int(c.get('last_level_pct', 0)):3d} %"
+            # The level this controller *requested*, not the level its zone ended up at. On a
+            # shared zone the arbiter applies max(level) across contributors, so a losing
+            # controller's own request differs from the applied zone level — showing the latter
+            # here would contradict the controller's own Temp value and curve. The applied
+            # per-zone levels have their own table ("IPMI zones (live)") at the end of the report.
+            level_int = int(c.get("last_level_pct", 0))
+            level_str = f"{level_int:3d} %"
             t_min = float(c.get("temp_min_c", 0.0))
             t_max = float(c.get("temp_max_c", 0.0))
             l_min = int(c.get("level_min_pct", 0))
             l_max = int(c.get("level_max_pct", 0))
             temp_color = _band_color(float(c.get("last_temp_c", 0.0)), t_min, t_max)
-            level_int = int(level) if level is not None else int(c.get("last_level_pct", 0))
             level_color = _band_color(float(level_int), float(l_min), float(l_max))
         rows.append({
             "section": section, "type": type_label,
@@ -929,8 +934,11 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
                 arr_str = sb.get("array_state", "")
                 standby_count = int(sb.get("standby_count", sum(1 for s in states if s)))
                 standby = (int(sb.get("limit", 1)), arr_str, standby_count, len(states))
-            # Current temp/level — pulled from the snapshot's cached aggregates, with the live
-            # zone level taking precedence (matches the Controllers table's level cell).
+            # Current temp/level — pulled from the snapshot's cached aggregates. The Level cell is
+            # this controller's own request so that "Temp -> Level" stays a faithful reading of the
+            # curve printed directly above it. When the zone it drives ended up at a different level
+            # (shared zone: another controller asked for more), that applied level is appended as an
+            # explicit note rather than silently replacing this controller's value.
             t_now = float(c.get("last_temp_c", 0.0))
             t_min = float(c.get("temp_min_c", 0.0))
             t_max = float(c.get("temp_max_c", 0.0))
@@ -939,11 +947,14 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
             last_temp_str = _wrap(f"{t_now:.1f} C", _band_color(t_now, t_min, t_max), use_color)
             first_zone = ipmi_zones[0] if ipmi_zones else None
             zone_info = zones.get(str(first_zone), {}) if first_zone is not None else {}
-            level = zone_info.get("applied_level_pct")
-            level_int = int(level) if level is not None else int(c.get("last_level_pct", 0))
+            zone_level = zone_info.get("applied_level_pct")
+            level_int = int(c.get("last_level_pct", 0))
             last_level_str = _wrap(f"{level_int:3d} %",
                                    _band_color(float(level_int), float(l_min), float(l_max)),
                                    use_color)
+            if zone_level is not None and int(zone_level) != level_int:
+                note = f"   (zone {first_zone} applied: {int(zone_level):3d} %)"
+                last_level_str += _wrap(note, DIM, use_color)
             # Curve breakpoints (empty list when controller is in legacy linear mode). Stored
             # as nested lists in JSON; convert each inner list to a tuple for the renderer.
             curve_pairs = [(int(p[0]), int(p[1])) for p in (c.get("control_function") or [])]

@@ -1521,6 +1521,66 @@ class TestFormatReportFromSnapshot:
         # No control_function configured for the sample CPU — the Curve: line is suppressed.
         assert "Curve:" not in cpu_block
 
+    def test_shared_zone_loser_reports_its_own_level(self) -> None:
+        """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
+        - build a sample snapshot where CPU and NVME both drive IPMI zone 0 (deferred_apply=True)
+        - pin CPU as the arbitration winner (last_level_pct=74) and NVME as the loser (last_level_pct=35)
+        - set the applied zone level to 74% (what the arbiter actually wrote to the BMC)
+        - call _format_report_from_snapshot() with use_color=False and verbose=True
+        - ASSERT: the NVME row of the Controllers table shows the controller's own 35%, not the zone's 74%
+        - ASSERT: the NVME block's Temp/Level line shows 35%, staying consistent with its own curve
+        - ASSERT: the NVME block annotates the diverging applied zone level as '(zone 0 applied:  74 %)'
+        - ASSERT: the winning CPU row still shows 74%
+        """
+        snap = _sample_snapshot_dict()
+        snap["fan_controllers"][0].update({
+            "ipmi_zones": [0], "last_temp_c": 65.4, "last_level_pct": 74, "deferred_apply": True,
+            "temp_min_c": 40.0, "temp_max_c": 75.0, "level_min_pct": 35, "level_max_pct": 100,
+        })
+        nvme = {
+            "section": "NVME", "type": "nvme", "enabled": True, "ipmi_zones": [0], "device_count": 1,
+            "polling": 2.0, "last_temp_c": 39.9, "last_level_pct": 35, "deferred_apply": True,
+            "temp_min_c": 38.0, "temp_max_c": 65.0, "level_min_pct": 35, "level_max_pct": 100,
+            "devices": [{"name": "/dev/disk/by-id/nvme-CT4000P3PSSD8", "temp_c": 39.9}],
+        }
+        snap["fan_controllers"].append(nvme)
+        snap["zones"]["0"] = {"applied_level_pct": 74}
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        # Controllers table: the losing controller reports what it asked for, not what the zone got.
+        nvme_row = [ln for ln in out.splitlines() if ln.strip().startswith("NVME")][0]
+        assert " 35 %" in nvme_row
+        assert " 74 %" not in nvme_row
+        # Verbose block: Temp -> Level stays a faithful reading of the controller's own curve, and
+        # the diverging applied zone level is called out explicitly instead of replacing it.
+        nvme_block = out.split("[NVME]", 1)[1].split("\n\n", 1)[0]
+        assert "Level:  35 %" in nvme_block
+        assert "(zone 0 applied:  74 %)" in nvme_block
+        # The arbitration winner is unaffected.
+        cpu_row = [ln for ln in out.splitlines() if ln.strip().startswith("CPU")][0]
+        assert " 74 %" in cpu_row
+
+    def test_shared_zone_winner_has_no_applied_level_note(self) -> None:
+        """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
+        - build a sample snapshot where CPU and NVME both drive IPMI zone 0 (deferred_apply=True)
+        - pin CPU as the arbitration winner whose own level equals the applied zone level (74%)
+        - call _format_report_from_snapshot() with use_color=False and verbose=True
+        - ASSERT: the CPU block shows its own level of 74%
+        - ASSERT: no '(zone ... applied: ...)' note is rendered when the two levels agree
+        - ASSERT: shared=yes is still reported for the winner (it participates in arbitration)
+        """
+        snap = _sample_snapshot_dict()
+        snap["fan_controllers"][0].update({
+            "ipmi_zones": [0], "last_temp_c": 65.4, "last_level_pct": 74, "deferred_apply": True,
+            "temp_min_c": 40.0, "temp_max_c": 75.0, "level_min_pct": 35, "level_max_pct": 100,
+        })
+        snap["zones"]["0"] = {"applied_level_pct": 74}
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=False, verbose=True)
+        cpu_block = out.split("[CPU]", 1)[1].split("\n\n", 1)[0]
+        assert "Level:  74 %" in cpu_block
+        assert "applied:" not in cpu_block
+        # 'shared=yes' marks arbitration participation, not defeat — the winner carries it too.
+        assert "shared=yes" in cpu_block
+
     def test_verbose_block_shows_curve_when_control_function_set(self) -> None:
         """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
         - build a sample snapshot dict with control_function set on the CPU controller plus matching window fields
