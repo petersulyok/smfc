@@ -293,7 +293,7 @@ class TestSmoke:
         mocker.patch("smfc.HdFc.__init__", _make_hdfc_init(my_td, cmd_smart))
         mocker.patch("smfc.NvmeFc.__init__", _make_nvmefc_init(my_td))
         mocker.patch("smfc.GpuFc.__init__", _make_gpufc_init(cmd_nvidia, cmd_rocm, scenario.gpu))
-        sys.argv = ("smfc -o 0 -l 4 -ne -nd -c " + new_config_file).split()
+        sys.argv = ("smfc -o 0 -l 4 -nd -c " + new_config_file).split()
         service = Service()
 
         # Start background thread to update temperatures periodically.

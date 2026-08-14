@@ -78,6 +78,17 @@ def _has_real_traceback(log: str) -> bool:
     return not any("KeyboardInterrupt" in ln for ln in last_lines)
 
 
+def _expected_exit_level(scn) -> int:
+    """Return the `[Ipmi] exit_level=` value of the scenario's configuration file.
+
+    The scenario files are the single source of truth: a scenario that does not set the parameter falls back to
+    the smfc default (100%), so adding `exit_level=` to a scenario automatically changes what is asserted.
+    """
+    conf = (PROJECT_ROOT / "test" / "scenarios" / scn.conf).read_text(encoding="utf-8")
+    m = re.search(r"^\s*exit_level\s*=\s*(-?\d+)", conf, re.MULTILINE)
+    return int(m.group(1)) if m else 100
+
+
 def run_scenario(name: str, duration: int) -> tuple:
     """Launch one scenario, run up to ``duration`` seconds, return (exit_code, log_text).
 
@@ -124,6 +135,7 @@ def run_scenario(name: str, duration: int) -> tuple:
 
 
 def check(name: str, scn: Scenario, duration: int) -> tuple:
+    # pylint: disable=too-many-branches,too-many-statements
     """Run a scenario and return (status_str, signal_dict, log_text)."""
     exit_code, log = run_scenario(name, duration)
 
@@ -146,6 +158,10 @@ def check(name: str, scn: Scenario, duration: int) -> tuple:
         "const_init":   bool(re.search(r"\bCONST(?::\d+)? fan controller was initialized", log)),
         # Temperature drift evidence: distinct per-device temperature observations.
         "temps_seen":   len(set(re.findall(r"new temperature > [\d.]+C|per-device temps=\[[^\]]+\]", log))),
+        # [Ipmi] exit_level= applied by Service.exit_func() at interpreter exit. The level is the one
+        # configured in the scenario file, so the expected value is looked up per scenario below.
+        "exit_level":   (int(m.group(1))
+                         if (m := re.search(r"smfc terminated: fans set to (\d+)% in zone\(s\)", log)) else None),
     }
 
     problems = []
@@ -156,6 +172,10 @@ def check(name: str, scn: Scenario, duration: int) -> tuple:
     if not sig["interrupt"]:                                  problems.append("no-clean-interrupt")
     if sig["traceback"]:                                      problems.append("traceback-during-run")
     if sig["temp_read"] < 1:                                  problems.append("no-temp-read")
+    # Service.exit_func() must apply the configured [Ipmi] exit_level= to every controlled zone. This runs at
+    # interpreter exit, after pytest tore down its capture, but the output still reaches the captured stdout of
+    # the harness process. It is the only end-to-end coverage of the platform-specific end() implementations.
+    if sig["exit_level"] != _expected_exit_level(scn):         problems.append(f"exit-level={sig['exit_level']}")
     # pytest exits 2 on KeyboardInterrupt, 130 on SIGINT signal-exit. -2 / -SIGINT can show up on
     # some platforms when the process is signalled and Popen returns the negative signal number.
     if exit_code not in (2, 130, -2, -signal.SIGINT):         problems.append(f"exit={exit_code}")
@@ -237,8 +257,8 @@ def check(name: str, scn: Scenario, duration: int) -> tuple:
     #     the exit handler then reacts to
     # The service dies on that re-raised exception, so the generic Ctrl-C / exit-code / traceback
     # checks do not apply here — that traceback IS the documented behavior. The exit handler's own
-    # "all fans set to the 100% speed" step runs at interpreter exit, after pytest has torn down its
-    # capture, so it is not visible here; it is covered by the Service.exit_func unit tests.
+    # exit_level step still runs at interpreter exit and is asserted by the generic exit-level check
+    # above: this scenario is the error-exit coverage of Service.exit_func().
     if name == "error_tolerance_exhausted":
         if "error_tolerance = 1" not in log:
             problems.append("error-tolerance-not-configured")
