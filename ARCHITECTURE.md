@@ -861,6 +861,14 @@ Top-level snapshot keys:
 
 Per-controller entry fields of note:
 
+- `last_level_pct` — the level this controller **requested** at its last
+  evaluation, which is not necessarily the level its zone runs at. On a shared
+  zone the arbiter applies `max(level)` across all contributors (§9), so a
+  losing controller's `last_level_pct` stays below
+  `zones[z]["applied_level_pct"]`. Consumers must keep the two apart: the
+  exporter emits them as separate series (`smfc_controller_level_percent` vs.
+  `smfc_zone_level_percent`), and smfc-client shows the request in the
+  controller row and the applied level in the `IPMI zones (live)` table.
 - `temp_min_c` / `temp_max_c` / `level_min_pct` / `level_max_pct` — always
   derived from the **active** steering envelope: the curve's first/last pair
   when `control_function` is set, otherwise the legacy `min_*` / `max_*`
@@ -959,7 +967,11 @@ guards the fetch; any failure falls back to the standalone path.
 (same classes as the service), reads temperatures live, and queries IPMI for
 fan levels and fan mode. Slower than the online path and requires access to
 `ipmitool` (and optionally `sudo`). The data source line reads
-`source: ipmitool (smfc service is not reachable)`.
+`source: ipmitool (smfc service is not reachable)`. Its controllers are built
+per invocation and the control loop never runs, so `last_level` is unpopulated:
+every `Level` cell falls back to the zone level read from the BMC
+(`_safe_zone_level()`), and the `(zone N applied: …)` annotation of the online
+path has no counterpart here.
 
 Both paths produce the same output structure:
 
@@ -967,11 +979,17 @@ Both paths produce the same output structure:
 2. **BMC block** — product name, fan mode. Verbose adds manufacturer, firmware,
    IPMI version, platform class.
 3. **Fan controllers table** — one row per controller: Section, Type, Zones,
-   Devices, Temp, Level. ANSI colour-banding (DIM/GREEN/YELLOW/RED) is applied
-   to Temp and Level cells against the controller's own steering window.
+   Devices, Temp, Level. On the online path `Level` is the controller's own
+   `last_level_pct` (§10.1), *not* the applied zone level: on a shared zone the
+   two differ for every controller that lost the arbitration, and showing the
+   zone level here would contradict the row's own Temp and window. ANSI
+   colour-banding (DIM/GREEN/YELLOW/RED) is applied to Temp and Level cells
+   against the controller's own steering window.
 4. **Verbose per-controller blocks** (with `--verbose`) — Window line
    (`T=[min..max]C → L=[min..max]%`), optional Curve line for advanced
-   control functions, current Temp/Level, optional Standby Guard line (HD),
+   control functions, current Temp/Level (again the controller's own request;
+   when the zone ended up at a different level it is appended as
+   `(zone N applied: Z %)`), optional Standby Guard line (HD),
    indented per-device temperature list. The device table has two conditional
    columns: `State` (HD with standby guard) and `Errors`, the device's lifetime
    failed-read count (§7.1.4), rendered only when at least one device of that

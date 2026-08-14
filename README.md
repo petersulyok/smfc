@@ -121,7 +121,9 @@ For shared zones, the control loop uses a two-phase approach in each iteration:
 
 Controllers on non-shared zones skip the apply phase entirely -- they execute their own IPMI calls directly during the compute phase, just like they would if no sharing existed.
 
-This means the hottest component always wins on a shared zone. For example, if HD fan controller wants 45% on zone 1 and NVME fan controller wants 70% on the same zone, `smfc` will set zone 1 to 70%. When the NVME cools down below the HD temperature, the HD controller's level will take over.
+This means the **highest requested fan level wins** on a shared zone. For example, if the HD fan controller wants 45% on zone 1 and the NVME fan controller wants 70% on the same zone, `smfc` will set zone 1 to 70%. When the NVME cools down and its curve asks for less than 45%, the HD controller's level takes over again.
+
+Usually this is also the hottest component, so "the hottest wins" is a good rule of thumb -- but "hottest" here means *hottest relative to its own limits*, not the highest number of degrees. Every controller compares its own temperature against its own `[min_temp..max_temp]` window, so degrees are not comparable between controllers: with the default windows a hard disk at 44 °C is nearly at its 46 °C ceiling and asks for close to `max_level`, while a CPU at 45 °C sits halfway through its 30--60 °C window and asks for roughly the middle of its range. The disk wins the zone even though it is the cooler device. Only the requested percentages are comparable, and those are what `smfc` compares.
 
 The CONST fan controller also participates in the arbitration -- its constant level acts as a guaranteed minimum for its zone(s). For example, configuring `[CONST] level=40` on zone 1 ensures that zone never drops below 40%, even if all temperature-driven controllers would request a lower value.
 
@@ -1041,6 +1043,8 @@ IPMI zones (live)
   2        50 %
 ```
 
+The `Level` column shows what each controller asks for, while the `IPMI zones (live)` table shows what each zone actually runs at. The two agree here, but on a shared zone only the winner's request is applied, so an overruled controller's `Level` stays below its zone. Run with `-V` to see which controller won.
+
 With `--verbose` (`-V`) the full report expands the BMC fingerprint, adds the service `uptime`, and emits one block per enabled fan controller with its steering window, active curve (when a `control_function` is configured), and per-device temperatures. The HD controller's `Standby Guard` line is folded into its block; CONST controllers stay in the Fan controllers table but don't get their own block (no devices, no curve):
 
 ```
@@ -1091,11 +1095,43 @@ IPMI zones (live)
   2        50 %
 ```
 
+On a **shared IPMI zone** (see [chapter 1.3](https://github.com/petersulyok/smfc/blob/main/README.md#13-shared-ipmi-zone-arbitration)) the report keeps what a controller *asked for* separate from what its zone actually got. Below, CPU and NVME both drive zone 0: the CPU wins the arbitration with 74%, while the NVME -- whose window maps 39.9 °C to its 35% floor -- is overruled. The `Level` column and the `Temp: → Level:` line always show the controller's **own request**, so they never contradict the `Window:`/`Curve:` lines; the level that actually reached the BMC is appended to the overruled controller's block as `(zone 0 applied:  74 %)`. Only the banner and BMC block are omitted here:
+
+```
+Fan controllers
+  Section   Type    Zones     Devices  Temp      Level
+  -------   ----    -----     -------  ------    -----
+  CPU       cpu     [0]       1        65.4 C     74 %
+  NVME      nvme    [0]       3        39.9 C     35 %
+
+[CPU]  cpu  zone(s)=[0]  shared=yes  polling=2.0s
+  Window: T=[40..75]C → L=[35..100]%
+  Curve:  40→35, 55→50, 70→80, 75→100
+  Temp:   65.4 C  →  Level:  74 %
+  Device  Temp
+  ------  ------
+  cpu0    65.4 C
+
+[NVME]  nvme  zone(s)=[0]  shared=yes  polling=2.0s
+  Window: T=[38..65]C → L=[35..100]%
+  Temp:   39.9 C  →  Level:  35 %   (zone 0 applied:  74 %)
+  Device                              Temp
+  ----------------------------------  ------
+  nvme-CT4000P3PSSD8_2412E7B1C4A9     39.9 C
+  nvme-CT4000P3PSSD8_2412E7B1D5F2     37.9 C
+  nvme-ADATA_LEGEND_800_2Q7714KX3ZTM  38.9 C
+
+IPMI zones (live)
+  Zone    Level
+  ----    -----
+  0        74 %
+```
+
 A few things to notice in the verbose block:
 
 - **`shared=yes/no`** tells you whether this controller shares its IPMI zone with another controller and therefore goes through [zone arbitration](https://github.com/petersulyok/smfc/blob/main/README.md#13-shared-ipmi-zone-arbitration). It is reported for *every* participant on a shared zone, including the one currently winning it -- it is not a winner/loser flag. To see who is actually driving the zone, compare the block's `Level:` with the `(zone N applied: ...)` note described below.
 - **`Window:` and `Curve:`** describe the active steering curve. When a `control_function=...` is configured, `Window:` shows the curve's actual `[temp_min..temp_max] → [level_min..level_max]` envelope (not the legacy `min_temp/max_temp` keys, which the runtime ignores in this mode), and `Curve:` lists the breakpoint pairs directly. Controllers without a `control_function` (legacy linear mode) skip the `Curve:` line — the `Window:` already says everything.
-- **`Temp: X → Level: Y`** is the aggregated temperature the curve was evaluated against and the level *this controller requested* as a result -- so it always agrees with the `Window:`/`Curve:` lines above it. On a shared zone the arbiter applies the highest request across all contributors, so a losing controller's request is not what reaches the BMC; in that case the applied zone level is appended as `(zone N applied: Z %)`. The note is omitted when the two agree (non-shared zones, and the winner of a shared zone). The applied level of every zone is also listed in the `IPMI zones (live)` table at the end of the report. With colours on, both cells carry the band colour against the same window — at a glance you see whether the controller is idle, working, ramping, or maxed out.
+- **`Temp: X → Level: Y`** is the aggregated temperature the curve was evaluated against and the level *this controller requested* as a result -- so it always agrees with the `Window:`/`Curve:` lines above it. On a shared zone the arbiter applies the highest request across all contributors, so a losing controller's request is not what reaches the BMC; in that case the applied zone level is appended as `(zone N applied: Z %)`. The note is omitted when the two agree (non-shared zones, and the winner of a shared zone). The applied level of every zone is also listed in the `IPMI zones (live)` table at the end of the report. `--standalone` mode cannot show who won the zone: it reports the current state only, so every controller simply displays its zone's level and the `(zone N applied: ...)` note never appears. With colours on, both cells carry the band colour against the same window — at a glance you see whether the controller is idle, working, ramping, or maxed out.
 - **`Device names`** for HD and NVMe controllers are shown as the path basename (e.g. `ata-WDC_WD120EFAX-68UNTN0_99GMFQVW` instead of `/dev/disk/by-id/ata-WDC_WD120EFAX-68UNTN0_99GMFQVW`) so per-disk rows stay scannable. The snapshot JSON and Prometheus labels still carry the full stable-id paths.
 - **`Standby Guard`** appears as a single line inside the `[HD]` block when the feature is enabled; the per-disk `STANDBY`/`ACTIVE` annotation lives in the right-most column of that block's device table. Disks in standby render in dim grey because the temperature reading is stale (smartctl is skipped while a disk sleeps).
 - **`Errors`** is a *conditional* column of the verbose blocks, so it needs `-V`: the default summary has no per-device rows at all. It only appears when at least one device of that controller has failed a temperature read since `smfc` started (see [chapter 2.4](https://github.com/petersulyok/smfc/blob/main/README.md#24-tolerating-transient-temperature-read-errors)). It then shows the lifetime failure count of every device of the controller, so the failing one stands out against its healthy neighbours, and non-zero values are highlighted. On a healthy machine the column is not rendered at all. Note it is only available in online mode: in `--standalone` mode the client builds its own controllers and has no history, so a failing read shows up as an `ERROR` temperature cell instead.
