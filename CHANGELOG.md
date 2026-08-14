@@ -5,25 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [6.2.0] - 2026.08.14
 
 ### Added
-- New `exit_level=` parameter in the `[Ipmi]` section (int, `[-1..100]`%, default=`100`). It is the fan level applied to all configured IPMI zones when the service terminates. The special value `-1` means "do not change the fan levels", so the zones stay at the last applied level. On X14 motherboards the level is applied and then manual fan control is released, so automatic BMC fan control is restored (see the README for the details of this platform difference).
+- New `exit_level=` parameter in the `[Ipmi]` section (int, `[-1..100]`%, default=`100`). It is the fan level applied to all configured IPMI zones when the service terminates. The special value `-1` means "do not change the fan levels", so the zones stay at the last applied level. On X14 motherboards the level is applied and then manual fan control is released, so automatic BMC fan control is restored - see [README chapter 1.5](https://github.com/petersulyok/smfc/blob/main/README.md#15-service-termination) and [chapter 6](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds) for the details of this platform difference. This parameter was added while fixing [issue #118](https://github.com/petersulyok/smfc/issues/118).
 
 ### Changed
-- **The documented safe shutdown now really covers every exit.** Fan levels were restored through an `atexit` handler only, and CPython does not run `atexit` callbacks when the process is terminated by SIGTERM, which is the default kill signal of systemd. As a result nothing happened on `systemctl stop` or `systemctl restart`: the BMC was left in FULL mode at the last applied duty cycle with no component regulating it, which is exactly the state FULL mode is not safe in. `smfc` now installs a SIGTERM handler, so a normal service stop performs an ordinary interpreter shutdown and the exit level is applied. If you prefer the previous behavior, set `exit_level=-1`. ([#118](https://github.com/petersulyok/smfc/issues/118))
+- The section headings of this changelog use the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) categories consistently now (`Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`). The earlier `New`, `New/Added`, `Fix` and `Change` headings were renamed accordingly in all releases, the entries themselves are unchanged.
 - The fan mode is not changed at exit any more. `smfc` is already running in FULL mode at that point, so the redundant `set_fan_mode()` call only cost a `fan_mode_delay` long sleep on every service stop.
 
 ### Deprecated
 - The `-ne` command-line option. It is still accepted and still means "no fan level change at exit" (it is equivalent to `exit_level=-1`), but it logs a deprecation warning and it will be removed in a future release.
 
 ### Fixed
+- The documented safe shutdown did not happen on a normal service stop. Fan levels were restored through an `atexit` handler only, and CPython does not run `atexit` callbacks when the process is terminated by SIGTERM, which is the default kill signal of systemd. As a result nothing happened on `systemctl stop` or `systemctl restart`: the BMC was left in FULL mode at the last applied duty cycle with no component regulating it, which is exactly the state FULL mode is not safe in. `smfc` installs a SIGTERM handler now, so a normal service stop performs an ordinary interpreter shutdown and the configured `exit_level=` is applied. If you prefer the previous behavior, set `exit_level=-1`. See [issue #118](https://github.com/petersulyok/smfc/issues/118).
 - `smfc-client` reported the wrong fan level for controllers that lose a [shared IPMI zone arbitration](https://github.com/petersulyok/smfc/blob/main/README.md#13-shared-ipmi-zone-arbitration). Both the `Fan controllers` table and the `--verbose` block showed the level applied to the zone instead of the level the controller itself requested, so a losing controller contradicted its own `Window:`/`Curve:` lines (e.g. an NVME controller at 39.9C displaying `Level: 74 %` while its curve maps that temperature to 35%). Each controller now reports its own request, and when the zone ended up at a different level that value is appended explicitly as `(zone N applied: Z %)`. Controllers on non-shared zones and the winner of a shared zone are unchanged.
 - Documentation of `smfc-client --verbose`: `shared=yes` was described as meaning that *another* controller is currently driving the row's IPMI zone. It marks participation in zone arbitration and is reported for every controller on a shared zone, the current winner included.
 
 ## [6.1.0] - 2026.07.31
 
-### New
+### Added
 - New `error_tolerance=` parameter for the `[CPU]`, `[HD]`, `[NVME]` and `[GPU]` sections (int, default=3): the number of consecutive failed temperature reads tolerated per device. Behavior change: a transient temperature read error does not stop `smfc` any more. While a device is inside its budget its last known good temperature is reused and the failure is logged at ERROR level; only an exhausted budget stops the service with the original error, as before. Use `error_tolerance=0` for the old, intolerant behavior. This fixes the crash reported for disks waking up from STANDBY, where the kernel's `drivetemp` driver returns `EIO` for a second or two - see [issue #87](https://github.com/petersulyok/smfc/issues/87).
 - `smfc-client --verbose` shows the per-device read error counts in a new, conditional `Errors` column: it appears only when at least one device of that controller has failed a temperature read since `smfc` was started, so the output of a healthy system is unchanged.
 - The per-device read errors are also published: new `read_errors` (current consecutive streak) and `read_errors_total` (failures since startup) fields in the `/snapshot` device entries, and the matching `smfc_device_temp_read_errors` gauge and `smfc_device_temp_read_errors_total` counter in `/metrics`, so these events are visible in Grafana and not only in the log. Both counters appear in the log messages as well: `HD: temperature read failed, reusing 33.0C (device=/dev/disk/by-id/..., 2/3, total=9): ...`.
@@ -38,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [6.0.1] - 2026.07.26
 
-### New
+### Added
 - Arch Linux users can install `smfc` from the [AUR package](https://aur.archlinux.org/packages/smfc) (community-maintained by `urirocky`, based on v6.0.0) — see new [README chapter 9.3](https://github.com/petersulyok/smfc/blob/main/README.md#93-arch-linux-aur-package-installation).
 - New [`Docker.md` chapter](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md#smfc-client-in-docker) about `smfc-client` in the docker images: how to run it in the running container (`docker exec`), live snapshot vs standalone mode, and how to start it in a separate container.
 
@@ -59,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [6.0.0] - 2026.07.09
 
-### New
+### Added
 - Signed [APT repository](https://petersulyok.github.io/smfc-deb/) for DEB packages, hosted at [`petersulyok/smfc-deb`](https://github.com/petersulyok/smfc-deb). Users on Debian/Ubuntu/Proxmox/Mint/Raspberry Pi OS can now install `smfc` directly with `apt install smfc` after adding the repository — see [README chapter 9.1](https://github.com/petersulyok/smfc/blob/main/README.md#91-deb-package-installation).
 - Signed [DNF repository](https://petersulyok.github.io/smfc-rpm/) for RPM packages, hosted at [`petersulyok/smfc-rpm`](https://github.com/petersulyok/smfc-rpm). Users on Fedora/RHEL/Rocky/AlmaLinux/CentOS Stream/openSUSE can now install `smfc` directly with `dnf install smfc` after adding the repository — see [README chapter 9.2](https://github.com/petersulyok/smfc/blob/main/README.md#92-rpm-package-installation).
 - New companion `smfc-client` tool showing a live read-only snapshot of controllers, fan levels, IPMI zones, and standby state — works either against a running `smfc` service or fully standalone. See [README chapter 14](https://github.com/petersulyok/smfc/blob/main/README.md#14-smfc-client).
@@ -85,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.4.0] - 2026.04.30
 
-### New
+### Added
 - AMD GPU support: `gpu_type=amd` enables temperature monitoring via `rocm-smi` - based on [PR #112](https://github.com/petersulyok/smfc/pull/112) by @GCoffland
   - New `amd_temp_sensor=` parameter selects the temperature sensor (0-junction, 1-edge, 2-memory, default=0)
   - New `rocm_smi_path=` parameter specifies the path to the `rocm-smi` command
@@ -114,7 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.3.0] - 2026.04.02
 
-### New
+### Added
 - Temperature smoothing feature added to all temperature-based fan controllers (CPU, HD, NVME, GPU). The new `smoothing=` configuration parameter enables a moving average window for temperature readings, reducing fan speed oscillation caused by brief temperature spikes.
 
 ### Changed
@@ -129,7 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.2.0] - 2026.03.30
 
-### New
+### Added
 - Beta support added for some Supermicro X9 motherboards, where fan level can be set with the next IPMI raw command:
   ```
   ipmitool raw 0x30 0x91 0x5A 0x03 0x10 0x80
@@ -146,7 +147,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.1.2] - 2026.03.28
 
-### New
+### Added
 - New [`./bin/update_version_number.sh`](https://github.com/petersulyok/smfc/blob/main/bin/update_version_number.sh) script created to update all release specific files.
 
 ### Fixed
@@ -162,7 +163,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.1.0] - 2026.03.28
 
-### New
+### Added
 - BMC information (device ID, firmware revision, manufacturer, product info) is retrieved and logged during IPMI initialization.
   ```
   BMC information:
@@ -188,7 +189,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.0.0] - 2026.03.04
 
-### New
+### Added
 - Shared IPMI zones implemented, multiple fan controllers can share an IPMI zone (inspired by PR [#89](https://github.com/petersulyok/smfc/pull/89) by @fz6)
 - New NVME fan controller added.
 - Python 3.14 support added.
@@ -223,19 +224,19 @@ then `smfc` can stop with an error. It can happen if the BMC and the PC are boot
 
 ## [v4.1.1] - 2025-09-30 
 
-### Change
+### Changed
 - Improved error messages for [HD zone] if temperature value cannot be read, the problematic disk name is also displayed.  
 
 
 ## [v4.1.0] - 2025-08-28 
 
-### New
+### Added
 - Linux man page added to `smfc`, part of the installation.
 - Documentation updates.
 - Delays added between starting fan controllers at startup (to provide more time for fan speed changes)
 - `install.sh`: new dependencies added (`gzip`, `mandb` commands).
 
-### Change
+### Changed
 - `uv` dependencies changed in `pyproject.toml`.
 - `install.sh`: pip errors visible again.
 
@@ -246,7 +247,7 @@ then `smfc` can stop with an error. It can happen if the BMC and the PC are boot
 ## [v4.0.0] - 2025-07-08 Final Release 
 The final release is identical with the beta-14 version and some documentation updates. Here is a high level summary of new features and changes:
 
-### New
+### Added
 - `smfc` is using `udev` (`pyudev` package) for device management (thanks to @abbaad): 
   - Automatic discovery of HWMON files for both Intel and AMD CPUs, including the number of CPUs, no manual configuration required. 
   - Automatic discovery of HWMON files for HDDs/SSDs based on `hd_names=` parameter, including the number of HDDS/SSDs, no manual configuration required.
@@ -260,7 +261,7 @@ The final release is identical with the beta-14 version and some documentation u
 - `smfc` implements free IPMI zone assignment, where a fan controller can control fans on one or more IPMI zones (see `ipmi_zone=` parameter)
 - `CHANGELOG.md` added
 
-### Change
+### Changed
 - `smfc` installer moved to `bin` folder, and can install remotely:
 
     `curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh|bash /dev/stdin --keep-config --verbose`
@@ -283,26 +284,26 @@ The final release is identical with the beta-14 version and some documentation u
 - Unused scripts from `bin` folder 
 - `hddtemp` removed
 
-### Fix
+### Fixed
 - Support of AMD CPUs (without manual configuration) - [issue #25](https://github.com/petersulyok/smfc/issues/25)
 
 
 ## [v4.0.0b14] - 2025-06-22 Pre-release 
 
-### Fix
+### Fixed
 - Fix: [issue #76](https://github.com/petersulyok/smfc/issues/76) corrected, where a parsing error blocked HdZone's initialization for newer SCSI disks.
 
 
 ## [v4.0.0b13] - 2025-06-06 Pre-release 
 
-### Fix
+### Fixed
 - Fix: test_08_service.py stopped running if `nvidia-smi` was not installed.
 - Fix: pylint warning
 
 
 ## [v4.0.0b12] - 2025-06-06 Pre-release 
 
-### New
+### Added
 - GPU zone fan controller is enabled in docker (please read [Docker.md](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md))
 - There are two docker images available: standard, gpu-enabled
 - Dependency check: check of `nvidia-smi` added
@@ -310,7 +311,7 @@ The final release is identical with the beta-14 version and some documentation u
 
 ## [v4.0.0b11] - 2025-06-02 Pre-release 
 
-### New
+### Added
 - Docker building script updated to BuildKit
 - New docker image uploaded to docker hub (but GPU zone is still not working in docker)
 - New package uploaded to pypi.org
@@ -318,7 +319,7 @@ The final release is identical with the beta-14 version and some documentation u
 
 ## [v4.0.0b10] - 2025-05-23 Pre-release 
 
-### New
+### Added
 - A new fan controller, called CONST zone, was implemented to provide constant fan level in one or more IPMI zones. It does not have any temperature source
 and does not read any temperature. The zone configuration is the following:
 
@@ -358,7 +359,7 @@ level=50
 
 ## [v4.0.0b7] - 2025-05-18 Pre-release 
 
-### New/Added
+### Added
 - New GPU fan controller implemented for Nvidia video cards. A new section added to the configuration file.
 - Python package on `pypi.org` updated to v4.0.0b7
 - Docker image IS NOT updated!
@@ -366,7 +367,7 @@ level=50
 
 ## [v4.0.0b6] - 2025-05-06 Pre-release 
 
-### New/Added
+### Added
 - Further enhancement of **_Free zone assignment_** feature: multiple IPMI zones can be assigned to a fan controller.
 It means that `ipmi_zone=` parameter could be a (comma- or space-separated) list of integers. This configuration could
 be useful for server chassis or motherboard where the fans are cooling everything and the proper heat source needs
@@ -396,7 +397,7 @@ to be selected for all fans. For example:
 
 ## [v4.0.0b5] - 2025-04-21 Pre-release 
 
-### New/Added
+### Added
 - Free IPMI zone assignment feature implemented:
   - Any IPMI zone can be assigned to _CPU zone_ or _Hd Zone_, to support server motherboards having multiple IPMI zones,
 and to implement the former _Swapped zones_ feature in a more generic way.
@@ -411,14 +412,14 @@ and to implement the former _Swapped zones_ feature in a more generic way.
 ### Removed
 - `swapped_zones=` parameter is not used anymore, this feature can be used with free IPMI zone assignment. 
 
-### Fixed 
+### Fixed
 - `install.sh` cannot save the existing configuration file ([discussion #64](https://github.com/petersulyok/smfc/discussions/64))
 
 ## [v4.0.0b4] - 2025-04-18 
 
 This pre-release is available on the main branch, pypi.org, hub.docker.com (announced in discussion #64)
 
-### New/Added
+### Added
 - `smfc` is a Python Package.
 - `smfc` is uploaded to pypi.org, a GitHub workflow can publish that with each new release.
 - `smfc` is using `udev` (`pyudev`) for device management (thanks to @abbaad): 
@@ -432,7 +433,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 - A new docker image created, `4.0.0b4` version
 - `uv` is used for Python project management (`uv.lock` is part of version control)
 
-### Changed 
+### Changed
 - Changes in the manual installation script ([`./bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)):
   - moved to the `bin` folder.
   - script has several new command-line options (`-v`, `-k`).
@@ -464,7 +465,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v3.8.0] - 2025-03-15
 
-### New/Added
+### Added
 
 - Remote IPMI access is supported, see `[IPMI] remote_parameters=` in the configuration file (requested in [issue #27](https://github.com/petersulyok/smfc/issues/27))
 
@@ -476,7 +477,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v3.7.0] - 2025-01-17
 
-### New/Added
+### Added
 
 - `install.sh` adds all disks to your smfc.conf at installation time
 - `hddtemp_emu.sh` added if hddtemp is not available. This feature is available in docker, too.
@@ -510,7 +511,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v3.5.0] - 2024-05-21
 
-### New/Added
+### Added
 
 - checking run-time dependencies (kernel modules and external command) added to startup
 - X13 and AST2600 compatibility notes added to documentation
@@ -518,14 +519,14 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v3.4.0] - 2023-11-28
 
-### New/Added
+### Added
 
 - Docker support added, smfc docker image can be pulled from docker hub
 
 
 ## [v3.3.0] - 2023-11-09
 
-### New/Added
+### Added
 
 - Support for new Python 3.12
 - New emergency exit feature extended to all exit/exception situations (if IPMI management is already configured in smfc)
@@ -535,7 +536,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v3.2.0] - 2023-11-08
 
-### New/Added
+### Added
 
 - New emergency exit implemented for exceptions and runtime errors. It will switch all fans back to speed 100% if smfc terminates (fix for [issue #32](https://github.com/petersulyok/smfc/issues/32))
 
@@ -556,7 +557,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v3.1.0] - 2023-08-16
 
-### New/Added
+### Added
 
 - `install.sh` script can preserve the original configuration file (using `--keep-config` command-line option) during the installation
 
@@ -577,7 +578,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v3.0.0] - 2023-08-16
 
-### New/Added
+### Added
 
 - support for SAS/SCSI disks (with the help of hddtemp)
 - support for NVME SSDs
@@ -589,7 +590,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v2.5.0] - 2023-05-26
 
-### New/Added
+### Added
 
 - new log level defined for logging initial configuration.
 
@@ -607,7 +608,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v2.4.0] - 2023-05-19
 
-### New/Added
+### Added
 
 - Use of the configuration file parameters in the IPMI class was refactored, unit tests have been updated
 - new chapter added to the documentation about the HW compatibility
@@ -626,7 +627,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v2.3.0] - 2023-02-15
 
-### New/Added
+### Added
 
 - Swapped zones feature implemented (see [issue #7](https://github.com/petersulyok/smfc/issues/7)), smoke and unit tests are updated, the feature is documented
 - Documentation improved, [issue #12](https://github.com/petersulyok/smfc/issues/12) documented
@@ -650,7 +651,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v2.2.0] - 2022-11-04
 
-### New/Added
+### Added
 
 - GitHub workflow upgraded to the final Python 3.11.0
 - Configuration parameters of Python tools moved to `pyproject.toml` file
@@ -659,7 +660,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v2.1.0] - 2022-08-12
 
-### New/Added
+### Added
 
 - Minimum requirement changed to Python 3.7 (see [Issue #4](https://github.com/petersulyok/smfc/issues/4) for more details)
 - `flake8` and `pylint` warnings corrected
@@ -677,7 +678,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v2.0.0] - 2022-08-10
 
-### New/Added
+### Added
 
 - `hwmon_path=` parameter constructed automatically in both zones (the configuration file changed!)
 - Sample configuration files provided for different scenarios
@@ -695,7 +696,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v1.2.0] - 2022-03-27
 
-### New/Added
+### Added
 
 - IPMI scripts are updated.
 - Documentation extended, new picture added, typos fixed.
@@ -703,7 +704,7 @@ This pre-release is available on the main branch, pypi.org, hub.docker.com (anno
 
 ## [v1.1.0] - 2022-02-12
 
-### New/Added
+### Added
 
 - Support multiple CPUs.
 - Temperature calculation can be configured for multiple CPUs and HDDs. It can be minimum, average, and maximum value.

@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        6.1.0
+Version:        6.2.0
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -98,6 +98,25 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Fri Aug 14 2026 Peter Sulyok <peter@sulyok.net> - 6.2.0-1
+- Fixed: the documented safe shutdown did not happen on a normal service stop.
+  Fan levels were restored through an atexit handler only, and CPython does not
+  run atexit callbacks on SIGTERM, the default kill signal of systemd. Nothing
+  happened on systemctl stop or restart: the BMC was left in FULL mode at the
+  last applied level with nothing regulating it. smfc installs a SIGTERM
+  handler now (issue #118)
+- New: exit_level= parameter in the [Ipmi] section (int, [-1..100]%,
+  default=100), the fan level applied to all configured IPMI zones at service
+  termination. Use exit_level=-1 if smfc should not change the fan levels at
+  exit. On X14 motherboards the level is applied and then manual fan control is
+  released, so automatic BMC fan control is restored
+- Changed: the fan mode is not set at exit any more. smfc is already running in
+  FULL mode at that point, so the redundant call only added a fan_mode_delay
+  long sleep to every service stop
+- Deprecated: the -ne command line option. It is still accepted and still works
+  (it is equivalent to exit_level=-1), but it logs a deprecation warning and it
+  will be removed in 7.0.0
+
 * Fri Jul 31 2026 Peter Sulyok <peter@sulyok.net> - 6.1.0-1
 - New: error_tolerance= parameter for the [CPU], [HD], [NVME] and [GPU] sections
   (int, default=3), the number of consecutive failed temperature reads tolerated

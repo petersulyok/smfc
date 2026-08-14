@@ -1,4 +1,4 @@
-.TH SMFC 1 smfc\-6.1.0
+.TH SMFC 1 smfc\-6.2.0
 .SH NAME
 .B smfc
 \- Supermicro fan control for Linux (home) servers.
@@ -34,7 +34,9 @@ transient temperature read errors.
 Multiple controllers can share the same IPMI zone; the highest requested fan level wins.
 .TP
 .B Safety
-All fans are restored to 100% speed on service exit.
+All fans are set to the configured
+.I exit_level=
+(100% by default) on service exit, including a normal service stop.
 
 .SH OPTIONS
 .TP
@@ -69,7 +71,7 @@ use sudo command
 
 .TP
 .B -ne
-no fan speed recovery at exit
+deprecated, use the [Ipmi] exit_level=-1 configuration parameter instead
 
 .SH FILES
 .TP

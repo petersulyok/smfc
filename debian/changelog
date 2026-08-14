@@ -1,3 +1,25 @@
+smfc (6.2.0) unstable; urgency=medium
+
+  * Fixed: the documented safe shutdown did not happen on a normal service
+    stop. Fan levels were restored through an atexit handler only, and CPython
+    does not run atexit callbacks on SIGTERM, the default kill signal of
+    systemd. Nothing happened on systemctl stop or restart: the BMC was left in
+    FULL mode at the last applied level with nothing regulating it. smfc
+    installs a SIGTERM handler now (issue #118).
+  * New: exit_level= parameter in the [Ipmi] section (int, [-1..100]%,
+    default=100), the fan level applied to all configured IPMI zones at service
+    termination. Use exit_level=-1 if smfc should not change the fan levels at
+    exit. On X14 motherboards the level is applied and then manual fan control
+    is released, so automatic BMC fan control is restored.
+  * Changed: the fan mode is not set at exit any more. smfc is already running
+    in FULL mode at that point, so the redundant call only added a
+    fan_mode_delay long sleep to every service stop.
+  * Deprecated: the -ne command line option. It is still accepted and still
+    works (it is equivalent to exit_level=-1), but it logs a deprecation
+    warning and it will be removed in 7.0.0.
+
+ -- Peter Sulyok <peter@sulyok.net>  Fri, 14 Aug 2026 15:49:02 +0200
+
 smfc (6.1.0) unstable; urgency=medium
 
   * New: error_tolerance= parameter for the [CPU], [HD], [NVME] and [GPU]
