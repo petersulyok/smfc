@@ -104,7 +104,7 @@ class PlatformSpec:
     get_level_vectors: tuple                            # (zone, bmc_stdout, expected_level)
     bad_zones: tuple                                    # zones rejected by get/set_fan_level()
     start_calls: tuple                                  # expected start() calls (empty => no-op)
-    end_calls: tuple                                    # expected end() calls (empty => no-op)
+    end_calls: tuple                                    # expected end() calls after the level writes (empty => none)
     set_mode_valid: tuple                               # accepted set_fan_mode() values
     set_mode_invalid: tuple                             # rejected set_fan_mode() values
     set_level_cmd: Callable[[int, int], List[str]]      # (zone, wire_level) -> expected set_fan_level() args
@@ -309,18 +309,20 @@ class TestPlatforms:
         """Positive unit test for Platform.end() method. It contains the following steps:
         - applies to all platforms (Generic, GenericX9, GenericX14, X10qbi) via the parametrized PlatformSpec matrix
         - mock the ipmitool exec callback to record the sequence of issued commands
-        - build the platform via spec.make() and invoke end()
-        - ASSERT: exec callback is invoked exactly len(spec.end_calls) times when end_calls is non-empty
-        - ASSERT: exec callback is invoked with the platform's manual-mode disable ipmitool byte sequences
-        - ASSERT: exec callback is not invoked at all for platforms whose end() is a no-op
+        - build the platform via spec.make() and invoke end() with the first multi_vectors (zones, level) case
+        - ASSERT: the exit level is written to every requested zone with the platform's own level command and
+          wire encoding
+        - ASSERT: exec callback is invoked exactly once per zone, plus the platform's pre-write and post-write
+          calls (X10QBi chip setup, X14 manual-mode release)
+        - ASSERT: platforms releasing manual mode (X14) do so after the level writes, not before, otherwise the
+          BMC would take over and the level writes would be lost
         """
+        zones, level, wire = spec.multi_vectors[0]
         platform = spec.make(mock_exec)
-        platform.end()
-        if spec.end_calls:
-            assert mock_exec.call_count == len(spec.end_calls)
-            mock_exec.assert_has_calls(list(spec.end_calls))
-        else:
-            mock_exec.assert_not_called()
+        platform.end(list(zones), level)
+        expected_calls = [call(spec.set_level_cmd(zone, wire)) for zone in zones]
+        assert mock_exec.call_count == spec.multi_extra_calls + len(expected_calls) + len(spec.end_calls)
+        mock_exec.assert_has_calls(expected_calls + list(spec.end_calls))
 
     @pytest.mark.parametrize("spec, mode", _cases("set_mode_valid"))
     def test_set_fan_mode(self, spec: PlatformSpec, mode: int, mock_exec: MagicMock) -> None:

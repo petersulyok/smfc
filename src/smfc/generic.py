@@ -27,8 +27,10 @@ class GenericPlatform(Platform):
     def start(self) -> None:
         """No manual-mode preparation needed on this platform."""
 
-    def end(self) -> None:
-        """No cleanup needed on this platform."""
+    def end(self, zones: List[int], level: int) -> None:
+        """Apply the exit fan level to the configured zones. The BMC stays in FULL fan mode, so the fans keep
+        this level until something else changes it."""
+        self.set_multiple_fan_levels(zones, level)
 
     def set_fan_mode(self, mode: int) -> None:
         """Set the IPMI fan mode."""

@@ -387,8 +387,10 @@ class TestIpmiConfigParsing:
         - ASSERT: ipmi.remote_parameters equals Config.DV_IPMI_REMOTE_PARAMETERS
         - ASSERT: ipmi.platform_name equals Config.DV_IPMI_PLATFORM_NAME
         - ASSERT: ipmi.enforce_fan_mode equals Config.DV_IPMI_ENFORCE_FAN_MODE
+        - ASSERT: ipmi.exit_level equals Config.DV_IPMI_EXIT_LEVEL
         """
         cfg = create_config("[Ipmi]\n")
+        assert cfg.ipmi.exit_level == Config.DV_IPMI_EXIT_LEVEL
         assert cfg.ipmi.command == Config.DV_IPMI_COMMAND
         assert cfg.ipmi.fan_mode_delay == Config.DV_IPMI_FAN_MODE_DELAY
         assert cfg.ipmi.fan_level_delay == Config.DV_IPMI_FAN_LEVEL_DELAY
@@ -399,7 +401,7 @@ class TestIpmiConfigParsing:
     def test_ipmi_custom_values(self, create_config):
         """Positive unit test for the [Ipmi] section parser inside Config.__init__(). It contains the following steps:
         - mock the on-disk config via the create_config fixture (tmp_path-backed)
-        - write [Ipmi] with all six keys populated and instantiate Config
+        - write [Ipmi] with all seven keys populated and instantiate Config
         - inspect every IpmiConfig attribute
         - ASSERT: ipmi.command equals "/opt/ipmitool"
         - ASSERT: ipmi.fan_mode_delay equals 5
@@ -407,6 +409,7 @@ class TestIpmiConfigParsing:
         - ASSERT: ipmi.remote_parameters equals the written string
         - ASSERT: ipmi.platform_name equals "X10QBi"
         - ASSERT: ipmi.enforce_fan_mode is False
+        - ASSERT: ipmi.exit_level equals 60
         """
         cfg = create_config("""
 [Ipmi]
@@ -416,7 +419,9 @@ fan_level_delay = 1
 remote_parameters = -I lanplus -U admin -P secret -H 192.168.1.100
 platform_name = X10QBi
 enforce_fan_mode = false
+exit_level = 60
 """)
+        assert cfg.ipmi.exit_level == 60
         assert cfg.ipmi.command == "/opt/ipmitool"
         assert cfg.ipmi.fan_mode_delay == 5
         assert cfg.ipmi.fan_level_delay == 1
@@ -489,6 +494,43 @@ enforce_fan_mode = false
         """
         cfg = create_config(f"[Ipmi]\nenforce_fan_mode = {value}\n")
         assert cfg.ipmi.enforce_fan_mode is expected
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            pytest.param("100", id="full-speed"),
+            pytest.param("0", id="zero"),
+            pytest.param("42", id="partial"),
+            pytest.param("-1", id="no-change-sentinel"),
+        ],
+    )
+    def test_ipmi_exit_level_parsing(self, create_config, value: str):
+        """Positive unit test for the [Ipmi] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [Ipmi] with exit_level = <accepted value> and instantiate Config
+        - inspect ipmi.exit_level
+        - ASSERT: ipmi.exit_level equals the written value for the whole accepted [-1,100] range
+        - ASSERT: the -1 sentinel ("do not change the fan levels") is accepted although it is not a valid level
+        """
+        cfg = create_config(f"[Ipmi]\nexit_level = {value}\n")
+        assert cfg.ipmi.exit_level == int(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            pytest.param("-2", id="below-sentinel"),
+            pytest.param("101", id="above-max"),
+            pytest.param("abc", id="not-a-number"),
+        ],
+    )
+    def test_ipmi_exit_level_invalid(self, create_config, value: str):
+        """Negative unit test for the [Ipmi] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [Ipmi] with exit_level = <rejected value> and call Config()
+        - ASSERT: ValueError is raised for values outside [-1,100] and for non-integer values
+        """
+        with pytest.raises(ValueError):
+            create_config(f"[Ipmi]\nexit_level = {value}\n")
 
     @pytest.mark.parametrize(
         "param, value",

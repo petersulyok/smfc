@@ -6,6 +6,7 @@
 from argparse import Namespace
 from dataclasses import dataclass
 from typing import List
+import signal
 import sys
 import time
 from configparser import ConfigParser
@@ -18,6 +19,7 @@ from smfc.config import Config
 from .test_fixtures import TestData
 from .test_mocks import MockedContextError, MockedContextGood
 from .test_ipmi import BMC_INFO_OUTPUT
+from .test_config_builders import create_ipmi_config
 
 
 @dataclass
@@ -25,6 +27,26 @@ class MockControllerConfig:
     """Simple mock config for FanController tests."""
     ipmi_zone: List[int]
     polling: float = 2.0
+
+
+def create_exit_config(exit_level: int = Config.DV_IPMI_EXIT_LEVEL, zones: List[int] = None) -> MagicMock:
+    """Build a minimal Config stub for Service.exit_func() tests: a real [Ipmi] configuration with the requested
+    `exit_level=` plus a single enabled CONST controller the zone fallback scan can find.
+
+    Args:
+        exit_level (int): value of the `[Ipmi] exit_level=` parameter (default: 100)
+        zones (List[int]): IPMI zones of the enabled controller (default: [0, 1]; use [] for no enabled
+                           controller at all)
+
+    Returns:
+        MagicMock: Config stub usable as Service.config
+    """
+    config = MagicMock()
+    config.ipmi = create_ipmi_config(exit_level=exit_level)
+    config.cpu = config.hd = config.nvme = config.gpu = []
+    zones = [0, 1] if zones is None else zones
+    config.const = [MagicMock(enabled=True, ipmi_zone=zones)] if zones else []
+    return config
 
 
 class TestService:
@@ -42,11 +64,12 @@ class TestService:
     def test_exit_func(self, mocker: MockerFixture, ipmi: bool, log: bool) -> None:
         """Positive unit test for Service.exit_func() method. It contains the following steps:
         - mock atexit.unregister(), Ipmi.set_fan_mode(), Log.msg_to_stdout(), platform end()
-        - instantiate Service and conditionally attach Log and Ipmi (with mocked platform)
+        - instantiate Service and conditionally attach Log, Config and Ipmi (with mocked platform)
+        - attach two controllers assigned to IPMI zones [0] and [1, 2]
         - call Service.exit_func()
         - ASSERT: atexit.unregister() is called exactly once
-        - ASSERT: Ipmi.set_fan_mode() is called once when ipmi is attached
-        - ASSERT: platform.end() is called once to release manual mode when ipmi is attached
+        - ASSERT: platform.end() is called once with the union of the configured zones and the default exit level
+        - ASSERT: Ipmi.set_fan_mode() is not called (the BMC is already in FULL mode at this point)
         - ASSERT: Log.msg_to_stdout() is called once when both ipmi and log are attached
         """
         mock_atexit_unregister = MagicMock()
@@ -60,15 +83,109 @@ class TestService:
             service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         mock_platform = MagicMock()
         if ipmi:
+            service.config = create_exit_config()
             service.ipmi = Ipmi.__new__(Ipmi)
             service.ipmi.platform = mock_platform
+            service.controllers = [MagicMock(config=MockControllerConfig(ipmi_zone=[0])),
+                                   MagicMock(config=MockControllerConfig(ipmi_zone=[1, 2]))]
         service.exit_func()
         assert mock_atexit_unregister.call_count == 1
+        assert mock_ipmi_set_fan_mode.call_count == 0
         if ipmi:
-            assert mock_ipmi_set_fan_mode.call_count == 1
-            assert mock_platform.end.call_count == 1
+            mock_platform.end.assert_called_once_with([0, 1, 2], Config.DV_IPMI_EXIT_LEVEL)
             if log:
                 assert mock_log_msg.call_count == 1
+
+    def test_exit_func_exit_level_none(self, mocker: MockerFixture) -> None:
+        """Positive unit test for Service.exit_func() method with `exit_level=-1`. It contains the following steps:
+        - mock atexit.unregister() and print()
+        - instantiate Service with a Log, a Config carrying exit_level=-1 and an Ipmi with a mocked platform
+        - call Service.exit_func()
+        - ASSERT: platform.end() is not called at all (the fans are left exactly where they are)
+        - ASSERT: atexit.unregister() is still called exactly once
+        """
+        mock_atexit_unregister = MagicMock()
+        mocker.patch("atexit.unregister", mock_atexit_unregister)
+        mocker.patch("builtins.print", MagicMock())
+        service = Service()
+        service.log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
+        service.config = create_exit_config(exit_level=Config.EXIT_LEVEL_NONE)
+        service.ipmi = MagicMock()
+        service.exit_func()
+        assert service.ipmi.platform.end.call_count == 0
+        assert mock_atexit_unregister.call_count == 1
+
+    def test_exit_func_without_configured_zone(self, mocker: MockerFixture) -> None:
+        """Positive unit test for Service.exit_func() method without any enabled fan controller. It contains the
+        following steps:
+        - mock print()
+        - instantiate Service with a Log, a Config where no controller is enabled, and an Ipmi with a mocked
+          platform (this is the exit-code-10 path, and every exit before the controllers are built)
+        - call Service.exit_func()
+        - ASSERT: platform.end() is not called, because smfc never controlled any IPMI zone, so there is no fan
+          level to restore
+        """
+        mocker.patch("builtins.print", MagicMock())
+        service = Service()
+        service.log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
+        service.config = create_exit_config(zones=[])
+        service.ipmi = MagicMock()
+        service.exit_func()
+        assert service.ipmi.platform.end.call_count == 0
+
+    def test_exit_func_tolerates_ipmi_failure(self, mocker: MockerFixture) -> None:
+        """Negative unit test for Service.exit_func() method. It contains the following steps:
+        - mock print()
+        - instantiate Service with a Log, a Config and an Ipmi whose platform.end() raises RuntimeError
+        - call Service.exit_func() (no exception should propagate, it would become a traceback at interpreter
+          shutdown)
+        - ASSERT: exit_func() returns normally despite the failing ipmitool call
+        - ASSERT: platform.end() was attempted exactly once
+        """
+        mocker.patch("builtins.print", MagicMock())
+        service = Service()
+        service.log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
+        service.config = create_exit_config()
+        service.ipmi = MagicMock()
+        service.ipmi.platform.end.side_effect = RuntimeError("ipmitool failed")
+        service.exit_func()
+        assert service.ipmi.platform.end.call_count == 1
+
+    def test_exit_zones_from_config(self, mocker: MockerFixture, td: TestData) -> None:
+        """Positive unit test for Service._exit_zones() method. It contains the following steps:
+        - mock print()
+        - build a config file with CPU enabled in zone 0, CONST enabled in zones 1 and 2, and a disabled NVME
+          controller in zone 3
+        - instantiate Service and assign the loaded Config, without any fan controller instance (early-exit case)
+        - call Service._exit_zones()
+        - ASSERT: the zones of the enabled controllers are collected from the configuration when no controller
+          instance exists yet
+        - ASSERT: the zones of disabled controllers are not collected
+        - ASSERT: the returned list is sorted and free of duplicates
+        """
+        mocker.patch("builtins.print", MagicMock())
+        my_config = ConfigParser()
+        my_config[Config.CS_IPMI] = {}
+        my_config[Config.CS_CPU] = {Config.CV_ENABLED: "1", Config.CV_IPMI_ZONE: "0"}
+        my_config[Config.CS_HD] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_NVME] = {Config.CV_ENABLED: "0", Config.CV_IPMI_ZONE: "3"}
+        my_config[Config.CS_GPU] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_CONST] = {Config.CV_ENABLED: "1", Config.CV_IPMI_ZONE: "2, 1"}
+        service = Service()
+        service.config = Config(td.create_config_file(my_config))
+        zones = service._exit_zones()  # pylint: disable=protected-access
+        assert zones == [0, 1, 2]
+
+    def test_sigterm_handler(self) -> None:
+        """Positive unit test for Service._sigterm_handler() method. It contains the following steps:
+        - instantiate Service and call Service._sigterm_handler() directly
+        - ASSERT: SystemExit is raised with code 0, so the interpreter shuts down normally and the registered
+          atexit handler (i.e. exit_func()) runs on SIGTERM
+        """
+        service = Service()
+        with pytest.raises(SystemExit) as excinfo:
+            service._sigterm_handler(15, None)  # pylint: disable=protected-access
+        assert excinfo.value.code == 0
 
     @pytest.mark.parametrize(
         "module_list, cpufc, hdfc, gpufc, standby",
@@ -389,6 +506,47 @@ class TestService:
         with pytest.raises(SystemExit) as cm:
             service.run()
         assert cm.value.code == exit_code
+
+    @pytest.mark.parametrize(
+        "options, expected_level",
+        [
+            pytest.param("-nd", Config.DV_IPMI_EXIT_LEVEL, id="without-ne"),
+            pytest.param("-nd -ne", Config.EXIT_LEVEL_NONE, id="with-deprecated-ne"),
+        ],
+    )
+    def test_run_registers_sigterm_and_honors_ne(self, mocker: MockerFixture, td: TestData, options: str,
+                                                 expected_level: int):
+        """Positive unit test for Service.run() method. It contains the following steps:
+        - mock print(), time.sleep(), pyudev Context and signal.signal()
+        - build a config file where no fan controller is enabled, so run() exits with code 10 right after the
+          configuration is loaded
+        - call Service.run() with and without the deprecated -ne option
+        - ASSERT: run() exits with code 10 in both cases, i.e. -ne is still accepted and never a parse error
+        - ASSERT: a SIGTERM handler is installed, so `systemctl stop` triggers a normal interpreter shutdown and
+          the registered atexit handler runs
+        - ASSERT: the deprecated -ne option forces exit_level to the -1 sentinel, otherwise the configured value
+          is kept
+        """
+        my_config = ConfigParser()
+        my_config[Config.CS_IPMI] = {Config.CV_IPMI_COMMAND: td.create_ipmi_command()}
+        my_config[Config.CS_CPU] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_HD] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_NVME] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_GPU] = {Config.CV_ENABLED: "0"}
+        my_config[Config.CS_CONST] = {Config.CV_ENABLED: "0"}
+        conf_file = td.create_config_file(my_config)
+        mocker.patch("builtins.print", MagicMock())
+        mocker.patch("time.sleep", MagicMock())
+        mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
+        mock_signal = MagicMock()
+        mocker.patch("signal.signal", mock_signal)
+        sys.argv = f"smfc.py -o 0 {options} -c {conf_file}".split()
+        service = Service()
+        with pytest.raises(SystemExit) as cm:
+            service.run()
+        assert cm.value.code == 10
+        assert mock_signal.call_args[0][0] == signal.SIGTERM
+        assert service.config.ipmi.exit_level == expected_level
 
     def test_check_dependencies_amd_p(self, mocker: MockerFixture, td: TestData, tmp_path):
         """Positive unit test for Service.check_dependencies() method with AMD GPU. It contains the following steps:
@@ -1045,37 +1203,40 @@ class TestService:
     def test_exit_func_stops_running_exporter(self, mocker: MockerFixture):
         """Positive unit test for Service.exit_func() method. It contains the following steps:
         - mock print()
-        - instantiate Service with a Log, a MagicMock ipmi and a MagicMock exporter
+        - instantiate Service with a Log, a Config, a MagicMock ipmi and a MagicMock exporter
         - call Service.exit_func()
         - ASSERT: exporter.stop() is called exactly once
-        - ASSERT: ipmi.set_fan_mode() is called with Ipmi.FULL_MODE (BMC reset to FULL)
+        - ASSERT: platform.end() is called with the default exit level (fans configured after the exporter stop)
         """
         mocker.patch("builtins.print", MagicMock())
         service = Service()
         service.log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
+        service.config = create_exit_config()
         service.ipmi = MagicMock()
         service.exporter = MagicMock()
         service.exit_func()
-        # Exporter was stopped, then BMC reset to FULL.
+        # Exporter was stopped, then the exit level was applied.
         assert service.exporter.stop.call_count == 1
-        service.ipmi.set_fan_mode.assert_called_with(Ipmi.FULL_MODE)
+        service.ipmi.platform.end.assert_called_once_with([0, 1], Config.DV_IPMI_EXIT_LEVEL)
 
     def test_exit_func_tolerates_exporter_stop_failure(self, mocker: MockerFixture):
         """Negative unit test for Service.exit_func() method. It contains the following steps:
         - mock print()
-        - instantiate Service with a Log, a MagicMock ipmi and a MagicMock exporter whose stop() raises RuntimeError
+        - instantiate Service with a Log, a Config, a MagicMock ipmi and a MagicMock exporter whose stop() raises
+          RuntimeError
         - call Service.exit_func() (no exception should propagate)
-        - ASSERT: ipmi.set_fan_mode() is still called with Ipmi.FULL_MODE despite exporter.stop() failing
+        - ASSERT: platform.end() is still called with the default exit level despite exporter.stop() failing
         """
         mocker.patch("builtins.print", MagicMock())
         service = Service()
         service.log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
+        service.config = create_exit_config()
         service.ipmi = MagicMock()
         service.exporter = MagicMock()
         service.exporter.stop.side_effect = RuntimeError("stop failed")
         service.exit_func()
-        # set_fan_mode still called even though stop() raised.
-        service.ipmi.set_fan_mode.assert_called_with(Ipmi.FULL_MODE)
+        # The exit level is still applied even though stop() raised.
+        service.ipmi.platform.end.assert_called_once_with([0, 1], Config.DV_IPMI_EXIT_LEVEL)
 
     def test_collect_desired_levels(self, mocker: MockerFixture):
         """Positive unit test for Service._collect_desired_levels() method. It contains the following steps:

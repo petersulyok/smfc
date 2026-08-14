@@ -8,7 +8,7 @@
 #   -o OUT   set log output: 0-stdout, 1-stderr, 2-syslog(default)
 #   -nd      no dependency checking at start
 #   -s       use sudo command
-#   -ne      no fan speed recovery at exit
+#   -ne      deprecated, use the [Ipmi] exit_level=-1 configuration parameter instead
 #
 
 # Startup options for the service

@@ -152,6 +152,10 @@ class Ipmi:
             self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_IPMI_PLATFORM_NAME} = "
                                          f"{self.config.platform_name}{platform_suffix}")
             self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_IPMI_ENFORCE_FAN_MODE} = {self.config.enforce_fan_mode}")
+            exit_level_suffix = " (fan levels are left unchanged at exit)" \
+                if self.config.exit_level == Config.EXIT_LEVEL_NONE else ""
+            self.log.msg(Log.LOG_CONFIG, f"   {Config.CV_IPMI_EXIT_LEVEL} = "
+                                         f"{self.config.exit_level}{exit_level_suffix}")
             self.log.msg(Log.LOG_CONFIG, "BMC information:")
             self.log.msg(Log.LOG_CONFIG, f"   manufacturer name (id) = {self.bmc_manufacturer_name} "
                                          f"({self.bmc_manufacturer_id})")

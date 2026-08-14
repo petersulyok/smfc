@@ -671,7 +671,7 @@ exit codes on failure:
 
 ```mermaid
 flowchart TD
-    A[Parse CLI args] --> B["Register atexit<br/>(unless -ne)"]
+    A[Parse CLI args] --> B["Register atexit<br/>+ SIGTERM handler"]
     B --> C[Construct Log]
     C -. "ValueError" .-> X5([exit 5])
     C --> D["Construct Config(path)"]
@@ -726,12 +726,38 @@ while True:
 
 ### 8.3 Shutdown
 
-`Service.exit_func` is registered with `atexit` (unless `-ne` was passed). On
-process exit — including most exceptions — it sets all fans back to **100%**
-via `ipmi.set_fan_mode(FULL_MODE)`. This is intentionally aggressive: a
-crashed `smfc` leaves the system noisy but cool, never silent and hot. The
-function unregisters itself afterwards so a second exit path doesn't reissue
-the IPMI command.
+`Service.exit_func` is registered with `atexit`. On process exit — including
+most exceptions — it applies `[Ipmi] exit_level=` (default **100%**) to every
+configured zone via `ipmi.platform.end(zones, level)`. This is intentionally
+aggressive: a crashed `smfc` leaves the system noisy but cool, never silent
+and hot. The function unregisters itself afterwards so a second exit path
+doesn't reissue the IPMI commands.
+
+CPython does not run `atexit` callbacks when the process is terminated by
+SIGTERM, which is systemd's default `KillSignal=`, so `run()` also installs
+`Service._sigterm_handler`. It raises `SystemExit`, which interrupts the
+`time.sleep()` of the main loop and performs an ordinary interpreter shutdown,
+so the `atexit` handler runs on `systemctl stop` too. SIGINT already behaves
+that way through `KeyboardInterrupt`. Neither can help on SIGKILL or an OOM
+kill — an `ExecStopPost=` drop-in in the systemd unit is the only cover there.
+
+The fan mode is deliberately *not* changed here: `smfc` is already running in
+FULL mode, so the extra `set_fan_mode()` would only add a `fan_mode_delay`
+long sleep to every service stop. The zone list is resolved by the caller
+(`Service._exit_zones`) from the fan controllers, falling back to a scan of
+the configuration on early exits where no controller has been built yet — the
+`Platform` instance is created before the controllers exist, so it cannot know
+the configured zones itself.
+
+`exit_level=-1` is a sentinel meaning *do not change the fan levels*: no IPMI
+command is issued at all, so the zones stay at the last applied level. The deprecated `-ne` command-line option maps
+onto it.
+
+Platforms differ in what `end()` does beyond the level write. `GenericX14Platform`
+releases its OEM manual-control mode after applying the level, restoring
+automatic BMC fan control, because that mode would otherwise stay latched
+forever. On the other platforms the BMC stays in FULL mode and the applied
+level is the resting state.
 
 ---
 

@@ -28,6 +28,7 @@ class IpmiConfig:
     remote_parameters: str  # Remote IPMI parameters (e.g. "-I lanplus -U ADMIN -P ADMIN -H 127.0.0.1")
     platform_name: str      # Platform name (from config or "auto" for auto-detection)
     enforce_fan_mode: bool  # Re-assert FULL fan mode if BMC drifts (default: True; False = exit on drift)
+    exit_level: int         # Fan level applied to all configured zones at exit (0..100%, -1 = do not change)
 
 
 @dataclass
@@ -168,6 +169,7 @@ class Config:
     CV_IPMI_REMOTE_PARAMETERS: str = "remote_parameters"    # Remote IPMI parameters
     CV_IPMI_PLATFORM_NAME: str = "platform_name"            # Platform name or "auto"
     CV_IPMI_ENFORCE_FAN_MODE: str = "enforce_fan_mode"      # Re-assert FULL on BMC drift
+    CV_IPMI_EXIT_LEVEL: str = "exit_level"                  # Fan level applied at exit (-1 = do not change)
 
     # [HD] section variable names
     CV_HD_NAMES: str = "hd_names"                            # HD device names
@@ -215,6 +217,9 @@ class Config:
     DV_IPMI_REMOTE_PARAMETERS: str = ""
     DV_IPMI_PLATFORM_NAME: str = "auto"
     DV_IPMI_ENFORCE_FAN_MODE: bool = True
+    DV_IPMI_EXIT_LEVEL: int = 100
+    # Sentinel value of `exit_level=` meaning "do not change the fan levels at exit".
+    EXIT_LEVEL_NONE: int = -1
 
     # Backward-compatible platform_name aliases (legacy value -> canonical value)
     PLATFORM_NAME_ALIASES: dict = {"genericx9": "generic_x9"}
@@ -429,6 +434,11 @@ class Config:
         fan_level_delay = parser[s].getint(self.CV_IPMI_FAN_LEVEL_DELAY, fallback=self.DV_IPMI_FAN_LEVEL_DELAY)
         if fan_level_delay < 0:
             raise ValueError(f"Negative {self.CV_IPMI_FAN_LEVEL_DELAY}= parameter ({fan_level_delay})")
+        # Fan level applied to all configured zones at exit. -1 is a sentinel meaning "do not change the fans",
+        # so the valid range is [-1, 100] rather than [0, 100] like the other level parameters.
+        exit_level = parser[s].getint(self.CV_IPMI_EXIT_LEVEL, fallback=self.DV_IPMI_EXIT_LEVEL)
+        if exit_level < self.EXIT_LEVEL_NONE or exit_level > 100:
+            raise ValueError(f"Invalid {self.CV_IPMI_EXIT_LEVEL}= parameter ({exit_level}). Valid range is [-1,100].")
         # Normalize legacy platform_name values (e.g. 'genericx9' -> 'generic_x9') for backward compatibility.
         platform_name = parser[s].get(self.CV_IPMI_PLATFORM_NAME, fallback=self.DV_IPMI_PLATFORM_NAME)
         platform_name = self.PLATFORM_NAME_ALIASES.get(platform_name, platform_name)
@@ -445,6 +455,7 @@ class Config:
             platform_name=platform_name,
             enforce_fan_mode=parser[s].getboolean(self.CV_IPMI_ENFORCE_FAN_MODE,
                                                   fallback=self.DV_IPMI_ENFORCE_FAN_MODE),
+            exit_level=exit_level,
         )
 
     def _parse_exporter(self, parser: ConfigParser) -> ExporterConfig:

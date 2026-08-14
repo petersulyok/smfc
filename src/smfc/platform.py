@@ -91,10 +91,16 @@ class Platform(ABC):
         """
 
     @abstractmethod
-    def end(self) -> None:
-        """Restore the platform state when shutting down.
-        Called once at shutdown (e.g. to restore automatic fan control or release manual mode).
+    def end(self, zones: List[int], level: int) -> None:
+        """Apply the exit fan level and restore the platform state when shutting down.
+        Called once at shutdown. The BMC is left in FULL fan mode on most platforms, so the applied level is
+        the state the fans keep until something else changes it. The zone list is resolved by the caller (the
+        platform is created before the fan controllers exist, so it cannot know the configured zones itself).
+        Args:
+            zones (List[int]): configured IPMI zones the exit level is applied to
+            level (int): fan level in % (0-100)
         Raises:
+            ValueError: invalid input parameter
             FileNotFoundError: ipmitool cannot be found
             RuntimeError: ipmitool execution problem
         """

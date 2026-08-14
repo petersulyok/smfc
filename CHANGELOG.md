@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- New `exit_level=` parameter in the `[Ipmi]` section (int, `[-1..100]`%, default=`100`). It is the fan level applied to all configured IPMI zones when the service terminates. The special value `-1` means "do not change the fan levels", so the zones stay at the last applied level. On X14 motherboards the level is applied and then manual fan control is released, so automatic BMC fan control is restored (see the README for the details of this platform difference).
+
+### Changed
+- **The documented safe shutdown now really covers every exit.** Fan levels were restored through an `atexit` handler only, and CPython does not run `atexit` callbacks when the process is terminated by SIGTERM, which is the default kill signal of systemd. As a result nothing happened on `systemctl stop` or `systemctl restart`: the BMC was left in FULL mode at the last applied duty cycle with no component regulating it, which is exactly the state FULL mode is not safe in. `smfc` now installs a SIGTERM handler, so a normal service stop performs an ordinary interpreter shutdown and the exit level is applied. If you prefer the previous behavior, set `exit_level=-1`. ([#118](https://github.com/petersulyok/smfc/issues/118))
+- The fan mode is not changed at exit any more. `smfc` is already running in FULL mode at that point, so the redundant `set_fan_mode()` call only cost a `fan_mode_delay` long sleep on every service stop.
+
+### Deprecated
+- The `-ne` command-line option. It is still accepted and still means "no fan level change at exit" (it is equivalent to `exit_level=-1`), but it logs a deprecation warning and it will be removed in a future release.
+
 ### Fixed
 - `smfc-client` reported the wrong fan level for controllers that lose a [shared IPMI zone arbitration](https://github.com/petersulyok/smfc/blob/main/README.md#13-shared-ipmi-zone-arbitration). Both the `Fan controllers` table and the `--verbose` block showed the level applied to the zone instead of the level the controller itself requested, so a losing controller contradicted its own `Window:`/`Curve:` lines (e.g. an NVME controller at 39.9C displaying `Level: 74 %` while its curve maps that temperature to 35%). Each controller now reports its own request, and when the zone ended up at a different level that value is appended explicitly as `(zone N applied: Z %)`. Controllers on non-shared zones and the winner of a shared zone are unchanged.
 - Documentation of `smfc-client --verbose`: `shared=yes` was described as meaning that *another* controller is currently driving the row's IPMI zone. It marks participation in zone arbitration and is reported for every controller on a shared zone, the current winner included.

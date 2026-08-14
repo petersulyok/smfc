@@ -26,13 +26,26 @@ class GenericX14Platform(Platform):
 
     def start(self) -> None:
         """Enable manual fan control for all zones so the BMC stops overriding the PWM values."""
-        # Enable manual mode for all zones so the BMC stops overriding the PWM values.
+        # Enable manual mode for all zones so the BMC stops overriding the PWM values. Note that this latches
+        # manual mode on every zone the hardware has, while end() applies the exit level only to the configured
+        # zones - end() releases manual mode for all zones again, so nothing is left latched.
         # OEM command (IANA 0x0000C2CF): 0x2c 0x04 0xcf 0xc2 0x00 <zone> 0x01
         for zone in range(self.FANCTL_COUNT):
             self._exec(["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", f"0x{zone:02x}", "0x01"])
 
-    def end(self) -> None:
-        """Disable manual fan control for all zones, restoring automatic BMC fan control."""
+    def end(self, zones: List[int], level: int) -> None:
+        """Apply the exit fan level to the configured zones, then disable manual fan control for all zones,
+        restoring automatic BMC fan control.
+
+        This platform behaves differently from the others: manual mode is an explicit OEM state that would stay
+        latched forever if it were not released, leaving every zone frozen at the exit level with nothing
+        regulating it. Releasing it hands the fans back to the BMC, so the exit level is only a transition here
+        - within seconds the BMC applies its own curve. Note that the BMC regulates on CPU and system sensors
+        only, so drive temperatures are not part of that loop.
+        """
+        # Apply the exit level first: releasing manual mode first would hand control to the BMC and make the
+        # level write a no-op.
+        self.set_multiple_fan_levels(zones, level)
         # Disable manual mode for all zones, restoring automatic BMC fan control.
         # OEM command (IANA 0x0000C2CF): 0x2c 0x04 0xcf 0xc2 0x00 <zone> 0x00
         for zone in range(self.FANCTL_COUNT):

@@ -63,7 +63,7 @@ Key features:
  - Optional HTTP exporter for live monitoring: powers `smfc-client` and enables Grafana dashboard integration
  - Companion `smfc-client` tool showing a live read-only snapshot of controllers, fan levels, IPMI zones, and standby state  
  - Automatic FULL-mode enforcement that detects and corrects BMC fan-mode drift
- - Safe shutdown: all fans are set back to 100% speed at service termination
+ - Safe shutdown: fans are always set to a configurable level (`exit_level=`, 100% by default) at service termination
 
 #### 1.1 IPMI zones
 _IPMI zone_ is a logical term, representing a cooling zone, where there are predefined fans having the same rotation speed.
@@ -103,7 +103,8 @@ In `smfc`, a temperature-driven fan controller implements the following control 
 
 If the temperature source has multiple instances (e.g. multiple CPUs, HDDs, NVMEs or GPUs) then the user can configure a calculation method (i.e. minimum, average, maximum) for the calculation of the final temperature value (see `temp_calc=` parameter).
 
-Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating!
+Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating (see
+[chapter 1.5](https://github.com/petersulyok/smfc/blob/main/README.md#15-service-termination))!
 
 #### 1.3 Shared IPMI zone arbitration
 When multiple fan controllers are assigned to the same IPMI zone, `smfc` detects this at startup and automatically switches to a two-phase arbitration loop for those controllers. Controllers on non-shared zones are not affected -- they apply their fan levels directly.
@@ -170,6 +171,11 @@ Three naming styles are supported and can be freely mixed:
 The suffix number after `:` is used only for ordering and logging — it has no relationship to the `ipmi_zone=` value inside the section. Each instance is a complete, independent fan controller with its own full set of parameters, sharing only the physical temperature source.
 
 Multiple instances on the same IPMI zone participate in the shared zone arbitration described in [chapter 1.3](https://github.com/petersulyok/smfc/blob/main/README.md#13-shared-ipmi-zone-arbitration).
+
+#### 1.5 Service termination
+While `smfc` is running the BMC stays in FULL mode, which means the BMC hands fan control over to `smfc` and does not regulate anything itself. If the service stopped without touching the fans, the zones would stay frozen at the last applied level with nothing regulating them.
+
+To avoid this, `smfc` always applies the `[Ipmi] exit_level=` value (default: `100`, i.e. full speed) to all configured IPMI zones before it exits -- on a normal service stop or restart, and on error exits alike. See [chapter 6](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds) for the details, including the different behaviour on X14 motherboards.
 
 ### 2. User-defined control function
 Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval. Two forms are supported in each temperature-driven section: a **simple linear** mapping (chapter 2.1) or an **advanced multi-segment** piecewise-linear curve (chapter 2.2). When both are present in the same section, `control_function=` takes precedence and the `min_temp/max_temp/min_level/max_level` keys are ignored.
@@ -337,6 +343,28 @@ Like many other utilities (created by NAS and home server community), `smfc` als
    3. if any fan speed oversteps either `Lower Critical` or `Upper Critical` threshold then IPMI will generate an _assertion event_ and will set all fan speeds back to 100% in the zone
 
 **Fan mode enforcement:** while `smfc` is running, an external event (BMC web UI, a manual `ipmitool` command, a firmware quirk) can silently flip the BMC out of FULL mode. When that happens, `smfc` keeps sending per-zone level commands but the BMC ignores them and applies its own profile — fans run at unintended speeds with no error in the log. `smfc` detects this by checking the fan mode on every loop iteration. The `[Ipmi] enforce_fan_mode=` parameter controls the reaction: with `1` (default) the drift is logged and FULL mode plus all zone levels are re-asserted; with `0` the service exits with code 11 (add `Restart=on-failure` to the systemd unit if you want it restarted automatically in this mode).
+
+**Fan levels at service termination:** the BMC stays in FULL mode while `smfc` runs, which means the BMC hands fan control
+over to the user and does not regulate anything itself. If `smfc` stopped without touching the fans, the zones would stay
+frozen at the last applied level with nothing regulating them, so `smfc` applies the `[Ipmi] exit_level=` value (default:
+`100`, i.e. full speed) to all configured zones before it exits. This happens on a normal `systemctl stop` (SIGTERM), on
+`Ctrl-C` (SIGINT), and on every error exit. Note that no in-process handler can run on `SIGKILL` or when the OOM killer
+terminates the service; use an `ExecStopPost=` drop-in in the systemd unit if you want to cover those cases too.
+
+The `exit_level=` parameter accepts the `[0-100]` range plus the special value `-1`, which means _"do not change the fan
+levels"_ - `smfc` then exits without issuing any fan command and the zones stay at the last applied level, exactly like
+the deprecated `-ne` command-line option did.
+A lower value (e.g. `exit_level=40`) is a compromise for quiet systems: the fans keep running, but the machine does not
+go to full speed every time the service is stopped or restarted.
+
+> [!IMPORTANT]
+> **X14 motherboards behave differently.** This platform uses an explicit OEM manual-fan-control mode that would stay
+> latched forever if `smfc` did not release it, leaving all zones frozen with nothing regulating them. On X14, `smfc`
+> applies `exit_level` and then releases manual mode, so **automatic BMC fan control is restored** and `exit_level` is
+> only a transition - within seconds the BMC applies its own fan curve. Be aware that the BMC regulates on CPU and
+> system sensors only, so hard disk and NVMe temperatures are not part of that control loop. Setting `exit_level=-1` on
+> X14 skips both steps and leaves manual mode latched with no regulation at all, which is the least safe option on this
+> platform.
 
 Please also consider the fact that **fans are mechanical devices, their rotational speed is not stable** (it could be fluctuating). To avoid IPMI's assertion mechanism described here please follow the next steps: 
 
@@ -687,6 +715,9 @@ fan_level_delay=2
 platform_name=auto
 # Re-assert FULL fan mode (bool, default=1/true)
 enforce_fan_mode=1
+# Fan level applied to all configured zones at service termination (int, [-1..100]%, default=100)
+# Use -1 if smfc should not change the fan levels at exit (they stay at the last applied level).
+exit_level=100
 
 
 # CPU fan controller: works based on CPU(s) temperature.
@@ -923,8 +954,12 @@ options:
   -o {0,1,2}      set log output: 0-stdout, 1-stderr, 2-syslog(default)
   -nd             no dependency checking at start
   -s              use sudo command
-  -ne             no fan speed recovery at exit
+  -ne             deprecated, use [Ipmi] exit_level=-1 instead
 ```
+
+> [!NOTE]
+> The `-ne` option is deprecated. It is still accepted and still means "no fan level change at exit", but it is
+> equivalent to the `[Ipmi] exit_level=-1` configuration parameter and it will be removed in a future release.
 
 `smfc` command-line options can be specified in `/etc/default/smfc` file if you run `smfc` as a systemd service. 
 

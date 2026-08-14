@@ -62,8 +62,10 @@ class X10QBi(Platform):
         # Reference: Nuvoton NCT7904D Datasheet (p115)
         self._exec(["raw", "0x30", "0x91", "0x5c", self.BANK_3_REGISTER, "0x07", "0x00"])
 
-    def end(self) -> None:
-        """No cleanup needed; the NCT7904D configuration persists until BMC restart."""
+    def end(self, zones: List[int], level: int) -> None:
+        """Apply the exit fan level to the configured zones. No further cleanup is needed; the NCT7904D
+        configuration persists until BMC restart, so the fans keep this level until something else changes it."""
+        self.set_multiple_fan_levels(zones, level)
 
     def set_fan_mode(self, mode: int) -> None:
         """Set the IPMI fan mode."""

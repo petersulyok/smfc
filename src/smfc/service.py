@@ -5,6 +5,7 @@
 #
 import atexit
 import os
+import signal
 import sys
 import time
 from typing import Dict, List, Optional, Set, Tuple, Union
@@ -43,22 +44,66 @@ class Service:
     fan_mode_enforced_count: int                               # Count of detected drift-from-FULL corrections
     exporter: Optional[Exporter]                               # HTTP exporter (None when disabled or bind failed)
 
+    def _sigterm_handler(self, signum, frame) -> None:  # pylint: disable=unused-argument
+        """Handle SIGTERM (the default kill signal of systemd) by requesting a normal interpreter shutdown, so
+        the registered `atexit` handler runs. `time.sleep()` in the main loop is interrupted by the signal and
+        the raised SystemExit propagates out of it.
+        Args:
+            signum (int): signal number (unused)
+            frame: current stack frame (unused)
+        """
+        sys.exit(0)
+
+    def _exit_zones(self) -> List[int]:
+        """Collect the IPMI zones the exit level has to be applied to.
+
+        The fan controllers are the authoritative source, but `exit_func()` also runs on early exits (config,
+        dependency, IPMI or udev errors) where they do not exist yet, so the configuration is scanned directly
+        in that case.
+        Returns:
+            List[int]: sorted list of configured IPMI zones (empty if the configuration is not loaded yet)
+        """
+        zones: Set[int] = set()
+        for fc in getattr(self, "controllers", []):
+            zones.update(fc.config.ipmi_zone)
+        if not zones and hasattr(self, "config"):
+            for cfg_list in (self.config.cpu, self.config.hd, self.config.nvme, self.config.gpu, self.config.const):
+                for cfg in cfg_list:
+                    if cfg.enabled:
+                        zones.update(cfg.ipmi_zone)
+        return sorted(zones)
+
     def exit_func(self) -> None:
-        """This function is called at exit (in case of exceptions or runtime errors cannot be handled), and it switches
-        all fans back to the default speed 100% to avoid overheating while `smfc` is not running."""
-        # Stop the exporter first so no /snapshot request can race with the BMC reset below.
+        """This function is called at exit (both on a normal service stop and when exceptions or runtime errors
+        cannot be handled), and it applies the configured `[Ipmi] exit_level=` to all configured zones to avoid
+        overheating while `smfc` is not running. The BMC is left in FULL fan mode - it is already in FULL mode at
+        this point, so no mode change is needed."""
+        # Stop the exporter first so no /snapshot request can race with the BMC access below.
         if getattr(self, "exporter", None) is not None:
             try:
                 self.exporter.stop()
             except Exception:  # pylint: disable=broad-except
                 pass
-        # Configure fans.
-        if hasattr(self, "ipmi"):
-            self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
-            # Release any platform-specific manual mode so the BMC resumes automatic control (no-op on most platforms).
-            self.ipmi.platform.end()
-            if hasattr(self, "log"):
-                self.log.msg(Log.LOG_INFO, "smfc terminated: all fans set to the 100% speed.")
+        # Configure fans. The configuration is always loaded before the Ipmi instance is created, so both
+        # attributes are present together in practice.
+        if hasattr(self, "ipmi") and hasattr(self, "config"):
+            level = self.config.ipmi.exit_level
+            zones = self._exit_zones()
+            # exit_level=-1 means smfc does not change the fan levels at all. An empty zone list means smfc never
+            # controlled a zone (e.g. it exited before/without any enabled fan controller), so there is nothing
+            # to restore either.
+            if level != Config.EXIT_LEVEL_NONE and zones:
+                # An ipmitool failure must not turn into a traceback during interpreter shutdown.
+                try:
+                    self.ipmi.platform.end(zones, level)
+                    if hasattr(self, "log"):
+                        self.log.msg(Log.LOG_INFO, f"smfc terminated: fans set to {level}% in zone(s) {zones}.")
+                except Exception as e:  # pylint: disable=broad-except
+                    if hasattr(self, "log"):
+                        self.log.msg(Log.LOG_ERROR, f"Cannot apply the exit fan level: {e}")
+            elif hasattr(self, "log"):
+                reason = "no IPMI zone was controlled" if zones == [] else f"{Config.CV_IPMI_EXIT_LEVEL}=-1"
+                self.log.msg(Log.LOG_INFO, f"smfc terminated: fan levels left unchanged ({reason}).")
 
         # Unregister this function.
         atexit.unregister(self.exit_func)
@@ -274,7 +319,8 @@ class Service:
                             help="set log output: 0-stdout, 1-stderr, 2-syslog(default)")
         parser.add_argument("-nd", action="store_true", default=False, help="no dependency checking at start")
         parser.add_argument("-s", action="store_true", default=False, help="use sudo command")
-        parser.add_argument("-ne", action="store_true", default=False, help="no fan speed recovery at exit")
+        parser.add_argument("-ne", action="store_true", default=False,
+                            help="deprecated, use [Ipmi] exit_level=-1 instead")
         return parser.parse_args()
 
     def run(self) -> None:
@@ -295,9 +341,11 @@ class Service:
         # Parse command line arguments.
         parsed_results = self._parse_args()
 
-        # Register the emergency exit function for service termination.
-        if not parsed_results.ne:
-            atexit.register(self.exit_func)
+        # Register the exit function for service termination. `atexit` handlers do not run when the process is
+        # terminated by SIGTERM (systemd's default kill signal), so SIGTERM is translated to a normal interpreter
+        # shutdown. SIGINT already behaves that way through KeyboardInterrupt.
+        atexit.register(self.exit_func)
+        signal.signal(signal.SIGTERM, self._sigterm_handler)
 
         # Store `sudo` option.
         self.sudo = parsed_results.s
@@ -332,6 +380,13 @@ class Service:
             self.log.msg(Log.LOG_ERROR, f"Configuration error: {e}")
             sys.exit(6)
         self.log.msg(Log.LOG_DEBUG, f"Configuration file ({parsed_results.config_file}) loaded")
+
+        # The deprecated `-ne` option is still honored (it is equivalent to `exit_level=-1`) but it will be
+        # removed in a future release.
+        if parsed_results.ne:
+            self.log.msg(Log.LOG_ERROR, "WARNING: the -ne option is deprecated, "
+                                        "use the [Ipmi] exit_level=-1 configuration parameter instead.")
+            self.config.ipmi.exit_level = Config.EXIT_LEVEL_NONE
 
         # Check run-time dependencies (commands, kernel modules) if `-nd` command line option is not specified.
         if not parsed_results.nd:
