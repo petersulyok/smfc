@@ -581,7 +581,7 @@ Please report package-specific issues (PKGBUILD, dependencies, file locations) o
 [AUR package page](https://aur.archlinux.org/packages/smfc).
 
 #### 9.4. Docker installation
-`smfc` is also available as a docker image, see more details in [Docker.md](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting.
+`smfc` is also available as a docker image, see more details in [DOCKER.md](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md). In this case, your job is only to provide your configuration file on the host computer, `smfc` will be executed automatically when the container is starting.
 
 #### 9.5. Manual installation and uninstallation
 There is an installation script ([`bin/install.sh`](https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/install.sh)) which can install `smfc` in two different ways:

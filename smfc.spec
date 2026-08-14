@@ -105,7 +105,7 @@ fi
   happened on systemctl stop or restart: the BMC was left in FULL mode at the
   last applied level with nothing regulating it. smfc installs a SIGTERM
   handler now (issue #118)
-- New: exit_level= parameter in the [Ipmi] section (int, [-1..100]%,
+- Added: exit_level= parameter in the [Ipmi] section (int, [-1..100]%,
   default=100), the fan level applied to all configured IPMI zones at service
   termination. Use exit_level=-1 if smfc should not change the fan levels at
   exit. On X14 motherboards the level is applied and then manual fan control is
@@ -118,17 +118,17 @@ fi
   will be removed in 7.0.0
 
 * Fri Jul 31 2026 Peter Sulyok <peter@sulyok.net> - 6.1.0-1
-- New: error_tolerance= parameter for the [CPU], [HD], [NVME] and [GPU] sections
-  (int, default=3), the number of consecutive failed temperature reads tolerated
-  per device. A transient read error does not stop smfc any more: while a device
-  is inside its budget its last known good temperature is reused and the failure
-  is logged at ERROR level, only an exhausted budget stops the service. Use
-  error_tolerance=0 for the old behavior
-- New: smfc-client --verbose shows the per-device read error counts in a new
+- Added: error_tolerance= parameter for the [CPU], [HD], [NVME] and [GPU]
+  sections (int, default=3), the number of consecutive failed temperature reads
+  tolerated per device. A transient read error does not stop smfc any more:
+  while a device is inside its budget its last known good temperature is reused
+  and the failure is logged at ERROR level, only an exhausted budget stops the
+  service. Use error_tolerance=0 for the old behavior
+- Added: smfc-client --verbose shows the per-device read error counts in a new
   Errors column, displayed only when a device has failed a read since smfc was
   started
-- New: read_errors and read_errors_total fields in the /snapshot device entries,
-  plus the smfc_device_temp_read_errors gauge and
+- Added: read_errors and read_errors_total fields in the /snapshot device
+  entries, plus the smfc_device_temp_read_errors gauge and
   smfc_device_temp_read_errors_total counter in /metrics
 - Changed: smfc man page lists the supported motherboards (X9, X10-X13/H10-H13,
   X10QBi, X14/H14) like the README and the package description
@@ -138,29 +138,30 @@ fi
   0-255 BMC byte was reported as a percentage, so smfc-client displayed values
   like 242% for a real 95% duty cycle and CONST controllers kept re-applying
   an already-correct level
-- Fixed: the same duty readback scaling issue on the X10QBi platform, where 100%
-  duty cycle was reported as 255%. Based on the NCT7904D datasheet and on the
-  symmetry with the write path, not validated on real hardware yet
+- Fixed: the same duty readback scaling issue on the X10QBi platform, where
+  100% duty cycle was reported as 255%. Based on the NCT7904D datasheet and on
+  the symmetry with the write path, not validated on real hardware yet
 - Changed: auto platform detection now also matches BMC product names starting
   with H14 (not just X14), selecting generic_x14
 - Changed: smfc-client --help and its documentation (man page, README)
   rewritten in plain, user-facing language
 
 * Thu Jul 09 2026 Peter Sulyok <peter@sulyok.net> - 6.0.0-1
-- New: Advanced multi-segment user-defined control_function= parameter for
+- Added: Advanced multi-segment user-defined control_function= parameter for
   arbitrary piecewise-linear fan curves
-- New: Multiple fan curve instances per controller type (e.g. [CPU] + [CPU:1])
-- New: smfc-client console script for a one-shot read-only snapshot of
+- Added: Multiple fan curve instances per controller type (e.g. [CPU] +
+  [CPU:1])
+- Added: smfc-client console script for a one-shot read-only snapshot of
   controllers, fan levels, IPMI zones, and standby state
-- New: signed APT and DNF repositories for direct apt/dnf install
-- New: platform support for Supermicro X14 motherboards (generic_x14),
+- Added: signed APT and DNF repositories for direct apt/dnf install
+- Added: platform support for Supermicro X14 motherboards (generic_x14),
   auto-detected from the BMC product name (experimental)
-- New: fan mode enforcement via [Ipmi] enforce_fan_mode= parameter to detect
+- Added: fan mode enforcement via [Ipmi] enforce_fan_mode= parameter to detect
   and restore when the BMC drifts out of FULL mode
-- New: Grafana integration with a sample dashboard and guide
+- Added: Grafana integration with a sample dashboard and guide
   (grafana/GRAFANA.md)
-- New: install.sh auto-prefills nvme_names= with detected NVMe devices
-- New: startup log shows the active control function as a plateau list
+- Added: install.sh auto-prefills nvme_names= with detected NVMe devices
+- Added: startup log shows the active control function as a plateau list
 - Changed: configuration parsing centralized in a new Config class
 - Changed: ConstConfig.level validation tightened to [1..100]
 - Changed: NVME polling default lowered from 10 to 2 seconds
@@ -175,19 +176,22 @@ fi
   before applying any fan level at startup
 
 * Thu Apr 30 2026 Peter Sulyok <peter@sulyok.net> - 5.4.0-1
-- New: AMD GPU support: gpu_type=amd enables temperature monitoring via rocm-smi
-- New: amd_temp_sensor= and rocm_smi_path= configuration parameters added
-- New: AMD GPU docker image (latest-amd / 5.4.0-amd) based on rocm/dev-ubuntu
-- New: Extended DEBUG level logging across all fan controllers and IPMI layer
-- New: Command line help text added to /etc/default/smfc
+- Added: AMD GPU support: gpu_type=amd enables temperature monitoring via
+  rocm-smi
+- Added: amd_temp_sensor= and rocm_smi_path= configuration parameters added
+- Added: AMD GPU docker image (latest-amd / 5.4.0-amd) based on rocm/dev-ubuntu
+- Added: Extended DEBUG level logging across all fan controllers and IPMI layer
+- Added: Command line help text added to /etc/default/smfc
 - Changed: Docker NVIDIA image renamed from -gpu to -nvidia suffix throughout
-- Changed: docker-build.sh and docker-push.sh updated for all three image variants
+- Changed: docker-build.sh and docker-push.sh updated for all three image
+  variants
 - Changed: Alpine base image updated to 3.23.4 (Python 3.12.13-r0)
 - Changed: install.sh preserves /etc/default/smfc when --keep-config is set
 - Changed: Shared IPMI zone arbitration log reduced noise in steady state
 
 * Thu Apr 02 2026 Peter Sulyok <peter@sulyok.net> - 5.3.0-1
-- New: Temperature smoothing feature (smoothing= parameter) for CPU, HD, NVME, GPU controllers
+- Added: Temperature smoothing feature (smoothing= parameter) for CPU, HD,
+  NVME, GPU controllers
 - Changed: Removed pointless catch-and-re-raise exception handling
 - Changed: Renamed "Super Micro" to "Supermicro" across the project
 - Changed: Updated references section in README.md
@@ -205,7 +209,8 @@ fi
 - Release process updated in DEVELOPMENT.md
 
 * Sat Mar 28 2026 Peter Sulyok <peter@sulyok.net> - 5.1.1-1
-- DEB and RPM package creation: version numbers updated, RPM GitHub workflow fixed
+- DEB and RPM package creation: version numbers updated, RPM GitHub workflow
+  fixed
 - Release process updated in DEVELOPMENT.md
 
 * Sat Mar 28 2026 Peter Sulyok <peter@sulyok.net> - 5.1.0-1

@@ -252,6 +252,11 @@ Use the following parameters to configure `smfc`:
 | `SMFC_ARGS` | environment variable | command-line arguments for `smfc` (only for -o, -l parameters!) |
 | `smfc.conf` | volume (ro)          | configuration file for `smfc`, mapped from host side            |
 
+Stopping the container (`docker stop`, `docker compose down`, or a container restart) sends `SIGTERM` to `smfc`,
+which applies the configured `[Ipmi] exit_level=` (100% by default) to all configured IPMI zones before it exits,
+so the fans are never left unregulated. Set `exit_level=-1` in your configuration file if `smfc` should not change
+the fan levels at exit. Note that a `docker kill` sends `SIGKILL`, where no in-process handler can run.
+
 
 # smfc-client in docker
 All three images contain the `smfc-client` command (see [README chapter 14.](https://github.com/petersulyok/smfc/blob/main/README.md#14-smfc-client)),
@@ -287,8 +292,8 @@ docker run --rm \
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
-  - **6.2.0** (2026.08.14): Updated to smfc 6.2.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0) - base images are unchanged
-  - **6.1.0** (2026.07.31): Updated to smfc 6.1.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0) - base images are unchanged
+  - **6.2.0** (2026.08.14): Updated to smfc 6.2.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
+  - **6.1.0** (2026.07.31): Updated to smfc 6.1.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
   - **6.0.1** (2026.07.26): Updated to smfc 6.0.1 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.2.4) - much smaller images!
   - **6.0.0** (2026.07.09): Updated to smfc 6.0.0 (Alpine 3.24.1/Debian 13 slim/ROCm-ubuntu)
   - **5.4.0** (2026.04.30): Updated to smfc 5.4.0 (Alpine 3.23.4/Debian 13 slim/ROCm-ubuntu) - new tags!!

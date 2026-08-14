@@ -6,7 +6,7 @@ smfc (6.2.0) unstable; urgency=medium
     systemd. Nothing happened on systemctl stop or restart: the BMC was left in
     FULL mode at the last applied level with nothing regulating it. smfc
     installs a SIGTERM handler now (issue #118).
-  * New: exit_level= parameter in the [Ipmi] section (int, [-1..100]%,
+  * Added: exit_level= parameter in the [Ipmi] section (int, [-1..100]%,
     default=100), the fan level applied to all configured IPMI zones at service
     termination. Use exit_level=-1 if smfc should not change the fan levels at
     exit. On X14 motherboards the level is applied and then manual fan control
@@ -22,16 +22,16 @@ smfc (6.2.0) unstable; urgency=medium
 
 smfc (6.1.0) unstable; urgency=medium
 
-  * New: error_tolerance= parameter for the [CPU], [HD], [NVME] and [GPU]
+  * Added: error_tolerance= parameter for the [CPU], [HD], [NVME] and [GPU]
     sections (int, default=3), the number of consecutive failed temperature
     reads tolerated per device. A transient read error does not stop smfc any
     more: while a device is inside its budget its last known good temperature
     is reused and the failure is logged at ERROR level, only an exhausted
     budget stops the service. Use error_tolerance=0 for the old behavior.
-  * New: smfc-client --verbose shows the per-device read error counts in a new
-    Errors column, displayed only when a device has failed a read since smfc
-    was started.
-  * New: read_errors and read_errors_total fields in the /snapshot device
+  * Added: smfc-client --verbose shows the per-device read error counts in a
+    new Errors column, displayed only when a device has failed a read since
+    smfc was started.
+  * Added: read_errors and read_errors_total fields in the /snapshot device
     entries, plus the smfc_device_temp_read_errors gauge and
     smfc_device_temp_read_errors_total counter in /metrics.
   * Changed: smfc man page lists the supported motherboards (X9, X10-X13/
@@ -57,28 +57,28 @@ smfc (6.0.1) unstable; urgency=medium
 
 smfc (6.0.0) unstable; urgency=medium
 
-  * New: Advanced multi-segment user-defined control_function= parameter for
+  * Added: Advanced multi-segment user-defined control_function= parameter for
     temperature-based fan controllers; arbitrary piecewise-linear fan curves
     take precedence over the legacy min_temp/max_temp/min_level/max_level.
-  * New: Multiple fan curve instances per controller type (e.g. [CPU] + [CPU:1],
-    [HD] + [HD:1]) with independent fan curves per IPMI zone.
-  * New: smfc-client console script for a one-shot read-only snapshot of
+  * Added: Multiple fan curve instances per controller type (e.g. [CPU] +
+    [CPU:1], [HD] + [HD:1]) with independent fan curves per IPMI zone.
+  * Added: smfc-client console script for a one-shot read-only snapshot of
     controllers, fan levels, IPMI zones, and standby state. Adds --verbose
     mode with per-controller blocks, four-band Temp/Level colour coding, and
     an active-curve display.
-  * New: Signed APT and DNF repositories for direct apt/dnf install on
+  * Added: Signed APT and DNF repositories for direct apt/dnf install on
     Debian/Ubuntu/Proxmox/Mint/Raspberry Pi OS and Fedora/RHEL/Rocky/Alma/
     CentOS/openSUSE.
-  * New: Platform support for Supermicro X14 motherboards (generic_x14),
+  * Added: Platform support for Supermicro X14 motherboards (generic_x14),
     auto-detected from the BMC product name (experimental).
-  * New: Fan mode enforcement via [Ipmi] enforce_fan_mode= parameter; smfc
+  * Added: Fan mode enforcement via [Ipmi] enforce_fan_mode= parameter; smfc
     now detects and restores when the BMC drifts out of FULL mode.
-  * New: Grafana integration with a sample dashboard and step-by-step guide
+  * Added: Grafana integration with a sample dashboard and step-by-step guide
     (grafana/GRAFANA.md) for visualizing live and historical fan/temperature
     data.
-  * New: install.sh auto-prefills nvme_names= with detected NVMe devices,
+  * Added: install.sh auto-prefills nvme_names= with detected NVMe devices,
     matching the existing hd_names= prefill.
-  * New: Startup log shows the active control function as a plateau list.
+  * Added: Startup log shows the active control function as a plateau list.
   * Changed: Configuration parsing centralized in a new Config class with
     per-controller @dataclass instances.
   * Changed: ConstConfig.level validation tightened to [1..100]; ConstFc
@@ -102,12 +102,14 @@ smfc (6.0.0) unstable; urgency=medium
 
 smfc (5.4.0) unstable; urgency=medium
 
-  * New: AMD GPU support: gpu_type=amd enables temperature monitoring via
+  * Added: AMD GPU support: gpu_type=amd enables temperature monitoring via
     rocm-smi; new amd_temp_sensor= and rocm_smi_path= parameters added.
-  * New: AMD GPU docker image (latest-amd / 5.4.0-amd) based on rocm/dev-ubuntu;
-    rocm-smi bundled inside, only amdgpu kernel driver required on host.
-  * New: Extended DEBUG level logging across all fan controllers and IPMI layer.
-  * New: Command line help text added to /etc/default/smfc.
+  * Added: AMD GPU docker image (latest-amd / 5.4.0-amd) based on
+    rocm/dev-ubuntu; rocm-smi bundled inside, only amdgpu kernel driver
+    required on host.
+  * Added: Extended DEBUG level logging across all fan controllers and IPMI
+    layer.
+  * Added: Command line help text added to /etc/default/smfc.
   * Changed: Docker NVIDIA image renamed from -gpu to -nvidia suffix throughout
     (Dockerfile, scripts, compose files, tags).
   * Changed: docker-build.sh and docker-push.sh updated to handle all three
@@ -120,7 +122,7 @@ smfc (5.4.0) unstable; urgency=medium
 
 smfc (5.3.0) unstable; urgency=medium
 
-  * New: Temperature smoothing feature (smoothing= parameter) for CPU, HD,
+  * Added: Temperature smoothing feature (smoothing= parameter) for CPU, HD,
     NVME, GPU fan controllers. Enables moving average window for temperature
     readings to reduce fan speed oscillation from brief temperature spikes.
   * Changed: Removed pointless catch-and-re-raise exception handling.
@@ -149,7 +151,8 @@ smfc (5.1.2) unstable; urgency=medium
 
 smfc (5.1.1) unstable; urgency=medium
 
-  * DEB and RPM package creation: version numbers updated, RPM GitHub workflow fixed.
+  * DEB and RPM package creation: version numbers updated, RPM GitHub workflow
+    fixed.
   * Release process updated in DEVELOPMENT.md.
 
 -- Peter Sulyok <peter@sulyok.net>  Sat, 28 Mar 2026 00:00:00 +0000

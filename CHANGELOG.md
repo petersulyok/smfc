@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `exit_level=` parameter in the `[Ipmi]` section (int, `[-1..100]`%, default=`100`). It is the fan level applied to all configured IPMI zones when the service terminates. The special value `-1` means "do not change the fan levels", so the zones stay at the last applied level. On X14 motherboards the level is applied and then manual fan control is released, so automatic BMC fan control is restored - see [README chapter 1.5](https://github.com/petersulyok/smfc/blob/main/README.md#15-service-termination) and [chapter 6](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds) for the details of this platform difference. This parameter was added while fixing [issue #118](https://github.com/petersulyok/smfc/issues/118).
 
 ### Changed
-- The section headings of this changelog use the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) categories consistently now (`Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`). The earlier `New`, `New/Added`, `Fix` and `Change` headings were renamed accordingly in all releases, the entries themselves are unchanged.
+- `docker/Docker.md` was renamed to [`docker/DOCKER.md`](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md), so all documentation files of the repository use the same upper-case naming. All references were updated, including the ones in the earlier entries of this changelog, but external links pointing to the old path (e.g. bookmarks) have to be updated manually.
+- `docker/DOCKER.md` documents what happens to the fans when the container is stopped: `docker stop` sends `SIGTERM`, so the configured `exit_level=` is applied.
+- The section headings of this changelog use the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) categories consistently now (`Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`). The earlier `New`, `New/Added`, `Fix` and `Change` headings were renamed accordingly in all releases, the entries themselves are unchanged. The same categories are used in the DEB (`debian/changelog`) and RPM (`smfc.spec`) changelogs, where the `New:` bullet prefix became `Added:`.
 - The fan mode is not changed at exit any more. `smfc` is already running in FULL mode at that point, so the redundant `set_fan_mode()` call only cost a `fan_mode_delay` long sleep on every service stop.
 
 ### Deprecated
@@ -41,21 +43,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Arch Linux users can install `smfc` from the [AUR package](https://aur.archlinux.org/packages/smfc) (community-maintained by `urirocky`, based on v6.0.0) — see new [README chapter 9.3](https://github.com/petersulyok/smfc/blob/main/README.md#93-arch-linux-aur-package-installation).
-- New [`Docker.md` chapter](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md#smfc-client-in-docker) about `smfc-client` in the docker images: how to run it in the running container (`docker exec`), live snapshot vs standalone mode, and how to start it in a separate container.
+- New [`DOCKER.md` chapter](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md#smfc-client-in-docker) about `smfc-client` in the docker images: how to run it in the running container (`docker exec`), live snapshot vs standalone mode, and how to start it in a separate container.
 
 ### Changed
 - `smfc-client --help` and its documentation (README, man page) rewritten in plain, user-facing language.
 - `auto` platform detection now also matches BMC product names starting with `H14` (not just `X14`), selecting `generic_x14`.
-- Docker images are now built on pinned base images (`alpine:3.24.1`, `debian:13.6-slim`, `ubuntu:noble-20260610`) instead of floating tags, so a rebuild always produces the same base. The base image and component versions of all three images are listed in [`Docker.md`](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md).
+- Docker images are now built on pinned base images (`alpine:3.24.1`, `debian:13.6-slim`, `ubuntu:noble-20260610`) instead of floating tags, so a rebuild always produces the same base. The base image and component versions of all three images are listed in [`DOCKER.md`](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md).
 - The `--break-system-packages` pip parameter was removed from the AMD dockerfile, it was not needed (`--prefix` is enough), so all three dockerfiles use the same pip command now.
-- The obsolete `version: "2"` attribute was removed from all docker compose files and from the compose samples in [`Docker.md`](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md); it has been ignored by Docker Compose V2 and only produced a warning on every start.
+- The obsolete `version: "2"` attribute was removed from all docker compose files and from the compose samples in [`DOCKER.md`](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md); it has been ignored by Docker Compose V2 and only produced a warning on every start.
 
 ### Fixed
 - X9 fan duty readback scaling (`generic_x9` platform): `get_fan_level()` returned the raw 0-255 BMC byte as if it were a percentage, so `smfc-client` displayed values like 242% for a real 95% duty cycle and CONST controllers kept re-applying an already-correct level. The readback is now converted back to the 0-100 percent platform contract - based on [PR #117](https://github.com/petersulyok/smfc/pull/117) by @krecik, validated on a Supermicro X9DR3-LN4F+ (BMC 3.48).
 - The same fan duty readback scaling issue was found and fixed on the `X10QBi` platform: `set_fan_level()` writes the duty cycle on the NCT7904D 0-255 scale, but `get_fan_level()` returned the raw byte as a percentage (100% duty was reported as 255%). This fix is based on the datasheet and on the symmetry with the write path, it is **not validated on real hardware yet** - X10QBi owners, please share your experience in [discussion #110](https://github.com/petersulyok/smfc/discussions/110).
 - Docker image sizes: `pip` was installed and removed in different layers, so it stayed in the images, and the AMD image used the `rocm/dev-ubuntu` base image with the complete ROCm SDK. The AMD image is built on the standard Ubuntu base image now, with only the `rocm-smi-lib` package installed. New sizes: standard 70.5 MB → 58.6 MB, `-nvidia` 583 MB → 230 MB, `-amd` 3.99 GB → 210 MB.
 - AMD Docker image: `rocm-smi` was not available at `/usr/bin/rocm-smi`, the default value of the `[GPU] rocm_smi_path=` parameter, so the GPU fan controller did not start with the default configuration. It is linked to `/usr/bin` now.
-- NVIDIA Docker image (`-nvidia`) failed to start under the NVIDIA Container Toolkit with `mkdirat run/nvidia-ctk-hook: read-only file system`, because the wide `/run:/run:ro` bind mount shadowed the container's writable `/run` and blocked the toolkit's `createContainer` hook. All Docker examples (compose files, `docker run` scripts, `Docker.md`) now bind-mount only `/run/udev:/run/udev:ro` — all `smfc` needs there is the udev database for `pyudev` — which leaves `/run` writable. See [issue #107](https://github.com/petersulyok/smfc/issues/107).
+- NVIDIA Docker image (`-nvidia`) failed to start under the NVIDIA Container Toolkit with `mkdirat run/nvidia-ctk-hook: read-only file system`, because the wide `/run:/run:ro` bind mount shadowed the container's writable `/run` and blocked the toolkit's `createContainer` hook. All Docker examples (compose files, `docker run` scripts, `DOCKER.md`) now bind-mount only `/run/udev:/run/udev:ro` — all `smfc` needs there is the udev database for `pyudev` — which leaves `/run` writable. See [issue #107](https://github.com/petersulyok/smfc/issues/107).
 
 
 ## [6.0.0] - 2026.07.09
@@ -304,7 +306,7 @@ The final release is identical with the beta-14 version and some documentation u
 ## [v4.0.0b12] - 2025-06-06 Pre-release 
 
 ### Added
-- GPU zone fan controller is enabled in docker (please read [Docker.md](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md))
+- GPU zone fan controller is enabled in docker (please read [DOCKER.md](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md))
 - There are two docker images available: standard, gpu-enabled
 - Dependency check: check of `nvidia-smi` added
 

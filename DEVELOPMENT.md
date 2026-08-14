@@ -182,7 +182,7 @@ Notes:
   `ubuntu:noble-20260610`) instead of a floating one, so a rebuild always produces the same base. The AMD image
   also pins the ROCm APT repository version (`7.2.4`), from which only `rocm-smi-lib` is installed.
   Before a release, check for newer base images and bump the `FROM` lines deliberately, then update the component
-  lists in [`Docker.md`](https://github.com/petersulyok/smfc/blob/main/docker/Docker.md) accordingly. The versions
+  lists in [`DOCKER.md`](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md) accordingly. The versions
   of the installed components can be listed this way:
 ```commandline
 docker run --rm --entrypoint sh petersulyok/smfc:latest -c 'python3 -V; ipmitool -V; smartctl -V | head -1'
