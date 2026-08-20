@@ -24,7 +24,7 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
             - 'generic_x14': force the GenericX14Platform (X14 motherboards)
             - 'X10QBi': force the X10QBi platform
             - any other string: auto-detected from the BMC product name prefix
-              ('X14...'/'H14...' -> X14, 'X10QBi...' -> X10QBi, 'X9...' -> X9), falls back to GenericPlatform
+              ('X14...' -> X14, 'X10QBi...' -> X10QBi, 'X9...' -> X9), falls back to GenericPlatform
         exec_ipmitool (Callable): Function that executes ipmitool commands
         zone_sensors (Optional[Dict[int, int]]): IPMI zone -> fan sensor number map, used by the X14 platform
             only (`[Ipmi] x14_zone_sensors=`); ignored by every other platform
@@ -39,7 +39,10 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
     }
     platform_class = platform_factory.get(platform_name)
     if platform_class is None:
-        if platform_name.startswith("X14") or platform_name.startswith("H14"):
+        # H14 boards are deliberately not routed here: they have no per-zone manual fan mode (the OEM
+        # command answers 0xC1), so GenericX14Platform cannot control them and would only fail at startup.
+        # They fall through to GenericPlatform, and `platform_name=generic_x14` still forces X14 explicitly.
+        if platform_name.startswith("X14"):
             platform_class = GenericX14Platform
         elif platform_name.startswith("X10QBi"):
             platform_class = X10QBi

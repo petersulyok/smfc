@@ -21,5 +21,5 @@ Recommends: smartmontools
 Suggests: nvidia-utils-server | nvidia-utils
 Description: Supermicro Fan Control for Linux
  smfc is a systemd service to control fans in Linux on Supermicro X9,
- X10-X13/H10-H13, X10QBi and X14/H14 (experimental) motherboards with
+ X10-X13/H10-H14, X10QBi and X14 (experimental) motherboards with
  IPMI fan function.

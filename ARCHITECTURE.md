@@ -290,7 +290,7 @@ flowchart TD
     I -- GENERIC_X9 --> X9[GenericX9Platform]
     I -- X10QBI --> XQ[X10QBi]
     I -- GENERIC --> GP[GenericPlatform]
-    I -- no match --> G{name startswith X14 or H14?}
+    I -- no match --> G{name startswith X14?}
     G -- yes --> X14
     G -- no --> J{name startswith X10QBi?}
     J -- yes --> XQ
@@ -303,11 +303,17 @@ flowchart TD
 (this is how an explicit `platform_name=generic_x9` / `generic_x14` / `X10QBi`
 value is honoured). When there is no exact match — the normal `auto` path, where
 the raw BMC product name is passed in — it falls back to string-prefix matching:
-names starting with `X14` or `H14` get the X14 platform, names starting with
-`X10QBi` get the X10QBi platform, names starting with `X9` get the X9 platform,
-and everything else (X10, X11, X12, X13, H10-H13, …) gets the generic platform.
+names starting with `X14` get the X14 platform, names starting with `X10QBi` get
+the X10QBi platform, names starting with `X9` get the X9 platform, and everything
+else (X10, X11, X12, X13, H10-H14, …) gets the generic platform.
 So `X10QBi` is auto-detected from the BMC product-name prefix, exactly like X14
 and X9 — no explicit opt-in is required.
+
+`H14` is **not** matched, although the BMC generation is the same: those boards
+have no per-zone manual fan mode (the OEM command answers `0xC1`), so
+`GenericX14Platform` cannot control them and routing them there could only fail at
+startup. They land on `GenericPlatform` instead. `platform_name=generic_x14` still
+forces the X14 platform on any board, for anyone who wants to test it.
 
 ### 6.3 Platform implementations
 
@@ -731,8 +737,8 @@ re-issuing the mode unconditionally. Skipping the redundant write avoids a needl
 `FULL` is re-latched on a running system); a lost control state is still caught
 every iteration by `_check_fan_mode()`. On real X11SCH-LN4F reboots the BMC comes
 up already in `FULL`, so this step routinely skips. A platform that cannot acquire
-control at all — an X14 zone refusing the manual mode latch, which is how an H14
-board behaves — raises here and `smfc` exits with code 8.
+control at all — an X14 zone refusing the manual mode latch — raises here and
+`smfc` exits with code 8.
 
 Important: controller construction issues **no** IPMI fan writes — each
 controller's `__init__` only calls `get_temp()` — so there is no inter-controller
