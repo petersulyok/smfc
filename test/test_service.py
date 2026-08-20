@@ -16,6 +16,7 @@ from mock import MagicMock
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, FanController, ConstFc, Service
 from smfc.config import Config
+from smfc.platform import ControlState, ControlStatus
 from .test_fixtures import TestData
 from .test_mocks import MockedContextError, MockedContextGood
 from .test_ipmi import BMC_INFO_OUTPUT
@@ -913,9 +914,10 @@ class TestService:
         steps:
         - mock print(), time.sleep() (exits with code 100 after 3 iterations), smfc.service.Exporter,
           pyudev.Context.__init__ via MockedContextGood, and CpuFc.__init__ to skip real hwmon discovery
-        - patch smfc.Ipmi.get_fan_mode with a staged function returning `startup_mode` on the first (startup) read
-          and Ipmi.FULL_MODE afterwards, so the main loop's _check_fan_mode() sees no drift and stays quiet
-        - patch smfc.Ipmi.set_fan_mode with a MagicMock spy
+        - patch smfc.platform.Platform.get_fan_mode with a staged function returning `startup_mode` for the two
+          startup reads (the cached pre-change mode and the one Platform.start() bases its decision on) and
+          Ipmi.FULL_MODE afterwards, so the main loop's _check_fan_mode() sees no drift and stays quiet
+        - patch smfc.platform.Platform.set_fan_mode with a MagicMock spy
         - build a minimal CPU-only config via `td` (fake ipmitool whose `sdr` reports a live fan so the BMC gate
           passes without sleeping) and write it to disk
         - instantiate Service and invoke Service.run() inside pytest.raises(SystemExit)
@@ -939,14 +941,12 @@ class TestService:
                 sys.exit(100)
 
         def staged_get_fan_mode(_self) -> int:
-            """Return the startup mode on the first read, then a steady FULL so the loop sees no drift."""
-            if seen["first"]:
-                seen["first"] = False
-                return startup_mode
-            return Ipmi.FULL_MODE
+            """Return the startup mode on the two startup reads, then a steady FULL so the loop sees no drift."""
+            seen["reads"] += 1
+            return startup_mode if seen["reads"] <= 2 else Ipmi.FULL_MODE
         # pylint: enable=unused-argument
 
-        seen = {"first": True}
+        seen = {"reads": 0}
         cmd_ipmi = td.create_command_file(
             'if [[ $1 = "bmc" && $2 = "info" ]] ; then\n'
             "cat << 'BMCEOF'\n" + BMC_INFO_OUTPUT +
@@ -984,9 +984,9 @@ class TestService:
         mocker.patch("smfc.service.Exporter", MagicMock())
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
         mocker.patch("smfc.CpuFc.__init__", mocked_cpufc_init)
-        mocker.patch("smfc.Ipmi.get_fan_mode", staged_get_fan_mode)
+        mocker.patch("smfc.platform.Platform.get_fan_mode", staged_get_fan_mode)
         mock_set = MagicMock()
-        mocker.patch("smfc.Ipmi.set_fan_mode", mock_set)
+        mocker.patch("smfc.platform.Platform.set_fan_mode", mock_set)
         self.sleep_counter = 0
         sys.argv = ("smfc.py -o 0 -l 4 -ne -nd -c " + conf_file).split()
         service = Service()
@@ -1000,17 +1000,63 @@ class TestService:
             mock_set.assert_not_called()
         assert service.last_fan_mode == Ipmi.FULL_MODE, "last_fan_mode must hold FULL after startup"
 
+    def test_run_exits_when_control_cannot_be_acquired(self, mocker: MockerFixture, td: TestData):
+        """Negative unit test for Service.run() method. It contains the following steps:
+        - mock print(), time.sleep(), smfc.service.Exporter, pyudev.Context.__init__ via MockedContextGood, and
+          CpuFc.__init__ to skip real hwmon discovery
+        - patch smfc.platform.Platform.start to raise RuntimeError, as an X14 zone refusing the manual mode
+          latch (or an unreachable BMC) does
+        - build a minimal CPU-only config via `td` and write it to disk
+        - instantiate Service and invoke Service.run() inside pytest.raises(SystemExit)
+        - ASSERT: sys.exit() code equals 8, the same code an Ipmi initialization failure uses, because smfc
+          cannot control the fans and must not pretend otherwise
+        """
+        # pylint: disable=unused-argument
+        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
+            nonlocal td
+            self.hwmon_path = td.cpu_files
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(td.cpu_files))
+        # pylint: enable=unused-argument
+
+        cmd_ipmi = td.create_ipmi_command()
+        td.create_cpu_data(1)
+        my_config = ConfigParser()
+        my_config[Config.CS_IPMI] = {
+            Config.CV_IPMI_COMMAND: cmd_ipmi,
+            Config.CV_IPMI_FAN_MODE_DELAY: "0",
+            Config.CV_IPMI_FAN_LEVEL_DELAY: "0",
+        }
+        my_config[Config.CS_CPU] = {Config.CV_ENABLED: "True", Config.CV_POLLING: "0"}
+        conf_file = td.create_config_file(my_config)
+        mocker.patch("builtins.print", MagicMock())
+        mocker.patch("time.sleep", MagicMock())
+        mocker.patch("smfc.service.Exporter", MagicMock())
+        mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
+        mocker.patch("smfc.CpuFc.__init__", mocked_cpufc_init)
+        mocker.patch("smfc.platform.Platform.start", MagicMock(side_effect=RuntimeError("zone 0 refused")))
+        sys.argv = ("smfc.py -o 0 -l 3 -ne -nd -c " + conf_file).split()
+        service = Service()
+        with pytest.raises(SystemExit) as cm:
+            service.run()
+        assert cm.value.code == 8, "a failed control acquisition must exit with code 8"
+
     def _make_service_for_fan_mode_check(self, mocker: MockerFixture, enforce: bool) -> Service:
-        """Build a minimally-initialized Service for unit-testing _check_fan_mode()."""
+        """Build a minimally-initialized Service for unit-testing _check_fan_mode(), with a stubbed Platform so
+        the control state the helper reacts to can be dictated per test."""
         mocker.patch("builtins.print", MagicMock())
         service = Service()
         service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
         # Real Ipmi instance with attributes we need for the helper, no actual ipmitool.
         service.ipmi = Ipmi.__new__(Ipmi)
-        # Stub a minimal config object — only ipmi.enforce_fan_mode is read by _check_fan_mode().
+        service.ipmi.platform = MagicMock()
+        service.ipmi.platform.start.return_value = False
+        # Stub a minimal config object — only ipmi.enforce_fan_mode and ipmi.fan_mode_delay are read.
         service.config = MagicMock()
         service.config.ipmi.enforce_fan_mode = enforce
+        service.config.ipmi.fan_mode_delay = 0
         service.applied_levels = {0: 45, 1: 55}
+        service.controlled_zones = [0, 1]
         service.last_fan_mode = Ipmi.FULL_MODE
         service.last_fan_mode_at = time.monotonic()
         service.fan_mode_enforced_count = 0
@@ -1018,32 +1064,33 @@ class TestService:
 
     def test_check_fan_mode_no_drift(self, mocker: MockerFixture):
         """Positive unit test for Service._check_fan_mode() method. It contains the following steps:
-        - mock print(), Ipmi.get_fan_mode() returning FULL_MODE, Ipmi.set_fan_mode(), Ipmi.set_fan_level()
+        - mock print(), Ipmi.set_fan_level(), and stub the platform to report ControlState.OK with FULL_MODE
         - build a Service via _make_service_for_fan_mode_check() with enforce=True
         - call Service._check_fan_mode()
+        - ASSERT: the platform is asked about the controlled zone list, not about some recomputed one
         - ASSERT: service.last_fan_mode still equals Ipmi.FULL_MODE (cache holds FULL)
-        - ASSERT: Ipmi.set_fan_mode() is not called (no recovery needed)
+        - ASSERT: Platform.start() is not called (no recovery needed)
         - ASSERT: Ipmi.set_fan_level() is not called (no zone re-apply needed)
         """
         f = "TestService.test_check_fan_mode_no_drift"
         service = self._make_service_for_fan_mode_check(mocker, enforce=True)
-        mocker.patch("smfc.Ipmi.get_fan_mode", MagicMock(return_value=Ipmi.FULL_MODE))
-        mock_set_mode = MagicMock()
+        status = ControlStatus(ControlState.OK, "", Ipmi.FULL_MODE)
+        service.ipmi.platform.check_fan_mode.return_value = status
         mock_set_level = MagicMock()
-        mocker.patch("smfc.Ipmi.set_fan_mode", mock_set_mode)
         mocker.patch("smfc.Ipmi.set_fan_level", mock_set_level)
         service._check_fan_mode()  # pylint: disable=protected-access
+        service.ipmi.platform.check_fan_mode.assert_called_once_with([0, 1])
         assert service.last_fan_mode == Ipmi.FULL_MODE, f"{f}: cache must hold FULL"
-        assert mock_set_mode.call_count == 0, f"{f}: no recovery expected"
+        assert service.ipmi.platform.start.call_count == 0, f"{f}: no recovery expected"
         assert mock_set_level.call_count == 0, f"{f}: no zone re-apply expected"
 
     def test_check_fan_mode_drift_recovers(self, mocker: MockerFixture):
         """Positive unit test for Service._check_fan_mode() method. It contains the following steps:
-        - mock print(), Ipmi.get_fan_mode() returning STANDARD_MODE (drift), Ipmi.set_fan_mode(), Ipmi.set_fan_level()
+        - mock print(), Ipmi.set_fan_level(), and stub the platform to report a confirmed ControlState.LOST with
+          the drifted mode (STANDARD), with Platform.start() reporting that it wrote the fan mode
         - build a Service via _make_service_for_fan_mode_check() with enforce=True and applied_levels={0:45,1:55}
         - call Service._check_fan_mode()
-        - ASSERT: Ipmi.set_fan_mode() is called exactly once
-        - ASSERT: Ipmi.set_fan_mode() is called with Ipmi.FULL_MODE (mode restored)
+        - ASSERT: Platform.start() is called exactly once, with the controlled zone list
         - ASSERT: Ipmi.set_fan_level() is called once per cached zone in applied_levels
         - ASSERT: set of zones passed to set_fan_level() equals service.applied_levels.keys()
         - ASSERT: service.last_fan_mode is updated back to Ipmi.FULL_MODE
@@ -1051,14 +1098,13 @@ class TestService:
         """
         f = "TestService.test_check_fan_mode_drift_recovers"
         service = self._make_service_for_fan_mode_check(mocker, enforce=True)
-        mocker.patch("smfc.Ipmi.get_fan_mode", MagicMock(return_value=Ipmi.STANDARD_MODE))
-        mock_set_mode = MagicMock()
+        status = ControlStatus(ControlState.LOST, "BMC fan mode drifted from FULL to STANDARD", Ipmi.STANDARD_MODE)
+        service.ipmi.platform.check_fan_mode.return_value = status
+        service.ipmi.platform.start.return_value = True
         mock_set_level = MagicMock()
-        mocker.patch("smfc.Ipmi.set_fan_mode", mock_set_mode)
         mocker.patch("smfc.Ipmi.set_fan_level", mock_set_level)
         service._check_fan_mode()  # pylint: disable=protected-access
-        assert mock_set_mode.call_count == 1, f"{f}: set_fan_mode should be called once"
-        assert mock_set_mode.call_args.args[0] == Ipmi.FULL_MODE, f"{f}: must restore FULL"
+        service.ipmi.platform.start.assert_called_once_with([0, 1])
         # set_fan_level called once per applied_levels entry.
         assert mock_set_level.call_count == len(service.applied_levels), \
             f"{f}: every cached zone should be re-applied"
@@ -1069,66 +1115,82 @@ class TestService:
 
     def test_check_fan_mode_drift_exits_when_disabled(self, mocker: MockerFixture):
         """Negative unit test for Service._check_fan_mode() method. It contains the following steps:
-        - mock print(), Ipmi.get_fan_mode() returning OPTIMAL_MODE (drift), Ipmi.set_fan_mode()
+        - mock print() and stub the platform to report a confirmed ControlState.LOST with the OPTIMAL mode
         - build a Service via _make_service_for_fan_mode_check() with enforce=False
         - call Service._check_fan_mode() inside pytest.raises(SystemExit)
-        - ASSERT: sys.exit() code equals 11 (drift detected with enforcement disabled)
-        - ASSERT: Ipmi.set_fan_mode() is not called (no recovery attempt when disabled)
+        - ASSERT: sys.exit() code equals 11 (a lost control state with enforcement disabled)
+        - ASSERT: Platform.start() is not called (no recovery attempt when disabled)
         """
         f = "TestService.test_check_fan_mode_drift_exits_when_disabled"
         service = self._make_service_for_fan_mode_check(mocker, enforce=False)
-        mocker.patch("smfc.Ipmi.get_fan_mode", MagicMock(return_value=Ipmi.OPTIMAL_MODE))
-        mock_set_mode = MagicMock()
-        mocker.patch("smfc.Ipmi.set_fan_mode", mock_set_mode)
+        status = ControlStatus(ControlState.LOST, "BMC fan mode drifted from FULL to OPTIMAL", Ipmi.OPTIMAL_MODE)
+        service.ipmi.platform.check_fan_mode.return_value = status
         with pytest.raises(SystemExit) as cm:
             service._check_fan_mode()  # pylint: disable=protected-access
         assert cm.value.code == 11, f"{f}: must exit with code 11"
-        assert mock_set_mode.call_count == 0, f"{f}: must not attempt recovery when disabled"
+        assert service.ipmi.platform.start.call_count == 0, f"{f}: must not attempt recovery when disabled"
 
-    def test_check_fan_mode_get_mode_transient_error(self, mocker: MockerFixture):
+    def test_check_fan_mode_unconfirmed_reacquires_without_counting(self, mocker: MockerFixture):
         """Negative unit test for Service._check_fan_mode() method. It contains the following steps:
-        - mock print(), Ipmi.get_fan_mode() raising RuntimeError("ipmitool error..."), Ipmi.set_fan_mode()
+        - mock print(), Ipmi.set_fan_level(), and stub the platform to report an unconfirmed ControlState.LOST
+          with fan_mode=-1, i.e. the BMC could not be read at all
         - build a Service via _make_service_for_fan_mode_check() with enforce=True and capture pre-call cache
         - call Service._check_fan_mode() (no SystemExit expected)
-        - ASSERT: service.last_fan_mode is unchanged after the transient error
-        - ASSERT: service.last_fan_mode_at timestamp is unchanged after the transient error
-        - ASSERT: Ipmi.set_fan_mode() is not called (no recovery attempt on read failure)
+        - ASSERT: service.last_fan_mode is unchanged, because nothing was observed
+        - ASSERT: service.last_fan_mode_at timestamp is unchanged for the same reason
+        - ASSERT: Platform.start() is called, i.e. smfc still tries to re-acquire control
+        - ASSERT: service.fan_mode_enforced_count stays zero, so an unreachable BMC does not inflate the metric
         """
-        f = "TestService.test_check_fan_mode_get_mode_transient_error"
+        f = "TestService.test_check_fan_mode_unconfirmed_reacquires_without_counting"
         service = self._make_service_for_fan_mode_check(mocker, enforce=True)
         before_mode = service.last_fan_mode
         before_at = service.last_fan_mode_at
-        mocker.patch("smfc.Ipmi.get_fan_mode",
-                     MagicMock(side_effect=RuntimeError("ipmitool error (1): permission denied.")))
-        mock_set_mode = MagicMock()
-        mocker.patch("smfc.Ipmi.set_fan_mode", mock_set_mode)
+        status = ControlStatus(ControlState.LOST, "BMC fan mode could not be read: x", -1, confirmed=False)
+        service.ipmi.platform.check_fan_mode.return_value = status
+        mocker.patch("smfc.Ipmi.set_fan_level", MagicMock())
         service._check_fan_mode()  # pylint: disable=protected-access
-        assert service.last_fan_mode == before_mode, f"{f}: cache must not change on transient error"
-        assert service.last_fan_mode_at == before_at, f"{f}: timestamp must not advance on transient error"
-        assert mock_set_mode.call_count == 0, f"{f}: must not attempt recovery on read failure"
+        assert service.last_fan_mode == before_mode, f"{f}: cache must not change on an unreadable state"
+        assert service.last_fan_mode_at == before_at, f"{f}: timestamp must not advance on an unreadable state"
+        assert service.ipmi.platform.start.call_count == 1, f"{f}: smfc must still try to re-acquire control"
+        assert service.fan_mode_enforced_count == 0, f"{f}: an unreadable state is not counted as drift"
+
+    def test_check_fan_mode_unconfirmed_does_not_exit_when_disabled(self, mocker: MockerFixture):
+        """Negative unit test for Service._check_fan_mode() method. It contains the following steps:
+        - mock print() and stub the platform to report an unconfirmed ControlState.LOST with fan_mode=-1
+        - build a Service via _make_service_for_fan_mode_check() with enforce=False
+        - call Service._check_fan_mode() (no SystemExit expected)
+        - ASSERT: smfc does not exit with code 11, because nothing was observed to drift
+        - ASSERT: Platform.start() is not called either, enforcement is disabled
+        """
+        f = "TestService.test_check_fan_mode_unconfirmed_does_not_exit_when_disabled"
+        service = self._make_service_for_fan_mode_check(mocker, enforce=False)
+        status = ControlStatus(ControlState.LOST, "BMC fan mode could not be read: x", -1, confirmed=False)
+        service.ipmi.platform.check_fan_mode.return_value = status
+        service._check_fan_mode()  # pylint: disable=protected-access
+        assert service.ipmi.platform.start.call_count == 0, f"{f}: must not attempt recovery when disabled"
 
     def test_check_fan_mode_recovery_transient_error(self, mocker: MockerFixture):
         """Negative unit test for Service._check_fan_mode() method. It contains the following steps:
-        - mock print(), Ipmi.get_fan_mode() returning STANDARD_MODE (drift),
-          Ipmi.set_fan_mode() raising RuntimeError, Ipmi.set_fan_level()
+        - mock print(), Ipmi.set_fan_level(), and stub the platform to report a confirmed ControlState.LOST with
+          the STANDARD mode and a Platform.start() that raises RuntimeError
         - build a Service via _make_service_for_fan_mode_check() with enforce=True
         - call Service._check_fan_mode() (no SystemExit expected — loop is the recovery mechanism)
         - ASSERT: service.last_fan_mode holds Ipmi.STANDARD_MODE (drifted mode) so the next iteration retries
-        - ASSERT: Ipmi.set_fan_level() is not called (no zone re-apply when set_fan_mode() failed)
+        - ASSERT: Ipmi.set_fan_level() is not called (no zone re-apply when the re-acquire failed)
         """
         f = "TestService.test_check_fan_mode_recovery_transient_error"
         service = self._make_service_for_fan_mode_check(mocker, enforce=True)
-        mocker.patch("smfc.Ipmi.get_fan_mode", MagicMock(return_value=Ipmi.STANDARD_MODE))
-        mock_set_mode = MagicMock(side_effect=RuntimeError("ipmitool error (1): try again."))
+        status = ControlStatus(ControlState.LOST, "BMC fan mode drifted from FULL to STANDARD", Ipmi.STANDARD_MODE)
+        service.ipmi.platform.check_fan_mode.return_value = status
+        service.ipmi.platform.start.side_effect = RuntimeError("ipmitool error (1): try again.")
         mock_set_level = MagicMock()
-        mocker.patch("smfc.Ipmi.set_fan_mode", mock_set_mode)
         mocker.patch("smfc.Ipmi.set_fan_level", mock_set_level)
         # No SystemExit; the loop is the recovery mechanism.
         service._check_fan_mode()  # pylint: disable=protected-access
         # last_fan_mode should reflect the failed reading (drifted), so the next iteration retries.
         assert service.last_fan_mode == Ipmi.STANDARD_MODE, \
             f"{f}: cache must hold the drifted mode so the next iteration retries"
-        assert mock_set_level.call_count == 0, f"{f}: must not re-apply levels when set_fan_mode failed"
+        assert mock_set_level.call_count == 0, f"{f}: must not re-apply levels when the re-acquire failed"
 
     def test_exporter_disabled_does_not_start(self, mocker: MockerFixture):
         """Positive unit test for Service._start_exporter() guard. It contains the following steps:

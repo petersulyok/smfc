@@ -352,6 +352,24 @@ class TestIpmi:
         mock_time_sleep.assert_called_with(my_ipmi.config.fan_mode_delay)
         assert mock_time_sleep.call_count == 1
 
+    def test_set_fan_mode_logs_at_debug(self, mocker: MockerFixture) -> None:
+        """Positive unit test for Ipmi.set_fan_mode() method (DEBUG logging). It contains the following steps:
+        - mock Ipmi._exec_ipmitool, time.sleep and Log.msg
+        - build a bare Ipmi via the _make_bare_ipmi helper with fan_mode_delay=0 and attach a DEBUG level Log
+        - call my_ipmi.set_fan_mode(Ipmi.FULL_MODE)
+        - ASSERT: Log.msg() is called once, i.e. the mode change is traced at DEBUG level
+        - ASSERT: the logged message names the fan mode by name and by value
+        """
+        mock_ipmi_exec = MagicMock()
+        my_ipmi = _make_bare_ipmi(mocker, mock_ipmi_exec, fan_mode_delay=0)
+        my_ipmi.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        mocker.patch("time.sleep", MagicMock())
+        mock_msg = MagicMock()
+        mocker.patch.object(my_ipmi.log, "msg", mock_msg)
+        my_ipmi.set_fan_mode(Ipmi.FULL_MODE)
+        assert mock_msg.call_count == 1
+        assert "FULL (1)" in mock_msg.call_args.args[1]
+
     @pytest.mark.parametrize(
         "fan_mode, exception",
         [
@@ -591,22 +609,15 @@ class TestIpmi:
             my_ipmi.get_fan_level(Ipmi.CPU_ZONE)
         assert cm.type == exception
 
-    @pytest.mark.parametrize(
-        "in_client, expect_set_manual_called",
-        [
-            pytest.param(False, True, id="in_client-false-starts-platform"),
-            pytest.param(True, False, id="in_client-true-skips-platform-start"),
-        ],
-    )
-    def test_init_in_client(self, mocker: MockerFixture, td: TestData, in_client: bool,
-                            expect_set_manual_called: bool) -> None:
-        """Positive unit test for Ipmi.__init__() method (in_client behaviour). It contains the following steps:
+    def test_init_never_starts_platform(self, mocker: MockerFixture, td: TestData) -> None:
+        """Positive unit test for Ipmi.__init__() method (fan control is not acquired here). It contains the
+        following steps:
         - mock builtins.print, Ipmi._exec_ipmitool (returns BMC info on the info call),
-          smfc.generic.GenericPlatform.start, and the td fixture's create_command_file (fake ipmitool binary)
+          smfc.platform.Platform.start, and the td fixture's create_command_file (fake ipmitool binary)
         - build an ipmi Config via create_ipmi_config(command=...)
-        - call Ipmi(my_log, cfg, False, in_client=in_client)
-        - ASSERT: GenericPlatform.start is called exactly once when in_client=False, and zero times when
-          in_client=True
+        - call Ipmi(my_log, cfg, False)
+        - ASSERT: Platform.start() is not called at all - acquiring fan control belongs to Service.run(), which
+          knows the controlled zone list and runs it after the DEBUG logging of the pre-change BMC state
         """
         command = td.create_command_file()
         mocker.patch("builtins.print", MagicMock())
@@ -616,15 +627,12 @@ class TestIpmi:
             subprocess.CompletedProcess([], returncode=0, stdout=BMC_INFO_OUTPUT),
         ]
         mocker.patch("smfc.Ipmi._exec_ipmitool", mock_ipmi_exec)
-        mock_set_manual = MagicMock()
-        mocker.patch("smfc.generic.GenericPlatform.start", mock_set_manual)
+        mock_start = MagicMock()
+        mocker.patch("smfc.platform.Platform.start", mock_start)
         cfg = create_ipmi_config(command=command)
         my_log = Log(Log.LOG_NONE, Log.LOG_STDOUT)
-        Ipmi(my_log, cfg, False, in_client=in_client)
-        if expect_set_manual_called:
-            assert mock_set_manual.call_count == 1
-        else:
-            assert mock_set_manual.call_count == 0
+        Ipmi(my_log, cfg, False)
+        assert mock_start.call_count == 0
 
     def test_init_bmc_init_timeout(self, mocker: MockerFixture, td: TestData) -> None:
         """Negative unit test for Ipmi.__init__() method (bmc_init_timeout override). It contains the following

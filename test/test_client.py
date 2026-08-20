@@ -439,6 +439,23 @@ class TestFormatReport:
         assert "not in FULL mode" in out
         assert "ERROR" not in out
 
+    def test_fan_mode_not_flagged_on_x14(self) -> None:
+        """Positive unit test for smfc.client._format_report() function. It contains the following steps:
+        - build a fake Ipmi MagicMock with fan_mode_value=0 (STANDARD) whose platform reports
+          ENFORCES_FULL_MODE=False, i.e. an X14 board where the base fan mode is only the fallback curve
+        - call _format_report() with use_color=False
+        - ASSERT: the mode label is still printed, so the user sees the base fan mode
+        - ASSERT: the 'not in FULL mode' warning is absent, because smfc deliberately leaves that mode alone
+          on this platform and a non-FULL mode is its normal state
+        """
+        ipmi = _make_fake_ipmi(fan_mode_value=0)
+        ipmi.platform.ENFORCES_FULL_MODE = False
+        cpu = _make_fake_cpu_controller()
+        entries = [("CPU", "cpu", cpu, None)]
+        out = client._format_report(ipmi, entries, "x.conf", use_color=False)
+        assert "STANDARD" in out
+        assert "not in FULL mode" not in out
+
     def test_zones_table_unions_zones(self) -> None:
         """Positive unit test for smfc.client._format_report() function. It contains the following steps:
         - build a fake Ipmi MagicMock and CPU/HD/CONST controller stubs on zones 0/1/2

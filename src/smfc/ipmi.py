@@ -7,7 +7,7 @@ import subprocess
 import time
 from typing import List
 from smfc.log import Log
-from smfc.platform import FanMode, Platform
+from smfc.platform import FanMode, Platform, get_fan_mode_name
 from smfc.platform_factory import create_platform
 from smfc.config import IpmiConfig, Config, PlatformName
 
@@ -56,8 +56,8 @@ class Ipmi:
             log (Log): a Log class instance
             cfg (IpmiConfig): IPMI configuration
             sudo (bool): sudo flag
-            in_client (bool): if True, do not switch the BMC into manual fan mode (read-only consumers
-                              like smfc-client should set this to avoid mutating BMC state)
+            in_client (bool): if True, skip the fan sensor readiness gate of the BMC startup wait (read-only
+                              consumers like smfc-client do not need the fan subsystem to be settled)
             bmc_init_timeout (float): override for the BMC-not-ready retry timeout (seconds);
                                       defaults to Ipmi.BMC_INIT_TIMEOUT (180 s); pass 0 to disable retries
         Raises:
@@ -136,9 +136,7 @@ class Ipmi:
         platform_name = self.config.platform_name
         if platform_name == PlatformName.AUTO:
             platform_name = self.bmc_product_name
-        self.platform = create_platform(platform_name, self._exec_ipmitool)
-        if not in_client:
-            self.platform.start()
+        self.platform = create_platform(platform_name, self._exec_ipmitool, self.config.x14_zone_sensors)
 
         # Print the configuration out at CONFIG log level.
         if self.log.log_level >= Log.LOG_CONFIG:
@@ -243,20 +241,7 @@ class Ipmi:
         Returns:
             str: name of the fan mode ('UNKNOWN', 'STANDARD', 'FULL', 'OPTIMAL', 'PUE', 'HEAVY IO')
         """
-        fan_mode_name: str  # Name of the fan mode
-
-        fan_mode_name = "UNKNOWN"
-        if mode == FanMode.STANDARD:
-            fan_mode_name = "STANDARD"
-        elif mode == FanMode.FULL:
-            fan_mode_name = "FULL"
-        elif mode == FanMode.OPTIMAL:
-            fan_mode_name = "OPTIMAL"
-        elif mode == FanMode.PUE:
-            fan_mode_name = "PUE"
-        elif mode == FanMode.HEAVY_IO:
-            fan_mode_name = "HEAVY IO"
-        return fan_mode_name
+        return get_fan_mode_name(mode)
 
     def set_fan_mode(self, mode: int) -> None:
         """Set the IPMI fan mode.

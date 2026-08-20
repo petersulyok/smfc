@@ -17,11 +17,6 @@ class X10QBi(Platform):
     FANCTL_BASE_REG: int = 0x10                # FANCTL1 output duty register address
     FANCTL_COUNT: int = 4                      # Number of fan controllers (FANCTL1-FANCTL4)
 
-    def get_fan_mode(self) -> int:
-        """Return the current IPMI fan mode."""
-        r = self._exec(["raw", "0x30", "0x45", "0x00"])
-        return int(r.stdout)
-
     def get_fan_level(self, zone: int) -> int:
         """Return the current fan duty cycle percentage for the given zone."""
         # Zone 0-3 maps to register 0x10-0x13 (FANCTL1-FANCTL4)
@@ -31,8 +26,17 @@ class X10QBi(Platform):
         # The NCT7904D returns duty on a 0..255 scale; the platform contract uses percent.
         return round(int(r.stdout, 16) * 100 / 255)
 
-    def start(self) -> None:
-        """Configure the NCT7904D chip for direct PWM fan control."""
+    def start(self, zones: List[int]) -> bool:
+        """Configure the NCT7904D chip, then acquire control the standard way (FULL fan mode)."""
+        self._configure_chip()
+        return super().start(zones)
+
+    def _configure_chip(self) -> None:
+        """Configure the NCT7904D chip for direct PWM fan control.
+
+        This is separate from start() because the two fan level writes below call it on every duty change;
+        going through start() there would write the fan mode as well.
+        """
         # Set Temperature Fan Mapping Relationships (TMFR)
         # These map which of the 4 fan controllers are assigned to which
         # of the 10 temperature sensors. Each temperature sensor can have
@@ -62,17 +66,6 @@ class X10QBi(Platform):
         # Reference: Nuvoton NCT7904D Datasheet (p115)
         self._exec(["raw", "0x30", "0x91", "0x5c", self.BANK_3_REGISTER, "0x07", "0x00"])
 
-    def end(self, zones: List[int], level: int) -> None:
-        """Apply the exit fan level to the configured zones. No further cleanup is needed; the NCT7904D
-        configuration persists until BMC restart, so the fans keep this level until something else changes it."""
-        self.set_multiple_fan_levels(zones, level)
-
-    def set_fan_mode(self, mode: int) -> None:
-        """Set the IPMI fan mode."""
-        if mode not in self.valid_fan_modes:
-            raise ValueError(f"Invalid value: fan mode ({mode}).")
-        self._exec(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
-
     def set_fan_level(self, zone: int, level: int) -> None:
         """Set the fan duty cycle percentage for the given zone."""
         # Zone 0-3 maps to register 0x10-0x13 (FANCTL1-FANCTL4)
@@ -82,7 +75,7 @@ class X10QBi(Platform):
         reg = self.FANCTL_BASE_REG + zone
         # On the X10QBi, 100% is 0xFF (255), not 0x64 (100)
         normalised_level = level * 255 // 100
-        self.start()
+        self._configure_chip()
         self._exec(["raw", "0x30", "0x91", "0x5c", self.BANK_3_REGISTER, f"0x{reg:02x}", f"0x{normalised_level:02x}"])
 
     def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
@@ -94,7 +87,7 @@ class X10QBi(Platform):
         validate_input_range(level, "level", 0, 100)
         # On the X10QBi, 100% is 0xFF (255), not 0x64 (100)
         normalised_level = level * 255 // 100
-        self.start()
+        self._configure_chip()
         for zone in zone_list:
             reg = self.FANCTL_BASE_REG + zone
             reg_hex, level_hex = f"0x{reg:02x}", f"0x{normalised_level:02x}"

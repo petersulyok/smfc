@@ -22,6 +22,7 @@ from smfc.nvmefc import NvmeFc
 from smfc.ipmi import Ipmi
 from smfc.log import Log
 from smfc.config import Config
+from smfc.platform import ControlState
 from smfc.snapshot import build_snapshot
 
 
@@ -37,6 +38,7 @@ class Service:
     controllers: List[Union[FanController, ConstFc]]           # List of enabled fan controller instances
     applied_levels: Dict[int, int]                             # Cache of last applied fan levels per IPMI zone
     shared_zones: Set[int]                                     # Set of IPMI zone IDs shared between controllers
+    controlled_zones: List[int]                                # Sorted list of IPMI zones smfc controls
     last_desired: List[Tuple[str, List[int], int, float]]      # Cache of last desired levels for change detection
     last_fan_mode: int                                         # Last observed BMC fan mode (from _check_fan_mode)
     last_fan_mode_at: float                                    # monotonic() timestamp of last_fan_mode
@@ -240,40 +242,44 @@ class Service:
         return shared
 
     def _check_fan_mode(self) -> None:
-        """Read the current BMC fan mode, cache it, and react to drift away from FULL.
+        """Ask the platform whether smfc is still in control of the fans, cache the observed BMC fan mode, and
+        react when control was lost.
 
-        When `enforce_fan_mode` is enabled (default), drift away from FULL is auto-corrected:
-        re-assert FULL and re-apply all cached per-zone levels (some BMC firmwares reset zone
-        levels when the mode changes). When disabled, drift triggers a clean exit with code 11.
+        What "in control" means is platform-specific: FULL fan mode on most Supermicro boards, latched per-zone
+        manual mode on X14. When `enforce_fan_mode` is enabled (default), a lost control state is re-acquired
+        and all cached per-zone levels are re-applied (some BMC firmwares reset zone levels when the mode
+        changes). When it is disabled, a lost control state triggers a clean exit with code 11.
+
+        A state that could not be read at all is reported by the platform as lost but unconfirmed: smfc still
+        tries to re-acquire (an unreachable BMC makes those writes fail too, and the next loop iteration is the
+        retry), but nothing was observed to drift, so it is neither counted as an enforcement nor a reason to
+        exit.
         """
-        try:
-            mode = self.ipmi.get_fan_mode()
-        except (RuntimeError, ValueError) as e:
-            # Transient BMC error: log and skip this cycle. Don't exit — the
-            # control loop is the recovery mechanism for transient errors.
-            self.log.msg(Log.LOG_ERROR, f"Fan mode read failed: {e}")
-            return
-
-        self.last_fan_mode = mode
-        self.last_fan_mode_at = time.monotonic()
-
-        if mode == Ipmi.FULL_MODE:
-            return
-
-        mode_name = Ipmi.get_fan_mode_name(mode)
-        if not self.config.ipmi.enforce_fan_mode:
-            self.log.msg(Log.LOG_ERROR,
-                         f"BMC fan mode drifted from FULL to {mode_name}; "
-                         f"enforce_fan_mode is disabled, smfc exiting.")
-            sys.exit(11)
-
-        self.fan_mode_enforced_count += 1
-        self.log.msg(Log.LOG_INFO,
-                     f"BMC fan mode drifted from FULL to {mode_name}; restoring FULL.")
-        try:
-            self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
-            self.last_fan_mode = Ipmi.FULL_MODE
+        status = self.ipmi.platform.check_fan_mode(self.controlled_zones)
+        if status.fan_mode != -1:
+            self.last_fan_mode = status.fan_mode
             self.last_fan_mode_at = time.monotonic()
+
+        if status.state == ControlState.OK:
+            return
+
+        if not self.config.ipmi.enforce_fan_mode:
+            if status.confirmed:
+                self.log.msg(Log.LOG_ERROR, f"{status.detail}; enforce_fan_mode is disabled, smfc exiting.")
+                sys.exit(11)
+            self.log.msg(Log.LOG_ERROR, status.detail)
+            return
+
+        if status.confirmed:
+            self.fan_mode_enforced_count += 1
+            self.log.msg(Log.LOG_INFO, f"{status.detail}; restoring fan control.")
+        else:
+            self.log.msg(Log.LOG_ERROR, status.detail)
+        try:
+            if self.ipmi.platform.start(self.controlled_zones):
+                self.last_fan_mode = Ipmi.FULL_MODE
+                self.last_fan_mode_at = time.monotonic()
+                time.sleep(self.config.ipmi.fan_mode_delay)
             for zone, level in self.applied_levels.items():
                 self.ipmi.set_fan_level(zone, level)
         except (RuntimeError, ValueError) as e:
@@ -415,20 +421,21 @@ class Service:
                         configured_zones.update(cfg.ipmi_zone)
             for zone in sorted(configured_zones):
                 self.log.msg(Log.LOG_DEBUG, f"Old level in IPMI zone {zone} = {self.ipmi.get_fan_level(zone)}%")
-        # Set FULL fan mode at startup only if the BMC is not already in FULL. The BMC readiness gate in
-        # Ipmi.__init__ waits out the cold-boot settling window (interface up + fan subsystem out of `ns`),
-        # so the mode read at line 346 is a settled reading — a reported FULL is a stable FULL, not the
-        # transitional state that once forced an unconditional re-set. Skipping the redundant write avoids
-        # a needless fan_mode_delay sleep (and the momentary fan blip some firmware produces when FULL is
-        # re-latched) on warm restarts; runtime drift is still caught by _check_fan_mode(). The set still
-        # fires on firmware that boots into a non-FULL default; the X11SCH-LN4F comes up already in FULL even
-        # after a full PSU-off cold start (verified across warm, BIOS-change, and PSU-off boots), so this
-        # branch routinely skips on this board.
-        if self.last_fan_mode != Ipmi.FULL_MODE:
-            self.ipmi.set_fan_mode(Ipmi.FULL_MODE)
-            self.last_fan_mode = Ipmi.FULL_MODE
-            self.last_fan_mode_at = time.monotonic()
-            self.log.msg(Log.LOG_DEBUG, f"Set IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}")
+        # Acquire fan control. What that means is platform-specific: most Supermicro boards are switched into
+        # FULL fan mode (and only if they are not in FULL already - skipping the redundant write avoids a
+        # needless fan_mode_delay sleep and the momentary fan blip some firmware produces when FULL is
+        # re-latched), while X14 latches its per-zone manual mode instead. The BMC readiness gate in
+        # Ipmi.__init__ waits out the cold-boot settling window, so the state the platform observes here is a
+        # settled one. Runtime drift is still caught by _check_fan_mode().
+        try:
+            if self.ipmi.platform.start(self._exit_zones()):
+                self.last_fan_mode = Ipmi.FULL_MODE
+                self.last_fan_mode_at = time.monotonic()
+                self.log.msg(Log.LOG_DEBUG, f"Set IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}")
+                time.sleep(self.config.ipmi.fan_mode_delay)
+        except (RuntimeError, ValueError) as e:
+            self.log.msg(Log.LOG_ERROR, f"{e}.")
+            sys.exit(8)
 
         # Initialize connection to udev database
         try:
@@ -468,6 +475,10 @@ class Service:
         if not self.controllers:
             self.log.msg(Log.LOG_ERROR, "None of the fan controllers are enabled, service terminated.")
             sys.exit(10)
+
+        # Cache the controlled zone list: _check_fan_mode() needs it on every poll and it cannot change while
+        # the service runs.
+        self.controlled_zones = self._exit_zones()
 
         # Check for shared IPMI zones and enable deferred apply only for affected controllers.
         self.shared_zones = self._check_shared_zones()

@@ -7,7 +7,7 @@ import re
 from configparser import ConfigParser
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 
 class PlatformName(str, Enum):
@@ -29,6 +29,7 @@ class IpmiConfig:
     platform_name: str      # Platform name (from config or "auto" for auto-detection)
     enforce_fan_mode: bool  # Re-assert FULL fan mode if BMC drifts (default: True; False = exit on drift)
     exit_level: int         # Fan level applied to all configured zones at exit (0..100%, -1 = do not change)
+    x14_zone_sensors: Dict[int, int] = field(default_factory=lambda: {0: 0x41})  # X14: zone -> fan sensor number
 
 
 @dataclass
@@ -170,6 +171,7 @@ class Config:
     CV_IPMI_PLATFORM_NAME: str = "platform_name"            # Platform name or "auto"
     CV_IPMI_ENFORCE_FAN_MODE: str = "enforce_fan_mode"      # Re-assert FULL on BMC drift
     CV_IPMI_EXIT_LEVEL: str = "exit_level"                  # Fan level applied at exit (-1 = do not change)
+    CV_IPMI_X14_ZONE_SENSORS: str = "x14_zone_sensors"      # X14 only: fan sensor number of each IPMI zone
 
     # [HD] section variable names
     CV_HD_NAMES: str = "hd_names"                            # HD device names
@@ -218,6 +220,7 @@ class Config:
     DV_IPMI_PLATFORM_NAME: str = "auto"
     DV_IPMI_ENFORCE_FAN_MODE: bool = True
     DV_IPMI_EXIT_LEVEL: int = 100
+    DV_IPMI_X14_ZONE_SENSORS: str = "0x41"
     # Sentinel value of `exit_level=` meaning "do not change the fan levels at exit".
     EXIT_LEVEL_NONE: int = -1
 
@@ -355,6 +358,27 @@ class Config:
         return zones
 
     @staticmethod
+    def parse_x14_zone_sensors(sensors_str: str) -> Dict[int, int]:
+        """Parse a comma- or space-separated string of X14 fan sensor numbers into a zone -> sensor map.
+        The list index is the IPMI zone, so the first value belongs to zone 0. Values may be decimal or
+        hexadecimal (`0x41`), and each one must be a valid IPMI sensor number (a byte).
+        Args:
+            sensors_str (str): fan sensor number(s) string
+        Returns:
+            Dict[int, int]: map of IPMI zone -> fan sensor number
+        Raises:
+            ValueError: invalid sensor string or sensor value out of range
+        """
+        clean_str = re.sub(" +", " ", sensors_str.strip())
+        if not clean_str:
+            return {}
+        sensors = [int(v, 0) for v in clean_str.split("," if "," in clean_str else " ")]
+        for sensor in sensors:
+            if sensor not in range(0, 256):
+                raise ValueError(f"invalid value: x14_zone_sensors={sensors_str}.")
+        return dict(enumerate(sensors))
+
+    @staticmethod
     def parse_device_names(names_str: str) -> List[str]:
         """Parse a newline- or space-separated string of device names.
         Args:
@@ -447,6 +471,11 @@ class Config:
             PlatformName(platform_name)
         except ValueError as e:
             raise ValueError(f"[{s}] invalid value: {self.CV_IPMI_PLATFORM_NAME}={platform_name}.") from e
+        sensors_str = parser[s].get(self.CV_IPMI_X14_ZONE_SENSORS, fallback=self.DV_IPMI_X14_ZONE_SENSORS)
+        try:
+            x14_zone_sensors = self.parse_x14_zone_sensors(sensors_str)
+        except ValueError as e:
+            raise ValueError(f"[{s}] invalid value: {self.CV_IPMI_X14_ZONE_SENSORS}={sensors_str}.") from e
         return IpmiConfig(
             command=parser[s].get(self.CV_IPMI_COMMAND, self.DV_IPMI_COMMAND),
             fan_mode_delay=fan_mode_delay,
@@ -456,6 +485,7 @@ class Config:
             enforce_fan_mode=parser[s].getboolean(self.CV_IPMI_ENFORCE_FAN_MODE,
                                                   fallback=self.DV_IPMI_ENFORCE_FAN_MODE),
             exit_level=exit_level,
+            x14_zone_sensors=x14_zone_sensors,
         )
 
     def _parse_exporter(self, parser: ConfigParser) -> ExporterConfig:

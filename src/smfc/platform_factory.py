@@ -4,7 +4,7 @@
 #   Factory function for creating platform-specific implementations.
 #
 import subprocess
-from typing import Callable, List
+from typing import Callable, Dict, List, Optional
 
 from smfc.config import PlatformName
 from smfc.generic import GenericPlatform
@@ -14,7 +14,8 @@ from smfc.platform import Platform
 from smfc.x10qbi import X10QBi
 
 
-def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess]) -> Platform:
+def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess],
+                    zone_sensors: Optional[Dict[int, int]] = None) -> Platform:
     """Factory method to create the appropriate Platform object for the given platform name.
     Args:
         platform_name (str): The platform name, one of:
@@ -25,6 +26,8 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
             - any other string: auto-detected from the BMC product name prefix
               ('X14...'/'H14...' -> X14, 'X10QBi...' -> X10QBi, 'X9...' -> X9), falls back to GenericPlatform
         exec_ipmitool (Callable): Function that executes ipmitool commands
+        zone_sensors (Optional[Dict[int, int]]): IPMI zone -> fan sensor number map, used by the X14 platform
+            only (`[Ipmi] x14_zone_sensors=`); ignored by every other platform
     Returns:
         Platform: The platform-specific implementation (defaults to GenericPlatform)
     """
@@ -44,6 +47,8 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
             platform_class = GenericX9Platform
         else:
             platform_class = GenericPlatform
+    if platform_class is GenericX14Platform:
+        return GenericX14Platform(platform_name, exec_ipmitool, zone_sensors)
     return platform_class(platform_name, exec_ipmitool)
 
 

@@ -589,10 +589,14 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
         if mode == int(Ipmi.FULL_MODE):
             mode_str = _wrap(mode_name, GREEN, use_color)
             lines.append(f"  Fan mode      : {mode_str} ({mode})")
-        else:
+        elif ipmi.platform.ENFORCES_FULL_MODE:
             mode_str = _wrap(mode_name, RED, use_color)
             warn = _wrap("  ! not in FULL mode - smfc may not be controlling the fans", RED, use_color)
             lines.append(f"  Fan mode      : {mode_str} ({mode}){warn}")
+        else:
+            # X14 does not use FULL mode: the base fan mode is only the fallback curve and smfc leaves it
+            # alone, so a non-FULL mode is the normal state there and must not be flagged as a problem.
+            lines.append(f"  Fan mode      : {mode_name} ({mode})")
     except Exception as e:  # pylint: disable=broad-except
         err_str = _wrap(f"ERROR: {e}", RED, use_color)
         lines.append(f"  Fan mode      : {err_str}")

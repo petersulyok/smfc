@@ -186,9 +186,17 @@ if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x45" && $4 = "0x01" ]] ; then
 	exit 0
 fi
 
-# IPMI get fan level (raw 0x30 0x70 0x66 0x00)
+# IPMI get fan level (raw 0x30 0x70 0x66 0x00 <zone>) — 5 args after "raw"
+# X14 set fan level (raw 0x30 0x70 0x66 0x00 <zone> <level>) — 6 args after "raw"
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x00" ]] ; then
-	echo " 32"
+	if [[ -z "$7" ]] ; then
+		echo " 32"
+	fi
+	exit 0
+fi
+
+# X14 manual mode for all zones (raw 0x30 0x70 0x66 0x02 <0/1>)
+if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x02" ]] ; then
 	exit 0
 fi
 
@@ -197,17 +205,20 @@ if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x01" ]] 
 	exit 0
 fi
 
-# X14 get fan level (raw 0x30 0x70 0x88 <zone>) — 4 args after "raw"
-# X14 set fan level (raw 0x30 0x70 0x88 <zone> <level>) — 5 args after "raw"
+# X14 get fan duty + temperature (raw 0x30 0x70 0x88 <sensorNum>) — two hex bytes, duty first
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x88" ]] ; then
-	if [[ -z "$6" ]] ; then
-		echo "32"
-	fi
+	echo " 32 2d"
 	exit 0
 fi
 
-# X14 manual-mode OEM command (raw 0x2c 0x04 0xcf 0xc2 ...)
+# X14 manual/failsafe OEM command (raw 0x2c 0x04 0xcf 0xc2 0x00 <op> <zone> [<value>]):
+# op 0x00 reads the manual mode flag, 0x01 writes it, 0x02 reads the failsafe flag.
 if [[ $1 = "raw" && $2 = "0x2c" && $3 = "0x04" && $4 = "0xcf" && $5 = "0xc2" ]] ; then
+	if [[ $7 = "0x00" ]] ; then
+		echo " 01"
+	elif [[ $7 = "0x02" ]] ; then
+		echo " 00"
+	fi
 	exit 0
 fi
 
