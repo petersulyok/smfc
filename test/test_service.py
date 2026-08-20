@@ -54,6 +54,18 @@ class TestService:
 
     sleep_counter: int
 
+    @pytest.fixture(autouse=True)
+    def no_real_atexit_registration(self, mocker: MockerFixture) -> None:
+        """Autouse fixture: replace `atexit.register()` with a mock for every test in this class.
+
+        `Service.run()` registers `exit_func()` with the real `atexit` module. Tests that call `run()` but never
+        reach `exit_func()` (e.g. they exit via `SystemExit` or an exception) leave that handler registered. It
+        then fires for real when the pytest process itself exits, after this test's `print()`/`Log.msg_to_stdout()`
+        mocks are already torn down, printing an unmocked "smfc terminated..." line to stdout. Mocking
+        `atexit.register()` here prevents the handler from ever reaching the real atexit list.
+        """
+        mocker.patch("atexit.register", MagicMock())
+
     @pytest.mark.parametrize(
         "ipmi, log",
         [
