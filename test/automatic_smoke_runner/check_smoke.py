@@ -199,9 +199,15 @@ def check(name: str, scn: Scenario, duration: int) -> tuple:
         if "0x30 0x91 0x5a" not in log:                       problems.append("x9-set-bytes-missing")
     elif name == "platform_x14":
         if "platform_name = generic_x14" not in log:          problems.append("x14-not-active")
-        if "0x30 0x70 0x88" not in log:                       problems.append("x14-set-bytes-missing")
-        # X14 start() must enable manual mode per zone via 0x2c 0x04 0xcf 0xc2 OEM cmd.
-        if "0x2c 0x04 0xcf 0xc2" not in log:                  problems.append("x14-manual-mode-missing")
+        # The CONST controller drives zone 3 at a fixed 50%, so the duty write is exact and 0-based.
+        if "0x30 0x70 0x66 0x00 0x03 0x32" not in log:        problems.append("x14-set-bytes-missing")
+        # X14 start() must latch manual mode per zone via the 0x2c 0x04 0xcf 0xc2 OEM cmd, with the
+        # 1-based zone byte (zone 0 -> 0x01), and confirm it with the op 0x00 read-back.
+        if "0x2c 0x04 0xcf 0xc2 0x00 0x01 0x01 0x01" not in log:
+            problems.append("x14-manual-mode-missing")
+        if "0x2c 0x04 0xcf 0xc2 0x00 0x00 0x01" not in log:   problems.append("x14-manual-readback-missing")
+        # The base fan mode must never be written on X14: it would clear manual mode on every zone.
+        if "0x30 0x45 0x01" in log:                           problems.append("x14-fan-mode-written")
     elif name == "platform_x10qbi":
         if "platform_name = X10QBi" not in log:               problems.append("x10qbi-not-active")
         if "0x30 0x91 0x5c" not in log:                       problems.append("x10qbi-set-bytes-missing")
@@ -211,12 +217,12 @@ def check(name: str, scn: Scenario, duration: int) -> tuple:
     # expected within a few polls. Required signals:
     #   - "enforce_fan_mode = False" in startup banner
     #   - "enforce_fan_mode is disabled, smfc exiting" log line (SystemExit(11) path)
-    #   - NO "restoring FULL" log line (that's the enforce=True branch)
+    #   - NO "restoring fan control" log line (that's the enforce=True branch)
     # The generic Ctrl-C / exit-code checks don't apply: smfc terminated on its own.
     if name == "no_enforce_fan_mode":
         if "enforce_fan_mode = False" not in log:
             problems.append("enforce-flag-still-on")
-        if "restoring FULL" in log:
+        if "restoring fan control" in log:
             problems.append("restored-FULL-despite-flag")
         if "enforce_fan_mode is disabled, smfc exiting" not in log:
             problems.append("no-autonomous-exit-on-drift")

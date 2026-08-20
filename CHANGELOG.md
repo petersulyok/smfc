@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- New `x14_zone_sensors=` parameter in the `[Ipmi]` section (comma- or space-separated list of int, decimal or `0x`-prefixed hex, default=`0x41`). X14 platform only: it names the fan sensor number `smfc` reads a zone's fan level from, with the list index used as the IPMI zone. The mapping cannot be derived from the fan names - the first fan of zone 1 is `0x46` on one board and `0x47` on another - so it is configured. Zone 0 defaults to `0x41` (FAN1), which is correct on every documented X14 board. Read the numbers off your board with `ipmitool sdr elist full | grep -i fan`, or take them from [doc/X14_MANUAL_FANCONTROL.md](https://github.com/petersulyok/smfc/blob/main/doc/X14_MANUAL_FANCONTROL.md) chapter 3.
+- [doc/X14_MANUAL_FANCONTROL.md](https://github.com/petersulyok/smfc/blob/main/doc/X14_MANUAL_FANCONTROL.md): the confirmed IPMI raw command set of the X14/AST2600 BMC, including the per-board fan sensor numbers and zone layouts.
+
+### Changed
+- **The number of IPMI zones the `generic_x14` platform accepts changed from 6 (0-5) to 4 (0-3).** No documented X14 board has more than four fan zones. A configuration using `ipmi_zone=4` or `ipmi_zone=5` on this platform is rejected at startup now.
+- The `Platform` class owns the "am I in control of the fans?" policy instead of `Service`. FULL fan mode is still what being in control means on every platform except X14, and `enforce_fan_mode=` still governs whether drift is corrected or terminates the service; the difference is that X14 now guards its per-zone manual mode flag rather than a fan mode it deliberately leaves alone.
+- `smfc-client` does not flag a non-FULL fan mode on X14 any more. The base fan mode is only the fallback curve there, `smfc` never writes it, so a mode other than FULL is the normal state and no longer prints the "not in FULL mode" warning. The mode itself is still reported.
+
+### Fixed
+- **Fan control was non-functional on X14/H14 motherboards (`generic_x14` platform).** Every command the platform issued was wrong in at least one byte: the fan level *write* used the read opcode (`0x30 0x70 0x88`) instead of `0x30 0x70 0x66 0x00`, the fan level *read* passed an IPMI zone where a fan sensor number is required and then failed to parse the two-byte reply, and the OEM manual-mode command omitted its operation byte, so manual mode was never actually enabled or released. On top of that the manual-mode commands address zones 1-based while the duty commands address them 0-based, which the code did not account for. The platform is rewritten against the documented command set; `smfc` now latches manual fan mode only in the zones it drives, reads the flag back to confirm it, and exits with code 8 naming the zone if the board does not accept it (which is how an H14 board behaves - it has no per-zone manual mode at all).
+- The X14 platform no longer writes the base fan mode. Setting it clears manual mode on every zone, so the FULL-mode write `smfc` performed at startup and on every drift correction undid the manual-mode latch it had just acquired. The base fan mode is read but left as found; it serves as the fallback curve if manual mode is ever lost.
+- A BMC that cannot be read is not counted as fan mode drift any more. An unreachable or rebooting BMC used to be skipped entirely (the fan mode check simply returned); it now triggers a re-acquire of fan control like any other lost state, but without incrementing the `smfc_fan_mode_enforced_total` metric and without terminating the service when `enforce_fan_mode=0`.
+
 ## [6.2.0] - 2026.08.14
 
 ### Added

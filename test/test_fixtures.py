@@ -148,6 +148,9 @@ class TestData:
         return self.create_command_file("""
 # ipmitool emulation
 
+# State file emulating the X14 per-zone manual mode latch (see the 0x2c 0x04 branch below).
+MANUAL_FLAG_FILE="${BASH_SOURCE[0]}.x14manual"
+
 if [[ $1 = "sdr" ]] ; then
 	echo "CPU Temp         | 45 degrees C      | ok"
 	echo "FAN1             | 500 RPM           | ok"
@@ -213,9 +216,20 @@ fi
 
 # X14 manual/failsafe OEM command (raw 0x2c 0x04 0xcf 0xc2 0x00 <op> <zone> [<value>]):
 # op 0x00 reads the manual mode flag, 0x01 writes it, 0x02 reads the failsafe flag.
+# The manual mode flag reads back as latched right after a write and randomly loses the latch
+# otherwise, emulating the BMC restart / firmware update that clears it on real hardware.
 if [[ $1 = "raw" && $2 = "0x2c" && $3 = "0x04" && $4 = "0xcf" && $5 = "0xc2" ]] ; then
 	if [[ $7 = "0x00" ]] ; then
-		echo " 01"
+		if [[ -f "$MANUAL_FLAG_FILE" ]] ; then
+			rm -f "$MANUAL_FLAG_FILE"
+			echo " 01"
+		elif [[ $((RANDOM % 4)) -eq 0 ]] ; then
+			echo " 00"
+		else
+			echo " 01"
+		fi
+	elif [[ $7 = "0x01" ]] ; then
+		touch "$MANUAL_FLAG_FILE"
 	elif [[ $7 = "0x02" ]] ; then
 		echo " 00"
 	fi

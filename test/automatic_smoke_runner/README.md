@@ -94,9 +94,9 @@ no_enforce_fan_mode    exit=1    set_level=4   distinct=2  temp_read=8   temps_s
 | Scenario | Extra assertions |
 |----------|------------------|
 | `platform_x9` | `platform_name = generic_x9` in startup; raw `0x30 0x91 0x5a` (X9 set_fan_level) appears in the log. |
-| `platform_x14` | `platform_name = generic_x14` in startup; raw `0x30 0x70 0x88` appears; raw `0x2c 0x04 0xcf 0xc2` (OEM manual-mode-enable) appears at startup. |
+| `platform_x14` | `platform_name = generic_x14` in startup; the zone 3 duty write `0x30 0x70 0x66 0x00 0x03 0x32` appears (CONST controller, 50%); the OEM manual-mode latch `0x2c 0x04 0xcf 0xc2 0x00 0x01 0x01 0x01` and its read-back `... 0x00 0x01` appear (note the 1-based zone byte); raw `0x30 0x45 0x01` (set fan mode) never appears — writing it would clear manual mode on every zone. |
 | `platform_x10qbi` | `platform_name = X10QBi` in startup; raw `0x30 0x91 0x5c` appears in the log. |
-| `no_enforce_fan_mode` | Startup logs `enforce_fan_mode = False`; the log contains `enforce_fan_mode is disabled, smfc exiting` (the `SystemExit(11)` path); the log does **not** contain `restoring FULL`. The generic `no-clean-interrupt` / `exit=1` checks are suppressed for this scenario. |
+| `no_enforce_fan_mode` | Startup logs `enforce_fan_mode = False`; the log contains `enforce_fan_mode is disabled, smfc exiting` (the `SystemExit(11)` path); the log does **not** contain `restoring fan control`. The generic `no-clean-interrupt` / `exit=1` checks are suppressed for this scenario. |
 | `hd_split_zones` | Both `HD:0 fan controller was initialized` and `HD:1 fan controller was initialized` appear. |
 | `smoothing_window` | At least one controller logs `smoothing = N` with `N ≥ 2`. |
 | `error_tolerance` | Startup logs `error_tolerance = 3`; the log contains `temperature read failed, reusing` (the last known good value was used) and `temperature read recovered`; it does **not** contain `time(s) in a row` (the budget must not run out). |
