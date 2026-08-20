@@ -192,13 +192,21 @@ A lower value (e.g. `exit_level=40`) is a compromise for quiet systems: the fans
 go to full speed every time the service is stopped or restarted.
 
 > [!IMPORTANT]
-> **X14 motherboards behave differently.** This platform uses an explicit OEM manual-fan-control mode that would stay
-> latched forever if `smfc` did not release it, leaving all zones frozen with nothing regulating them. On X14, `smfc`
-> applies `exit_level` and then releases manual mode, so **automatic BMC fan control is restored** and `exit_level` is
-> only a transition - within seconds the BMC applies its own fan curve. Be aware that the BMC regulates on CPU and
-> system sensors only, so hard disk and NVMe temperatures are not part of that control loop. Setting `exit_level=-1` on
-> X14 skips both steps and leaves manual mode latched with no regulation at all, which is the least safe option on this
-> platform.
+> **X14 motherboards behave differently.** Instead of FULL mode, this platform uses an explicit OEM manual-fan-control
+> mode, which stays latched until it is released - the BMC never takes the fans back on its own. Therefore, on X14 the
+> exit is a two-step operation:
+>
+>   1. `exit_level` is applied to all configured zones (it must be first: after step 2 the BMC owns the fans and a level
+>      command would be a no-op)
+>   2. manual mode is released for all zones, so **automatic BMC fan control is restored**
+>
+> This means `exit_level` is only a transitional value on X14: within seconds the BMC starts applying its own fan curve
+> and overwrites it. Be aware that the BMC regulates on CPU and system sensors only, so hard disk and NVMe temperatures
+> are not part of that control loop.
+>
+> `exit_level=-1` skips **the whole exit sequence, step 2 included**. It does not simply mean _"let the BMC decide"_ -
+> manual mode stays latched, the zones stay frozen at the last level `smfc` applied, and nothing regulates them until
+> `smfc` (or something else) takes control again. This is the least safe option on this platform.
 
 ### 2. User-defined control function
 Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval. Two forms are supported in each temperature-driven section: a **simple linear** mapping (chapter 2.1) or an **advanced multi-segment** piecewise-linear curve (chapter 2.2). When both are present in the same section, `control_function=` takes precedence and the `min_temp/max_temp/min_level/max_level` keys are ignored.
