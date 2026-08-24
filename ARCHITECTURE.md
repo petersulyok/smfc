@@ -424,7 +424,11 @@ flowchart TD
   `"ipmitool"`), sleeps, and retries — this is what rides out the ~30 s
   interface-down phase.
 - **(b) fan subsystem settled** — `_fan_sensors_ready()` scans the `sdr`
-  output for at least one `FAN*` sensor whose state column is **not** `ns`.
+  output for at least one fan sensor whose state column is **not** `ns`. A
+  sensor counts as a fan when `FAN` appears anywhere in its name, so every
+  board naming convention is covered (`FAN1`, `FANA`, `CPU_FAN1`, `SYS_FAN1`,
+  `SYSFAN1`, `FAN_CPU1`); no other sensor of a Supermicro `sdr` list carries
+  `FAN` in its name.
 
 **Why read-only.** The gate never writes during the fragile window. A
 write-readback probe would be self-defeating — writing a fan level mid-window
@@ -444,9 +448,9 @@ sibling reading-column strings (`disabled`, `no reading`, `Not Readable`) are
 never inspected — they always co-occur with `ns` and vary by board, trigger, and
 even sensor type (on the same board a genuinely cold BMC shows `no reading` for
 fans but `disabled` for other sensors, while a reboot that leaves the BMC powered
-shows `disabled`), so keying on the state column keeps the gate board-agnostic. At least one `FAN*` sensor
-is required so an unpopulated header that stays `ns` forever cannot hold the
-gate open.
+shows `disabled`), so keying on the state column keeps the gate board-agnostic.
+At least one fan sensor is required so an unpopulated header that stays `ns`
+forever cannot hold the gate open.
 
 **Clients skip (b).** Read-only consumers (`smfc-client`) pass
 `in_client=True` and a short `CLIENT_BMC_INIT_TIMEOUT = 5 s`: they never mutate
