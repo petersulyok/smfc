@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [6.2.1] - 2026.08.24
 
 ### Fixed
 - The startup BMC fan subsystem readiness check did not recognize fan sensors whose name is not exactly `FAN*`. Boards that report their fans as `CPU_FAN1`, `SYS_FAN1`, `SYSFAN1` or `CPUFAN1` (e.g. `X13SAE-F`) never satisfied the check, so they waited out the complete BMC init budget on every start, logging `BMC fan sensors are not ready, waiting 5 seconds.` all along. A sensor counts as a fan now when `FAN` appears anywhere in its name, which covers every board naming convention without a per-board special case; no other sensor of a Supermicro `sdr` list carries `FAN` in its name. A fan sensor in state `ns` is still not ready, and the check still never inspects the reading column. This check runs before platform selection, so it was independent of `platform_name=`. Reported and first fixed by [@chrisallen](https://github.com/chrisallen) in [PR #120](https://github.com/petersulyok/smfc/pull/120).

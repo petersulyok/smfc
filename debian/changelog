@@ -1,3 +1,15 @@
+smfc (6.2.1) unstable; urgency=medium
+
+  * Fixed: the startup BMC fan subsystem readiness check did not recognize fan
+    sensors whose name is not exactly FAN*. Boards reporting their fans as
+    CPU_FAN1, SYS_FAN1, SYSFAN1 or CPUFAN1 (e.g. X13SAE-F) never satisfied the
+    check, so they waited out the complete BMC init budget on every start. A
+    sensor counts as a fan now when FAN appears anywhere in its name, which
+    covers every board naming convention. A fan sensor in state ns is still not
+    ready (PR #120).
+
+ -- Peter Sulyok <peter@sulyok.net>  Mon, 24 Aug 2026 11:46:18 +0200
+
 smfc (6.2.0) unstable; urgency=medium
 
   * Fixed: the documented safe shutdown did not happen on a normal service

@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        6.2.0
+Version:        6.2.1
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -98,6 +98,15 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Mon Aug 24 2026 Peter Sulyok <peter@sulyok.net> - 6.2.1-1
+- Fixed: the startup BMC fan subsystem readiness check did not recognize fan
+  sensors whose name is not exactly FAN*. Boards reporting their fans as
+  CPU_FAN1, SYS_FAN1, SYSFAN1 or CPUFAN1 (e.g. X13SAE-F) never satisfied the
+  check, so they waited out the complete BMC init budget on every start. A
+  sensor counts as a fan now when FAN appears anywhere in its name, which covers
+  every board naming convention. A fan sensor in state ns is still not ready
+  (PR #120)
+
 * Fri Aug 14 2026 Peter Sulyok <peter@sulyok.net> - 6.2.0-1
 - Fixed: the documented safe shutdown did not happen on a normal service stop.
   Fan levels were restored through an atexit handler only, and CPython does not
