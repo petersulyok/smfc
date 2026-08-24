@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The X14 platform no longer writes the base fan mode. Setting it clears manual mode on every zone, so the FULL-mode write `smfc` performed at startup and on every drift correction undid the manual-mode latch it had just acquired. The base fan mode is read but left as found; it serves as the fallback curve if manual mode is ever lost.
 - A BMC that cannot be read is not counted as fan mode drift any more. An unreachable or rebooting BMC used to be skipped entirely (the fan mode check simply returned); it now triggers a re-acquire of fan control like any other lost state, but without incrementing the `smfc_fan_mode_enforced_total` metric and without terminating the service when `enforce_fan_mode=0`.
 
+## [6.2.1] - 2026.08.24
+
+### Fixed
+- The startup BMC fan subsystem readiness check did not recognize fan sensors whose name is not exactly `FAN*`. Boards that report their fans as `CPU_FAN1`, `SYS_FAN1`, `SYSFAN1` or `CPUFAN1` (e.g. `X13SAE-F`) never satisfied the check, so they waited out the complete BMC init budget on every start, logging `BMC fan sensors are not ready, waiting 5 seconds.` all along. A sensor counts as a fan now when `FAN` appears anywhere in its name, which covers every board naming convention without a per-board special case; no other sensor of a Supermicro `sdr` list carries `FAN` in its name. A fan sensor in state `ns` is still not ready, and the check still never inspects the reading column. This check runs before platform selection, so it was independent of `platform_name=`. Reported and first fixed by [@chrisallen](https://github.com/chrisallen) in [PR #120](https://github.com/petersulyok/smfc/pull/120).
+
 ## [6.2.0] - 2026.08.14
 
 ### Added

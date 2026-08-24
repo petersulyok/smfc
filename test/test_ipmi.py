@@ -43,6 +43,39 @@ SDR_NOTREADY_OUTPUT = (
     "FANA             | no reading        | ns\n"
 )
 
+# `ipmitool sdr` output of a board reboot that leaves the BMC powered: sensors read `disabled | ns`
+# instead of `no reading | ns`. Both strings co-occur with state `ns`, which is why the gate keys on
+# the state column. Captured on the X11SCH-LN4F.
+SDR_NOTREADY_DISABLED_OUTPUT = (
+    "CPU Temp         | disabled          | ns\n"
+    "FAN1             | disabled          | ns\n"
+    "FANA             | disabled          | ns\n"
+)
+
+# `ipmitool sdr` output of a board naming its fans with a prefix (e.g. X13SAE-F): the fan sensors are
+# `CPU_FAN*`/`SYS_FAN*` instead of `FAN*`.
+SDR_PREFIXED_READY_OUTPUT = (
+    "CPU Temp         | 45 degrees C      | ok\n"
+    "CPU_FAN1         | 840 RPM           | ok\n"
+    "CPU_FAN2         | 840 RPM           | ok\n"
+    "SYS_FAN1         | 980 RPM           | ok\n"
+    "SYS_FAN2         | 840 RPM           | ok\n"
+    "SYS_FAN3         | 980 RPM           | ok\n"
+)
+
+# A complete `sdr` list with no fan sensor at all: no sensor name of a real Supermicro board carries
+# `FAN` outside of the fan sensors themselves, so none of these may satisfy the gate.
+SDR_NO_FAN_OUTPUT = (
+    "CPU Temp         | 45 degrees C      | ok\n"
+    "Inlet Temp       | no reading        | ns\n"
+    "PCH Temp         | 59 degrees C      | ok\n"
+    "DIMMA1 Temp      | 32 degrees C      | ok\n"
+    "12V              | 11.79 Volts       | ok\n"
+    "VBAT             | 0x04              | ok\n"
+    "1.8V_PCH_GPPA    | 1.82 Volts        | ok\n"
+    "Chassis Intru    | 0x00              | ok\n"
+)
+
 
 def _make_bare_ipmi(mocker: MockerFixture, mock_ipmi_exec: MagicMock, **cfg_kwargs) -> Ipmi:
     """Build a bare Ipmi instance (no __init__) wired with the given exec mock and a default config.
@@ -670,9 +703,41 @@ class TestIpmi:
     @pytest.mark.parametrize(
         "sdr_output, expected",
         [
-            pytest.param(SDR_READY_OUTPUT, True, id="fan-ok"),
-            pytest.param(SDR_NOTREADY_OUTPUT, False, id="all-ns"),
+            # Realistic complete `sdr` captures.
+            pytest.param(SDR_READY_OUTPUT, True, id="settled"),
+            pytest.param(SDR_PREFIXED_READY_OUTPUT, True, id="settled-prefixed-names"),
+            pytest.param(SDR_NOTREADY_OUTPUT, False, id="window-no-reading"),
+            pytest.param(SDR_NOTREADY_DISABLED_OUTPUT, False, id="window-disabled"),
+            pytest.param(SDR_NO_FAN_OUTPUT, False, id="no-fan-sensor-at-all"),
+            # Fan naming conventions: `FAN` anywhere in the name marks a fan sensor.
+            pytest.param("FAN1 | 500 RPM | ok\n", True, id="name-bare-digit"),
+            pytest.param("FANA | 500 RPM | ok\n", True, id="name-bare-letter"),
+            pytest.param("CPU_FAN1 | 840 RPM | ok\n", True, id="name-prefix-underscore-cpu"),
+            pytest.param("SYS_FAN1 | 980 RPM | ok\n", True, id="name-prefix-underscore-sys"),
+            pytest.param("REAR_FAN1 | 980 RPM | ok\n", True, id="name-prefix-underscore-rear"),
+            pytest.param("SYSFAN1 | 980 RPM | ok\n", True, id="name-prefix-no-separator-sys"),
+            pytest.param("CPUFAN1 | 840 RPM | ok\n", True, id="name-prefix-no-separator-cpu"),
+            pytest.param("FAN_CPU1 | 840 RPM | ok\n", True, id="name-suffix-underscore"),
+            pytest.param("Fan Speed | 1200 RPM | ok\n", True, id="name-space-separator"),
+            pytest.param("fan1 | 500 RPM | ok\n", True, id="name-lower-case"),
+            pytest.param("Fan1 | 500 RPM | ok\n", True, id="name-mixed-case"),
+            # The same naming conventions in state `ns` stay not ready.
+            pytest.param("FAN1 | no reading | ns\n", False, id="ns-bare"),
+            pytest.param("CPU_FAN1 | no reading | ns\n", False, id="ns-prefix-underscore"),
+            pytest.param("SYSFAN1 | disabled | ns\n", False, id="ns-prefix-no-separator"),
+            pytest.param("FAN_CPU1 | disabled | ns\n", False, id="ns-suffix-underscore"),
+            pytest.param("fan1 | Not Readable | ns\n", False, id="ns-lower-case"),
+            # Any state other than `ns` counts: a fan booting into an alarm state must not hold the gate.
+            pytest.param("FAN1 | 100 RPM | nc\n", True, id="state-non-critical"),
+            pytest.param("FAN1 | 0 RPM | cr\n", True, id="state-critical"),
+            pytest.param("FAN1 | 0 RPM | nr\n", True, id="state-non-recoverable"),
+            pytest.param("FAN1 | 500 RPM | NS\n", False, id="state-ns-upper-case"),
+            # A live fan among `ns` siblings is enough; an `ns` fan among live siblings is not decisive.
+            pytest.param("FAN1 | no reading | ns\nFAN2 | 500 RPM | ok\n", True, id="mixed-one-live-fan"),
+            pytest.param("CPU Temp | 45 degrees C | ok\nFAN1 | no reading | ns\n", False, id="mixed-live-non-fan"),
+            # Malformed input.
             pytest.param("garbage line without pipes\nFAN1 | 500 RPM | ok\n", True, id="malformed-then-fan-ok"),
+            pytest.param("FAN1 | 500 RPM\n", False, id="too-few-fields"),
             pytest.param("OTHER Temp | 40 degrees C | ok\n", False, id="no-fan-sensor"),
             pytest.param("", False, id="empty"),
         ],
@@ -680,8 +745,12 @@ class TestIpmi:
     def test_fan_sensors_ready(self, sdr_output: str, expected: bool) -> None:
         """Unit test for Ipmi._fan_sensors_ready(). It contains the following steps:
         - call Ipmi._fan_sensors_ready(sdr_output) on representative `ipmitool sdr` outputs
-        - ASSERT: True only when at least one FAN* sensor reports a live reading (state != `ns`);
-          malformed lines (fewer than 3 fields) are skipped, `ns`/no-fan outputs return False
+        - ASSERT: True when at least one sensor carrying `FAN` in its name reports a live reading,
+          for every fan naming convention (`FAN1`, `FANA`, `CPU_FAN1`, `SYSFAN1`, `FAN_CPU1`, ...)
+        - ASSERT: the match is case insensitive and independent of the reading column, so both
+          `no reading | ns` and `disabled | ns` are not ready while `nc`/`cr`/`nr` are ready
+        - ASSERT: False when no fan sensor is live, including a complete `sdr` list without fans
+        - ASSERT: malformed lines (fewer than 3 fields) are skipped and an empty output returns False
         """
         assert Ipmi._fan_sensors_ready(sdr_output) is expected  # pylint: disable=protected-access
 

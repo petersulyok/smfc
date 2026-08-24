@@ -170,6 +170,11 @@ class Ipmi:
         live reading (any state other than `ns`, e.g. `500 RPM | ok`) marks the fan subsystem as
         settled. At least one fan sensor is required so that an unpopulated header that stays `ns`
         forever does not force us to wait for the full timeout.
+
+        A sensor counts as a fan when `FAN` appears anywhere in its name. Boards spell the names
+        differently (`FAN1`, `FANA`, `CPU_FAN1`, `SYS_FAN1`, `SYSFAN1`, `FAN_CPU1`), and no other
+        sensor of a Supermicro `sdr` list carries `FAN` in its name, so a plain substring match
+        covers every naming convention without a per-board special case.
         Args:
             sdr_output (str): stdout of `ipmitool sdr`
         Returns:
@@ -180,7 +185,7 @@ class Ipmi:
             if len(fields) < 3:
                 continue
             name, state = fields[0], fields[2]
-            if name.upper().startswith("FAN") and state.lower() != "ns":
+            if "FAN" in name.upper() and state.lower() != "ns":
                 return True
         return False
 
