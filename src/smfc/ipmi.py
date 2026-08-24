@@ -182,7 +182,8 @@ class Ipmi:
             if len(fields) < 3:
                 continue
             name, state = fields[0], fields[2]
-            if name.upper().startswith("FAN") and state.lower() != "ns":
+            fan_name = name.upper()
+            if (fan_name.startswith("FAN") or "_FAN" in fan_name) and state.lower() != "ns":
                 return True
         return False
 

@@ -665,6 +665,9 @@ class TestIpmi:
             pytest.param(SDR_READY_OUTPUT, True, id="fan-ok"),
             pytest.param(SDR_NOTREADY_OUTPUT, False, id="all-ns"),
             pytest.param("garbage line without pipes\nFAN1 | 500 RPM | ok\n", True, id="malformed-then-fan-ok"),
+            pytest.param("CPU_FAN1 | 840 RPM | ok\n", True, id="cpu-prefixed-fan-ok"),
+            pytest.param("SYS_FAN1 | 980 RPM | ok\n", True, id="system-prefixed-fan-ok"),
+            pytest.param("CPU_FAN1 | no reading | ns\n", False, id="prefixed-fan-not-ready"),
             pytest.param("OTHER Temp | 40 degrees C | ok\n", False, id="no-fan-sensor"),
             pytest.param("", False, id="empty"),
         ],
@@ -672,7 +675,7 @@ class TestIpmi:
     def test_fan_sensors_ready(self, sdr_output: str, expected: bool) -> None:
         """Unit test for Ipmi._fan_sensors_ready(). It contains the following steps:
         - call Ipmi._fan_sensors_ready(sdr_output) on representative `ipmitool sdr` outputs
-        - ASSERT: True only when at least one FAN* sensor reports a live reading (state != `ns`);
+        - ASSERT: True only when at least one FAN* or *_FAN* sensor reports a live reading (state != `ns`);
           malformed lines (fewer than 3 fields) are skipped, `ns`/no-fan outputs return False
         """
         assert Ipmi._fan_sensors_ready(sdr_output) is expected  # pylint: disable=protected-access
