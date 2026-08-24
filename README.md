@@ -12,6 +12,8 @@ Supermicro fan control for Linux (home) servers.
 
 This is a `systemd service` running on Linux that can control fans with the help of IPMI on Supermicro X10-X13/H10-H13, some X9, and X14/H14 (experimental) motherboards.
 
+> ⚠️ X14 motherboard support does not work; please wait for the next release before testing it.
+
 ### 1. Prerequisites
  - a Supermicro motherboard with IPMI 2.0 (ASPEED AST2400/2500/2600 chip)
  - Python 3.10-3.14
