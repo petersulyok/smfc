@@ -11,6 +11,7 @@ from smfc.constfc import ConstFc
 from smfc.cpufc import CpuFc
 from smfc.gpufc import GpuFc
 from smfc.hdfc import HdFc
+from smfc.npufc import NpuFc
 from smfc.config import PlatformName
 from smfc.ipmi import Ipmi
 from smfc.nvmefc import NvmeFc
@@ -25,7 +26,7 @@ SNAPSHOT_SCHEMA_VERSION: int = 1
 def _controller_type_label(controller) -> str:
     """Map a controller instance to its short type label used in the JSON schema and metric labels.
 
-    The Service.controllers list is closed: it only holds CpuFc, HdFc, NvmeFc, GpuFc, ConstFc.
+    The Service.controllers list is closed: it only holds CpuFc, HdFc, NvmeFc, GpuFc, NpuFc, ConstFc.
     """
     if isinstance(controller, ConstFc):
         return "const"
@@ -35,6 +36,8 @@ def _controller_type_label(controller) -> str:
         return "nvme"
     if isinstance(controller, GpuFc):
         return "gpu"
+    if isinstance(controller, NpuFc):
+        return "npu"
     assert isinstance(controller, CpuFc), f"unknown controller type: {type(controller).__name__}"
     return "cpu"
 

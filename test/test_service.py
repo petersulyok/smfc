@@ -43,7 +43,7 @@ def create_exit_config(exit_level: int = Config.DV_IPMI_EXIT_LEVEL, zones: List[
     """
     config = MagicMock()
     config.ipmi = create_ipmi_config(exit_level=exit_level)
-    config.cpu = config.hd = config.nvme = config.gpu = []
+    config.cpu = config.hd = config.nvme = config.gpu = config.npu = []
     zones = [0, 1] if zones is None else zones
     config.const = [MagicMock(enabled=True, ipmi_zone=zones)] if zones else []
     return config
@@ -290,6 +290,106 @@ class TestService:
         service = Service()
         service.config = Config(str(config_file))
         assert service.check_dependencies() == ""
+
+    def test_check_dependencies_npu(self, mocker: MockerFixture, td: TestData, tmp_path):
+        """Positive/negative unit test for Service.check_dependencies() NPU branch. It contains the following steps:
+        - mock print(), builtins.open() (redirects /proc/modules to a fake module list with coretemp)
+        - build a temporary config file via `td` with [CPU] and [NPU] enabled and a fake npu-smi command file
+        - instantiate Service and assign a Config loaded from the temp config file
+        - call Service.check_dependencies()
+        - ASSERT: returns an empty string while the npu-smi command exists
+        - delete the npu-smi command file
+        - ASSERT: check_dependencies() reports "command cannot be found"
+        """
+        ipmi_command = td.create_ipmi_command()
+        npu_smi_cmd = td.create_command_file('echo "0"')
+        modules = td.create_text_file("something\ncoretemp\n")
+        original_open = open
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+
+        def fake_open(path, *a, **kw):
+            target = modules if path == "/proc/modules" else path
+            return original_open(target, *a, **kw)  # pylint: disable=consider-using-with
+        mocker.patch("builtins.open", MagicMock(side_effect=fake_open))
+        config_content = (f"[Ipmi]\ncommand = {ipmi_command}\n"
+                          f"[CPU]\nenabled = 1\n"
+                          f"[NPU]\nenabled = 1\nnpu_smi_path = {npu_smi_cmd}\n")
+        config_file = tmp_path / "test.conf"
+        config_file.write_text(config_content)
+        service = Service()
+        service.config = Config(str(config_file))
+        assert service.check_dependencies() == ""
+        # Remove the npu-smi command -> dependency error.
+        td.delete_file(npu_smi_cmd)
+        assert "command cannot be found" in service.check_dependencies()
+
+    def test_check_dependencies_npu_disabled(self, mocker: MockerFixture, td: TestData, tmp_path):
+        """Positive unit test for Service.check_dependencies() NPU branch. It contains the following steps:
+        - mock print(), builtins.open() (redirects /proc/modules to a fake module list with coretemp)
+        - build a temporary config file via `td` with [NPU] enabled=0 (section present but disabled)
+        - instantiate Service and assign a Config loaded from the temp config file
+        - call Service.check_dependencies()
+        - ASSERT: check_dependencies() returns an empty string (disabled NPU section is skipped)
+        """
+        ipmi_command = td.create_ipmi_command()
+        modules = td.create_text_file("something\ncoretemp\n")
+        original_open = open
+        mocker.patch("builtins.print", MagicMock())
+
+        def fake_open(path, *a, **kw):
+            target = modules if path == "/proc/modules" else path
+            return original_open(target, *a, **kw)  # pylint: disable=consider-using-with
+        mocker.patch("builtins.open", MagicMock(side_effect=fake_open))
+        config_content = (f"[Ipmi]\ncommand = {ipmi_command}\n"
+                          f"[CPU]\nenabled = 1\n"
+                          f"[NPU]\nenabled = 0\nnpu_smi_path = /nonexistent/npu-smi\n")
+        config_file = tmp_path / "test.conf"
+        config_file.write_text(config_content)
+        service = Service()
+        service.config = Config(str(config_file))
+        assert service.check_dependencies() == ""
+
+    @pytest.mark.parametrize(
+        "which_result, expected_found",
+        [
+            pytest.param("/usr/local/Ascend/bin/npu-smi", True, id="bare-name-in-path"),
+            pytest.param(None, False, id="bare-name-not-in-path"),
+        ],
+    )
+    def test_check_dependencies_npu_bare_name(self, mocker: MockerFixture, td: TestData, tmp_path,
+                                              which_result, expected_found: bool):
+        """Positive/negative unit test for Service.check_dependencies() NPU branch with a bare (non-absolute)
+        npu_smi_path resolved via PATH. It contains the following steps:
+        - mock print(), builtins.open() (redirects /proc/modules to a fake module list with coretemp)
+        - build a temporary config file via `td` with [CPU] and [NPU] enabled and npu_smi_path = "npu-smi"
+        - mock shutil.which to return the parametrized result
+        - instantiate Service and assign a Config loaded from the temp config file
+        - call Service.check_dependencies()
+        - ASSERT: empty string when found (which returns a path), "command cannot be found" when not found
+        """
+        ipmi_command = td.create_ipmi_command()
+        modules = td.create_text_file("something\ncoretemp\n")
+        original_open = open
+        mocker.patch("builtins.print", MagicMock())
+
+        def fake_open(path, *a, **kw):
+            target = modules if path == "/proc/modules" else path
+            return original_open(target, *a, **kw)  # pylint: disable=consider-using-with
+        mocker.patch("builtins.open", MagicMock(side_effect=fake_open))
+        mocker.patch("smfc.service.shutil.which", MagicMock(return_value=which_result))
+        config_content = (f"[Ipmi]\ncommand = {ipmi_command}\n"
+                          f"[CPU]\nenabled = 1\n"
+                          f"[NPU]\nenabled = 1\nnpu_smi_path = npu-smi\n")
+        config_file = tmp_path / "test.conf"
+        config_file.write_text(config_content)
+        service = Service()
+        service.config = Config(str(config_file))
+        result = service.check_dependencies()
+        if expected_found:
+            assert result == ""
+        else:
+            assert "command cannot be found" in result
 
     @pytest.mark.parametrize(
         "_dummy",
@@ -653,22 +753,24 @@ class TestService:
         assert cm.value.code == exit_code
 
     @pytest.mark.parametrize(
-        "cpufc, hdfc, nvmefc, gpufc, constfc, exit_code",
+        "cpufc, hdfc, nvmefc, gpufc, npufc, constfc, exit_code",
         [
             # CPU and GPU enabled
-            pytest.param(True, False, False, True, False, 100, id="cpu-gpu"),
+            pytest.param(True, False, False, True, False, False, 100, id="cpu-gpu"),
             # HD and CONST enabled
-            pytest.param(False, True, False, False, True, 100, id="hd-const"),
+            pytest.param(False, True, False, False, False, True, 100, id="hd-const"),
             # CPU and GPU enabled (duplicate)
-            pytest.param(True, False, False, True, False, 100, id="cpu-gpu-alt"),
+            pytest.param(True, False, False, True, False, False, 100, id="cpu-gpu-alt"),
             # CPU and NVME enabled
-            pytest.param(True, False, True, False, False, 100, id="cpu-nvme"),
+            pytest.param(True, False, True, False, False, False, 100, id="cpu-nvme"),
+            # CPU and NPU enabled
+            pytest.param(True, False, False, False, True, False, 100, id="cpu-npu"),
             # All controllers enabled
-            pytest.param(True, True, True, True, True, 100, id="all-controllers"),
+            pytest.param(True, True, True, True, True, True, 100, id="all-controllers"),
         ],
     )
     def test_run_happy_path(self, mocker: MockerFixture, td: TestData, cpufc: bool, hdfc: bool, nvmefc: bool,
-                            gpufc: bool, constfc: bool, exit_code: int):
+                            gpufc: bool, npufc: bool, constfc: bool, exit_code: int):
         """Positive unit test for Service.run() method. It contains the following steps:
         - mock print(), time.sleep() (exits with code 100 after 10 iterations), smfc.service.Exporter
         - mock pyudev.Context.__init__ via MockedContextGood and CpuFc/HdFc/NvmeFc/GpuFc/ConstFc.__init__
@@ -710,6 +812,14 @@ class TestService:
             self.config = cfg
             FanController.__init__(self, log, ipmi, cfg.section, len(cfg.gpu_device_ids))
 
+        def mocked_npufc_init(self, log: Log, ipmi: Ipmi, cfg) -> None:
+            nonlocal td
+            self.smi_called = 0
+            self.hwmon_path = []
+            self.npu_temperature = []
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(cfg.npu_device_ids))
+
         def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
             nonlocal td
             self.nvme_device_names = td.nvme_name_list
@@ -747,6 +857,7 @@ class TestService:
         cmd_smart = td.create_smart_command()
         # create_command_file('echo "ACTIVE"'))
         cmd_nvidia = td.create_nvidia_smi_command(1)
+        cmd_npu = td.create_npu_smi_command(1)
         td.create_cpu_data(1)
         td.create_hd_data(8)
         td.create_nvme_data(2)
@@ -808,6 +919,20 @@ class TestService:
             Config.CV_GPU_IDS: "0",
             Config.CV_GPU_NVIDIA_SMI_PATH: cmd_nvidia,
         }
+        my_config[Config.CS_NPU] = {
+            Config.CV_ENABLED: str(npufc),
+            Config.CV_IPMI_ZONE: "3",
+            Config.CV_TEMP_CALC: "1",
+            Config.CV_STEPS: "4",
+            Config.CV_SENSITIVITY: "2",
+            Config.CV_POLLING: "0",
+            Config.CV_MIN_TEMP: "40",
+            Config.CV_MAX_TEMP: "85",
+            Config.CV_MIN_LEVEL: "35",
+            Config.CV_MAX_LEVEL: "100",
+            Config.CV_NPU_IDS: "0",
+            Config.CV_NPU_SMI_PATH: cmd_npu,
+        }
         my_config[Config.CS_CONST] = {
             Config.CV_ENABLED: str(constfc),
             Config.CV_IPMI_ZONE: "2",
@@ -832,6 +957,7 @@ class TestService:
         mocker.patch("smfc.HdFc.__init__", mocked_hdfc_init)
         mocker.patch("smfc.NvmeFc.__init__", mocked_nvmefc_init)
         mocker.patch("smfc.GpuFc.__init__", mocked_gpufc_init)
+        mocker.patch("smfc.NpuFc.__init__", mocked_npufc_init)
         mocker.patch("smfc.ConstFc.__init__", mocked_constfc_init)
         # pylint: enable=R0801
         self.sleep_counter = 0

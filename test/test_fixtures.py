@@ -380,6 +380,18 @@ printf '{fmt_str}' $args
 """
         return self.create_command_file(file_content)
 
+    def create_npu_smi_command(self, count: int = 1, temp_list: List[float] = None) -> str:
+        """Creates a shell script emulating `npu-smi info -t temp -i <id>` for a single card:
+        one "Temperature (C)" line per chip, in the key-value layout of the real output."""
+        if temp_list is None:
+            temp_list = [50.0] * count
+        file_content = "cat << 'NPUEOF'\n"
+        for i in range(count):
+            file_content += f"        Temperature (C)                : {temp_list[i]:.0f}\n"
+            file_content += f"        Chip ID                        : {i}\n\n"
+        file_content += "NPUEOF\n"
+        return self.create_command_file(file_content)
+
     def create_text_file(self, content: str) -> str:
         """Creates a text file with the specified content."""
         h, name = tempfile.mkstemp(prefix="text", suffix=".txt", dir=self.td_dir)

@@ -157,6 +157,33 @@ def _make_gpu_fc(zones=None, count=1, last_temp=55.0, last_level=60,
     return fc
 
 
+def _make_npu_fc(zones=None, count=1, last_temp=55.0, last_level=60,
+                 per_device_temps=None, npu_device_ids=None) -> MagicMock:
+    """Build a fake NpuFc-like controller (real spec so the snapshot's isinstance check finds it)."""
+    from smfc.npufc import NpuFc as _NpuFc  # pylint: disable=import-outside-toplevel
+    zones = zones or [3]
+    npu_device_ids = npu_device_ids if npu_device_ids is not None else list(range(count))
+    fc = MagicMock(spec=_NpuFc)
+    fc.config = MagicMock()
+    fc.config.section = "NPU"
+    fc.config.enabled = True
+    fc.config.ipmi_zone = zones
+    fc.config.polling = 5.0
+    fc.config.min_temp = 40.0
+    fc.config.max_temp = 85.0
+    fc.config.min_level = 35
+    fc.config.max_level = 100
+    fc.config.npu_device_ids = npu_device_ids
+    fc.count = count
+    fc.last_temp = last_temp
+    fc.last_level = last_level
+    fc.deferred_apply = False
+    fc.last_per_device_temps = (per_device_temps if per_device_temps is not None
+                                else [last_temp + i * 1.5 for i in range(count)])
+    fc.device_names.return_value = [f"npu{nid}" for nid in npu_device_ids]
+    return fc
+
+
 def _make_service(controllers=None, applied_levels=None,
                   last_fan_mode=Ipmi.FULL_MODE, last_fan_mode_at=None,
                   start_time=1716902400.0, fan_mode_enforced_count=0,
@@ -476,6 +503,22 @@ class TestBuildSnapshot:
         entry = snap["fan_controllers"][0]
         assert entry["type"] == "gpu"
         assert entry["section"] == "GPU"
+        assert entry["last_temp_c"] == pytest.approx(55.0)
+
+    def test_npu_controller_entry(self) -> None:
+        """Positive unit test for build_snapshot() function. It contains the following steps:
+        - mock a NpuFc controller (via _make_npu_fc) and a Service (via _make_service)
+        - call build_snapshot() with the fake service
+        - ASSERT: entry.type equals "npu"
+        - ASSERT: entry.section equals "NPU"
+        - ASSERT: entry.last_temp_c matches the fixture temperature
+        """
+        npu = _make_npu_fc(zones=[3])
+        service = _make_service(controllers=[npu])
+        snap = build_snapshot(service)
+        entry = snap["fan_controllers"][0]
+        assert entry["type"] == "npu"
+        assert entry["section"] == "NPU"
         assert entry["last_temp_c"] == pytest.approx(55.0)
 
     def test_hd_per_device_temperatures(self) -> None:
