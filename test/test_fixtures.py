@@ -333,6 +333,58 @@ printf '%s\\n' "${{temps[@]}}" > "$STATE_FILE"
 """
         return self.create_command_file(file_content)
 
+    def create_npu_smi_drift_command(self, cards: int, min_temp: float = 40.0, max_temp: float = 85.0) -> str:
+        """Creates a shell script emulating `npu-smi info -t temp -i <card>` with gradual temperature changes.
+
+        The multi-card, drifting counterpart of create_npu_smi_command() (which emits the chips of a
+        single card with fixed temperatures). Unlike nvidia-smi/rocm-smi, npu-smi has no multi-card
+        query: smfc calls it once per card with `-i <card>`, so the script parses that argument and
+        reports only the requested card. Each card emulates a dual-chip Atlas 300I Duo (the second chip
+        runs 2C hotter, so the hottest-chip selection of NpuFc is exercised), and the MCU block is
+        emitted as well so the parser has the same decoy lines to reject as on real hardware.
+        Args:
+            cards (int): number of NPU cards
+            min_temp (float): lower bound of the drifting temperature (C)
+            max_temp (float): upper bound of the drifting temperature (C)
+        Returns:
+            str: path of the generated script
+        """
+        min_t = int(min_temp)
+        max_t = int(max_temp)
+        mid_t = (min_t + max_t) // 2
+        file_content = f"""STATE_FILE="${{0}}.state"
+CARD=0
+while [ $# -gt 0 ]; do
+    if [ "$1" = "-i" ]; then CARD="$2"; fi
+    shift
+done
+if [ ! -f "$STATE_FILE" ]; then
+    for i in $(seq 0 {cards - 1}); do echo {mid_t}; done > "$STATE_FILE"
+fi
+temps=($(cat "$STATE_FILE"))
+delta=$((RANDOM % 7 - 3))
+new_t=$((temps[CARD] + delta))
+[ $new_t -lt {min_t} ] && new_t={min_t}
+[ $new_t -gt {max_t} ] && new_t={max_t}
+temps[CARD]=$new_t
+printf '%s\\n' "${{temps[@]}}" > "$STATE_FILE"
+chip1=$((new_t + 2))
+[ $chip1 -gt {max_t} ] && chip1={max_t}
+echo "        NPU ID                         : $CARD"
+echo "        Chip Count                     : 2"
+echo ""
+echo "        Temperature (C)                : $new_t"
+echo "        Chip ID                        : 0"
+echo ""
+echo "        Temperature (C)                : $chip1"
+echo "        Chip ID                        : 1"
+echo ""
+echo "        T_LM75A  (C)                   : 29"
+echo "        T_CORE_M (C)                   : 40"
+echo "        Chip Name                      : MCU"
+"""
+        return self.create_command_file(file_content)
+
     def create_rocm_smi_command(self, count: int, temp_list: List[float] = None, min_temp: float = 35.0,
                                 max_temp: float = 75.0) -> str:
         """Creates a shell script emulating `rocm-smi -t --json` with gradual temperature changes."""

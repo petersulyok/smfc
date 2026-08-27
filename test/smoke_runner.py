@@ -19,14 +19,15 @@ from pytest import fixture, UsageError
 from pyudev import Context
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, FanController, Service
-from smfc.config import Config, CpuConfig, HdConfig, NvmeConfig, GpuConfig
+from smfc.config import Config, CpuConfig, HdConfig, NvmeConfig, GpuConfig, NpuConfig
 from .test_fixtures import TestData
 from .test_mocks import MockedContextGood
 
 # Smoke scenario matrix — single source of truth (replaces the per-scenario run_test_*.sh wrappers).
 # Each scenario maps a name to device counts plus the config template (in this directory) under test.
 # The optional `fault` field selects a fault injector (see FAULT_INJECTORS); None = no fault.
-Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf", "fault"], defaults=(None,))
+# `npu` is last (and keyword-only in practice) so the existing positional entries stay unchanged.
+Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf", "fault", "npu"], defaults=(None, 0))
 
 SCENARIOS = {
     "cpu_1":             Scenario(1, 1, 0, 0, "cpu_1.conf"),
@@ -40,6 +41,7 @@ SCENARIOS = {
     "const_level":       Scenario(1, 0, 0, 0, "const_level.conf"),
     "gpu_8_nvidia":      Scenario(1, 0, 8, 0, "gpu_8_nvidia.conf"),
     "gpu_8_amd":         Scenario(1, 0, 8, 0, "gpu_8_amd.conf"),
+    "npu_2":             Scenario(1, 0, 0, 0, "npu_2.conf", npu=2),
     "shared_zones":      Scenario(1, 0, 0, 2, "shared_zones.conf"),
     "shared_zones_cpu_split": Scenario(2, 2, 0, 0, "shared_zones_cpu_split.conf"),
     "control_function":  Scenario(2, 2, 0, 0, "control_function.conf"),
@@ -150,6 +152,23 @@ def _make_gpufc_init(nvidia_cmd: str, rocm_cmd: str, gpu_count: int):
     return _init
 
 
+def _make_npufc_init(npu_cmd: str, npu_count: int):
+    """Build an NpuFc.__init__ replacement that uses the fake npu-smi command and NPU card count."""
+    def _init(self, log: Log, ipmi: Ipmi, cfg: NpuConfig) -> None:
+        cfg.npu_device_ids = list(range(npu_count))
+        cfg.npu_smi_path = npu_cmd
+        self.config = cfg
+        self.smi_called = 0
+        self.npu_temperature = []
+        self.hwmon_path = []
+        FanController.__init__(self, log, ipmi, cfg.section, len(cfg.npu_device_ids))
+        if self.log.log_level >= Log.LOG_CONFIG:
+            self.log.msg(Log.LOG_CONFIG, f"   npu_device_ids = {self.config.npu_device_ids}")
+            self.log.msg(Log.LOG_CONFIG, f"   npu_smi_path = {self.config.npu_smi_path}")
+            self.log.msg(Log.LOG_CONFIG, f"   npu_smi_timeout = {self.config.npu_smi_timeout}")
+    return _init
+
+
 def _section_temp_range(config: ConfigParser, section: str, dv_min: float, dv_max: float) -> tuple:
     """Return the (min_temp, max_temp) of a controller section, tolerating numbered sections (e.g. CPU:0)."""
     sec = next((s for s in config.sections() if s == section or s.startswith(section + ":")), section)
@@ -237,6 +256,7 @@ class TestSmoke:
         cmd_smart = my_td.create_smart_command()
         cmd_nvidia = ""
         cmd_rocm = ""
+        cmd_npu = ""
         if scenario.cpu:
             my_td.create_cpu_data(scenario.cpu)
         if scenario.hd:
@@ -274,6 +294,13 @@ class TestSmoke:
                 my_config[Config.CS_GPU][Config.CV_GPU_NVIDIA_SMI_PATH] = cmd_nvidia
             else:
                 my_config[Config.CS_GPU][Config.CV_GPU_ROCM_SMI_PATH] = cmd_rocm
+        if scenario.npu:
+            # npu-smi drifts its own temperatures in a state file (like the GPU SMI emulators), so the
+            # NPU cards need no entry in temp_ranges / the hwmon updater thread.
+            npu_min = my_config[Config.CS_NPU].getfloat(Config.CV_MIN_TEMP, fallback=Config.DV_NPU_MIN_TEMP)
+            npu_max = my_config[Config.CS_NPU].getfloat(Config.CV_MAX_TEMP, fallback=Config.DV_NPU_MAX_TEMP)
+            cmd_npu = my_td.create_npu_smi_drift_command(scenario.npu, min_temp=npu_min, max_temp=npu_max)
+            my_config[Config.CS_NPU][Config.CV_NPU_SMI_PATH] = cmd_npu
 
         # Extract temperature ranges from config so the updater thread can drift them realistically.
         if scenario.cpu:
@@ -293,6 +320,7 @@ class TestSmoke:
         mocker.patch("smfc.HdFc.__init__", _make_hdfc_init(my_td, cmd_smart))
         mocker.patch("smfc.NvmeFc.__init__", _make_nvmefc_init(my_td))
         mocker.patch("smfc.GpuFc.__init__", _make_gpufc_init(cmd_nvidia, cmd_rocm, scenario.gpu))
+        mocker.patch("smfc.NpuFc.__init__", _make_npufc_init(cmd_npu, scenario.npu))
         sys.argv = ("smfc -o 0 -l 4 -nd -c " + new_config_file).split()
         service = Service()
 
