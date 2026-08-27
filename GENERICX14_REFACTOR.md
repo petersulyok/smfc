@@ -1,382 +1,516 @@
-# Fix X14 fan control and refactor the Platform control contract
+# Cover both X14/H14 BMC firmware stacks in the `generic_x14` platform
 
 ## Context
 
-`X14_MANUAL_FANCONTROL.md` (repo root) documents the confirmed IPMI raw command set of the
-X14/AST2600 BMC. Comparing it with `src/smfc/genericx14.py` shows `GenericX14Platform` cannot
-control an X14 board at all:
+`doc/X14H14_MANUAL_FANCONTROL.md` supersedes the two per-generation guides (`X14_MANUAL_FANCONTROL.md`
+and `H14_MANUAL_FANCONTROL.md`, both deleted). It documents that Supermicro's 14th generation ships
+**two unrelated BMC firmware stacks**, and that the split does not follow the board generation:
 
-- the duty **write** uses `0x30 0x70 0x88` (the *read* opcode) instead of `0x30 0x70 0x66 0x00 …`;
-- the duty **read** passes a *zone* where a *fan sensor number* (`0x41`+) is required, and parses a
-  two-byte `[duty, temp]` reply with `int(stdout, 16)`, which raises `ValueError`;
-- the manual-mode OEM command omits its `<op>` byte (`0x2c 0x04 0xcf 0xc2 0x00 <op> <zone> [<val>]`),
-  so the loop variable lands in the op slot — manual mode is **never** enabled or released;
-- manual-command zones are 1-based, duty-command zones 0-based; the code uses 0-based for both;
-- `FANCTL_COUNT = 6` matches no documented X14 board (1–4 zones).
+- **OpenBMC** (`openbmc-phosphor`) — most X14 boards, *plus* `H14SHM`.
+- **ATEN** (the firmware line Supermicro shipped through X9–X13) — all other H14 boards, *plus* the
+  SoC boards `X14SDW` and `X14SDV`.
 
-Beyond those, there is a structural problem the current `Platform` ABC cannot express. `Platform`
-only translates commands; the *policy* of "acquire control, verify it is still held, release it"
-lives in `Service`, hard-coded as "the BMC must be in FULL fan mode":
+The BMC product name therefore cannot decide which command set applies, and the current code decides
+exactly that way:
 
-- `Ipmi.__init__` (`ipmi.py:141`) calls `platform.start()`, and `Service.run()`
-  (`service.py:428`) *afterwards* may call `set_fan_mode(FULL)` — which per §4.1 of the guide
-  **clears manual mode on every zone**, undoing the `start()` that just ran;
-- `Service._check_fan_mode()` (`service.py:274`) re-asserts FULL on drift, which on X14 destroys
-  manual mode on every poll where drift is seen, and it never checks the flag that actually matters;
-- on X14 the base fan mode is only the *fallback curve*; enforcing FULL is meaningless there.
+- `create_platform()` routes on the `X14` prefix, so `X14SDW`/`X14SDV` receive the OpenBMC manual
+  latch, the BMC answers `0xC1`, and `smfc` exits 8 on boards that are perfectly controllable.
+- The CHANGELOG entry added on this branch deliberately excludes `H14` from auto-detection, which
+  sends `H14SHM` — an OpenBMC board — to `GenericPlatform` for the same wrong reason.
 
-Outcome: X14 boards actually controllable, and a `Platform` contract where each platform owns its
-own "am I in control?" semantics instead of `Service` assuming FULL mode for everyone.
+Two further facts change the shape of the work:
 
-Decisions taken with the user:
+**The ATEN duty commands are byte-for-byte `GenericPlatform`'s.**
 
-- **X14 base fan mode is left as found** — read only (it selects the zone map), never written.
-- **X14 level reads** get their zone→fan-sensor map from a new `[Ipmi] x14_zone_sensors=` setting
-  (default `0x41` for zone 0, other zones unmapped) instead of being inferred or measured.
-- **An unreadable state counts as lost** — smfc re-acquires rather than skipping the cycle, so
-  `ControlState` is just `OK`/`LOST`; a separate `confirmed` flag keeps an unreachable BMC out of the
-  `fan_mode_enforced_total` metric.
-- **X14 supports 4 zones (0-3)** — `FANCTL_COUNT: 6 → 4`, the documented board maximum of §3.
-- **The zone limit stays platform-only**: `Config.parse_ipmi_zones()` keeps accepting 0-100 and
-  `GenericPlatform` keeps its 0-100 range; neither is touched by this refactor.
-- **H14 routing stays** as it is (only one known, non-working board); the §4.0 preflight is added as
-  a *log warning*, not a hard failure.
-- **`/snapshot` and `/metrics` output stays byte-for-byte as it is today.**
+```
+GenericPlatform.get_fan_level(z)      raw 0x30 0x70 0x66 0x00 <z>          generic.py:18
+ATEN duty read (Part 4.2)             raw 0x30 0x70 0x66 0x00 <z>
+
+GenericPlatform.set_fan_level(z, d)   raw 0x30 0x70 0x66 0x01 <z> <d>      generic.py:25
+ATEN duty write (Part 4.2)            raw 0x30 0x70 0x66 0x01 <z> <d>
+```
+
+This is not a coincidence — ATEN *is* the X9–X13 firmware line, so `generic` has been speaking it all
+along. It also explains the field reports from H14 owners: the duty commands are correct, the **lever**
+is wrong. `smfc` sets FULL fan mode, but Part 4.1 states that the automatic control loop re-asserts its
+own duty in every fan mode; only the global bypass flag suspends it. Hence "smfc writes the level, the
+fans drift back within a second".
+
+**The testing status is the reverse of what the previous revision assumed.** Per Part 5.3, the ATEN
+path — bypass, duty write, read-back and release — is *confirmed on H14 hardware*, while the OpenBMC
+duty write is *not yet confirmed on any board*. Shipping only the OpenBMC half would ship only the
+unverified half.
+
+Outcome: `platform_name=generic_x14` becomes a platform **family** covering both stacks, with the
+concrete implementation chosen by a runtime probe instead of by board name. H14 boards become
+controllable for the first time.
+
+### What has already landed on this branch
+
+The previous revision's §1 and §3 — the widened `Platform` contract — are **implemented**:
+`ControlState`, `ControlStatus`, the concrete `start()`/`check_fan_mode()`/`end()`/`get_fan_mode()`/
+`set_fan_mode()` in the ABC, `ENFORCES_FULL_MODE`, the `Service._check_fan_mode()` state table, and
+the `x14_zone_sensors=` setting. This revision builds on that and does not revisit it.
+
+### Decisions taken with the user
+
+- **Both stacks in this change**, not OpenBMC first and ATEN later.
+- **Two concrete classes**, both in `src/smfc/genericx14.py`; no shared X14 base class.
+- **`X14AtenPlatform` subclasses `GenericPlatform`** and inherits its duty read and duty write,
+  overriding only the write's lower bound (§4.5).
+- **One configuration name.** `platform_name=generic_x14` selects the family; the probe selects the
+  class. There is no way to force a stack from the configuration file.
+- **Exit applies `exit_level`, then always releases** the latch or bypass — including when
+  `exit_level=-1`.
+- **The ATEN frozen-zone hazard is documented in `README.md`**, not handled at runtime: no warning
+  log, and no driving of zones the user did not configure.
 
 ---
 
-## 1. Widened `Platform` control contract (`src/smfc/platform.py`)
+## 1. Stack detection
 
-`start()` is **kept**, and its meaning widens from "prepare for manual control" to "bring this
-platform into the state where smfc controls the fans" — which includes the FULL-mode write on the
-platforms that need one. The FULL-mode policy moves out of `Service` into the platforms that
-actually want it, and `start()` becomes **idempotent**, so drift recovery is simply calling it again.
+### 1.1 The probe
 
-That keeps the new surface to a single new method (`check_fan_mode()`): `end()` already exists and
-already releases X14 manual mode, and re-acquiring is `start()` itself, so no separate
-`restore_control()` / `leave_manual_mode()` / `enter_manual_mode()` are introduced.
+The guide's Part 1 read is the authority, and it is the only command that is safe to send to a board
+whose stack is unknown:
 
-```python
-class ControlState(IntEnum):
-    OK = 0     # smfc is in control of the fans
-    LOST = 1   # control was lost: mode drifted, manual flag cleared, or the state could not be read
-
-
-@dataclass(frozen=True)
-class ControlStatus:
-    state: ControlState
-    detail: str            # human-readable reason, logged verbatim by Service
-    fan_mode: int          # observed base fan mode, for the snapshot cache (-1 = not read)
-    confirmed: bool = True # False when the state could not be read at all (BMC error)
+```
+raw 0x2c 0x04 0xcf 0xc2 0x00 0x00 0x01     # read the manual-mode flag of zone 1
 ```
 
-**There is no `UNKNOWN` state.** An earlier draft had one for "the read itself failed", mapped to
-"skip this cycle" (which is what `Service` does today, `service.py:249-256`). In practice an
-unreadable state is a lost state: smfc cannot demonstrate it is in control, so it re-acquires. This
-matches the guide's §4.5 watchdog, which re-asserts on any unreadable reply rather than waiting.
-`check_fan_mode()` therefore catches `(RuntimeError, ValueError)` internally — a BMC completion-code
-error surfaces as `RuntimeError` from `Ipmi._exec_ipmitool()` (`ipmi.py:213-217`) — and returns
-`LOST` with `confirmed=False` and a `detail` that says the state could not be read.
-`FileNotFoundError` (no `ipmitool` at all) still propagates.
-
-`confirmed` exists so an unreachable BMC does not look like fan-mode drift in the metrics: a
-rebooting BMC reports `LOST` on every poll, and counting each one would inflate
-`smfc_fan_mode_enforced_total` (see §3 for the exact rules).
-
-Methods:
-
-| Method | Change | Purpose |
-| --- | --- | --- |
-| `start(zones) -> bool` | signature + semantics, **concrete in the ABC** | acquire **and re-acquire** control; idempotent. Gains the zone list; returns `True` if it wrote the fan mode, so the caller knows to apply `fan_mode_delay`. |
-| `check_fan_mode(zones) -> ControlStatus` | **new**, concrete in the ABC | "am I still in the demanded state?" — the platform, not `Service`, defines what is demanded. |
-| `end(zones, level)` | unchanged signature, concrete in the ABC | `set_multiple_fan_levels(zones, level)`; only X14 overrides it (§2). |
-| `get_fan_mode()` / `set_fan_mode(mode)` | **hoisted** into the ABC | byte-identical (`raw 0x30 0x45 0x00`) and near-identical (only the `valid_fan_modes` check differs) in all four platforms today. |
-
-`start()` takes the zone list because X14 must know which zones to latch — latching a zone smfc does
-not drive freezes it at its current duty with nothing regulating it (today's code latches all six,
-which has exactly that hazard).
-
-### Shared implementation lives in the ABC
-
-Three of the four platforms want identical behaviour, so it is written once as a concrete default and
-the outlier overrides. `Platform` stops being a pure interface and carries the majority policy —
-"FULL fan mode means smfc is in control" — which is true for every Supermicro generation except X14:
-
-```python
-class Platform(ABC):
-    valid_fan_modes: List[int] = [...]      # per subclass
-    ENFORCES_FULL_MODE: bool = True         # False on X14; also gates the smfc-client warning (§3)
-
-    def start(self, zones: List[int]) -> bool:
-        """Acquire (or re-acquire) control of the fans. Idempotent."""
-        if self.get_fan_mode() != FanMode.FULL:
-            self.set_fan_mode(FanMode.FULL)     # read-then-conditional-write from service.py:419-431
-            return True
-        return False
-
-    def check_fan_mode(self, zones: List[int]) -> ControlStatus: ... # OK iff mode == FULL
-    def end(self, zones: List[int], level: int) -> None: ...          # level write only
-    def get_fan_mode(self) -> int: ...                                # raw 0x30 0x45 0x00
-    def set_fan_mode(self, mode: int) -> None: ...                    # validates against valid_fan_modes
-```
-
-The abstract set shrinks to what genuinely differs per board: `get_fan_level`, `set_fan_level`,
-`set_multiple_fan_levels`. This deletes roughly fourteen duplicated methods (four `get_fan_mode`,
-four `set_fan_mode`, four `end`, two `start`) — the same duplication that let the wrong X14 opcode sit
-unnoticed. `test_platforms.py` still drives every platform through the shared `PlatformSpec` matrix,
-so inherited behaviour stays asserted per platform rather than assumed.
-
-### Platforms get no `Log`
-
-`Platform.__init__` keeps its `(name, exec_ipmitool)` signature; platforms never log and never exit.
-Everything they need to communicate has a channel already:
-
-- failures → **raise** (`RuntimeError`/`ValueError`); `Service` logs and exits (§3);
-- "I wrote the fan mode" → `start()`'s `bool`, which `Service` turns into the existing
-  `Set IPMI fan mode = FULL` DEBUG line;
-- "control was lost, because…" → `ControlStatus.detail`, logged verbatim;
-- command-level tracing → already free: `Ipmi._exec_ipmitool()` logs every argument list and reply
-  at DEBUG (`ipmi.py:204,209`), and all four platforms share that callback.
-
-Earlier drafts needed a logger for X14 diagnostics (measured sensor map, active failsafe, §4.0
-preflight warning); all three of those features are gone. If a future need appears, adding a `Log`
-argument to `Platform.__init__` and `create_platform()` is a contained change.
-
-Per-platform behaviour:
-
-- **`GenericPlatform` / `GenericX9Platform`** (`generic.py`, `genericx9.py`): declare
-  `valid_fan_modes` and their three level methods, and **nothing else** — `start()`, `check_fan_mode()`,
-  `end()`, `get_fan_mode()` and `set_fan_mode()` are all inherited. `check_fan_mode()` reports `LOST`
-  with `detail="fan mode drifted from FULL to <name>"`, and calling `start()` again re-asserts FULL,
-  which is what the recovery path at `service.py:274` does today.
-- **`X10QBi`** (`x10qbi.py`): inherits the FULL logic and overrides `start()` only to add the chip
-  setup — `self._configure_chip(); return super().start(zones)`. The register setup
-  **must** move out of `start()` into a private `_configure_chip()`, because `set_fan_level()` and
-  `set_multiple_fan_levels()` call `self.start()` on every duty write (`x10qbi.py:85`, `x10qbi.py:97`)
-  — leaving it there would make every level change write the fan mode as well. The two write paths
-  call `_configure_chip()` only, so the test matrix's `set_level_extra_calls: 11` stays valid.
-- **`GenericX14Platform`**: the outlier — overrides `start()`, `check_fan_mode()` and `end()` in full
-  and sets `ENFORCES_FULL_MODE = False`. See §2.
-
-## 2. `GenericX14Platform` rewrite (`src/smfc/genericx14.py`)
-
-Zone numbering is the crux: **manual/failsafe commands are 1-based, duty commands 0-based.** smfc's
-zone IDs stay 0-based everywhere (config, controllers, other platforms); the +1 is applied only when
-building a `0x2c 0x04` command, via a single helper so it is stated once.
-
-| Operation | Command |
+| Reply | Stack |
 | --- | --- |
-| set duty, zone z | `raw 0x30 0x70 0x66 0x00 <z> <duty%>` |
-| read duty+temp | `raw 0x30 0x70 0x88 <sensorNum>` → first byte is duty, `ff` = unavailable |
-| manual ON/OFF, zone z | `raw 0x2c 0x04 0xcf 0xc2 0x00 0x01 <z+1> <0/1>` |
-| read manual flag, zone z | `raw 0x2c 0x04 0xcf 0xc2 0x00 0x00 <z+1>` |
-| read failsafe flag, zone z | `raw 0x2c 0x04 0xcf 0xc2 0x00 0x02 <z+1>` |
-| release all zones | `raw 0x30 0x70 0x66 0x02 0x00` |
+| a data byte (`00` or `01`) | OpenBMC |
+| completion code `0xC1` | ATEN |
+| anything else | undetermined — **fail** |
 
-- `FANCTL_COUNT`: `6` → `4`, i.e. zones **0-3**. §3 documents 1-zone boards (no specific fan table),
-  2-zone boards (X14DBI-SP/-T, X14SBI-F/-TF, X14DBG-AP) and one 4-zone layout (X14SRG-TF in
-  Performance); no board has more. The firmware itself accepts one index more — the duty command
-  returns `0xCC` only *above* `0x04` — but no documented board has a 5th zone, and `6` matches
-  neither number. Writes to a zone the board lacks are harmless (§4.3), so the cost of the tighter
-  bound is only a rejected config on a hypothetical undocumented board.
-- `start(zones)` — also the recovery path, so every step must tolerate being run again:
-  1. `get_fan_mode()` for the snapshot cache only — **never** write the base mode.
-  2. enable manual on each requested zone, then read the flag back; a zone that does not confirm
-     `01` raises `RuntimeError` naming the zone — smfc is not in control of it and must not pretend
-     otherwise.
-  3. return `False` (no fan-mode write ⇒ no `fan_mode_delay` sleep).
+### 1.2 🔴 There is no fallback branch
 
-  The platform never logs and never exits: it raises, and the caller decides (§3).
+Part 1.3: `0x30 0x70 0x66 0x00 <zone>` is a duty **read** on ATEN and a **truncated duty write** on
+OpenBMC. The OpenBMC handler accepts payloads of two *or* three bytes, so the short form is not caught
+by a length check — it executes as a duty write with no duty value. Guessing the stack does not return
+an error; it moves fans.
 
-  **No separate §4.0 preflight.** An earlier draft read the manual flag of zone 0 first to detect a
-  BMC without per-zone manual mode (H14 answers `0xC1`). Step 2 already covers it: on such a board
-  the latch write and its read-back fail, `start()` raises, and `Service` exits 8 with the zone
-  named. A dedicated preflight would only duplicate that — and with no `Log` in the platform it had
-  nowhere to put its warning anyway. The error message should name
-  `X14_MANUAL_FANCONTROL.md` §4.0 so an H14 user understands why.
+Consequently, "try OpenBMC, fall back to ATEN" is not an acceptable implementation, and neither is
+treating any error as ATEN. `Ipmi._exec_ipmitool()` (`ipmi.py:213-217`) flattens every failure into
 
-  **The failsafe flag (`op 0x02`) is not read** — with nothing to report it to, it is a wasted BMC
-  call per zone, and a failsafe zone is pinned at 100 % by the BMC, which is safe.
-- `check_fan_mode(zones)`: read the manual flag of every zone. Any `00` → `LOST`
-  (`detail="manual fan mode cleared in zone(s) [...]"`); an unreadable or erroring reply → also
-  `LOST`, with `detail` naming the read failure (§1). The base fan mode is read too and carried in
-  `ControlStatus.fan_mode` so the snapshot cache stays populated as today — but it plays no part in
-  the decision on this platform.
-- `end(zones, level)`: unchanged order — level write first, then release manual — but the release
-  becomes the all-zones shortcut `0x30 0x70 0x66 0x02 0x00`, falling back to the corrected per-zone
-  command if it errors. The existing `test_end` ordering assertion still applies.
-- `get_fan_level(zone)`: `raw 0x30 0x70 0x88 <sensor>`, split the reply, take the **first** byte;
-  `ff` → raise `ValueError` ("fan duty unavailable").
-- `set_fan_level` / `set_multiple_fan_levels`: `0x30 0x70 0x66 0x00 <zone> <level>`.
+```python
+raise RuntimeError(f"ipmitool error ({r.returncode}): {r.stderr}.")
+```
 
-### Zone → fan sensor map: configured, not inferred
+so an unreachable BMC, a wedged `/dev/ipmi0` and a genuine `0xC1` are indistinguishable by type. Only
+`rsp=0xc1` means ATEN.
 
-`get_fan_level(zone)` needs one representative fan sensor per zone, and that mapping cannot be
-derived from fan names — §3 gives zone 1's first sensor as `0x46` on X14SBI-F, `0x47` on X14DBI-SP,
-`0x46` (FAN6, a *numbered* fan) on X14DBG-AP and `0x44` on X14SRG-TF, and only X14SRG-TF has zones
-2-3 at all. Any name-based rule is wrong on at least one documented board.
+**Implementation:** give `_exec_ipmitool()` a structured exception rather than matching text.
 
-So smfc does not infer it: **the user supplies it.**
+```python
+class IpmiError(RuntimeError):
+    """An ipmitool failure, carrying the IPMI completion code when the BMC returned one."""
+    completion_code: Optional[int]      # e.g. 0xC1; None when ipmitool failed for another reason
+```
 
-- New setting `[Ipmi] x14_zone_sensors=0x41,0x46` — comma- or space-separated sensor numbers, list
-  index = smfc zone, parsed like the existing `ipmi_zone=` (`Config.parse_ipmi_zones`,
-  `config.py:341`). Values accept `0x` hex or decimal; each must be a byte (0-255).
-- **Default when unset: `{0: 0x41}`.** Zone 0 is `0x41` on every board in §3, so the common case
-  works out of the box.
-- `get_fan_level(zone)` for a zone with no mapping raises
-  `RuntimeError("IPMI zone N has no fan sensor configured (see [Ipmi] x14_zone_sensors=)")`.
-  The control loop never reads levels back, so this only affects the startup DEBUG line and
-  `smfc-client`. ⚠️ But the startup DEBUG loop is **currently unguarded** (`service.py:417`), so at
-  `log_level=4` that raise would abort startup — see "Open topics" at the end of this document.
-- The users who need it can read the numbers straight off their board with
-  `ipmitool sdr elist full | grep -i fan` (second field, e.g. `41h`), or take them from §3.
+`ipmitool` prints the code in its failure line (`… cmd=0x4 rsp=0xc1): Invalid command`), so
+`_exec_ipmitool()` parses `rsp=0x..` out of `stderr` once, in one place, and every caller keeps
+catching `RuntimeError` as it does today. Matching the string at the call site would work but leaves a
+latent trap: a future change to the error message silently turns a fatal condition into a wrong-stack
+guess.
 
-This is a deliberate reversal of an earlier draft that measured the map by writing distinct probe
-duties per zone and grouping fans by what they reported. Measuring worked, but it cost `sdr`
-parsing, several seconds of deliberate fan movement at every startup, an ordering constraint against
-the manual latch, a "probe once, not on recovery" guard, and four invented probe-level constants —
-all to populate a read that feeds only a DEBUG line and `smfc-client`. One documented setting is a
-better trade.
+Detection failure is fatal with a message naming the guide:
 
-Consequence worth stating: the probe would have caught an `ipmi_zone` the board does not have (no
-fan reports that zone's duty ⇒ smfc is writing duty that cools nothing, since §4.3 makes writes to a
-nonexistent zone harmless *and* ineffective). Configuration cannot catch that, so on X14 a wrong
-`ipmi_zone` fails silently — exactly as it already does on every other platform, where
-`Config.parse_ipmi_zones()` accepts 0-100 and `GenericPlatform` writes it unchecked.
+```
+Cannot determine the BMC fan control stack (see doc/X14H14_MANUAL_FANCONTROL.md, Part 1): <reason>
+```
 
-### Timing: what waits where
+### 1.3 Where detection runs
 
-No new delay parameters. The existing ones apply, and the X14 sequence needs none of its own:
+In `create_platform()` (`src/smfc/platform_factory.py`), not lazily inside the platform:
 
-| After | Delay | Why |
+- `Ipmi.__init__` calls the factory immediately after parsing `mc info` (`ipmi.py:139`), so the BMC
+  has just been proven responsive — the ambiguous "BMC unreachable" case is largely excluded by
+  construction.
+- Returning the correct *class* keeps `type(platform).__name__` honest everywhere it is already
+  displayed: the CONFIG log line (`ipmi.py:151`), `smfc-client`'s `Platform :` line
+  (`client.py:584`), and the snapshot.
+- A lazy probe would leave the class name unable to tell the user which stack was found, and would
+  put a `self._stack` guard in every method.
+
+The factory resolves the **family** first, then probes within it:
+
+```python
+def create_platform(platform_name, exec_ipmitool, zone_sensors=None) -> Platform:
+    if platform_name in (PlatformName.GENERIC_X14,) or platform_name.startswith(("X14", "H14")):
+        return _create_x14_platform(platform_name, exec_ipmitool, zone_sensors)
+    ...                                  # unchanged: generic_x9 / X10QBi / generic + prefixes
+```
+
+No OEM command is ever sent to a board outside the family, so X9–X13 auto-detection is untouched.
+`H14` prefixes route into the family again, **reverting the CHANGELOG entry made on this branch**.
+
+---
+
+## 2. Class layout (`src/smfc/genericx14.py`)
+
+Two concrete classes. There is no shared X14 base class: with the duty methods coming from
+`GenericPlatform` on one side and being genuinely X14-specific on the other, the two stacks share only
+`ENFORCES_FULL_MODE = False`, "read the base fan mode but never write it", and the release opcode.
+Three constants do not justify a base class, and the previous revision's own argument applies — an
+abstraction that exists only to hold constants is where wrong opcodes hide.
+
+```python
+class X14OpenBmcPlatform(Platform):        # today's GenericX14Platform body, renamed
+class X14AtenPlatform(GenericPlatform):    # duty commands inherited, lever replaced
+```
+
+| | `X14OpenBmcPlatform` | `X14AtenPlatform` |
 | --- | --- | --- |
-| fan mode write (non-X14 `start()`) | `fan_mode_delay` (default 10 s) | guide §4.1 asks for `sleep 8`; `Service` applies it when `start()` returns `True` |
-| duty write | `fan_level_delay` (default 2 s) | unchanged, applied by `Ipmi.set_fan_level()` / `set_multiple_fan_levels()` |
-| manual latch → read-back confirm | none | §4.2 issues the confirm read immediately after the set |
-| manual latch → first duty write | none | the §4.5 watchdog runs them back-to-back |
-| duty write → duty read | none | the duty register returns the commanded value; the 5-10 s in §4.4 is RPM spin-up, not duty |
+| acquire | per-zone latch `0x2c 04 cf c2 00 01 <z+1> 01`, read back | global bypass `0x30 70 66 02 01` |
+| scope of the lever | only the latched zones | every zone on the board |
+| lever readable | yes | **no** |
+| "still in control?" | read the manual flag per zone | compare a duty read-back with `accepted()` |
+| duty write | `0x30 70 66 **00** <z> <d>` | inherited from `GenericPlatform` |
+| duty read | `0x30 70 88 <sensor>` → 2 bytes | inherited (`0x30 70 66 00 <z>`) |
+| zone numbering | manual 1-based, duty 0-based | 0-based throughout |
+| duty range | 0–100 | 5–100 on the PWM path, unclamped on the percent path — `smfc` clamps to ≥ 5 (§4.5) |
+| duty read-back | exact (a separate read command) | one of two values, board-dependent (§4.2) |
+| `x14_zone_sensors=` | required | unused |
+| base fan mode | read only | read only |
+| `ENFORCES_FULL_MODE` | `False` | `False` |
 
-X14 `start()` never writes the base fan mode, so it returns `False` and costs no `fan_mode_delay` —
-recovery after drift is therefore fast, which matters because §1 of the guide notes automatic control
-takes the fans back within ~1 s of the latch being cleared.
+`X14AtenPlatform(GenericPlatform)` is the repository's first two-level platform hierarchy — every
+platform subclasses `Platform` directly today. It is justified because the relationship is real: the
+same firmware, the same duty commands, a different lever. The alternative, copying those methods out
+of `generic.py`, reintroduces exactly the duplication this refactor set out to remove. The one
+override (§4.5) is a bound on an argument, not a different command.
 
-## 3. Call-site changes
+The class name `GenericX14Platform` disappears. `PlatformName.GENERIC_X14` stays as the configuration
+value and is no longer a one-to-one mapping to a class, so the `platform_factory` dictionary lookup is
+replaced by the family resolution in §1.3.
 
-- **`src/smfc/ipmi.py`**: drop `self.platform.start()` from `__init__` — the zone list is not known
-  there, and the acquire has to happen after the DEBUG "old mode / old level" logging so those stay
-  genuinely pre-change. `in_client` then governs only the fan-sensor readiness gate (update its
-  docstring). No new `Ipmi` wrapper methods: `Service` already calls `self.ipmi.platform.end(...)`
-  directly at `service.py:98`, so it calls `start()` the same way. `Ipmi.set_fan_mode()` stays as
-  public API but loses its internal callers.
-- **`src/smfc/service.py`**:
-  - `run()`: delete the `if self.last_fan_mode != Ipmi.FULL_MODE: set_fan_mode(FULL)` block
-    (`service.py:419-431`) and call `self.ipmi.platform.start(self._exit_zones())` instead —
-    `_exit_zones()` already falls back to a config scan when the controllers do not exist yet, which
-    is exactly this moment. Wrap it in `try/except (RuntimeError, ValueError)` → log the message and
-    `sys.exit(8)`, matching how an `Ipmi` initialization failure is already handled a few lines above
-    (`service.py:399-403`): this is where an X14 latch failure surfaces to the user. Sleep
-    `config.ipmi.fan_mode_delay` when `start()` returns `True`. The DEBUG "old level in IPMI zone"
-    loop keeps its current position and behaviour — with a static map there is no ordering
-    constraint, and on X14 an unmapped zone simply logs as unavailable.
-  - `_check_fan_mode()` **keeps its name** (as do `enforce_fan_mode=` and
-    `fan_mode_enforced_total`): it calls `platform.check_fan_mode(zones)`, caches
-    `status.fan_mode` into `self.last_fan_mode`/`last_fan_mode_at` as today, then
-    then acts on `state` and `confirmed`:
+---
 
-    | `state` | `confirmed` | `enforce_fan_mode` | Action |
-    | --- | --- | --- | --- |
-    | `OK` | — | — | nothing |
-    | `LOST` | `True` | on | `fan_mode_enforced_count += 1`, `platform.start(zones)`, re-apply `applied_levels` |
-    | `LOST` | `True` | off | log `detail`, `sys.exit(11)` — real drift, today's behaviour |
-    | `LOST` | `False` | on | `platform.start(zones)`, re-apply `applied_levels`, **no count** |
-    | `LOST` | `False` | off | log `detail` and continue — nothing was observed to drift, so exiting 11 would be wrong |
+## 3. `X14OpenBmcPlatform`
 
-    The re-apply loop is unchanged. The `confirmed=False` rows are the BMC-unreachable case: smfc
-    still tries to re-acquire (the writes will fail too and land in the existing
-    `except (RuntimeError, ValueError)` at `service.py:277-281`), but the metric stays clean.
-  - Cache the controlled zone list once after the controllers are built rather than recomputing per
-    poll.
-- **`src/smfc/client.py:588-595`**: the "not in FULL mode" warning is misleading on X14, where the
-  base mode is deliberately left alone. Gate the red warning on `platform.ENFORCES_FULL_MODE` (§1);
-  the mode line itself keeps printing for every platform. **No change to `/snapshot` or `/metrics`.**
+The body of today's `GenericX14Platform` is correct and is kept: the `_manual_zone()` helper that
+applies the 1-based offset in exactly one place, `start()`'s latch-and-read-back, the per-zone flag
+check in `check_fan_mode()`, the two-byte duty parse with `ff` → `ValueError`, `FANCTL_COUNT = 4`, and
+the configured zone → fan sensor map. Changes:
 
-## 4. Tests
+- **Rename** to `X14OpenBmcPlatform`.
+- **The H14 error message is obsolete.** `start()` currently says a zone that refuses the latch means
+  an H14 board and points at the old guide's §4.0 preflight. Detection now guarantees the class
+  matches the board, so a refusal means the zone does not exist or the BMC rejected the command:
 
-- **`test/test_platforms.py`**: `PlatformSpec` keeps `start_calls`/`end_calls` (their contents change)
-  and gains `check_*` vectors; `start()` now takes a zone list, so the existing `test_start` grows a
-  parameter. Add X14 cases for the corrected byte layouts,
-  the 1-based/0-based zone split, the two-byte duty parse (` 64 2d` → 100), `ff` → `ValueError`, and
-  the `OK`/`LOST` classifications including an unreadable flag. This is the file that encodes the wrong opcodes today
-  (`_x14_get_cmd`/`_x14_set_cmd`, `_X14_START_CALLS`), so it must be rewritten alongside the source.
-- **`test/test_fixtures.py`**: the fake `ipmitool` script (lines 200-212) answers `0x30 0x70 0x88`
-  by arg count and `0x2c 0x04 …` unconditionally. Teach it the real layouts: `0x88` returns two
-  bytes, `0x66 0x00` accepts a duty write, and the `0x2c` read ops return `01`/`00`.
-- **`test/test_ipmi.py`**: `platform.start()` is no longer called from `__init__` (and `in_client`
-  no longer gates it).
-- **`test/test_config.py`**: parsing and validation of the new `x14_zone_sensors=` setting —
-  unset (default `{0: 0x41}`), hex and decimal forms, comma and space separators, and a rejected
-  out-of-range value.
-- **`test/test_service.py`**: startup no longer writes FULL directly (tests at lines 66-93, 917-989);
-  `_check_fan_mode` tests (from line 1004) keep their name but drive a stubbed platform returning
-  each `ControlState`. Keep the exit-11 and `fan_mode_enforced_count` assertions.
+  ```
+  IPMI zone {zone} did not accept manual fan mode
+  (see doc/X14H14_MANUAL_FANCONTROL.md, Part 3.5).
+  ```
+
+- **All guide references renumber.** The old §3 board tables are **Part 5.1**, the old §4 procedure is
+  **Part 3**, and the file is `doc/X14H14_MANUAL_FANCONTROL.md`. Affected: the class docstring
+  (`genericx14.py:24`) and the two `start()` references (`genericx14.py:80,97`).
+- `x14_zone_sensors=` remains documented against the Part 5.1 per-board table, with one addition
+  from the guide's Part 3.5: **the zone map belongs to the active base fan mode, not to the board.**
+  Selecting a base mode makes the BMC load a fan table, and that table is what defines how many zones
+  exist and which fans are in each — on most boards the everyday modes load a single zone holding
+  every fan, while Performance and Silent carry a three-zone table and some boards override the
+  common modes with a board-specific two-zone one. So a `x14_zone_sensors=` that is correct today
+  becomes wrong if anyone changes the fan mode from the web UI or Redfish, and `smfc` cannot detect
+  that: it reads the mode but the mode name does not imply the table (Part 3.4 — an unsupported mode
+  is accepted silently and reads back correctly while a different table is loaded).
+- Consequently `ControlStatus.fan_mode` is reported as read and nothing is inferred from it. It is a
+  snapshot field, never an input to the zone map.
+
+---
+
+## 4. `X14AtenPlatform`
+
+### 4.1 `start(zones)`
+
+```
+raw 0x30 0x70 0x66 0x02 0x01        # suspend the automatic loop, all zones
+```
+
+- One command, global; the zone list is recorded for §5's release but not otherwise used.
+- Returns `False` — the base fan mode is never written, so no `fan_mode_delay` is due.
+- 🔴 **Never write the base fan mode.** Part 4.1: the mode is persistent while the bypass is not, so a
+  board left in Full Speed comes back at 100 % after a BMC restart with nothing to stop it.
+- `0xD4` means System Lockdown is enabled; the raised message must say so, because the fix is in the
+  BMC web UI and nothing in `smfc` can work around it.
+- 🔴 **`0xCC` here means this firmware build has no fan-duty sub-command at all.** Part 4.6: on some
+  ATEN builds every `0x30 0x70 0x66` command returns `0xCC` while `0x30 0x45` still works. The `0xC1`
+  probe of §1.1 identifies the *stack*, not that duty control exists, so this is the first point where
+  such a build can be recognised. It needs its own fatal message, because the only recourse is a
+  firmware change and a generic `ipmitool error (…)` sends the user hunting the wrong thing:
+
+  ```
+  This BMC build implements no IPMI fan duty control (0x30 0x70 0x66 rejected with 0xCC); only the
+  base fan mode can be set (see doc/X14H14_MANUAL_FANCONTROL.md, Part 4.6).
+  ```
+
+- Idempotent by construction, which is what the recovery path in `Service._check_fan_mode()` needs.
+
+### 4.2 `check_fan_mode(zones)` — the read-back watchdog
+
+The bypass flag is **write-only**, so there is no flag to poll. The detector is the guide's Part 4.5
+comparison: read each zone's duty and compare it against what we wrote — but the read-back is not one
+predictable value.
+
+🔴 **There is no single expected read-back on this stack.** Part 4.4: the truncation formula was
+verified on the AST2600 hardware monitor the H14 boards use, and the **X14SDW / X14SDV** firmware
+carries a **second duty path** that stores the percentage itself and reads it back **exactly**, with no
+truncation and no 5 % clamp. A configuration byte picks the path when the BMC starts, so *the board
+name does not tell you which one is active* and neither does anything `smfc` can read. Part 4.1 says
+the same thing in one line — "measure your board once".
+
+A single computed expectation is therefore wrong on one of the two paths, and getting it wrong is not
+cosmetic in either direction:
+
+- computing the truncated value on a percent-path board makes **every** duty that is not a multiple of
+  20 mismatch on **every** poll — a permanent `LOST`, re-arming the bypass and logging control loss
+  forever;
+- comparing against the written value on a PWM-path board does the same, one count the other way.
+
+The two paths never differ by more than one count, so the comparison is against an **accepted set**
+rather than a value. This is self-calibrating: no probe write, no extra IPMI traffic, no per-board
+table to maintain.
+
+```python
+@staticmethod
+def accepted(level: int) -> set[int]:
+    """Duty bytes the BMC may report back after `level` was written (Part 4.4).
+
+    ATEN firmware has two duty paths and the board name does not say which is active: an
+    8-bit PWM path that clamps to 5-100 and truncates twice, and a path that stores the
+    percentage exactly. The two never differ by more than one count.
+    """
+    pwm = max(5, min(100, level))
+    return {((pwm * 255) // 100) * 100 // 255, pwm, max(0, min(100, level))}
+```
+
+On the PWM path: `50 → 127 → 49`, `20 → 51 → 20`, `100 → 255 → 100`, `0 → 12 → 4` — exact at multiples
+of 20, exactly one low elsewhere. On the percent path the write itself is returned. `accepted()` holds
+both, plus the unclamped value for the `min_level=0` case that `config.py:787` permits.
+
+The cost is that a genuine takeover landing within one count of our own value is missed for a single
+poll. That is not a real exposure: the automatic curve keeps moving, so the next poll sees it.
+
+- **The map of accepted values lives on the platform**, recorded by `set_fan_level()` and
+  `set_multiple_fan_levels()` from the level they actually wrote (post-clamp, §4.5). It is not read
+  out of `Service.applied_levels`: the platform must not depend on its caller's bookkeeping.
+- **Before the first duty write there is nothing to compare**, so the first call reports `OK`.
+  `Service` writes levels on every iteration, so that window is one poll.
+- **The read happens before this pass's write** (Part 4.5): reading straight after our own
+  write returns our own value regardless of the bypass, because the automatic loop needs about a
+  second to overwrite.
+- **A zone reading `64` that we did not ask for is most likely a fan-failure trip**, not a lost
+  bypass — but the two boards differ and `smfc` cannot tell which it is on. Part 5.2: on the H14
+  boards the fan-failure check runs *before* the bypass check, so a trip forces 100 % on every tick
+  and re-arming can never win it back; on **X14SDW / X14SDV** the bypass is checked first and holds
+  *through* a fan failure, so a pinned zone there has some other cause. Count consecutive occurrences
+  per zone, and from the third on make `ControlStatus.detail` name the likely cause without asserting
+  it:
+
+  ```
+  IPMI zone 0 is pinned at 100% and is most likely a fan failure rather than a lost bypass; on
+  boards where fan failure outranks the bypass, re-arming cannot recover it (see
+  doc/X14H14_MANUAL_FANCONTROL.md, Part 4.6 and Part 5.2).
+  ```
+
+  Without this the log repeats "control lost" forever and points the user at the wrong thing.
+- **The base fan mode is read too**, purely to populate `ControlStatus.fan_mode` for the snapshot
+  cache, exactly as the OpenBMC class already does. It plays no part in the decision.
+
+Mapping onto the existing contract, with no extension to `ControlStatus`:
+
+| Observation | Result |
+| --- | --- |
+| every zone reads a value in its accepted set | `OK` |
+| a zone reads something else | `LOST`, `confirmed=True` — the automatic loop resumed |
+| a read fails | `LOST`, `confirmed=False` — the BMC could not be read |
+
+`Service._check_fan_mode()` (`service.py:260-287`) is unchanged, and its "re-acquire, then re-apply
+`applied_levels`" recovery *is* the guide's Part 4.5 loop.
+
+### 4.3 `end(zones, level)`
+
+Apply the exit level (unless `level < 0`, see §5), then release the bypass with
+`raw 0x30 0x70 0x66 0x02 0x00`. The order matters only in that releasing first would make the level
+write pointless.
+
+### 4.4 The frozen-zone hazard — documented, not handled
+
+The bypass is **global**. A zone the user did not list in `ipmi_zone=` is bypassed along with the rest
+and sits **frozen at its last duty with nothing regulating it** — unlike OpenBMC, where an unlatched
+zone keeps running under automatic control. This cannot be fixed in code: there is no reliable way to
+learn how many zones a board has (several ATEN boards accept any zone byte silently, Part 5.2), and
+driving zones the user did not configure would make `smfc` move fans nobody asked it to move.
+
+It is therefore a documented warning in `README.md` (§8), telling ATEN users to list every zone their
+board has.
+
+### 4.5 🔴 Never write a duty of 0
+
+`X14AtenPlatform` clamps every duty write to **≥ 5 %**, overriding `GenericPlatform.set_fan_level()`
+and `set_multiple_fan_levels()` for that one bound. `Config` permits `min_level=0` (`config.py:787`),
+and on the PWM path that is harmless — the firmware clamps it to 5 % and reports 4. Part 4.4 🔴 states
+that the **percent path has no floor**, so on X14SDW / X14SDV a written `0x00` may reach the fans as a
+real 0 % — with the BMC's own thermal loop suspended by our bypass and nothing else regulating them.
+
+This is a safety clamp, not a read-back concern: `accepted()` (§4.2) already tolerates either path, so
+the clamp exists purely so that a legal configuration cannot stop the fans on a board whose duty path
+we cannot identify. The clamped value is what `accepted()` is asked about, so the two stay consistent
+by construction.
+
+`X14OpenBmcPlatform` needs no such clamp: its duty range is a documented 0–100 and it does not suspend
+a thermal loop globally.
+
+---
+
+## 5. Release must not depend on `exit_level`
+
+A defect on this branch, affecting both stacks. `Service.exit_func()` (`service.py:97`) calls
+`platform.end()` only when `exit_level != EXIT_LEVEL_NONE` **and** the zone list is non-empty:
+
+```python
+if level != Config.EXIT_LEVEL_NONE and zones:
+    self.ipmi.platform.end(zones, level)
+```
+
+On FULL-mode platforms `end()` is only a level write, so skipping it is harmless. On X14/H14 it means
+the manual latch or the global bypass is **never released**: the fans stay frozen at whatever duty
+`smfc` last wrote, permanently, with no thermal regulation behind them. Part 4.1 states it directly —
+*"If your controller dies, the fans freeze at their last duty — they do not fall back to automatic.
+Always release the bypass on exit."*
+
+The fix does not add a method to the `Platform` contract:
+
+- `exit_func()` calls `platform.end(zones, level)` **unconditionally** whenever `self.ipmi` exists,
+  passing `Config.EXIT_LEVEL_NONE` (`-1`) straight through instead of branching on it.
+- `Platform.end()` in the ABC writes the level only when `level >= 0`. This is a no-op behaviour change
+  for `generic`, `generic_x9` and `X10QBi`.
+- Both X14 classes record in `start()` which zones they latched, so the release covers exactly those
+  and no longer depends on `_exit_zones()` returning the right list during interpreter shutdown.
+- The existing log lines are kept, including the `no IPMI zone was controlled` / `exit_level=-1`
+  messages — with their wording adjusted so they no longer imply that nothing at all was done.
+
+**State this plainly in the user documentation:** on both X14/H14 stacks the exit level is a
+*transition*, not a resting state. Within about a second the BMC's own curve takes over — and that
+curve regulates on CPU and system sensors only, so drive temperatures are not part of it.
+
+---
+
+## 6. Call-site changes
+
+- **`src/smfc/platform_factory.py`** — family resolution and the probe (§1.3); `H14` prefix restored;
+  the `PlatformName.GENERIC_X14 → class` dictionary entry replaced.
+- **`src/smfc/ipmi.py`** — `IpmiError` with the parsed completion code (§1.2). No other change; the
+  removal of `platform.start()` from `__init__` already landed.
+- **`src/smfc/service.py`** — the unconditional `end()` of §5. `run()` and `_check_fan_mode()` are
+  otherwise unchanged: the state table already handles everything both stacks report.
+- **`src/smfc/client.py`** — no change. The `ENFORCES_FULL_MODE` gate on the "not in FULL mode"
+  warning (`client.py:592`) already covers both new classes, and `Platform :` now prints the detected
+  stack for free.
+- **`src/smfc/config.py`** — no parsing change, and in particular **no new validation of
+  `min_level`**. The 0–100 range stays as it is; the ≥ 5 % floor is a property of one platform, not of
+  the configuration, and it is applied in `X14AtenPlatform` (§4.5). `parse_x14_zone_sensors()`
+  (`config.py:361`) stays as it is; only its documentation changes, to say the setting is
+  **OpenBMC-only** and scoped to the active base fan mode. The setting is unreleased, so renaming it
+  is still free — the recommendation is to keep the name.
+
+---
+
+## 7. Tests
+
+- **`test/test_fixtures.py`** — the fake `ipmitool` must model **both** stacks, selected by an
+  environment variable, and answer the Part 1 probe accordingly. It currently conflates them: `0x66
+  0x00` with five arguments returns a level while six arguments is a write (lines 193-199). That
+  ambiguity is the real hardware behaviour and must become stack-dependent, so that an OpenBMC
+  scenario treats the short form as a write and an ATEN scenario treats it as a read.
+  The ATEN side needs a **second switch for the duty read-back path** — PWM truncation or exact
+  percentage (Part 4.4) — because that is the difference §4.2's `accepted()` exists to absorb, and a
+  fixture that models only one path cannot fail a regression that reintroduces a single expectation.
+- **`test/test_platforms.py`** — `PlatformSpec` gains a second X14 row. The existing `_x14_*` command
+  builders become the OpenBMC ones; the ATEN row reuses the `_generic_*` builders, which is itself an
+  assertion that the two command sets are identical. New vectors:
+  - detection: data → `X14OpenBmcPlatform`, `0xC1` → `X14AtenPlatform`, any other error → raises;
+  - `accepted()` from Part 4.4, asserted as a set per level: `50 → {49, 50}`, `20 → {20}`,
+    `100 → {100}`, `0 → {4, 5, 0}`, `120 → {100}` — the PWM read-back, the clamped write and the raw
+    write, so both duty paths pass;
+  - `check_fan_mode()` classification driven from **both** read-back paths: for each level, the PWM
+    value → `OK` *and* the exact value → `OK`; a value outside the set → `LOST/confirmed=True`; a read
+    error → `LOST/confirmed=False`; and the fan-failure wording after three consecutive pinned passes;
+  - the §4.5 write clamp: a configured level of 0 reaches the BMC as `0x05`, never `0x00`;
+  - `start()` translating `0xCC` into the "no fan-duty sub-command" message of §4.1, distinct from the
+    `0xD4` System Lockdown message;
+  - `end()` with `level=-1`: releases without writing a level.
+- **`test/test_service.py`** — `exit_func()` now calls `end()` with `-1` instead of skipping it;
+  the existing exit-level assertions are extended rather than replaced.
+- **`test/run_smoke.sh`** and `test/automatic_smoke_runner/` — one scenario per stack, each driven
+  through startup → level changes → control loss → re-assert → `systemctl stop` exit level.
 - Test docstrings follow the existing "It contains the steps:" + ASSERT-bullet style.
 
-## 5. Documentation
+---
 
-- `ARCHITECTURE.md`: lines 261, 317, 337 and 756 describe `start()`, the wrong X14 opcode and the
-  6-zone claim; update those plus the class diagram to the widened `start()` + `check_fan_mode()`.
-- `README.md`: chapter 5 platform table (line 335: "6 fan zones") and the X14 note at lines 195-203
-  (the exit-level explanation stays correct, the mode handling does not).
-- `config/smfc.conf` + README's embedded copy + README chapter 5: document
-  `x14_zone_sensors=`, including how to read the numbers off a board
-  (`ipmitool sdr elist full | grep -i fan`) and the per-board table from the X14 guide's §3.
-- `CHANGELOG.md`: X14 fan control was non-functional; note the zone-count change 6 → 4 as a
-  behaviour change.
-- Move `X14_MANUAL_FANCONTROL.md` under `doc/` and link it from README chapter 5 as the reference for
-  the raw commands (currently it is an untracked file in the repo root).
+## 8. Documentation
 
-## 6. Verification
+- **`README.md`** chapter 5 — the platform table and the X14 note: `generic_x14` covers both stacks
+  and selects by probe; `x14_zone_sensors=` is OpenBMC-only; the exit level is a transition on both
+  stacks; and the 🔴 **frozen-zone warning** of §4.4 for ATEN boards. Two additions from the current
+  guide: on ATEN boards `min_level=0` is silently raised to 5 % (§4.5), and on OpenBMC boards
+  `x14_zone_sensors=` is only valid for the base fan mode that was active when it was measured — a
+  fan-mode change from the web UI or Redfish reshapes the zones and the map must be re-probed
+  (Part 3.5).
+- **`CHANGELOG.md`** — revert the "H14 BMC product names are not auto-detected any more" entry; add
+  the dual-stack detection, the H14 boards becoming controllable, and the `exit_level=-1` release fix
+  (a behaviour change on X14).
+- **`ARCHITECTURE.md`** — line 327 and the class diagram: two X14 classes, the probe, the widened
+  `end()` semantics.
+- **`config/smfc.conf`** and its embedded copy in `README.md` — `x14_zone_sensors=` marked
+  OpenBMC-only and mode-scoped, pointing at Part 5.1 and Part 3.5; the `min_level=` comment notes the
+  ATEN 5 % floor.
+- **Repoint every dangling `doc/X14_MANUAL_FANCONTROL.md` link** — the file is deleted:
+  `README.md:337,344,746`, `CHANGELOG.md:11,12`, `ARCHITECTURE.md:327`, `config/smfc.conf:36`,
+  `src/smfc/genericx14.py:24,80,97`. All become `doc/X14H14_MANUAL_FANCONTROL.md` with the new Part
+  numbers (board tables: Part 5.1 / 5.2; OpenBMC procedure: Part 3; ATEN procedure: Part 4).
 
-1. `pytest test/ -x` — full unit suite; the platform matrix is the primary gate.
-2. Coverage for the touched modules should stay at the project's current level
-   (`pytest --cov=smfc --cov-report=term-missing test/`).
-3. `pylint src/smfc` — the repo lints clean today.
-4. `test/run_smoke.sh` (and `test/automatic_smoke_runner/run_all.sh`) against the fake-`ipmitool`
-   scenarios, including a `platform_name=generic_x14` scenario driven through startup → level
-   changes → manual-flag loss → re-assert → `systemctl stop` exit level.
-5. Hardware, if an X14 board is available: set `x14_zone_sensors=` from §3 for that board, then run
-   the guide's §4.4 check once — drive zone 0 to 100 %, read a fan of zone 0 and one of zone 1, and
-   confirm only the first moved. That validates both the setting and the zone map. Then confirm the
-   manual flags hold across a poll, and stop the service and confirm the fans return to the base
-   curve. Without hardware the X14 path stays flagged experimental in the README.
+---
+
+## 9. Verification
+
+1. `pytest test/ -x` — the platform matrix is the primary gate.
+2. `pytest --cov=smfc --cov-report=term-missing test/` — coverage of the touched modules stays at the
+   project's current level.
+3. `pylint src/smfc` — the repository lints clean today.
+4. `test/run_smoke.sh` and `test/automatic_smoke_runner/run_all.sh`, with the two new stack scenarios.
+5. **ATEN hardware** (available — an H14 board, i.e. the PWM duty path): run the guide's Part 4.4
+   spot-check once — write a duty that is not a multiple of 20, wait ~3 s, read it back and confirm
+   the value is in `accepted()`; then confirm the level holds across several polls, and that
+   `systemctl stop smfc` returns the fans to the automatic curve.
+   Per Part 5.3 this confirms the ATEN path **on H14 only**. `X14SDW` / `X14SDV` are untested and
+   their read-back path is explicitly *unknown* — that is precisely why §4.2 compares against a set
+   instead of a computed value, so no board-specific verification is owed before shipping.
+6. **OpenBMC hardware** (if a board is available): set `x14_zone_sensors=` from Part 5.1, drive zone 0
+   to 100 %, and confirm a zone-1 fan did not move — this validates the setting and the zone map at
+   once. Until that is done the OpenBMC path stays flagged experimental in `README.md`.
 
 ## Out of scope
 
-- No watchdog/poll-interval change: the existing control-loop cadence is the poll, and `check_fan_mode()`
-  runs in it.
-- No change to `/snapshot`, `/metrics`, or the Grafana contract.
-- No H14-specific platform class.
-- No change to zone validation outside `GenericX14Platform`: `Config.parse_ipmi_zones()`
-  (`config.py:352`) keeps its 0-100 range and `GenericPlatform` keeps `validate_input_range(zone,
-  "zone", 0, 100)` (`generic.py:22,42`). Both are looser than any real board, but tightening them is
-  a separate change with its own regression risk.
+- No `/snapshot`, `/metrics` or Grafana contract change.
+- No zone-validation change outside the X14 classes: `Config.parse_ipmi_zones()` keeps its 0-100 range
+  and `GenericPlatform` keeps its 0-100 check.
+- **Whether the ATEN bypass also improves X13 and older boards is untested and stays out.** The same
+  firmware line runs there, so `0x66 0x02 0x01` may well work — but `generic` with FULL fan mode is
+  proven on those boards and changing it is a separate decision with its own regression risk.
+- No H14-specific platform class: H14 boards are ATEN or OpenBMC like any other, and the probe says
+  which.
 
 ## Open topics (deferred, not part of this change)
 
-- **The startup DEBUG level read is unguarded.** `service.py:417` calls `get_fan_level(zone)` inside
-  the `log_level >= LOG_DEBUG` block with no `try/except`, so any BMC error there — a transient
-  failure on any platform, or an X14 zone missing from `x14_zone_sensors=` — aborts startup before
-  the control loop begins. Deferred to a separate refactor; until then, X14 users running at DEBUG
-  should configure a sensor for every zone they use.
-- **`ipmitool` has no timeout.** `Ipmi._exec_ipmitool()` calls `subprocess.run()` without
-  `timeout=` (`ipmi.py:207`), so a wedged `/dev/ipmi0` or an unreachable remote BMC blocks the
-  control loop indefinitely — no log line, no recovery. Not X14-specific, but more exposed after
-  this change: X14 issues N+1 invocations per poll instead of 1, plus writes during enforcement.
-  Suggested fix (~3 lines): a module-level timeout constant, `subprocess.TimeoutExpired` mapped to
-  the same `RuntimeError` everything else raises, so a hang becomes a `LOST` result the loop retries.
-- **Fan-level write errors kill the service.** `set_fan_level()` / `set_multiple_fan_levels()` in the
-  control loop are likewise unguarded, so a transient `ipmitool` failure terminates smfc on every
-  platform. Pre-existing, unchanged by this work, and worth its own decision about retry vs exit.
-- **`ControlStatus.detail` is platform-composed user-facing text.** Acceptable (exception messages
-  work the same way), but if `Service` should own all phrasing, `detail` would become structured
-  data — the drifted-to mode, the list of cleared zones — that `Service` formats.
+- **The startup DEBUG level read is unguarded** (`service.py:417`): any BMC error there aborts startup
+  before the control loop begins.
+- **`ipmitool` has no timeout.** `subprocess.run()` is called without `timeout=` (`ipmi.py:207`), so a
+  wedged `/dev/ipmi0` blocks the control loop indefinitely. More exposed after this change: the ATEN
+  watchdog adds one read per zone per poll.
+- **Fan-level write errors terminate the service** — unguarded in the control loop, on every platform.
+- **`ControlStatus.detail` is platform-composed user-facing text**, now including the fan-failure
+  wording of §4.2.
