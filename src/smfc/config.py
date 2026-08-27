@@ -383,7 +383,27 @@ class Config:
         return sections
 
     @staticmethod
-    def parse_ipmi_zones(ipmi_zone: str) -> List[int]:
+    def _parse_int_list(value: str, param_name: str) -> List[int]:
+        """Parse a comma- or space-separated string of IDs into a validated list of integers.
+        Shared by the ipmi_zone=, gpu_device_ids= and npu_device_ids= parameters, which use the
+        same syntax and the same [0..100] valid range.
+        Args:
+            value (str): the raw parameter value
+            param_name (str): parameter name reported in the error message (e.g. "ipmi_zone")
+        Returns:
+            List[int]: list of parsed IDs
+        Raises:
+            ValueError: invalid ID string or value out of range
+        """
+        id_str = re.sub(" +", " ", value.strip())
+        ids = [int(s) for s in id_str.split("," if "," in id_str else " ")]
+        for i in ids:
+            if i not in range(0, 101):
+                raise ValueError(f"invalid value: {param_name}={value}.")
+        return ids
+
+    @classmethod
+    def parse_ipmi_zones(cls, ipmi_zone: str) -> List[int]:
         """Parse a comma- or space-separated string of IPMI zone IDs into a validated list.
         Args:
             ipmi_zone (str): IPMI zone(s) string
@@ -392,12 +412,7 @@ class Config:
         Raises:
             ValueError: invalid zone string or zone value out of range
         """
-        zone_str = re.sub(" +", " ", ipmi_zone.strip())
-        zones = [int(s) for s in zone_str.split("," if "," in ipmi_zone else " ")]
-        for zone in zones:
-            if zone not in range(0, 101):
-                raise ValueError(f"invalid value: ipmi_zone={ipmi_zone}.")
-        return zones
+        return cls._parse_int_list(ipmi_zone, cls.CV_IPMI_ZONE)
 
     @staticmethod
     def parse_device_names(names_str: str) -> List[str]:
@@ -444,8 +459,8 @@ class Config:
                 raise ValueError(f"invalid value: temperatures must be strictly ascending in {cls.CV_CONTROL_FUNCTION}")
         return pairs
 
-    @staticmethod
-    def parse_gpu_ids(gpu_id_str: str) -> List[int]:
+    @classmethod
+    def parse_gpu_ids(cls, gpu_id_str: str) -> List[int]:
         """Parse a comma- or space-separated string of GPU device IDs.
         Args:
             gpu_id_str (str): GPU device IDs string
@@ -454,15 +469,10 @@ class Config:
         Raises:
             ValueError: invalid GPU ID string or value out of range
         """
-        gpu_id_list = re.sub(" +", " ", gpu_id_str.strip())
-        ids = [int(s) for s in gpu_id_list.split("," if "," in gpu_id_list else " ")]
-        for gid in ids:
-            if gid not in range(0, 101):
-                raise ValueError(f"invalid value: gpu_device_ids={gpu_id_str}.")
-        return ids
+        return cls._parse_int_list(gpu_id_str, cls.CV_GPU_IDS)
 
-    @staticmethod
-    def parse_npu_ids(npu_id_str: str) -> List[int]:
+    @classmethod
+    def parse_npu_ids(cls, npu_id_str: str) -> List[int]:
         """Parse a comma- or space-separated string of NPU card IDs.
         Args:
             npu_id_str (str): NPU card IDs string
@@ -471,12 +481,7 @@ class Config:
         Raises:
             ValueError: invalid NPU ID string or value out of range
         """
-        npu_id_list = re.sub(" +", " ", npu_id_str.strip())
-        ids = [int(s) for s in npu_id_list.split("," if "," in npu_id_list else " ")]
-        for nid in ids:
-            if nid not in range(0, 101):
-                raise ValueError(f"invalid value: npu_device_ids={npu_id_str}.")
-        return ids
+        return cls._parse_int_list(npu_id_str, cls.CV_NPU_IDS)
 
     def _parse_ipmi(self, parser: ConfigParser) -> IpmiConfig:
         """Parse [Ipmi] section.
