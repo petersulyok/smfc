@@ -1,5 +1,5 @@
 #
-#   npufc.py (C) 2026
+#   npufc.py (C) 2026, Artur Kalagov, Peter Sulyok
 #   smfc package: Supermicro fan control for Linux (home) servers.
 #   smfc.NpuFc() class implementation.
 #

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   test_npufc.py (C) 2026
+#   test_npufc.py (C) 2026, Artur Kalagov, Peter Sulyok
 #   Unit tests for smfc.NpuFc() class.
 #
 import subprocess
