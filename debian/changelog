@@ -1,3 +1,17 @@
+smfc (6.3.0) unstable; urgency=medium
+
+  * Added: new NPU fan controller (sixth controller type) that drives one or
+    more IPMI zones from the temperature of Ascend NPUs, e.g. the Atlas 300I
+    Duo, read with npu-smi. A device is an NPU card (npu-smi -i id); for a
+    multi-chip card the hottest chip is used, and temp_calc= aggregates across
+    cards. New [NPU] / [NPU:1] / ... sections with npu_device_ids=,
+    npu_smi_path= and npu_smi_timeout=; all the shared parameters of the other
+    temperature-driven controllers are supported. The controller shows up in
+    smfc-client and the HTTP exporter like the other fan controllers.
+
+ -- Peter Sulyok <peter@sulyok.net>  Tue, 25 Aug 2026 17:00:00 +0000
+
+
 smfc (6.2.1) unstable; urgency=medium
 
   * Fixed: the startup BMC fan subsystem readiness check did not recognize fan

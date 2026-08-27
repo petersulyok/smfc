@@ -25,6 +25,7 @@ This is a `systemd service` running on Linux that can control fans with the help
  - optional: `smartmontools` for SAS/SCSI disks and *standby guard* feature
  - optional: `nvidia-smi` for Nvidia GPUs
  - optional: `rocm-smi` for AMD GPUs
+ - optional: `npu-smi` for Ascend NPUs (e.g. Atlas 300I Duo)
 
 
 ### 2. Installation and configuration
@@ -47,7 +48,7 @@ can be adjusted with IPMI raw commands (read [more details here](https://forums.
 
 Key features:
 
- - Five independent fan controllers (CPU, HD, NVME, GPU, CONST) that can be enabled/disabled and combined freely
+ - Six independent fan controllers (CPU, HD, NVME, GPU, NPU, CONST) that can be enabled/disabled and combined freely
  - Linear user-defined control function mapping a temperature interval to a fan level interval with configurable discrete steps
  - Advanced multi-segment user-defined control function (via `control_function=`) for arbitrary piecewise-linear fan curves
  - Support for multiple IPMI zones with automatic shared zone arbitration (highest fan level wins)
@@ -59,6 +60,7 @@ Key features:
  - Standby guard feature for SATA hard disk arrays organized in RAID
  - Support for SATA, SAS/SCSI, and NVMe disks with automatic HWMON/smartctl fallback
  - Nvidia or AMD GPU temperature monitoring via `nvidia-smi` or `rocm-smi`
+ - Ascend NPU temperature monitoring via `npu-smi` (e.g. Atlas 300I Duo, the hottest chip of each card is used)
  - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13, X14) and edge cases (X10QBi)
  - Remote IPMI access via `remote_parameters=` for VM setups (e.g. TrueNAS on Proxmox with PCI passthrough)
  - Distributed as a `systemd` service, Docker image, DEB/RPM/AUR package, or PyPI package
@@ -88,6 +90,7 @@ In `smfc`, the following fan controllers are implemented:
 | HD             | SATA and SCSI HDDs/SSDs | Hard disks' names must be specified in `[HD] hd_names=` parameter     | 1 (Peripheral zone) |
 | NVME           | NVMe SSDs               | NVMe device names must be specified in `[NVME] nvme_names=` parameter | 1 (Peripheral zone) |
 | GPU            | Nvidia/AMD GPUs         | GPU indices must be specified in `[GPU] gpu_device_ids=` parameter    | 1 (Peripheral zone) |
+| NPU            | Ascend NPUs             | NPU card IDs must be specified in `[NPU] npu_device_ids=` parameter   | 1 (Peripheral zone) |
 | CONST          | None                    | Constant fan level can be specified in `[CONST] level=` parameter     | 1 (Peripheral zone) |
 
 These fan controllers can be enabled and disabled independently. They can be used in a free combination with one or more IPMI zones. Multiple fan controllers
@@ -103,7 +106,7 @@ In `smfc`, a temperature-driven fan controller implements the following control 
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="700">
 
-If the temperature source has multiple instances (e.g. multiple CPUs, HDDs, NVMEs or GPUs) then the user can configure a calculation method (i.e. minimum, average, maximum) for the calculation of the final temperature value (see `temp_calc=` parameter).
+If the temperature source has multiple instances (e.g. multiple CPUs, HDDs, NVMEs, GPUs or NPU cards) then the user can configure a calculation method (i.e. minimum, average, maximum) for the calculation of the final temperature value (see `temp_calc=` parameter).
 
 Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating (see
 [chapter 1.6](https://github.com/petersulyok/smfc/blob/main/README.md#16-service-termination))!
@@ -682,7 +685,7 @@ After successful installation, create/edit your new configuration file. Its defa
 #### 10.1 Right strategy to create your configuration file
 You have to think over and answer the following questions:
 
-1. What are the most important heat sources in your machine? Typically, these could be CPU(s), hard disks, or GPUs.
+1. What are the most important heat sources in your machine? Typically, these could be CPU(s), hard disks, GPUs, or NPUs.
 2. Which fan controller would you like to use and configure in `smfc`?
 3. What is the expected temperature interval (minimum/maximum C degree) for the selected temperature source(s)? Use some test tools to measure it (e.g. [`s-tui`](https://github.com/amanusk/s-tui), [`fio`](https://fio.readthedocs.io/en/latest/fio_doc.html), [`iozone`](https://www.iozone.org/)) if you don't have their track records.  
 4. Which IPMI zone(s) will be connected to these fan controllers/temperature sources)? Check how many IPMI zones you have, how the fans are connected on your motherboard, and how they are cooling the selected temperature source(s). Multiple controllers can share the same zone -- the highest requested level will be applied automatically.
@@ -883,6 +886,48 @@ gpu_device_ids=0
 nvidia_smi_path=/usr/bin/nvidia-smi
 # Path for 'rocm-smi' command (str, default=/usr/bin/rocm-smi)
 rocm_smi_path=/usr/bin/rocm-smi
+
+
+# NPU fan controller: works based on Ascend NPU(s) temperature (npu-smi), e.g. Atlas 300I Duo.
+# A device is an NPU card (npu-smi -i id); for multi-chip cards the hottest chip is used.
+[NPU]
+# Fan controller enabled (bool, default=0/false)
+enabled=0
+# IPMI zone(s) (comma- or space-separated list of int, default=1))
+ipmi_zone=1
+# Calculation of NPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
+temp_calc=1
+# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
+sensitivity=2.0
+# Polling interval for reading temperature (float, sec, default=5; npu-smi is slow, ~1.5s/call)
+polling=5
+# Discrete steps in mapping of temperatures to fan level (int, default=5)
+steps=5
+# Minimum NPU temperature (float, C, default=40.0)
+min_temp=40.0
+# Maximum NPU temperature (float, C, default=85.0)
+max_temp=85.0
+# Minimum NPU fan level (int, %, default=35)
+min_level=35
+# Maximum NPU fan level (int, %, default=100)
+max_level=100
+# User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
+# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified
+# then min_temp/max_temp/min_level/max_level parameters are skipped
+#control_function=50-40, 70-70, 85-100
+# Moving average window size for temperature smoothing (int, default=1, 1=disabled)
+smoothing=1
+# Consecutive failed temperature reads tolerated per device (int, default=3, 0=disabled)
+# Inside this budget the last known good temperature is reused, above it smfc stops
+error_tolerance=3
+# NPU card IDs (comma- or space-separated list of int, default=0)
+# These are the '-i' card IDs reported by `npu-smi info -m` (may not start from 0).
+npu_device_ids=0
+# Path for 'npu-smi' command (str, default=npu-smi). May be a bare command name (resolved via PATH)
+# or a full path (e.g. /usr/local/Ascend/ascend-toolkit/latest/bin/npu-smi).
+npu_smi_path=npu-smi
+# Timeout for a single npu-smi call (float, sec, default=15.0)
+npu_smi_timeout=15.0
 
 
 # CONST fan controller: sets constant fan level (without any heat source) for IPMI zones(s).
@@ -1241,6 +1286,7 @@ Further readings:
  - [smartmontools](https://www.smartmontools.org/) — S.M.A.R.T. monitoring tools for hard disks (`smartctl`)
  - [nvidia-smi](https://developer.nvidia.com/system-management-interface) — NVIDIA System Management Interface for GPU monitoring
  - [rocm-smi](https://github.com/ROCm/rocm_smi_lib) — AMD ROCm System Management Interface for GPU monitoring
+ - [npu-smi](https://www.hiascend.com/document) — Huawei Ascend System Management Interface for NPU monitoring
  - [hwmon subsystem](https://www.kernel.org/doc/html/latest/hwmon/index.html) — hardware monitoring framework used for temperature readings
  - [coretemp](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html) — Intel CPU temperature monitoring
  - [k10temp](https://docs.kernel.org/hwmon/k10temp.html) — AMD CPU temperature monitoring

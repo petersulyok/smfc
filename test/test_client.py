@@ -932,13 +932,14 @@ class TestFormatReportErrorPaths:
 class TestConstructControllers:
     """Cover _construct_controllers() — instantiation and per-controller error handling."""
 
-    def _make_cfg(self, cpu=None, hd=None, nvme=None, gpu=None, const=None) -> MagicMock:
-        """Build a minimal Config-like object exposing the five controller lists."""
+    def _make_cfg(self, cpu=None, hd=None, nvme=None, gpu=None, npu=None, const=None) -> MagicMock:
+        """Build a minimal Config-like object exposing the controller lists."""
         cfg = MagicMock()
         cfg.cpu = cpu or []
         cfg.hd = hd or []
         cfg.nvme = nvme or []
         cfg.gpu = gpu or []
+        cfg.npu = npu or []
         cfg.const = const or []
         return cfg
 
@@ -967,12 +968,14 @@ class TestConstructControllers:
             hd=[self._entry("HD", enabled=False)],
             nvme=[self._entry("NVME", enabled=False)],
             gpu=[self._entry("GPU", enabled=False)],
+            npu=[self._entry("NPU", enabled=False)],
             const=[self._entry("CONST", enabled=False)],
         )
         cpu_ctor = mocker.patch("smfc.client.CpuFc")
         hd_ctor = mocker.patch("smfc.client.HdFc")
         nvme_ctor = mocker.patch("smfc.client.NvmeFc")
         gpu_ctor = mocker.patch("smfc.client.GpuFc")
+        npu_ctor = mocker.patch("smfc.client.NpuFc")
         const_ctor = mocker.patch("smfc.client.ConstFc")
         log = MagicMock()
         ipmi = MagicMock()
@@ -983,6 +986,7 @@ class TestConstructControllers:
         hd_ctor.assert_not_called()
         nvme_ctor.assert_not_called()
         gpu_ctor.assert_not_called()
+        npu_ctor.assert_not_called()
         const_ctor.assert_not_called()
 
     def test_all_enabled_construct_successfully(self, mocker: MockerFixture) -> None:
@@ -998,17 +1002,20 @@ class TestConstructControllers:
             hd=[self._entry("HD")],
             nvme=[self._entry("NVME")],
             gpu=[self._entry("GPU")],
+            npu=[self._entry("NPU")],
             const=[self._entry("CONST")],
         )
         cpu_obj = MagicMock(name="cpu")
         hd_obj = MagicMock(name="hd")
         nvme_obj = MagicMock(name="nvme")
         gpu_obj = MagicMock(name="gpu")
+        npu_obj = MagicMock(name="npu")
         const_obj = MagicMock(name="const")
         mocker.patch("smfc.client.CpuFc", return_value=cpu_obj)
         mocker.patch("smfc.client.HdFc", return_value=hd_obj)
         mocker.patch("smfc.client.NvmeFc", return_value=nvme_obj)
         mocker.patch("smfc.client.GpuFc", return_value=gpu_obj)
+        mocker.patch("smfc.client.NpuFc", return_value=npu_obj)
         mocker.patch("smfc.client.ConstFc", return_value=const_obj)
         log = MagicMock()
         ipmi = MagicMock()
@@ -1019,6 +1026,7 @@ class TestConstructControllers:
             ("HD", "hd", hd_obj, None),
             ("NVME", "nvme", nvme_obj, None),
             ("GPU", "gpu", gpu_obj, None),
+            ("NPU", "npu", npu_obj, None),
             ("CONST", "const", const_obj, None),
         ]
 
@@ -1038,23 +1046,26 @@ class TestConstructControllers:
             hd=[self._entry("HD")],
             nvme=[self._entry("NVME")],
             gpu=[self._entry("GPU")],
+            npu=[self._entry("NPU")],
             const=[self._entry("CONST")],
         )
         mocker.patch("smfc.client.CpuFc", side_effect=RuntimeError("cpu boom"))
         mocker.patch("smfc.client.HdFc", side_effect=RuntimeError("hd boom"))
         mocker.patch("smfc.client.NvmeFc", side_effect=ValueError("nvme boom"))
         mocker.patch("smfc.client.GpuFc", side_effect=FileNotFoundError("nvidia-smi missing"))
+        mocker.patch("smfc.client.NpuFc", side_effect=RuntimeError("npu-smi missing"))
         mocker.patch("smfc.client.ConstFc", side_effect=RuntimeError("const boom"))
         log = MagicMock()
         ipmi = MagicMock()
         udevc = MagicMock()
         entries = client._construct_controllers(log, cfg, ipmi, udevc, sudo=False)
-        # All five produced ERROR rows; ordering matches iteration order.
+        # All six produced ERROR rows; ordering matches iteration order.
         assert entries[0][0:3] == ("CPU", "cpu", None) and "cpu boom" in entries[0][3]
         assert entries[1][0:3] == ("HD", "hd", None) and "hd boom" in entries[1][3]
         assert entries[2][0:3] == ("NVME", "nvme", None) and "nvme boom" in entries[2][3]
         assert entries[3][0:3] == ("GPU", "gpu", None) and "nvidia-smi" in entries[3][3]
-        assert entries[4][0:3] == ("CONST", "const", None) and "const boom" in entries[4][3]
+        assert entries[4][0:3] == ("NPU", "npu", None) and "npu-smi" in entries[4][3]
+        assert entries[5][0:3] == ("CONST", "const", None) and "const boom" in entries[5][3]
 
 
 def _sample_snapshot_dict() -> dict:

@@ -7,7 +7,7 @@
 #   `Config.DV_*` constants, so a test can write e.g. `create_cpu_config(steps=4)` without touching a
 #   real config file. The module is intentionally stateless: no temp dirs, no fixtures, no lifecycle.
 #
-from smfc.config import (Config, IpmiConfig, CpuConfig, HdConfig, NvmeConfig, GpuConfig, ConstConfig)
+from smfc.config import (Config, IpmiConfig, CpuConfig, HdConfig, NvmeConfig, GpuConfig, NpuConfig, ConstConfig)
 
 
 def create_ipmi_config(command=Config.DV_IPMI_COMMAND, fan_mode_delay=Config.DV_IPMI_FAN_MODE_DELAY,
@@ -187,6 +187,48 @@ def create_gpu_config(section="GPU", enabled=False, ipmi_zone=None, temp_calc=Co
                      max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
                      error_tolerance=error_tolerance, gpu_type=gpu_type, gpu_device_ids=device_ids,
                      nvidia_smi_path=nvidia_smi_path, rocm_smi_path=rocm_smi_path, amd_temp_sensor=amd_temp_sensor,
+                     control_function=control_function if control_function is not None else [])
+
+
+def create_npu_config(section="NPU", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,
+                      steps=Config.DV_NPU_STEPS, sensitivity=Config.DV_NPU_SENSITIVITY,
+                      polling=Config.DV_NPU_POLLING, min_temp=Config.DV_NPU_MIN_TEMP,
+                      max_temp=Config.DV_NPU_MAX_TEMP, min_level=Config.DV_NPU_MIN_LEVEL,
+                      max_level=Config.DV_NPU_MAX_LEVEL, smoothing=Config.DV_NPU_SMOOTHING,
+                      error_tolerance=Config.DV_NPU_ERROR_TOLERANCE, npu_device_ids=None,
+                      npu_smi_path=Config.DV_NPU_SMI_PATH, npu_smi_timeout=Config.DV_NPU_SMI_TIMEOUT,
+                      control_function=None):
+    """Factory function to create NpuConfig instances for testing without needing a config file.
+
+    Args:
+        section (str): section name (default: "NPU")
+        enabled (bool): fan controller enabled flag (default: False)
+        ipmi_zone (list): IPMI zones (default: [1])
+        temp_calc (int): temperature calculation method (default: 1 = avg)
+        steps (int): discrete steps (default: Config.DV_NPU_STEPS)
+        sensitivity (float): temperature change sensitivity (default: Config.DV_NPU_SENSITIVITY)
+        polling (float): polling interval in seconds (default: Config.DV_NPU_POLLING)
+        min_temp (float): minimum temperature in C (default: Config.DV_NPU_MIN_TEMP)
+        max_temp (float): maximum temperature in C (default: Config.DV_NPU_MAX_TEMP)
+        min_level (int): minimum fan level in % (default: Config.DV_NPU_MIN_LEVEL)
+        max_level (int): maximum fan level in % (default: Config.DV_NPU_MAX_LEVEL)
+        smoothing (int): smoothing window size (default: 1)
+        error_tolerance (int): consecutive failed reads tolerated per device (default: Config.DV_NPU_ERROR_TOLERANCE)
+        npu_device_ids (list): NPU card IDs (default: [0])
+        npu_smi_path (str): path to npu-smi (default: Config.DV_NPU_SMI_PATH)
+        npu_smi_timeout (float): timeout for a single npu-smi call in sec (default: Config.DV_NPU_SMI_TIMEOUT)
+        control_function (list): (T,L) breakpoints; empty = legacy mode
+
+    Returns:
+        NpuConfig: configured NpuConfig instance
+    """
+    zones = ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE]
+    device_ids = npu_device_ids if npu_device_ids is not None else Config.parse_npu_ids(Config.DV_NPU_DEVICE_IDS)
+    return NpuConfig(section=section, enabled=enabled, ipmi_zone=zones,
+                     temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
+                     max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
+                     error_tolerance=error_tolerance, npu_device_ids=device_ids,
+                     npu_smi_path=npu_smi_path, npu_smi_timeout=npu_smi_timeout,
                      control_function=control_function if control_function is not None else [])
 
 

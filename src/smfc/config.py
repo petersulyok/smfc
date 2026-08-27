@@ -118,6 +118,28 @@ class GpuConfig:
 
 
 @dataclass
+class NpuConfig:
+    """Configuration for NPU (Ascend) fan controller."""
+    section: str                # Section name used for logging (e.g. "NPU", "NPU:1")
+    enabled: bool               # Fan controller enabled
+    ipmi_zone: List[int]        # IPMI zone(s) assigned to the controller
+    temp_calc: int              # Temperature calculation method (0-min, 1-avg, 2-max)
+    steps: int                  # Discrete steps in temperatures and fan levels
+    sensitivity: float          # Temperature change to activate fan controller (C)
+    polling: float              # Polling interval to read temperature (sec)
+    min_temp: float             # Minimum temperature value (C)
+    max_temp: float             # Maximum temperature value (C)
+    min_level: int              # Minimum fan level (0..100%)
+    max_level: int              # Maximum fan level (0..100%)
+    smoothing: int              # Moving average window size for temperature readings (1=disabled)
+    error_tolerance: int        # Consecutive failed temperature reads tolerated per device (0=disabled)
+    npu_device_ids: List[int]   # NPU card IDs (`-i` arguments of npu-smi)
+    npu_smi_path: str           # Path for 'npu-smi' command
+    npu_smi_timeout: float      # Timeout in seconds for a single npu-smi call
+    control_function: List[Tuple[int, int]] = field(default_factory=list)  # (T,L) breakpoints, empty = legacy
+
+
+@dataclass
 class ConstConfig:
     """Configuration for CONST fan controller."""
     section: str            # Section name used for logging (e.g. "CONST", "CONST:1")
@@ -144,6 +166,7 @@ class Config:
     CS_HD: str = "HD"           # [HD] section name
     CS_NVME: str = "NVME"       # [NVME] section name
     CS_GPU: str = "GPU"         # [GPU] section name
+    CS_NPU: str = "NPU"         # [NPU] section name
     CS_CONST: str = "CONST"     # [CONST] section name
     CS_EXPORTER: str = "Exporter"   # [Exporter] section name
 
@@ -186,6 +209,11 @@ class Config:
     CV_GPU_NVIDIA_SMI_PATH: str = "nvidia_smi_path" # Path to nvidia-smi command
     CV_GPU_ROCM_SMI_PATH: str = "rocm_smi_path"     # Path to rocm-smi command
     CV_GPU_AMD_TEMP_SENSOR: str = "amd_temp_sensor" # AMD temperature sensor index
+
+    # [NPU] section variable names
+    CV_NPU_IDS: str = "npu_device_ids"              # NPU card IDs (npu-smi -i arguments)
+    CV_NPU_SMI_PATH: str = "npu_smi_path"           # Path to npu-smi command
+    CV_NPU_SMI_TIMEOUT: str = "npu_smi_timeout"     # Timeout for a single npu-smi call (sec)
 
     # AMD temperature sensor key names (for rocm-smi output parsing)
     CV_AMD_TEMP_JUNCTION: str = "Temperature (Sensor junction) (C)"
@@ -275,6 +303,20 @@ class Config:
     DV_GPU_ROCM_SMI_PATH: str = "/usr/bin/rocm-smi"
     DV_GPU_AMD_TEMP_SENSOR: int = 0
 
+    # Default values — [NPU] section
+    DV_NPU_STEPS: int = 5
+    DV_NPU_SENSITIVITY: float = 2.0
+    DV_NPU_POLLING: float = 5.0
+    DV_NPU_MIN_TEMP: float = 40.0
+    DV_NPU_MAX_TEMP: float = 85.0
+    DV_NPU_MIN_LEVEL: int = 35
+    DV_NPU_MAX_LEVEL: int = 100
+    DV_NPU_SMOOTHING: int = 1
+    DV_NPU_ERROR_TOLERANCE: int = 3
+    DV_NPU_DEVICE_IDS: str = "0"
+    DV_NPU_SMI_PATH: str = "npu-smi"
+    DV_NPU_SMI_TIMEOUT: float = 15.0
+
     # Default values — [CONST] section
     DV_CONST_POLLING: float = 30.0
     DV_CONST_LEVEL: int = 50
@@ -290,6 +332,7 @@ class Config:
     hd: List[HdConfig]          # List of HD fan controller configurations
     nvme: List[NvmeConfig]      # List of NVME fan controller configurations
     gpu: List[GpuConfig]        # List of GPU fan controller configurations
+    npu: List[NpuConfig]        # List of NPU fan controller configurations
     const: List[ConstConfig]    # List of CONST fan controller configurations
     exporter: ExporterConfig    # HTTP exporter configuration
 
@@ -313,6 +356,8 @@ class Config:
         self._validate_no_duplicate_zones(self.nvme)
         self.gpu = self._parse_gpu_sections(parser)
         self._validate_no_duplicate_zones(self.gpu)
+        self.npu = self._parse_npu_sections(parser)
+        self._validate_no_duplicate_zones(self.npu)
         self.const = self._parse_const_sections(parser)
         self._validate_no_duplicate_zones(self.const)
         self.exporter = self._parse_exporter(parser)
@@ -414,6 +459,23 @@ class Config:
         for gid in ids:
             if gid not in range(0, 101):
                 raise ValueError(f"invalid value: gpu_device_ids={gpu_id_str}.")
+        return ids
+
+    @staticmethod
+    def parse_npu_ids(npu_id_str: str) -> List[int]:
+        """Parse a comma- or space-separated string of NPU card IDs.
+        Args:
+            npu_id_str (str): NPU card IDs string
+        Returns:
+            List[int]: list of NPU card IDs
+        Raises:
+            ValueError: invalid NPU ID string or value out of range
+        """
+        npu_id_list = re.sub(" +", " ", npu_id_str.strip())
+        ids = [int(s) for s in npu_id_list.split("," if "," in npu_id_list else " ")]
+        for nid in ids:
+            if nid not in range(0, 101):
+                raise ValueError(f"invalid value: npu_device_ids={npu_id_str}.")
         return ids
 
     def _parse_ipmi(self, parser: ConfigParser) -> IpmiConfig:
@@ -677,6 +739,49 @@ class Config:
                 nvidia_smi_path=nvidia_smi_path,
                 rocm_smi_path=rocm_smi_path,
                 amd_temp_sensor=amd_temp_sensor,
+                control_function=self._read_control_function(parser, s, steps),
+            )
+            self._validate_fan_controller_config(cfg, s)
+            result.append(cfg)
+        return result
+
+    def _parse_npu_sections(self, parser: ConfigParser) -> List[NpuConfig]:
+        """Parse [NPU], [NPU:0], [NPU:1] ... sections.
+        Args:
+            parser (ConfigParser): configuration parser
+        Returns:
+            List[NpuConfig]: list of parsed NPU configurations
+        Raises:
+            ValueError: invalid configuration parameters
+        """
+        result = []
+        for s in self._get_sections(parser, self.CS_NPU):
+            enabled = parser[s].getboolean(self.CV_ENABLED, fallback=False)
+            npu_device_ids = self.parse_npu_ids(parser[s].get(self.CV_NPU_IDS, self.DV_NPU_DEVICE_IDS))
+            npu_smi_path = parser[s].get(self.CV_NPU_SMI_PATH, self.DV_NPU_SMI_PATH)
+            if enabled and not npu_smi_path.strip():
+                raise ValueError(f"[{s}] {self.CV_NPU_SMI_PATH} is empty")
+            npu_smi_timeout = parser[s].getfloat(self.CV_NPU_SMI_TIMEOUT, fallback=self.DV_NPU_SMI_TIMEOUT)
+            if npu_smi_timeout <= 0:
+                raise ValueError(f"[{s}] invalid value: {self.CV_NPU_SMI_TIMEOUT}={npu_smi_timeout}.")
+            steps = parser[s].getint(self.CV_STEPS, fallback=self.DV_NPU_STEPS)
+            cfg = NpuConfig(
+                section=s,
+                enabled=enabled,
+                ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
+                temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_AVG),
+                steps=steps,
+                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_NPU_SENSITIVITY),
+                polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_NPU_POLLING),
+                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_NPU_MIN_TEMP),
+                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=self.DV_NPU_MAX_TEMP),
+                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_NPU_MIN_LEVEL),
+                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_NPU_MAX_LEVEL),
+                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_NPU_SMOOTHING),
+                error_tolerance=parser[s].getint(self.CV_ERROR_TOLERANCE, fallback=self.DV_NPU_ERROR_TOLERANCE),
+                npu_device_ids=npu_device_ids,
+                npu_smi_path=npu_smi_path,
+                npu_smi_timeout=npu_smi_timeout,
                 control_function=self._read_control_function(parser, s, steps),
             )
             self._validate_fan_controller_config(cfg, s)

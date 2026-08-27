@@ -17,6 +17,7 @@ from smfc.constfc import ConstFc
 from smfc.cpufc import CpuFc
 from smfc.fancontroller import FanController
 from smfc.gpufc import GpuFc
+from smfc.npufc import NpuFc
 from smfc.hdfc import HdFc
 from smfc.ipmi import Ipmi
 from smfc.log import Log
@@ -170,6 +171,15 @@ def _construct_controllers(log: Log, cfg: Config, ipmi: Ipmi, udevc: Optional[Co
             entries.append((gpu_cfg.section, "gpu", controller, None))
         except Exception as e:  # pylint: disable=broad-except
             entries.append((gpu_cfg.section, "gpu", None, str(e)))
+
+    for npu_cfg in cfg.npu:
+        if not npu_cfg.enabled:
+            continue
+        try:
+            controller = NpuFc(log, ipmi, npu_cfg)
+            entries.append((npu_cfg.section, "npu", controller, None))
+        except Exception as e:  # pylint: disable=broad-except
+            entries.append((npu_cfg.section, "npu", None, str(e)))
 
     for const_cfg in cfg.const:
         if not const_cfg.enabled:
