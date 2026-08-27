@@ -16,7 +16,7 @@ from mock import MagicMock
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, FanController, ConstFc, Service
 from smfc.config import Config
-from smfc.platform import ControlState, ControlStatus
+from smfc.platform import ControlState, ControlStatus, FanLevelUnavailable, IpmiError
 from .test_fixtures import TestData
 from .test_mocks import MockedContextError, MockedContextGood
 from .test_ipmi import BMC_INFO_OUTPUT
@@ -114,9 +114,14 @@ class TestService:
         - mock atexit.unregister() and print()
         - instantiate Service with a Log, a Config carrying exit_level=-1 and an Ipmi with a mocked platform
         - call Service.exit_func()
-        - ASSERT: platform.end() is not called at all (the fans are left exactly where they are)
+        - ASSERT: platform.end() is called all the same, with the exit level passed straight through as -1.
+          `end()` is not only a fan level write: on X14/H14 it also releases the manual mode latch or the
+          global bypass, and a platform state that is never released leaves the fans frozen at their last duty
+          with nothing regulating them. `Platform.end()` itself skips the level write when the level is
+          negative, so the fans are still left exactly where they are
         - ASSERT: atexit.unregister() is still called exactly once
         """
+        f = "TestService.test_exit_func_exit_level_none"
         mock_atexit_unregister = MagicMock()
         mocker.patch("atexit.unregister", mock_atexit_unregister)
         mocker.patch("builtins.print", MagicMock())
@@ -125,8 +130,8 @@ class TestService:
         service.config = create_exit_config(exit_level=Config.EXIT_LEVEL_NONE)
         service.ipmi = MagicMock()
         service.exit_func()
-        assert service.ipmi.platform.end.call_count == 0
-        assert mock_atexit_unregister.call_count == 1
+        service.ipmi.platform.end.assert_called_once_with([0, 1], Config.EXIT_LEVEL_NONE)
+        assert mock_atexit_unregister.call_count == 1, f"{f}: atexit.unregister()"
 
     def test_exit_func_without_configured_zone(self, mocker: MockerFixture) -> None:
         """Positive unit test for Service.exit_func() method without any enabled fan controller. It contains the
@@ -135,16 +140,20 @@ class TestService:
         - instantiate Service with a Log, a Config where no controller is enabled, and an Ipmi with a mocked
           platform (this is the exit-code-10 path, and every exit before the controllers are built)
         - call Service.exit_func()
-        - ASSERT: platform.end() is not called, because smfc never controlled any IPMI zone, so there is no fan
-          level to restore
+        - ASSERT: platform.end() is called with an empty zone list. There is no fan level to restore, but the
+          release must still run: an early exit can happen after the platform acquired control, and on X14/H14
+          the manual latch and the global bypass are released by a single all-zones command that needs no zone
+          list at all
         """
+        f = "TestService.test_exit_func_without_configured_zone"
         mocker.patch("builtins.print", MagicMock())
         service = Service()
         service.log = Log(Log.LOG_INFO, Log.LOG_STDOUT)
         service.config = create_exit_config(zones=[])
         service.ipmi = MagicMock()
         service.exit_func()
-        assert service.ipmi.platform.end.call_count == 0
+        service.ipmi.platform.end.assert_called_once_with([], Config.DV_IPMI_EXIT_LEVEL)
+        assert service.ipmi.platform.end.call_count == 1, f"{f}: end() call count"
 
     def test_exit_func_tolerates_ipmi_failure(self, mocker: MockerFixture) -> None:
         """Negative unit test for Service.exit_func() method. It contains the following steps:
@@ -851,8 +860,9 @@ class TestService:
           on the very first call from the main loop
         - build a minimal CPU-only config via `td` (fake ipmitool + one CPU hwmon file) and write it to disk
         - instantiate Service and invoke Service.run()
-        - ASSERT: RuntimeError("sensor gone") propagates out of Service.run() unhandled (the main loop has no
-          exception handler around fc.run(), so a single controller fault terminates the daemon)
+        - ASSERT: RuntimeError("sensor gone") propagates out of Service.run() (the main loop's handler is
+          deliberately narrow - it catches IpmiError only - so a controller fault, which is not a BMC
+          problem, still terminates the daemon exactly as it always has)
         - ASSERT: smfc.CpuFc.run was called exactly once before the exception escaped
         """
 
@@ -910,6 +920,167 @@ class TestService:
         with pytest.raises(RuntimeError, match="sensor gone"):
             service.run()
         assert mock_run.call_count == 1
+
+    def test_run_startup_debug_tolerates_unreadable_zone_level(self, mocker: MockerFixture, td: TestData):
+        """Negative unit test for Service.run() startup when a zone level cannot be read. It contains the
+        following steps:
+        - mock print(), smfc.service.Exporter, pyudev.Context.__init__ via MockedContextGood, and
+          CpuFc.__init__ to skip real hwmon discovery
+        - mock time.sleep() so it exits with code 100 on its 1st call, bounding the main loop
+        - mock Ipmi.get_fan_level() to raise FanLevelUnavailable, as an X14 OpenBMC zone missing from
+          `[Ipmi] x14_zone_sensors=` does, and run at DEBUG level so the startup level read is reached
+        - build a minimal CPU-only config via `td` and invoke Service.run()
+        - ASSERT: sys.exit() code is 100, i.e. startup completed and the main loop was entered. This read is
+          diagnostics only, and it runs *before* the fan controllers, so failing here would abort startup
+          before smfc ever takes control of the fans
+        - ASSERT: the zone is logged as "unknown" rather than a level, so the gap is visible in the log
+        """
+        f = "TestService.test_run_startup_debug_tolerates_unreadable_zone_level"
+        self.sleep_counter = 0
+
+        # pylint: disable=unused-argument
+        def mocked_sleep(*args):
+            """Mocked time.sleep() function. Exits at the 1st call."""
+            self.sleep_counter += 1
+            sys.exit(100)
+
+        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
+            nonlocal td
+            self.hwmon_path = td.cpu_files
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(td.cpu_files))
+        # pylint: enable=unused-argument
+
+        cmd_ipmi = td.create_command_file(
+            'if [[ $1 = "bmc" && $2 = "info" ]] ; then\n'
+            "cat << 'BMCEOF'\n" + BMC_INFO_OUTPUT +
+            "BMCEOF\n"
+            "exit 0\n"
+            "fi\n"
+            'if [[ $1 = "sdr" ]] ; then\n'
+            'echo "FAN1             | 500 RPM           | ok"\n'
+            "exit 0\n"
+            "fi\n"
+            'echo "1"'
+        )
+        td.create_cpu_data(1)
+        my_config = ConfigParser()
+        my_config[Config.CS_IPMI] = {
+            Config.CV_IPMI_COMMAND: cmd_ipmi,
+            Config.CV_IPMI_FAN_MODE_DELAY: "0",
+            Config.CV_IPMI_FAN_LEVEL_DELAY: "0",
+        }
+        my_config[Config.CS_CPU] = {
+            Config.CV_ENABLED: "True",
+            Config.CV_TEMP_CALC: "1",
+            Config.CV_STEPS: "5",
+            Config.CV_SENSITIVITY: "5",
+            Config.CV_POLLING: "0",
+            Config.CV_MIN_TEMP: "30",
+            Config.CV_MAX_TEMP: "60",
+            Config.CV_MIN_LEVEL: "35",
+            Config.CV_MAX_LEVEL: "100",
+        }
+        conf_file = td.create_config_file(my_config)
+        mocker.patch("builtins.print", MagicMock())
+        mocker.patch("time.sleep", MagicMock(side_effect=mocked_sleep))
+        mocker.patch("smfc.service.Exporter", MagicMock())
+        mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
+        mocker.patch("smfc.CpuFc.__init__", mocked_cpufc_init)
+        mocker.patch("smfc.Ipmi.get_fan_level",
+                     MagicMock(side_effect=FanLevelUnavailable("IPMI zone 0 has no fan sensor configured.")))
+        mocker.patch("smfc.Ipmi.set_fan_level", MagicMock())
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        sys.argv = ("smfc.py -o 0 -l 4 -ne -nd -c " + conf_file).split()
+        service = Service()
+        with pytest.raises(SystemExit) as cm:
+            service.run()
+        assert cm.value.code == 100, f"{f}: startup completed and the main loop was entered"
+        logged = " ".join(str(c) for c in mock_log_msg.call_args_list)
+        assert "Old level in IPMI zone 0 = unknown" in logged, f"{f}: logged as unknown"
+
+    def test_run_survives_ipmi_error_in_the_control_loop(self, mocker: MockerFixture, td: TestData):
+        """Negative unit test for Service.run() method when a fan level write fails mid-loop. It contains the
+        following steps:
+        - mock print(), smfc.service.Exporter, pyudev.Context.__init__ via MockedContextGood, and
+          CpuFc.__init__ to skip real hwmon discovery
+        - mock time.sleep() so it exits with code 100 on its 3rd call, bounding the main loop
+        - mock smfc.CpuFc.run with a side_effect raising IpmiError on every call, as an unreachable BMC or an
+          `ipmitool_timeout` expiry on a wedged /dev/ipmi0 would
+        - build a minimal CPU-only config via `td` and invoke Service.run()
+        - ASSERT: sys.exit() code is 100, i.e. the loop reached its 3rd sleep - the IPMI failure did not
+          terminate the daemon. Exiting would leave the fans wherever they happen to be with nothing
+          regulating them, which is strictly worse than staying up and retrying
+        - ASSERT: smfc.CpuFc.run was called once per iteration, so each poll retried rather than the failure
+          being latched
+        - ASSERT: the failure is logged, so a permanently broken BMC is visible rather than silent
+        """
+        f = "TestService.test_run_survives_ipmi_error_in_the_control_loop"
+        self.sleep_counter = 0
+
+        # pylint: disable=unused-argument
+        def mocked_sleep(*args):
+            """Mocked time.sleep() function. Exits at the 3rd call."""
+            self.sleep_counter += 1
+            if self.sleep_counter >= 3:
+                sys.exit(100)
+
+        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
+            nonlocal td
+            self.hwmon_path = td.cpu_files
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(td.cpu_files))
+        # pylint: enable=unused-argument
+
+        cmd_ipmi = td.create_command_file(
+            'if [[ $1 = "bmc" && $2 = "info" ]] ; then\n'
+            "cat << 'BMCEOF'\n" + BMC_INFO_OUTPUT +
+            "BMCEOF\n"
+            "exit 0\n"
+            "fi\n"
+            'if [[ $1 = "sdr" ]] ; then\n'
+            'echo "FAN1             | 500 RPM           | ok"\n'
+            "exit 0\n"
+            "fi\n"
+            'echo "1"'
+        )
+        td.create_cpu_data(1)
+        my_config = ConfigParser()
+        my_config[Config.CS_IPMI] = {
+            Config.CV_IPMI_COMMAND: cmd_ipmi,
+            Config.CV_IPMI_FAN_MODE_DELAY: "0",
+            Config.CV_IPMI_FAN_LEVEL_DELAY: "0",
+        }
+        my_config[Config.CS_CPU] = {
+            Config.CV_ENABLED: "True",
+            Config.CV_TEMP_CALC: "1",
+            Config.CV_STEPS: "5",
+            Config.CV_SENSITIVITY: "5",
+            Config.CV_POLLING: "0",
+            Config.CV_MIN_TEMP: "30",
+            Config.CV_MAX_TEMP: "60",
+            Config.CV_MIN_LEVEL: "35",
+            Config.CV_MAX_LEVEL: "100",
+        }
+        conf_file = td.create_config_file(my_config)
+        mocker.patch("builtins.print", MagicMock())
+        mocker.patch("time.sleep", MagicMock(side_effect=mocked_sleep))
+        mocker.patch("smfc.service.Exporter", MagicMock())
+        mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
+        mocker.patch("smfc.CpuFc.__init__", mocked_cpufc_init)
+        mock_run = MagicMock(side_effect=IpmiError("ipmitool timed out after 10 seconds: raw 0x30 0x70 0x66."))
+        mocker.patch("smfc.CpuFc.run", mock_run)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        sys.argv = ("smfc.py -o 0 -l 4 -ne -nd -c " + conf_file).split()
+        service = Service()
+        with pytest.raises(SystemExit) as cm:
+            service.run()
+        assert cm.value.code == 100, f"{f}: the loop survived the IPMI failure"
+        assert mock_run.call_count == 3, f"{f}: retried on every poll"
+        logged = " ".join(str(c) for c in mock_log_msg.call_args_list)
+        assert "Fan level update failed" in logged, f"{f}: the failure is logged"
 
     @pytest.mark.parametrize(
         "startup_mode, expect_startup_set",

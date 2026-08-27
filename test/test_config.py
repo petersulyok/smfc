@@ -342,12 +342,15 @@ class TestConfigFileLoading:
         - ASSERT: ipmi.command equals the DV_IPMI_COMMAND default (the written command matches the default)
         - ASSERT: ipmi.fan_mode_delay equals DV_IPMI_FAN_MODE_DELAY
         - ASSERT: ipmi.fan_level_delay equals DV_IPMI_FAN_LEVEL_DELAY
+        - ASSERT: ipmi.ipmitool_timeout equals DV_IPMI_IPMITOOL_TIMEOUT, i.e. a bound applies by default -
+          an omitted parameter must not silently restore the "ipmitool may block forever" behaviour
         - ASSERT: cpu, hd, nvme, gpu, const lists are all empty
         """
         cfg = create_config("[Ipmi]\ncommand = /usr/bin/ipmitool\n")
         assert cfg.ipmi.command == Config.DV_IPMI_COMMAND
         assert cfg.ipmi.fan_mode_delay == Config.DV_IPMI_FAN_MODE_DELAY
         assert cfg.ipmi.fan_level_delay == Config.DV_IPMI_FAN_LEVEL_DELAY
+        assert cfg.ipmi.ipmitool_timeout == Config.DV_IPMI_IPMITOOL_TIMEOUT
         assert cfg.cpu == []
         assert cfg.hd == []
         assert cfg.nvme == []
@@ -621,13 +624,15 @@ exit_level = 60
         [
             pytest.param("fan_mode_delay", "-1", id="negative-mode-delay"),
             pytest.param("fan_level_delay", "-5", id="negative-level-delay"),
+            pytest.param("ipmitool_timeout", "-1", id="negative-ipmitool-timeout"),
         ],
     )
     def test_ipmi_invalid_values(self, create_config_file, param: str, value: str):
         """Negative unit test for the [Ipmi] section parser inside Config.__init__(). It contains the following steps:
         - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
-        - write [Ipmi] with a negative fan_mode_delay or fan_level_delay and call Config(path)
-        - ASSERT: Config(path) raises ValueError
+        - write [Ipmi] with a negative fan_mode_delay, fan_level_delay or ipmitool_timeout and call Config(path)
+        - ASSERT: Config(path) raises ValueError. 0 is a valid ipmitool_timeout (it means "wait
+          indefinitely"), so only a negative value is rejected
         """
         config_path = create_config_file(f"[Ipmi]\n{param} = {value}\n")
         with pytest.raises(ValueError):

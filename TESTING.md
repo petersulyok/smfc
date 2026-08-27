@@ -364,7 +364,8 @@ controllers, platforms, and configuration modes:
   `hd_split_zones` (multi-HD pool across zones).
 - **Curve modes**: `control_function` (user-defined T→L curves on both CPU
   and HD, with the legacy `min_temp`/`max_temp` keys omitted).
-- **Platform overrides**: `platform_x9`, `platform_x14`, `platform_x10qbi`
+- **Platform overrides**: `platform_x9`, `platform_x14_openbmc`, `platform_x14_aten`,
+  `platform_x14_aten_percent`, `platform_x10qbi`
   drive the non-default platform code paths end-to-end. Each platform emits
   a distinctive IPMI raw byte sequence that proves the platform layer is
   actually engaged.
@@ -397,7 +398,9 @@ The full table — what each scenario contains:
 | `shared_zones_cpu_split` | `shared_zones_cpu_split.conf` | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
 | `control_function`   | `control_function.conf`    | 2 x CPUs                    | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
 | `platform_x9`        | `platform_x9.conf`         | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
-| `platform_x14`       | `platform_x14.conf`        | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
+| `platform_x14_openbmc` | `platform_x14_openbmc.conf` | 1 x CPU                    | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
+| `platform_x14_aten`  | `platform_x14_aten.conf`   | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
+| `platform_x14_aten_percent` | `platform_x14_aten.conf` | 1 x CPU                   | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
 | `platform_x10qbi`    | `platform_x10qbi.conf`     | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
 | `no_enforce_fan_mode`| `no_enforce_fan_mode.conf` | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
 | `hd_split_zones`     | `hd_split_zones.conf`      | disabled                    | 4 x HDs (`HD:0`, `HD:1`)    | disabled  | disabled      | disabled   | disabled      |
@@ -422,14 +425,37 @@ Notes:
   section uses a 4-point curve (`30-35, 50-40, 60-90, 65-100`) and the HD
   section uses a 3-point curve (`32-35, 38-45, 46-100`), both with
   `min_temp`/`max_temp`/`min_level`/`max_level` omitted.
-- `platform_x9`, `platform_x14`, `platform_x10qbi` force a specific platform
-  via `platform_name=` (overriding the BMC auto-detect path). Each platform
-  produces a distinctive raw IPMI byte sequence on `set_fan_level`: X9 uses
-  `raw 0x30 0x91 0x5a 0x03 …` with the 0–255 scaled level encoding, X14 uses
-  `raw 0x30 0x70 0x88 …` with direct-% encoding plus an OEM
-  `raw 0x2c 0x04 0xcf 0xc2 …` manual-mode-enable sequence at startup, and
-  X10QBi uses `raw 0x30 0x91 0x5c 0x03 …` preceded by an 11-line Nuvoton
-  NCT7904D TMFR/FOMC init.
+- `platform_x9`, the three `platform_x14_*` scenarios and `platform_x10qbi`
+  force a specific platform via `platform_name=` (overriding the BMC
+  auto-detect path). Each produces a distinctive raw IPMI byte sequence on
+  `set_fan_level`: X9 uses `raw 0x30 0x91 0x5a 0x03 …` with the 0–255 scaled
+  level encoding, and X10QBi uses `raw 0x30 0x91 0x5c 0x03 …` preceded by an
+  11-line Nuvoton NCT7904D TMFR/FOMC init.
+- The `platform_x14_*` trio is different in kind: all three set the **same**
+  `platform_name=generic_x14`, which names a platform *family* rather than a
+  class. Supermicro's 14th generation ships two unrelated BMC firmware stacks
+  and the split does not follow the board name, so `smfc` probes the BMC at
+  startup and picks the implementation from the answer. The fake `ipmitool`
+  emulates a chosen stack (`TestData.create_ipmi_command(bmc_stack=…)`), so the
+  three scenarios assert that the probe — not the configuration and not the
+  board name — decides:
+    - `platform_x14_openbmc`: the probe answers with a data byte, so
+      `X14OpenBmcPlatform` is selected. Duty writes use
+      `raw 0x30 0x70 0x66 0x00 …` with direct-% encoding, preceded by the OEM
+      `raw 0x2c 0x04 0xcf 0xc2 …` per-zone manual-mode latch and its read-back.
+    - `platform_x14_aten`: the probe answers `0xC1`, so `X14AtenPlatform` is
+      selected instead. Its duty commands are `GenericPlatform`'s byte for byte
+      (ATEN is the firmware line shipped through X9–X13); what differs is the
+      lever, a global bypass flag `raw 0x30 0x70 0x66 0x02 0x01` armed at
+      startup and cleared at exit, watched through a duty read-back because the
+      flag itself cannot be read.
+    - `platform_x14_aten_percent`: the same config file and stack, but the fake
+      BMC uses the other ATEN duty path, which reports the written percentage
+      back exactly instead of truncating it. Both paths must read as "still in
+      control", which is why the platform compares the read-back against a
+      *set* of accepted values rather than one computed value.
+  Neither X14/H14 stack ever writes the base fan mode: `raw 0x30 0x45 0x01`
+  must not appear in either log.
 - `no_enforce_fan_mode` sets `enforce_fan_mode=0` in `[Ipmi]`. Unlike every
   other scenario, the service is **designed to exit immediately**
   (`SystemExit(11)`) the first time the BMC fan-mode reads as anything other

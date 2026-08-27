@@ -143,13 +143,59 @@ class TestData:
         """Deletes the specified file."""
         os.remove(path)
 
-    def create_ipmi_command(self) -> str:
-        """Creates a bash script emulating ipmitool."""
-        return self.create_command_file("""
+    def create_ipmi_command(self, bmc_stack: str = "", aten_duty_path: str = "pwm") -> str:
+        """Creates a bash script emulating ipmitool.
+
+        Supermicro's 14th generation ships two unrelated BMC firmware stacks, and the same opcode means
+        different things on each (`doc/X14H14_MANUAL_FANCONTROL.md`, Part 1.3), so the emulation has to be
+        stack-dependent. The arguments are baked into the generated script (the matching `SMFC_TEST_*`
+        environment variables still override them, for driving the script by hand):
+
+        - `bmc_stack="openbmc"`  the Part 1 probe answers with a data byte, and
+          `0x30 0x70 0x66 0x00 <zone> [<level>]` is always a duty *write* (the real handler accepts two or
+          three bytes, which is exactly why guessing the stack is unsafe).
+        - `bmc_stack="aten"`     the Part 1 probe answers `0xC1`, and `0x30 0x70 0x66 0x00 <zone>` is a
+          duty *read* while `0x30 0x70 0x66 0x01 <zone> <level>` is the write.
+        - `bmc_stack=""` (default): the historical, stack-agnostic behaviour every non-X14 test relies on.
+
+        On the ATEN stack `aten_duty_path` selects which of the two duty paths of Part 4.4 the board has,
+        because that is the difference `X14AtenPlatform.accepted()` exists to absorb:
+
+        - `pwm` (default): the 8-bit PWM path, clamping to 5-100 and truncating twice, so the read-back is
+          exact at multiples of 20 and exactly one low elsewhere.
+        - `percent`: the path that stores the percentage itself and reads it back exactly.
+        Args:
+            bmc_stack (str): the 14th generation BMC firmware stack to emulate ('openbmc', 'aten' or '')
+            aten_duty_path (str): the ATEN duty path to emulate ('pwm' or 'percent')
+        Returns:
+            str: path of the generated script
+        """
+        return self.create_command_file(f"""
 # ipmitool emulation
 
 # State file emulating the X14 per-zone manual mode latch (see the 0x2c 0x04 branch below).
-MANUAL_FLAG_FILE="${BASH_SOURCE[0]}.x14manual"
+MANUAL_FLAG_FILE="${{BASH_SOURCE[0]}}.x14manual"
+# State file emulating the ATEN per-zone duty register (see the 0x30 0x70 0x66 branches below).
+ATEN_DUTY_FILE="${{BASH_SOURCE[0]}}.atenduty"
+# Which of the two 14th generation BMC firmware stacks this fake BMC is: 'openbmc', 'aten' or unset
+# (the historical, stack-agnostic behaviour every non-X14 test relies on).
+BMC_STACK="${{SMFC_TEST_BMC_STACK:-{bmc_stack}}}"
+# Which ATEN duty path the fake board has (Part 4.4): 'pwm' (default) or 'percent'.
+ATEN_DUTY_PATH="${{SMFC_TEST_ATEN_DUTY_PATH:-{aten_duty_path}}}"
+
+# Reply of an ATEN duty read for a duty that was written as $1 (decimal %).
+aten_readback() {{
+	local d=$1
+	if [[ "$ATEN_DUTY_PATH" = "percent" ]] ; then
+		# The percent path stores the percentage itself: no truncation, no 5% clamp.
+		printf " %02x\\n" "$d"
+		return
+	fi
+	# The PWM path clamps to 5-100, converts to an 8-bit PWM value and back, truncating both divisions.
+	if [[ "$d" -lt 5 ]] ; then d=5 ; fi
+	if [[ "$d" -gt 100 ]] ; then d=100 ; fi
+	printf " %02x\\n" "$(( ((d * 255) / 100) * 100 / 255 ))"
+}}
 
 if [[ $1 = "sdr" ]] ; then
 	echo "CPU Temp         | 45 degrees C      | ok"
@@ -189,22 +235,39 @@ if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x45" && $4 = "0x01" ]] ; then
 	exit 0
 fi
 
-# IPMI get fan level (raw 0x30 0x70 0x66 0x00 <zone>) — 5 args after "raw"
-# X14 set fan level (raw 0x30 0x70 0x66 0x00 <zone> <level>) — 6 args after "raw"
+# raw 0x30 0x70 0x66 0x00 <zone> [<level>] — the opcode whose meaning depends on the stack (Part 1.3):
+# a duty write on OpenBMC (which accepts both the two- and the three-byte payload), a duty read on ATEN.
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x00" ]] ; then
+	if [[ "$BMC_STACK" = "openbmc" ]] ; then
+		exit 0
+	fi
+	if [[ "$BMC_STACK" = "aten" ]] ; then
+		zone=$(( $6 ))
+		duty=50
+		if [[ -f "$ATEN_DUTY_FILE" ]] ; then
+			stored=$(grep "^${{zone}}=" "$ATEN_DUTY_FILE" | tail -1 | cut -d= -f2)
+			if [[ -n "$stored" ]] ; then duty=$stored ; fi
+		fi
+		aten_readback "$duty"
+		exit 0
+	fi
+	# Stack-agnostic default: a read when no level byte is given, a write otherwise.
 	if [[ -z "$7" ]] ; then
 		echo " 32"
 	fi
 	exit 0
 fi
 
-# X14 manual mode for all zones (raw 0x30 0x70 0x66 0x02 <0/1>)
+# X14 manual mode / ATEN bypass flag for all zones (raw 0x30 0x70 0x66 0x02 <0/1>)
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x02" ]] ; then
 	exit 0
 fi
 
-# IPMI set fan level (raw 0x30 0x70 0x66 0x01)
+# IPMI set fan level (raw 0x30 0x70 0x66 0x01 <zone> <level>)
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x01" ]] ; then
+	if [[ "$BMC_STACK" = "aten" ]] ; then
+		echo "$(( $6 ))=$(( $7 ))" >> "$ATEN_DUTY_FILE"
+	fi
 	exit 0
 fi
 
@@ -216,9 +279,14 @@ fi
 
 # X14 manual/failsafe OEM command (raw 0x2c 0x04 0xcf 0xc2 0x00 <op> <zone> [<value>]):
 # op 0x00 reads the manual mode flag, 0x01 writes it, 0x02 reads the failsafe flag.
-# The manual mode flag reads back as latched right after a write and randomly loses the latch
-# otherwise, emulating the BMC restart / firmware update that clears it on real hardware.
+# This whole command set is what the ATEN stack does not have: it answers 0xC1, which is the Part 1.1
+# stack probe. The manual mode flag reads back as latched right after a write and randomly loses the
+# latch otherwise, emulating the BMC restart / firmware update that clears it on real hardware.
 if [[ $1 = "raw" && $2 = "0x2c" && $3 = "0x04" && $4 = "0xcf" && $5 = "0xc2" ]] ; then
+	if [[ "$BMC_STACK" = "aten" ]] ; then
+		echo "Unable to send RAW command (channel=0x0 netfn=0x2c lun=0x0 cmd=0x4 rsp=0xc1): Invalid command" >&2
+		exit 1
+	fi
 	if [[ $7 = "0x00" ]] ; then
 		if [[ -f "$MANUAL_FLAG_FILE" ]] ; then
 			rm -f "$MANUAL_FLAG_FILE"

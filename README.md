@@ -331,31 +331,52 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 
 | `platform_name=` parameter | Platform                                     | Notes                                                                                            |
 |----------------------------|----------------------------------------------|--------------------------------------------------------------------------------------------------|
-| `auto`                     | automatic discovery based on BMC information | Reads BMC product name; selects `generic_x14` if it starts with `X14`, `X10QBi` if it starts with `X10QBi`, `generic_x9` if it starts with `X9`, otherwise falls back to `generic` |
-| `generic`                  | Generic X10-X13/H10-H14 Supermicro boards    | Uses standard Supermicro IPMI raw commands                                                       |
+| `auto`                     | automatic discovery based on BMC information | Reads BMC product name; selects `generic_x14` if it starts with `X14` or `H14`, `X10QBi` if it starts with `X10QBi`, `generic_x9` if it starts with `X9`, otherwise falls back to `generic` |
+| `generic`                  | Generic X10-X13/H10-H13 Supermicro boards    | Uses standard Supermicro IPMI raw commands                                                       |
 | `generic_x9`               | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                  |
-| `generic_x14`              | Generic Supermicro X14 boards                | AST2600-based, up to 4 fan zones (0-3), duty cycle 0-100%, per-zone manual fan mode instead of `FULL` (see [doc/X14_MANUAL_FANCONTROL.md](doc/X14_MANUAL_FANCONTROL.md)) — **experimental**, see [issue #98](https://github.com/petersulyok/smfc/issues/98), [discussion #106](https://github.com/petersulyok/smfc/discussions/106) |
+| `generic_x14`              | Supermicro X14 **and** H14 boards            | A platform *family* covering both 14th generation BMC firmware stacks; the stack is detected at startup, not guessed from the board name (see [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md)). Up to 4 fan zones (0-3), duty cycle 0-100%, and neither stack uses `FULL` fan mode — see the notes below. **Experimental**, see [issue #98](https://github.com/petersulyok/smfc/issues/98), [discussion #106](https://github.com/petersulyok/smfc/discussions/106) |
 | `X10QBi`                   | Supermicro X10QBi motherboard                | Nuvoton NCT7904D fan controller, 4 fan zones (0x10-0x13), duty cycle 0-255 scale, see [PR #97](https://github.com/petersulyok/smfc/pull/97) and [discussion #110](https://github.com/petersulyok/smfc/discussions/110) |
 
 With this abstraction layer, new Supermicro motherboards can also be added to `smfc` with a good understanding of their IPMI raw commands and fan control logic.
 
 Some X9 motherboards are supported (since `smfc v5.2.0`) via the `generic_x9` platform, provided they support the specific IPMI raw commands used for fan control. X9 boards are auto-detected when the BMC product name starts with `X9`; you can also force the platform by setting `platform_name=generic_x9`. The `X10QBi` platform is auto-detected when the BMC product name starts with `X10QBi`.
 
-X14 motherboard support (`generic_x14`) was introduced in `smfc v6.0.0` and is currently **in testing phase**. The X14 BMC uses different IPMI raw commands from older platforms; they are documented in [doc/X14_MANUAL_FANCONTROL.md](doc/X14_MANUAL_FANCONTROL.md). Two differences matter in practice:
+X14/H14 motherboard support (`generic_x14`) was introduced in `smfc v6.0.0` and is currently **in testing phase**. All the IPMI raw commands involved are documented in [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md).
 
-- **Fan control is acquired per zone, not through `FULL` fan mode.** X14 has an explicit OEM *manual mode* that `smfc` latches in the zones it drives. The base fan mode (Standard, Optimal, …) is only the curve the fans fall back to if manual mode is lost, so `smfc` reads it but never writes it - writing it would clear manual mode on every zone. Consequently the `Fan mode` line of `smfc-client` is not flagged when it is not `FULL` on this platform, and `enforce_fan_mode=` guards the manual-mode flag instead of the fan mode.
-- **Reading a zone's fan level needs a fan sensor number.** Set `x14_zone_sensors=` in the `[Ipmi]` section with one sensor number per zone (see [chapter 10.2](https://github.com/petersulyok/smfc/blob/main/README.md#102-sample-configuration-file)); zone 0 defaults to `0x41` (FAN1), which is correct on every documented board. This only affects the startup `DEBUG` log and `smfc-client`, not the control loop.
+**Supermicro's 14th generation ships two unrelated BMC firmware stacks, and the split does not follow the board generation:**
 
-**H14 boards are not X14 boards for this purpose.** They have no per-zone manual mode at all and answer the OEM command with `0xC1`, so `smfc` cannot control their fan levels through this platform. They are therefore *not* auto-detected as `generic_x14` - they fall back to `generic` like the H10-H13 boards. Setting `platform_name=generic_x14` explicitly still forces the X14 platform, in which case `smfc` exits at startup with code 8 naming the zone that refused the latch.
+| Stack | Boards |
+|---|---|
+| **OpenBMC** (`openbmc-phosphor`) | Most X14 boards — plus the H14 board `H14SHM` |
+| **ATEN** (the firmware line shipped through X9-X13) | All other H14 boards — plus the SoC boards `X14SDW` and `X14SDV` |
 
-If you own an X14 board and test `smfc`, please share your experience in [discussion #106](https://github.com/petersulyok/smfc/discussions/106) — your feedback is essential to stabilize this support.
+Because the BMC product name cannot decide which command set applies, `smfc` **probes the BMC at startup** with the one command that is safe to send to a board whose stack is unknown, and selects the implementation from the answer. There is deliberately no way to force a stack from the configuration file: the same opcode is a duty *read* on one stack and a duty *write* on the other, so guessing does not return an error — it moves fans. The detected class name is printed on the `platform_name` line at `CONFIG` log level and on the `Platform :` line of `smfc-client`.
+
+What both stacks have in common:
+
+- **Fan control is not acquired through `FULL` fan mode.** Each stack has its own lever (see below), and on both of them the base fan mode (Standard, Optimal, …) is only the curve the fans fall back to when that lever is lost. `smfc` reads the base fan mode but **never writes it**. Consequently the `Fan mode` line of `smfc-client` is not flagged when it is not `FULL` on this platform, and `enforce_fan_mode=` guards the lever instead of the fan mode.
+- 🔴 **The exit level is a transition, not a resting state.** On both stacks `smfc` releases its lever when it stops — including with `exit_level=-1`, where no fan level is written at all but the release still runs. Releasing hands the fans back to the BMC, so within about a second the BMC's own curve takes over. That curve regulates on CPU and system sensors only, so **drive temperatures are not part of it**.
+
+**On the OpenBMC stack**, `smfc` latches an explicit OEM *manual mode* in each zone it drives; zones it does not drive keep running under automatic control. Two consequences:
+
+- **Reading a zone's fan level needs a fan sensor number.** Set `x14_zone_sensors=` in the `[Ipmi]` section with one sensor number per zone (see [chapter 10.2](https://github.com/petersulyok/smfc/blob/main/README.md#102-sample-configuration-file)); zone 0 defaults to `0x41` (FAN1), which is correct on every documented board. This setting is **OpenBMC-only** and is ignored on ATEN boards. It only affects the startup `DEBUG` log, `smfc-client` and the CONST controller's redundant-write check — never the control loop, and a zone you leave out is not an error: its level is reported as `unknown` and the CONST controller writes unconditionally.
+- 🔴 **The zone map belongs to the active base fan mode, not to the board.** Selecting a base mode makes the BMC load a fan table, and that table defines how many zones exist and which fans are in each. An `x14_zone_sensors=` that is correct today becomes wrong if anyone changes the fan mode from the BMC web UI or Redfish, and `smfc` cannot detect that — it reads the mode, but the mode name does not imply the table. Re-measure the map if you change the fan mode (Part 3.5 of the guide).
+
+**On the ATEN stack**, the lever is a single **global bypass flag** that suspends the BMC's automatic control loop for every zone at once. Two consequences:
+
+- 🔴 **List every zone your board has in `ipmi_zone=`.** The bypass is global, so a zone you did not configure is bypassed along with the rest and sits **frozen at its last duty with nothing regulating it** — unlike the OpenBMC stack, where an unlatched zone keeps running automatically. `smfc` cannot fix this for you: there is no reliable way to learn how many zones a board has, and driving zones you did not configure would move fans you never asked it to move.
+- **`min_level=0` is silently raised to 5%.** One of the two ATEN duty paths has no floor of its own, and `smfc` cannot tell which path a board uses, so it never writes a duty below 5% — with the BMC's thermal loop suspended by the bypass, a real 0% would leave nothing regulating the fans.
+
+Per Part 5.3 of the guide, the ATEN path is **confirmed on H14 hardware**, while the OpenBMC duty write is **not yet confirmed on any board**.
+
+If you own an X14 or H14 board and test `smfc`, please share your experience in [discussion #106](https://github.com/petersulyok/smfc/discussions/106) — your feedback is essential to stabilize this support.
 
 The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
 
 Feel free to create a short feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55) on your compatibility experience.
 
 ### 6. IPMI fan control and sensor thresholds
-> This chapter describes the RPM sensor-threshold/assertion model of the older AST2400/2500/2600-based BMCs (`generic`, `generic_x9`, `X10QBi` platforms). Whether and how it applies to the X14 boards (`generic_x14` platform) is not yet confirmed — see [chapter 5](https://github.com/petersulyok/smfc/blob/main/README.md#5-supermicro-compatibility) and share your findings in [discussion #106](https://github.com/petersulyok/smfc/discussions/106).
+> This chapter describes the RPM sensor-threshold/assertion model of the older AST2400/2500/2600-based BMCs (`generic`, `generic_x9`, `X10QBi` platforms). Whether and how it applies to the X14/H14 boards (`generic_x14` platform) is not yet confirmed — see [chapter 5](https://github.com/petersulyok/smfc/blob/main/README.md#5-supermicro-compatibility) and share your findings in [discussion #106](https://github.com/petersulyok/smfc/discussions/106).
 
 On Supermicro X10-X11 motherboards IPMI uses six sensor thresholds to specify the safe and unsafe fan rotational speed intervals (these are RPM values rounded to the nearest hundreds, defined for each fan separately):
 
@@ -730,20 +751,38 @@ fan_level_delay=2
 #  auto         - automatic discovery based on BMC information
 #  generic      - Generic Supermicro X10-X13/H10-H13 platform
 #  generic_x9   - Generic Supermicro X9 platform
-#  generic_x14  - Generic Supermicro X14 platform
+#  generic_x14  - Supermicro X14/H14 platform family (the BMC firmware stack -
+#                 OpenBMC or ATEN - is detected at startup, see README chapter 5)
 #  X10QBi       - Supermicro X10QBi platform
 platform_name=auto
 # Re-assert FULL fan mode (bool, default=1/true)
 enforce_fan_mode=1
 # Fan level applied to all configured zones at service termination (int, [-1..100]%, default=100)
 # Use -1 if smfc should not change the fan levels at exit (they stay at the last applied level).
+# Note: on X14/H14 boards the exit level is only a transition. smfc releases its BMC fan control state
+# on exit (with -1 too), and within about a second the BMC's own curve takes over - and that curve
+# regulates on CPU and system sensors only, so drive temperatures are not part of it.
 exit_level=100
-# X14 platform only: fan sensor number of each IPMI zone (comma- or space-separated list of int,
-# decimal or 0x-prefixed hex, list index = IPMI zone, default=0x41).
+# Timeout of a single ipmitool execution (int, seconds, default=10)
+# A wedged /dev/ipmi0 makes ipmitool block forever, which would park the control loop with nothing
+# regulating the fans behind it. A timed-out call is treated as any other IPMI failure: the control
+# loop logs it and retries on the next poll, and the fan mode watchdog re-acquires control. 10 seconds
+# is far above any healthy call, still clears a remote LAN session setup, and keeps the worst-case
+# shutdown (one level write per zone plus the platform release) inside systemd's 90 s stop window.
+# Use 0 to wait indefinitely, which is how smfc behaved before this parameter existed.
+#ipmitool_timeout=10
+# OpenBMC X14/H14 boards only: fan sensor number of each IPMI zone (comma- or space-separated list
+# of int, decimal or 0x-prefixed hex, list index = IPMI zone, default=0x41).
 # smfc reads a zone's fan level from one representative fan of that zone. Zone 0 is FAN1 (0x41) on
-# every documented X14 board, so the default covers single-zone boards; add one value per further
-# zone. Read the numbers off your board with `ipmitool sdr elist full | grep -i fan` (second field,
-# e.g. `41h`), or take them from doc/X14_MANUAL_FANCONTROL.md chapter 3. Ignored on other platforms.
+# every documented board, so the default covers single-zone boards; add one value per further zone.
+# Read the numbers off your board with `ipmitool sdr elist full | grep -i fan` (second field, e.g.
+# `41h`), or take them from doc/X14H14_MANUAL_FANCONTROL.md Part 5.1.
+# The map belongs to the base fan mode that was active when it was measured: changing the fan mode
+# from the BMC web UI or Redfish reshapes the zones, so re-measure it then (Part 3.5).
+# Ignored on ATEN X14/H14 boards and on every other platform.
+# A zone missing from the list is not an error: smfc logs its level as unknown and the CONST controller
+# writes its level unconditionally instead of skipping a redundant write. Only the reported level is
+# lost - fan control itself never depends on this setting.
 #x14_zone_sensors=0x41, 0x46
 
 
@@ -766,6 +805,8 @@ min_temp=30.0
 # Maximum CPU temperature (float, C, default=60.0)
 max_temp=60.0
 # Minimum CPU fan level (int, %, default=35)
+# On ATEN X14/H14 boards a value below 5 is silently raised to 5%: that duty path has no floor of
+# its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
 # Maximum CPU fan level (int, %, default=100)
 max_level=100
@@ -799,6 +840,8 @@ min_temp=32.0
 # Maximum HD temperature (float, C, default=46.0)
 max_temp=46.0
 # Minimum HD fan level (int, %, default=35)
+# On ATEN X14/H14 boards a value below 5 is silently raised to 5%: that duty path has no floor of
+# its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
 # Maximum HD fan level (int, %, default=100)
 max_level=100
@@ -844,6 +887,8 @@ min_temp=35.0
 # Maximum NVMe temperature (float, C, default=70.0)
 max_temp=70.0
 # Minimum NVMe fan level (int, %, default=35)
+# On ATEN X14/H14 boards a value below 5 is silently raised to 5%: that duty path has no floor of
+# its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
 # Maximum NVMe fan level (int, %, default=100)
 max_level=100
@@ -886,6 +931,8 @@ min_temp=40.0
 # Maximum GPU temperature (float, C, default=70.0)
 max_temp=70.0
 # Minimum GPU fan level (int, %, default=35)
+# On ATEN X14/H14 boards a value below 5 is silently raised to 5%: that duty path has no floor of
+# its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
 # Maximum GPU fan level (int, %, default=100)
 max_level=100

@@ -29,6 +29,7 @@ class IpmiConfig:
     platform_name: str      # Platform name (from config or "auto" for auto-detection)
     enforce_fan_mode: bool  # Re-assert FULL fan mode if BMC drifts (default: True; False = exit on drift)
     exit_level: int         # Fan level applied to all configured zones at exit (0..100%, -1 = do not change)
+    ipmitool_timeout: int   # Timeout of a single ipmitool execution (sec, 0 = wait indefinitely)
     x14_zone_sensors: Dict[int, int] = field(default_factory=lambda: {0: 0x41})  # X14: zone -> fan sensor number
 
 
@@ -172,6 +173,7 @@ class Config:
     CV_IPMI_ENFORCE_FAN_MODE: str = "enforce_fan_mode"      # Re-assert FULL on BMC drift
     CV_IPMI_EXIT_LEVEL: str = "exit_level"                  # Fan level applied at exit (-1 = do not change)
     CV_IPMI_X14_ZONE_SENSORS: str = "x14_zone_sensors"      # X14 only: fan sensor number of each IPMI zone
+    CV_IPMI_IPMITOOL_TIMEOUT: str = "ipmitool_timeout"      # Timeout of one ipmitool execution (0 = none)
 
     # [HD] section variable names
     CV_HD_NAMES: str = "hd_names"                            # HD device names
@@ -221,6 +223,11 @@ class Config:
     DV_IPMI_ENFORCE_FAN_MODE: bool = True
     DV_IPMI_EXIT_LEVEL: int = 100
     DV_IPMI_X14_ZONE_SENSORS: str = "0x41"
+    # A wedged /dev/ipmi0 makes ipmitool block forever, which would stall the control loop with no fan
+    # regulation behind it. 10 s is far above any healthy call (a not-ready BMC returns an error promptly
+    # rather than hanging) and still clears a remote LAN session setup, while keeping the worst-case
+    # shutdown - one level write per zone plus the platform release - inside systemd's 90 s stop window.
+    DV_IPMI_IPMITOOL_TIMEOUT: int = 10
     # Sentinel value of `exit_level=` meaning "do not change the fan levels at exit".
     EXIT_LEVEL_NONE: int = -1
 
@@ -471,6 +478,11 @@ class Config:
             PlatformName(platform_name)
         except ValueError as e:
             raise ValueError(f"[{s}] invalid value: {self.CV_IPMI_PLATFORM_NAME}={platform_name}.") from e
+        # Timeout of a single `ipmitool` execution. 0 is a sentinel meaning "wait indefinitely", i.e. the
+        # behaviour before this parameter existed.
+        ipmitool_timeout = parser[s].getint(self.CV_IPMI_IPMITOOL_TIMEOUT, fallback=self.DV_IPMI_IPMITOOL_TIMEOUT)
+        if ipmitool_timeout < 0:
+            raise ValueError(f"Negative {self.CV_IPMI_IPMITOOL_TIMEOUT}= parameter ({ipmitool_timeout})")
         sensors_str = parser[s].get(self.CV_IPMI_X14_ZONE_SENSORS, fallback=self.DV_IPMI_X14_ZONE_SENSORS)
         try:
             x14_zone_sensors = self.parse_x14_zone_sensors(sensors_str)
@@ -485,6 +497,7 @@ class Config:
             enforce_fan_mode=parser[s].getboolean(self.CV_IPMI_ENFORCE_FAN_MODE,
                                                   fallback=self.DV_IPMI_ENFORCE_FAN_MODE),
             exit_level=exit_level,
+            ipmitool_timeout=ipmitool_timeout,
             x14_zone_sensors=x14_zone_sensors,
         )
 

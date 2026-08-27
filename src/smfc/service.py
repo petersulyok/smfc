@@ -22,7 +22,7 @@ from smfc.nvmefc import NvmeFc
 from smfc.ipmi import Ipmi
 from smfc.log import Log
 from smfc.config import Config
-from smfc.platform import ControlState
+from smfc.platform import ControlState, FanLevelUnavailable, IpmiError
 from smfc.snapshot import build_snapshot
 
 
@@ -91,21 +91,24 @@ class Service:
         if hasattr(self, "ipmi") and hasattr(self, "config"):
             level = self.config.ipmi.exit_level
             zones = self._exit_zones()
-            # exit_level=-1 means smfc does not change the fan levels at all. An empty zone list means smfc never
-            # controlled a zone (e.g. it exited before/without any enabled fan controller), so there is nothing
-            # to restore either.
-            if level != Config.EXIT_LEVEL_NONE and zones:
-                # An ipmitool failure must not turn into a traceback during interpreter shutdown.
-                try:
-                    self.ipmi.platform.end(zones, level)
-                    if hasattr(self, "log"):
+            # `end()` is called unconditionally, `exit_level=-1` included. It is not only a fan level write:
+            # on X14/H14 it also releases the manual mode latch or the global bypass, and a platform state
+            # that is never released leaves the fans frozen at their last duty with nothing regulating them.
+            # The level itself is applied by `Platform.end()` only when it is not -1.
+            # An ipmitool failure must not turn into a traceback during interpreter shutdown.
+            try:
+                self.ipmi.platform.end(zones, level)
+                if hasattr(self, "log"):
+                    if level != Config.EXIT_LEVEL_NONE and zones:
                         self.log.msg(Log.LOG_INFO, f"smfc terminated: fans set to {level}% in zone(s) {zones}.")
-                except Exception as e:  # pylint: disable=broad-except
-                    if hasattr(self, "log"):
-                        self.log.msg(Log.LOG_ERROR, f"Cannot apply the exit fan level: {e}")
-            elif hasattr(self, "log"):
-                reason = "no IPMI zone was controlled" if zones == [] else f"{Config.CV_IPMI_EXIT_LEVEL}=-1"
-                self.log.msg(Log.LOG_INFO, f"smfc terminated: fan levels left unchanged ({reason}).")
+                    else:
+                        reason = "no IPMI zone was controlled" if not zones else f"{Config.CV_IPMI_EXIT_LEVEL}=-1"
+                        self.log.msg(Log.LOG_INFO, f"smfc terminated: fan levels left unchanged ({reason}), "
+                                                   f"BMC fan control state released.")
+            except Exception as e:  # pylint: disable=broad-except
+                if hasattr(self, "log"):
+                    self.log.msg(Log.LOG_ERROR, "Error while applying the exit fan level or releasing "
+                                                f"BMC fan control: {e}")
 
         # Unregister this function.
         atexit.unregister(self.exit_func)
@@ -420,7 +423,14 @@ class Service:
                     if cfg.enabled:
                         configured_zones.update(cfg.ipmi_zone)
             for zone in sorted(configured_zones):
-                self.log.msg(Log.LOG_DEBUG, f"Old level in IPMI zone {zone} = {self.ipmi.get_fan_level(zone)}%")
+                # A zone the platform cannot report a level for is logged as unknown rather than aborting
+                # startup: this line is diagnostics, and an incomplete x14_zone_sensors= must not prevent
+                # smfc from taking control of the fans.
+                try:
+                    old_level = f"{self.ipmi.get_fan_level(zone)}%"
+                except FanLevelUnavailable:
+                    old_level = "unknown"
+                self.log.msg(Log.LOG_DEBUG, f"Old level in IPMI zone {zone} = {old_level}")
         # Acquire fan control. What that means is platform-specific: most Supermicro boards are switched into
         # FULL fan mode (and only if they are not in FULL already - skipping the redundant write avoids a
         # needless fan_mode_delay sleep and the momentary fan blip some firmware produces when FULL is
@@ -498,15 +508,25 @@ class Service:
 
         # Main execution loop.
         while True:
-            for fc in self.controllers:
-                fc.run()
-                # Record applied levels for non-deferred controllers so every zone shows up in the
-                # snapshot. Deferred controllers (shared zones) are recorded by _apply_fan_levels().
-                if not fc.deferred_apply:
-                    for zone in fc.config.ipmi_zone:
-                        self.applied_levels[zone] = fc.last_level
-            if self.shared_zones:
-                self._apply_fan_levels()
+            # A BMC or ipmitool failure while applying fan levels - a transient rejection, an unreachable
+            # BMC, or an `ipmitool_timeout` expiry on a wedged /dev/ipmi0 - must not terminate the daemon.
+            # Only IpmiError is caught, deliberately: a controller fault (a vanished sensor, a bad value) is
+            # not an IPMI problem, and it still terminates the service as it always has.
+            # Exiting would leave the fans wherever they happen to be with nothing regulating them, which is
+            # strictly worse than staying up and retrying: the BMC may come back, and _check_fan_mode()
+            # re-acquires control if it was lost meanwhile. The iteration is abandoned, not the service.
+            try:
+                for fc in self.controllers:
+                    fc.run()
+                    # Record applied levels for non-deferred controllers so every zone shows up in the
+                    # snapshot. Deferred controllers (shared zones) are recorded by _apply_fan_levels().
+                    if not fc.deferred_apply:
+                        for zone in fc.config.ipmi_zone:
+                            self.applied_levels[zone] = fc.last_level
+                if self.shared_zones:
+                    self._apply_fan_levels()
+            except IpmiError as e:
+                self.log.msg(Log.LOG_ERROR, f"Fan level update failed: {e}")
             self._check_fan_mode()
             time.sleep(wait)
 

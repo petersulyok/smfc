@@ -7,7 +7,7 @@ import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 
 def validate_input_range(value: int, valrepr: str, minval: int, maxval: int) -> None:
@@ -22,6 +22,42 @@ def validate_input_range(value: int, valrepr: str, minval: int, maxval: int) -> 
     """
     if minval > value or value > maxval:
         raise ValueError(f"Invalid value: {valrepr} ({value}). Valid range is [{minval},{maxval}].")
+
+
+class IpmiError(RuntimeError):
+    """An `ipmitool` failure, carrying the IPMI completion code when the BMC returned one.
+
+    It subclasses `RuntimeError` so that every existing `except RuntimeError` keeps catching it
+    unchanged. The completion code is what separates a command the BMC *rejected* (e.g. 0xC1 - this
+    command does not exist on this BMC stack) from an unreachable BMC, a wedged `/dev/ipmi0` or a
+    `sudo` problem, all of which are otherwise indistinguishable by exception type. The X14/H14 stack
+    probe depends on that distinction: only `rsp=0xc1` means ATEN, and guessing moves fans
+    (see `doc/X14H14_MANUAL_FANCONTROL.md`, Part 1.3).
+    """
+
+    completion_code: Optional[int]   # IPMI completion code, None when ipmitool failed for another reason
+
+    def __init__(self, message: str, completion_code: Optional[int] = None) -> None:
+        """Initialize the error with a message and the optional IPMI completion code.
+        Args:
+            message (str): the error message
+            completion_code (Optional[int]): IPMI completion code the BMC returned, if any
+        """
+        super().__init__(message)
+        self.completion_code = completion_code
+
+
+class FanLevelUnavailable(RuntimeError):
+    """The current fan level of a zone cannot be read on this platform with this configuration.
+
+    Deliberately distinct from `IpmiError`: nothing failed and retrying will not help - the platform simply
+    has no way to answer for this zone. `X14OpenBmcPlatform` raises it for a zone missing from
+    `[Ipmi] x14_zone_sensors=`, because its duty read addresses a *fan sensor number* rather than a zone.
+
+    Callers degrade instead of treating it as a fault, because this reading never feeds a control decision:
+    it backs a redundant-write optimisation in `ConstFc` and two display paths. Failing on it would let an
+    incomplete cosmetic setting stop fan control altogether.
+    """
 
 
 class FanMode(IntEnum):
@@ -156,15 +192,20 @@ class Platform(ABC):
         Called once at shutdown. The BMC is left in FULL fan mode on most platforms, so the applied level is
         the state the fans keep until something else changes it. The zone list is resolved by the caller (the
         platform is created before the fan controllers exist, so it cannot know the configured zones itself).
+        A negative level (`[Ipmi] exit_level=-1`) means "leave the fan levels alone", so no level is
+        written - but `end()` is still called, because platforms that hold an explicit control state
+        (X14/H14) must release it on every exit path regardless of the exit level. Skipping the release
+        would leave the fans frozen at their last duty with nothing regulating them.
         Args:
             zones (List[int]): configured IPMI zones the exit level is applied to
-            level (int): fan level in % (0-100)
+            level (int): fan level in % (0-100), or a negative value to leave the levels unchanged
         Raises:
             ValueError: invalid input parameter
             FileNotFoundError: ipmitool cannot be found
             RuntimeError: ipmitool execution problem
         """
-        self.set_multiple_fan_levels(zones, level)
+        if level >= 0:
+            self.set_multiple_fan_levels(zones, level)
 
     def get_fan_mode(self) -> int:
         """Get the current IPMI fan mode.

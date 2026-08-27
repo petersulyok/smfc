@@ -9,6 +9,7 @@ from mock import MagicMock
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, ConstFc
 from smfc.config import Config
+from smfc.platform import FanLevelUnavailable, IpmiError
 from .test_config_builders import create_const_config
 
 
@@ -124,6 +125,49 @@ class TestConstFc:
         assert mock_get.call_count == len(ipmi_zone)
         if read_level != level:
             assert mock_set.call_count == len(ipmi_zone)
+
+    def test_run_writes_when_the_level_cannot_be_read(self, mocker: MockerFixture):
+        """Negative unit test for ConstFc.run() method when the zone level is unreadable. It contains the
+        following steps:
+        - mock print(), Ipmi.set_fan_level(), and Ipmi.get_fan_level() to raise FanLevelUnavailable, as an
+          X14 OpenBMC zone missing from `[Ipmi] x14_zone_sensors=` does
+        - instantiate ConstFc via _make_const_fc() with two zones and force the polling interval to elapse
+        - call ConstFc.run()
+        - ASSERT: run() does not raise. The read exists only to skip a redundant write, so an incomplete
+          cosmetic setting must not stop fan control - and this error never resolves by itself, so failing
+          would kill the service permanently on the very first poll
+        - ASSERT: the level is written to every zone, i.e. the optimisation degrades to writing
+          unconditionally rather than being skipped
+        """
+        f = "TestConstFc.test_run_writes_when_the_level_cannot_be_read"
+        mocker.patch("smfc.Ipmi.get_fan_level",
+                     MagicMock(side_effect=FanLevelUnavailable("IPMI zone 1 has no fan sensor configured.")))
+        mock_set = MagicMock()
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set)
+        fc, _, _ = _make_const_fc(mocker, ipmi_zone=[0, 1], polling=3.0, level=45)
+        fc.last_time = -100.0
+        fc.run()
+        assert mock_set.call_count == 2, f"{f}: written to every zone"
+
+    def test_run_propagates_ipmi_error_from_the_read(self, mocker: MockerFixture):
+        """Negative unit test for ConstFc.run() method when the BMC read itself fails. It contains the
+        following steps:
+        - mock print(), Ipmi.set_fan_level(), and Ipmi.get_fan_level() to raise IpmiError, as an unreachable
+          BMC or an ipmitool_timeout expiry does
+        - instantiate ConstFc via _make_const_fc() and force the polling interval to elapse
+        - call ConstFc.run()
+        - ASSERT: IpmiError propagates. Only the "cannot be answered at all" case is absorbed here; a real
+          BMC failure belongs to Service.run()'s handler, which logs it and retries on the next poll rather
+          than silently writing into a BMC that is not responding
+        """
+        f = "TestConstFc.test_run_propagates_ipmi_error_from_the_read"
+        mocker.patch("smfc.Ipmi.get_fan_level", MagicMock(side_effect=IpmiError("ipmitool error (1): x.")))
+        mocker.patch("smfc.Ipmi.set_fan_level", MagicMock())
+        fc, _, _ = _make_const_fc(mocker, ipmi_zone=[0], polling=3.0, level=45)
+        fc.last_time = -100.0
+        with pytest.raises(IpmiError):
+            fc.run()
+        assert True, f"{f}: propagated"
 
     @pytest.mark.parametrize(
         "ipmi_zone, level",
