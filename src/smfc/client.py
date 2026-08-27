@@ -235,11 +235,11 @@ def _display_device_name(name: str, type_label: str) -> str:
     HD and NVMe controllers store full /dev/disk/by-id/... paths to keep udev mappings stable
     across reboots; that's useful in config but noisy in the verbose block where every row
     repeats the same prefix. Strip to the basename for these two types so the per-device list
-    stays scannable. CPU/GPU (and CONST) keep their synthesized labels unchanged.
+    stays scannable. CPU/GPU/NPU (and CONST) keep their synthesized labels unchanged.
 
     Args:
         name (str): the raw device name (path or label)
-        type_label (str): controller type ("hd" / "nvme" / "cpu" / "gpu" / "const")
+        type_label (str): controller type ("hd" / "nvme" / "cpu" / "gpu" / "npu" / "const")
 
     Returns:
         str: display-friendly name
@@ -451,7 +451,7 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
 
     Args:
         section (str): controller's section name (e.g. "CPU", "HD")
-        type_label (str): short type label ("cpu", "hd", "nvme", "gpu")
+        type_label (str): short type label ("cpu", "hd", "nvme", "gpu", "npu")
         zones (List[int]): IPMI zones the controller drives
         polling (float): configured polling interval in seconds
         deferred (bool): whether deferred_apply is set on the controller

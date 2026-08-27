@@ -145,9 +145,9 @@ The four shared-infra files form the foundation that every test module reuses:
   `create_cpu_config(steps=4)` without touching a real config file.
 - **`test_fc_helpers.py`** holds builders specific to the `FanController`
   hierarchy: `FcHarness`, `assert_fc_base_contract()`, and per-controller
-  `build_cpu_fc` / `build_hd_fc` / `build_nvme_fc` / `build_gpu_fc` helpers
-  that absorb the `pyudev.Context.__new__` / `Ipmi.__new__` / `print` mock
-  boilerplate.
+  `build_cpu_fc` / `build_hd_fc` / `build_nvme_fc` / `build_gpu_fc` /
+  `build_npu_fc` helpers that absorb the `pyudev.Context.__new__` /
+  `Ipmi.__new__` / `print` mock boilerplate.
 
 ### Source ↔ test mapping
 
@@ -159,7 +159,7 @@ contain several test classes grouped by feature.
 |----------------------------------|------------------------------|-------------------|
 | `client.py`                      | `test_client.py`             | Arg parsing, colour detection, offline report formatter, snapshot-driven report, snapshot fetch over HTTP, controller construction, main online/offline path selection |
 | `cmd.py`                         | `test_cmd.py`                | `__main__` entry point |
-| `config.py`                      | `test_config.py`             | Static parsers, per-section parsing + validation (`Ipmi` / `Exporter` / `CPU` / `HD` / `NVMe` / `GPU` / `Const`), control-function precedence, duplicate-zone detection, edge cases, full multi-section integration |
+| `config.py`                      | `test_config.py`             | Static parsers, per-section parsing + validation (`Ipmi` / `Exporter` / `CPU` / `HD` / `NVMe` / `GPU` / `NPU` / `Const`), control-function precedence, duplicate-zone detection, edge cases, full multi-section integration |
 | `constfc.py`                     | `test_constfc.py`            | Fixed-level controller init, `run`, deferred apply |
 | `cpufc.py`                       | `test_cpufc.py`              | Hwmon discovery, ordinal `cpuN` device names |
 | `exporter.py`                    | `test_exporter.py`           | Prometheus text rendering, HTTP server endpoints (`/snapshot`, `/metrics`, `/healthz`), 404/500 handling, idempotent stop |
@@ -170,15 +170,16 @@ contain several test classes grouped by feature.
 | `ipmi.py`                        | `test_ipmi.py`               | Init (positive/negative, BMC timeout, client mode), `exec_ipmitool` (remote args, sudo, rc, exceptions), `get/set_fan_mode`, fan-mode name mapping, `get/set_fan_level`, `set_multiple_fan_levels`, exception surface |
 | `log.py`                         | `test_log.py`                | Init (valid/invalid level+output combos), level/output/message-type mapping, message routing to stdout/stderr/syslog |
 | `nvmefc.py`                      | `test_nvmefc.py`             | NVMe name validation, smartctl-based temps |
+| `npufc.py`                       | `test_npufc.py`              | `exec_smi` (args, rc, timeout), `npu-smi` chip-temperature parsing (single/multi-chip, non-zero-based ids), per-card hottest-chip selection, `temp_calc` aggregation, error-tolerance budget, `control_function=` mapping |
 | `platform.py`                    | *(no dedicated module)*      | Exercised indirectly through `test_platforms.py` |
 | `platform_factory.py`            | `test_platform_factory.py`   | `create_platform` dispatch per platform name + fallback |
-| `service.py`                     | `test_service.py`            | Lifecycle (`exit_func`), dependency checks (CPU/HD/GPU/NVMe, AMD, invalid type), `run()` exit-code matrix, fan-mode drift enforcement, exporter start/stop wiring, **shared-zone arbitration** (`collect_desired_levels`, `apply_fan_levels` across single/shared/multi-zone, const winner/loser, caching, oscillation) |
-| `snapshot.py`                    | `test_snapshot.py`           | Schema/version, fan-mode block, per-controller entries (cpu/hd/nvme/gpu/const), curve vs. legacy min/max, zones block, applied levels, per-device temperatures and read-error counters |
+| `service.py`                     | `test_service.py`            | Lifecycle (`exit_func`), dependency checks (CPU/HD/GPU/NPU/NVMe, AMD, `npu-smi` via PATH, invalid type), `run()` exit-code matrix, fan-mode drift enforcement, exporter start/stop wiring, **shared-zone arbitration** (`collect_desired_levels`, `apply_fan_levels` across single/shared/multi-zone, const winner/loser, caching, oscillation) |
+| `snapshot.py`                    | `test_snapshot.py`           | Schema/version, fan-mode block, per-controller entries (cpu/hd/nvme/gpu/npu/const), curve vs. legacy min/max, zones block, applied levels, per-device temperatures and read-error counters |
 
 Behind that table sit two cross-cutting topics worth knowing about:
 
-- **Fan-controller subclasses share a contract.** The four `FanController`
-  subclasses (`CpuFc`, `HdFc`, `NvmeFc`, `GpuFc`) implement the same base
+- **Fan-controller subclasses share a contract.** The five `FanController`
+  subclasses (`CpuFc`, `HdFc`, `NvmeFc`, `GpuFc`, `NpuFc`) implement the same base
   contract but differ in how they discover devices. The shared base
   behaviours (construction, `set_fan_level`, deferred levels, the smoothing
   algorithm, read-error tolerance, LUT construction) are tested *once* in

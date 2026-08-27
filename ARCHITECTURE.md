@@ -71,6 +71,7 @@ src/smfc/
 ├── hdfc.py               HdFc  — SATA/SAS HDD/SSD source (+ Standby Guard)
 ├── nvmefc.py             NvmeFc — NVMe HWMON source
 ├── gpufc.py              GpuFc  — Nvidia/AMD GPU source via SMI tools
+├── npufc.py              NpuFc  — Ascend NPU source via npu-smi
 ├── constfc.py            ConstFc — constant-level controller (no temp source)
 ├── snapshot.py           build_snapshot() — serialize live service state to JSON
 ├── exporter.py           Exporter — HTTP server for /snapshot, /metrics, /healthz
@@ -112,6 +113,7 @@ classDiagram
         +HdConfig[] hd
         +NvmeConfig[] nvme
         +GpuConfig[] gpu
+        +NpuConfig[] npu
         +ConstConfig[] const
     }
     class ExporterConfig {
@@ -148,6 +150,7 @@ classDiagram
     class HdFc
     class NvmeFc
     class GpuFc
+    class NpuFc
     class ConstFc {
         +run()
     }
@@ -168,6 +171,7 @@ classDiagram
     FanController <|-- HdFc
     FanController <|-- NvmeFc
     FanController <|-- GpuFc
+    FanController <|-- NpuFc
 ```
 
 Key relationships:
@@ -192,7 +196,7 @@ want":
 
 1. Reads the INI file via `configparser.ConfigParser`.
 2. Builds an `IpmiConfig` dataclass from `[Ipmi]`.
-3. For each controller family (`CPU`, `HD`, `NVME`, `GPU`, `CONST`) it scans
+3. For each controller family (`CPU`, `HD`, `NVME`, `GPU`, `NPU`, `CONST`) it scans
    the configuration for the base section (e.g. `[CPU]`) **plus** all numbered
    variants (`[CPU:0]`, `[CPU:1]`, …). Each section yields its own dataclass
    instance — this is how *multiple fan curves per controller type* are
@@ -209,6 +213,7 @@ config.cpu    : List[CpuConfig]
 config.hd     : List[HdConfig]
 config.nvme   : List[NvmeConfig]
 config.gpu    : List[GpuConfig]
+config.npu    : List[NpuConfig]
 config.const  : List[ConstConfig]
 ```
 
@@ -498,6 +503,7 @@ Each subclass only builds `self.hwmon_path[]` and (optionally) overrides
 | `HdFc`   | Per-disk HWMON (`drivetemp`); empty path → `smartctl -a`      | Validates against NVMe device names; runs Standby Guard |
 | `NvmeFc` | Per-device HWMON (NVMe driver)                                | Empty hwmon path is treated as a hard error            |
 | `GpuFc`  | `nvidia-smi --query-gpu=temperature.gpu` or `rocm-smi -t`     | Caches result for `polling` seconds across N indices    |
+| `NpuFc`  | `npu-smi info -t temp -i <id>`, one call per card             | Hottest chip of each card; same per-`polling` caching   |
 
 `HdFc` is the only subclass with a per-device fallback: SAS/SCSI disks have no
 `drivetemp` entry, so their udev-discovered HWMON path comes back as `""`.
@@ -643,8 +649,9 @@ Consequences worth stating explicitly:
 
 #### 7.1.5 Aggregation across multiple devices
 
-When `count > 1` (multiple CPUs, multiple disks, multiple GPUs), `get_temp()`
-collects all per-device temperatures and reduces them with one of:
+When `count > 1` (multiple CPUs, multiple disks, multiple GPUs or NPU
+cards), `get_temp()` collects all per-device temperatures and reduces them
+with one of:
 
 - `CALC_MIN` — coolest sensor (rare; mostly for testing)
 - `CALC_AVG` — average (default)
@@ -771,7 +778,7 @@ This is the trickiest piece of the architecture and deserves its own section.
 
 ### 9.1 Why it exists
 
-The user can point any combination of CPU/HD/NVME/GPU/CONST controllers at
+The user can point any combination of CPU/HD/NVME/GPU/NPU/CONST controllers at
 any IPMI zone. If two *different* controller types end up writing to the
 same zone, they would fight each other on every poll. The arbiter solves
 this by enforcing one global rule per shared zone:
@@ -1145,7 +1152,7 @@ main()                                          (cmd.py)
     │   └── platform.start()
     ├── ipmi.set_fan_mode(FULL)
     ├── pyudev.Context()
-    ├── for cfg in config.cpu / hd / nvme / gpu / const if cfg.enabled:
+    ├── for cfg in config.cpu / hd / nvme / gpu / npu / const if cfg.enabled:
     │     instantiate fan controller (calls get_temp once)
     ├── _check_shared_zones()                   — mark deferred_apply
     ├── _start_exporter()                       — Exporter(bind_addr, port, snapshot_fn)
@@ -1225,6 +1232,11 @@ raises from the SMI path on the first index and off the empty/partial cache
 for every further index, so one bad call costs exactly one tolerance unit per
 GPU. The counters of all GPUs in a section therefore advance in lockstep —
 `error_tolerance=3` means 3 consecutive *polls*, not 3 SMI calls per GPU.
+
+`NpuFc` follows the same pattern with `npu-smi`, with one difference: `npu-smi`
+has no multi-card query, so it is invoked once *per configured card* per polling
+interval rather than once per section. The per-poll cache and the lockstep error
+accounting above are otherwise identical.
 
 ### 14.3 First-poll behavior
 

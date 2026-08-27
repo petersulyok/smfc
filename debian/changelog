@@ -9,7 +9,7 @@ smfc (6.3.0) unstable; urgency=medium
     temperature-driven controllers are supported. The controller shows up in
     smfc-client and the HTTP exporter like the other fan controllers.
 
- -- Peter Sulyok <peter@sulyok.net>  Tue, 25 Aug 2026 17:00:00 +0000
+ -- Peter Sulyok <peter@sulyok.net>  Thu, 27 Aug 2026 12:00:00 +0000
 
 
 smfc (6.2.1) unstable; urgency=medium

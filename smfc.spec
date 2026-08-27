@@ -98,7 +98,7 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
-* Tue Aug 25 2026 Peter Sulyok <peter@sulyok.net> - 6.3.0-1
+* Thu Aug 27 2026 Peter Sulyok <peter@sulyok.net> - 6.3.0-1
 - Added: new NPU fan controller (sixth controller type) that drives one or
   more IPMI zones from the temperature of Ascend NPUs, e.g. the Atlas 300I
   Duo, read with npu-smi. A device is an NPU card (npu-smi -i id); for a
