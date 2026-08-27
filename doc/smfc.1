@@ -1,4 +1,4 @@
-.TH SMFC 1 smfc\-6.2.1
+.TH SMFC 1 smfc\-6.3.0
 .SH NAME
 .B smfc
 \- Supermicro fan control for Linux (home) servers.
@@ -18,12 +18,13 @@ https://github.com/petersulyok/smfc
 .SH FEATURES
 .TP
 .B Fan controllers
-Five independent controllers: CPU, HD (SATA/SAS), NVMe, GPU, and CONST (constant level).
+Six independent controllers: CPU, HD (SATA/SAS), NVMe, GPU, NPU, and CONST (constant level).
 Each can be enabled/disabled and assigned to one or more IPMI zones freely.
 .TP
 .B Temperature sources
 Intel/AMD CPUs (coretemp/k10temp), SATA/SAS disks (drivetemp/smartctl),
-NVMe SSDs (hwmon), Nvidia GPUs (nvidia\-smi), AMD GPUs (rocm\-smi).
+NVMe SSDs (hwmon), Nvidia GPUs (nvidia\-smi), AMD GPUs (rocm\-smi),
+Ascend NPUs (npu\-smi).
 .TP
 .B Control logic
 Configurable temperature\-to\-fan\-level mapping with discrete steps, sensitivity threshold,
@@ -132,7 +133,8 @@ IPMI fan mode drifted away from FULL mode and enforce_fan_mode= is disabled
 .BR smartctl (8),
 .BR systemctl (1),
 .BR nvidia-smi (1),
-.BR rocm-smi (1)
+.BR rocm-smi (1),
+.BR npu-smi (1)
 
 .SH COPYRIGHT
 .B smfc

@@ -1347,8 +1347,8 @@ Non-obvious constraints:
 - `test/test_*.py` — unit tests structured per source file; the
   `MockDevices` / `factory_mockdevice` helpers in `test/test_mocks.py`
   illustrate how the udev path is exercised without real hardware.
-- `config/samples/*.conf` — nine canonical configurations covering the
+- `config/samples/*.conf` — ten canonical configurations covering the
   common deployment shapes (CPU-only, HD-only, mixed, multi-curve, GPU,
-  CONST-only, X9, X10QBi, advanced control function).
+  NPU, CONST-only, X9, X10QBi, advanced control function).
 - `README.md` chapters 6 (IPMI thresholds), 10 (configuration), 11 (run).
 - `DEVELOPMENT.md` for the contributor workflow.

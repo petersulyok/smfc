@@ -958,7 +958,7 @@ Important notes:
 2. `[HD] hd_names=` is a compulsory parameter for HD fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/sda` form is not persistent and could change after a reboot!
 3. `[NVME] nvme_names=` is a compulsory parameter for NVME fan controller, and it must be specified in `/dev/disk/by-id/...` form. Please note that the `/dev/nvme0n1` form is not persistent and could change after a reboot!
 4. `[CPU] / [HD] / [NVME] min_level= / max_level=` should be configured in alignment with threshold configuration (see more details in [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)). Be patient, several refinement cycles could happen.
-5. `[CPU] / [HD] / [NVME] / [GPU] control_function=` defines an advanced multi-segment user-defined control function as a list of `temp-level` value pairs (at least 2 pairs, temperatures strictly ascending). When specified, it overrides the linear `min_temp/max_temp/min_level/max_level` form. See [chapter 2.2](https://github.com/petersulyok/smfc/blob/main/README.md#22-advanced-multi-segment-user-defined-function) for details.
+5. `[CPU] / [HD] / [NVME] / [GPU] / [NPU] control_function=` defines an advanced multi-segment user-defined control function as a list of `temp-level` value pairs (at least 2 pairs, temperatures strictly ascending). When specified, it overrides the linear `min_temp/max_temp/min_level/max_level` form. See [chapter 2.2](https://github.com/petersulyok/smfc/blob/main/README.md#22-advanced-multi-segment-user-defined-function) for details.
 6. Multiple instances of the same fan controller can be created using numbered section names (e.g. `[CPU:0]`, `[CPU:1]`). Each instance has its own full set of parameters and can be assigned to a different IPMI zone with a different fan curve. Two enabled instances of the same type must not share the same IPMI zone. See [chapter 1.4](https://github.com/petersulyok/smfc/blob/main/README.md#14-multiple-fan-curves-per-ipmi-zone) for details.
 7. Several sample configuration files are provided in `./config/samples` folder.
 8. Save/backup your configuration file when you've got the final version. Avoid overwriting if you upgrade to a new version of `smfc`.
@@ -1081,7 +1081,7 @@ The report has two modes:
 
 When stdout is a terminal and `--no-color` is not set, the report is **colourised**:
 
-- Section headers (`BMC`, `Fan controllers`, `[CPU]`/`[HD]`/`[NVME]`/`[GPU]`, `IPMI zones (live)`) render in bold bright-blue.
+- Section headers (`BMC`, `Fan controllers`, `[CPU]`/`[HD]`/`[NVME]`/`[GPU]`/`[NPU]`, `IPMI zones (live)`) render in bold bright-blue.
 - Each `Temp` and `Level` cell is banded against the controller's own steering window: **DIM** below the floor (idle), **GREEN** in the lower 70 % (working), **YELLOW** in the upper 30 % (warm — fans ramping), **RED** at or above the ceiling (curve maxed out). The per-device temperatures inside the verbose `Device` list use the same banding against the parent controller's window — handy for spotting a single hot disk dragging the aggregate up.
 - HD per-disk state cells show `STANDBY` in dim grey and `ACTIVE` in green.
 - The fan-mode line shows `FULL` in green and any other mode in red, accompanied by a warning.
