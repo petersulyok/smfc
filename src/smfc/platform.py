@@ -47,19 +47,6 @@ class IpmiError(RuntimeError):
         self.completion_code = completion_code
 
 
-class FanLevelUnavailable(RuntimeError):
-    """The current fan level of a zone cannot be read on this platform with this configuration.
-
-    Deliberately distinct from `IpmiError`: nothing failed and retrying will not help - the platform simply
-    has no way to answer for this zone. `X14OpenBmcPlatform` raises it for a zone missing from
-    `[Ipmi] x14_zone_sensors=`, because its duty read addresses a *fan sensor number* rather than a zone.
-
-    Callers degrade instead of treating it as a fault, because this reading never feeds a control decision:
-    it backs a redundant-write optimisation in `ConstFc` and two display paths. Failing on it would let an
-    incomplete cosmetic setting stop fan control altogether.
-    """
-
-
 class FanMode(IntEnum):
     """The different fan modes supported by Supermicro platforms.
     The integers represent the hex values propagated to ipmitool raw commands.

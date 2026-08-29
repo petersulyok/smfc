@@ -22,7 +22,7 @@ from smfc.nvmefc import NvmeFc
 from smfc.ipmi import Ipmi
 from smfc.log import Log
 from smfc.config import Config
-from smfc.platform import ControlState, FanLevelUnavailable, IpmiError
+from smfc.platform import ControlState, IpmiError
 from smfc.snapshot import build_snapshot
 
 
@@ -423,14 +423,7 @@ class Service:
                     if cfg.enabled:
                         configured_zones.update(cfg.ipmi_zone)
             for zone in sorted(configured_zones):
-                # A zone the platform cannot report a level for is logged as unknown rather than aborting
-                # startup: this line is diagnostics, and an incomplete x14_zone_sensors= must not prevent
-                # smfc from taking control of the fans.
-                try:
-                    old_level = f"{self.ipmi.get_fan_level(zone)}%"
-                except FanLevelUnavailable:
-                    old_level = "unknown"
-                self.log.msg(Log.LOG_DEBUG, f"Old level in IPMI zone {zone} = {old_level}")
+                self.log.msg(Log.LOG_DEBUG, f"Old level in IPMI zone {zone} = {self.ipmi.get_fan_level(zone)}%")
         # Acquire fan control. What that means is platform-specific: most Supermicro boards are switched into
         # FULL fan mode (and only if they are not in FULL already - skipping the redundant write avoids a
         # needless fan_mode_delay sleep and the momentary fan blip some firmware produces when FULL is

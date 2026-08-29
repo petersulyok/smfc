@@ -394,7 +394,11 @@ shutdown via `Service.exit_func()`:
   the exit level and then releases manual mode, restoring automatic BMC fan control.
   Zone numbering differs between the two command families (manual commands are
   1-based, duty commands 0-based); smfc zone IDs stay 0-based and the platform
-  converts in one place.
+  converts in one place. Three things it reads from the board rather than assuming:
+  the zone count (probed once at `start()`), the supported base fan modes
+  (`0x30 0x45 0x02`), and the per-zone failsafe flag, which `check_fan_mode()` reports
+  as a lost control state because failsafe outranks manual mode and re-acquiring
+  cannot clear it.
 - `X14AtenPlatform`: the same `ENFORCES_FULL_MODE = False`, and the repository's only
   two-level platform hierarchy — it subclasses `GenericPlatform` and inherits its duty
   read and write **unchanged**, because ATEN *is* the firmware line Supermicro shipped

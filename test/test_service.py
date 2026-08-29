@@ -16,7 +16,7 @@ from mock import MagicMock
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, FanController, ConstFc, Service
 from smfc.config import Config
-from smfc.platform import ControlState, ControlStatus, FanLevelUnavailable, IpmiError
+from smfc.platform import ControlState, ControlStatus, IpmiError
 from .test_fixtures import TestData
 from .test_mocks import MockedContextError, MockedContextGood
 from .test_ipmi import BMC_INFO_OUTPUT
@@ -920,85 +920,6 @@ class TestService:
         with pytest.raises(RuntimeError, match="sensor gone"):
             service.run()
         assert mock_run.call_count == 1
-
-    def test_run_startup_debug_tolerates_unreadable_zone_level(self, mocker: MockerFixture, td: TestData):
-        """Negative unit test for Service.run() startup when a zone level cannot be read. It contains the
-        following steps:
-        - mock print(), smfc.service.Exporter, pyudev.Context.__init__ via MockedContextGood, and
-          CpuFc.__init__ to skip real hwmon discovery
-        - mock time.sleep() so it exits with code 100 on its 1st call, bounding the main loop
-        - mock Ipmi.get_fan_level() to raise FanLevelUnavailable, as an X14 OpenBMC zone missing from
-          `[Ipmi] x14_zone_sensors=` does, and run at DEBUG level so the startup level read is reached
-        - build a minimal CPU-only config via `td` and invoke Service.run()
-        - ASSERT: sys.exit() code is 100, i.e. startup completed and the main loop was entered. This read is
-          diagnostics only, and it runs *before* the fan controllers, so failing here would abort startup
-          before smfc ever takes control of the fans
-        - ASSERT: the zone is logged as "unknown" rather than a level, so the gap is visible in the log
-        """
-        f = "TestService.test_run_startup_debug_tolerates_unreadable_zone_level"
-        self.sleep_counter = 0
-
-        # pylint: disable=unused-argument
-        def mocked_sleep(*args):
-            """Mocked time.sleep() function. Exits at the 1st call."""
-            self.sleep_counter += 1
-            sys.exit(100)
-
-        def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
-            nonlocal td
-            self.hwmon_path = td.cpu_files
-            self.config = cfg
-            FanController.__init__(self, log, ipmi, cfg.section, len(td.cpu_files))
-        # pylint: enable=unused-argument
-
-        cmd_ipmi = td.create_command_file(
-            'if [[ $1 = "bmc" && $2 = "info" ]] ; then\n'
-            "cat << 'BMCEOF'\n" + BMC_INFO_OUTPUT +
-            "BMCEOF\n"
-            "exit 0\n"
-            "fi\n"
-            'if [[ $1 = "sdr" ]] ; then\n'
-            'echo "FAN1             | 500 RPM           | ok"\n'
-            "exit 0\n"
-            "fi\n"
-            'echo "1"'
-        )
-        td.create_cpu_data(1)
-        my_config = ConfigParser()
-        my_config[Config.CS_IPMI] = {
-            Config.CV_IPMI_COMMAND: cmd_ipmi,
-            Config.CV_IPMI_FAN_MODE_DELAY: "0",
-            Config.CV_IPMI_FAN_LEVEL_DELAY: "0",
-        }
-        my_config[Config.CS_CPU] = {
-            Config.CV_ENABLED: "True",
-            Config.CV_TEMP_CALC: "1",
-            Config.CV_STEPS: "5",
-            Config.CV_SENSITIVITY: "5",
-            Config.CV_POLLING: "0",
-            Config.CV_MIN_TEMP: "30",
-            Config.CV_MAX_TEMP: "60",
-            Config.CV_MIN_LEVEL: "35",
-            Config.CV_MAX_LEVEL: "100",
-        }
-        conf_file = td.create_config_file(my_config)
-        mocker.patch("builtins.print", MagicMock())
-        mocker.patch("time.sleep", MagicMock(side_effect=mocked_sleep))
-        mocker.patch("smfc.service.Exporter", MagicMock())
-        mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
-        mocker.patch("smfc.CpuFc.__init__", mocked_cpufc_init)
-        mocker.patch("smfc.Ipmi.get_fan_level",
-                     MagicMock(side_effect=FanLevelUnavailable("IPMI zone 0 has no fan sensor configured.")))
-        mocker.patch("smfc.Ipmi.set_fan_level", MagicMock())
-        mock_log_msg = MagicMock()
-        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
-        sys.argv = ("smfc.py -o 0 -l 4 -ne -nd -c " + conf_file).split()
-        service = Service()
-        with pytest.raises(SystemExit) as cm:
-            service.run()
-        assert cm.value.code == 100, f"{f}: startup completed and the main loop was entered"
-        logged = " ".join(str(c) for c in mock_log_msg.call_args_list)
-        assert "Old level in IPMI zone 0 = unknown" in logged, f"{f}: logged as unknown"
 
     def test_run_survives_ipmi_error_in_the_control_loop(self, mocker: MockerFixture, td: TestData):
         """Negative unit test for Service.run() method when a fan level write fails mid-loop. It contains the

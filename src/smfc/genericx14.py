@@ -7,8 +7,8 @@ import subprocess
 from typing import Callable, Dict, List, Optional, Set
 
 from smfc.generic import GenericPlatform
-from smfc.platform import (ControlState, ControlStatus, FanLevelUnavailable, FanMode, IpmiError,
-                           Platform, validate_input_range)
+from smfc.platform import (ControlState, ControlStatus, FanMode, IpmiError, Platform,
+                           validate_input_range)
 
 
 class X14OpenBmcPlatform(Platform):
@@ -44,28 +44,19 @@ class X14OpenBmcPlatform(Platform):
     OEM_OP_SET_MANUAL: str = "0x01"         # Set the manual mode flag of a zone
     OEM_OP_READ_FAILSAFE: str = "0x02"      # Read the failsafe flag of a zone
     GET_SUPPORTED_MODES: List[str] = ["raw", "0x30", "0x45", "0x02"]     # Supported fan mode bitmask
-    DEFAULT_ZONE_SENSOR: int = 0x41         # FAN1, zone 0 on every documented X14 board
 
-    zone_sensors: Dict[int, int]            # IPMI zone -> representative fan sensor number
     latched_zones: List[int]                # Zones manual mode was latched in by start()
     _zone_count: Optional[int]              # Zones the board has, discovered by probe() on first use
     _supported_modes: Optional[List[int]]   # Fan modes the board supports, read from the BMC on first use
     _failsafe_count: Dict[int, int]         # IPMI zone -> consecutive observations in failsafe
 
-    def __init__(self, name: str, exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess],
-                 zone_sensors: Optional[Dict[int, int]] = None) -> None:
-        """Initialize the platform with the zone -> fan sensor map needed by `get_fan_level()`.
-
-        The map cannot be derived from the fan names: the first sensor of zone 1 is 0x46 on X14SBI-F, 0x47 on
-        X14DBI-SP, 0x46 (a numbered fan) on X14DBG-AP and 0x44 on X14SRG-TF, so the user supplies it with
-        `[Ipmi] x14_zone_sensors=`.
+    def __init__(self, name: str, exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess]) -> None:
+        """Initialize the platform.
         Args:
             name (str): platform name (e.g. from BMC product name or config)
             exec_ipmitool (Callable): function that executes ipmitool commands
-            zone_sensors (Optional[Dict[int, int]]): IPMI zone -> fan sensor number (default: {0: 0x41})
         """
         super().__init__(name, exec_ipmitool)
-        self.zone_sensors = dict(zone_sensors) if zone_sensors else {0: self.DEFAULT_ZONE_SENSOR}
         self.latched_zones = []
         self._zone_count = None
         self._supported_modes = None
@@ -277,28 +268,21 @@ class X14OpenBmcPlatform(Platform):
     def get_fan_level(self, zone: int) -> int:
         """Return the current fan duty cycle percentage for the given zone.
 
-        The duty is read from one representative fan of the zone (all fans of a zone share the same duty), and
-        the reply carries two hexadecimal bytes: the duty and the temperature of that fan.
+        Selector 0x00 reads a zone's duty and writes nothing; all fans of a zone share the same duty. The
+        zone byte is the 0-based one the duty write uses, so the read and the write address the same zone
+        by the same number and a duty reads back exactly as it was written.
         Args:
             zone (int): IPMI zone
         Returns:
             int: fan level in % (0-100)
         Raises:
-            ValueError: invalid input parameter, or the duty is unavailable
+            ValueError: invalid input parameter, or the reply cannot be interpreted
             FileNotFoundError: ipmitool cannot be found
-            FanLevelUnavailable: the zone has no fan sensor configured, so its level cannot be read at all
             RuntimeError: ipmitool execution problem
         """
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
-        sensor = self.zone_sensors.get(zone)
-        if sensor is None:
-            raise FanLevelUnavailable(f"IPMI zone {zone} has no fan sensor configured "
-                                     f"(see [Ipmi] x14_zone_sensors=).")
-        r = self._exec(["raw", "0x30", "0x70", "0x88", f"0x{sensor:02x}"])
-        duty = int(r.stdout.split()[0], 16)
-        if duty == 0xFF:
-            raise ValueError(f"Fan duty is unavailable in IPMI zone {zone}.")
-        return duty
+        r = self._exec(["raw", "0x30", "0x70", "0x66", "0x00", f"0x{zone:02x}"])
+        return int(r.stdout.split()[-1], 16)
 
     def set_fan_level(self, zone: int, level: int) -> None:
         """Set the fan duty cycle percentage for the given zone, never below the 5 % floor."""

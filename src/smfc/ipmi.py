@@ -167,7 +167,7 @@ class Ipmi:
         platform_name = self.config.platform_name
         if platform_name == PlatformName.AUTO:
             platform_name = self.bmc_product_name
-        self.platform = create_platform(platform_name, self._exec_ipmitool, self.config.x14_zone_sensors)
+        self.platform = create_platform(platform_name, self._exec_ipmitool)
 
         # Print the configuration out at CONFIG log level.
         if self.log.log_level >= Log.LOG_CONFIG:

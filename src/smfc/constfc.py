@@ -6,7 +6,6 @@
 import time
 from smfc.ipmi import Ipmi
 from smfc.log import Log
-from smfc.platform import FanLevelUnavailable
 from smfc.config import ConstConfig
 
 
@@ -77,14 +76,8 @@ class ConstFc:  # pylint: disable=too-few-public-methods
             # Check in all IPMI zones if the current fan level is the expected one,
             # otherwise set the fan level again.
             for zone in self.config.ipmi_zone:
-                try:
-                    level = self.ipmi.get_fan_level(zone)
-                    current = f"{level}%"
-                except FanLevelUnavailable:
-                    # The platform cannot report this zone's level at all (an X14 OpenBMC zone missing from
-                    # x14_zone_sensors=). The read exists only to skip a redundant write, so fall back to
-                    # writing unconditionally: an incomplete cosmetic setting must not stop fan control.
-                    level, current = None, "unknown"
+                level = self.ipmi.get_fan_level(zone)
+                current = f"{level}%"
                 if self.log.log_level >= Log.LOG_DEBUG:
                     self.log.msg(Log.LOG_DEBUG, f"{self.name}: zone {zone} current={current} "
                                  f"expected={self.config.level}%")

@@ -4,7 +4,7 @@
 #   Factory function for creating platform-specific implementations.
 #
 import subprocess
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List
 
 from smfc.config import PlatformName
 from smfc.generic import GenericPlatform
@@ -20,8 +20,8 @@ CC_INVALID_COMMAND: int = 0xC1      # The OEM manual-mode command does not exist
 STACK_PROBE_DOC: str = "doc/X14H14_MANUAL_FANCONTROL.md, Part 1"
 
 
-def _create_x14_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess],
-                         zone_sensors: Optional[Dict[int, int]] = None) -> Platform:
+def _create_x14_platform(platform_name: str,
+                         exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess]) -> Platform:
     """Probe which of the two 14th generation BMC firmware stacks the board runs, and return its platform.
 
     Supermicro's 14th generation ships two unrelated BMC firmware stacks and the split does not follow the
@@ -37,7 +37,6 @@ def _create_x14_platform(platform_name: str, exec_ipmitool: Callable[[List[str]]
     Args:
         platform_name (str): the platform name (configuration value or BMC product name)
         exec_ipmitool (Callable): function that executes ipmitool commands
-        zone_sensors (Optional[Dict[int, int]]): IPMI zone -> fan sensor number map (OpenBMC stack only)
     Returns:
         Platform: X14OpenBmcPlatform or X14AtenPlatform
     Raises:
@@ -61,11 +60,11 @@ def _create_x14_platform(platform_name: str, exec_ipmitool: Callable[[List[str]]
     if flag not in (0, 1):
         raise RuntimeError(f"Cannot determine the BMC fan control stack (see {STACK_PROBE_DOC}): the manual "
                            f"fan mode flag read back as 0x{flag:02x}, which is neither 0x00 nor 0x01.")
-    return X14OpenBmcPlatform(platform_name, exec_ipmitool, zone_sensors)
+    return X14OpenBmcPlatform(platform_name, exec_ipmitool)
 
 
-def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess],
-                    zone_sensors: Optional[Dict[int, int]] = None) -> Platform:
+def create_platform(platform_name: str,
+                    exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess]) -> Platform:
     """Factory method to create the appropriate Platform object for the given platform name.
     Args:
         platform_name (str): The platform name, one of:
@@ -77,8 +76,6 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
               ('X14...'/'H14...' -> the X14/H14 family, 'X10QBi...' -> X10QBi, 'X9...' -> X9),
               falls back to GenericPlatform
         exec_ipmitool (Callable): Function that executes ipmitool commands
-        zone_sensors (Optional[Dict[int, int]]): IPMI zone -> fan sensor number map, used by the OpenBMC X14
-            platform only (`[Ipmi] x14_zone_sensors=`); ignored by every other platform
     Returns:
         Platform: The platform-specific implementation (defaults to GenericPlatform)
     Raises:
@@ -89,7 +86,7 @@ def create_platform(platform_name: str, exec_ipmitool: Callable[[List[str]], sub
     # concrete class is chosen by the probe. No OEM command is ever sent to a board outside the family, so
     # X9-X13 auto-detection is untouched.
     if platform_name == PlatformName.GENERIC_X14 or platform_name.startswith(("X14", "H14")):
-        return _create_x14_platform(platform_name, exec_ipmitool, zone_sensors)
+        return _create_x14_platform(platform_name, exec_ipmitool)
     platform_factory = {
         PlatformName.GENERIC: GenericPlatform,
         PlatformName.GENERIC_X9: GenericX9Platform,

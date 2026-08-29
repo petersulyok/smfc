@@ -359,15 +359,16 @@ What both stacks have in common:
 
 **On the OpenBMC stack**, `smfc` latches an explicit OEM *manual mode* in each zone it drives; zones it does not drive keep running under automatic control. Two consequences:
 
-- **Reading a zone's fan level needs a fan sensor number.** Set `x14_zone_sensors=` in the `[Ipmi]` section with one sensor number per zone (see [chapter 10.2](https://github.com/petersulyok/smfc/blob/main/README.md#102-sample-configuration-file)); zone 0 defaults to `0x41` (FAN1), which is correct on every documented board. This setting is **OpenBMC-only** and is ignored on ATEN boards. It only affects the startup `DEBUG` log, `smfc-client` and the CONST controller's redundant-write check — never the control loop, and a zone you leave out is not an error: its level is reported as `unknown` and the CONST controller writes unconditionally.
-- 🔴 **The zone map belongs to the active base fan mode, not to the board.** Selecting a base mode makes the BMC load a fan table, and that table defines how many zones exist and which fans are in each. An `x14_zone_sensors=` that is correct today becomes wrong if anyone changes the fan mode from the BMC web UI or Redfish, and `smfc` cannot detect that — it reads the mode, but the mode name does not imply the table. Re-measure the map if you change the fan mode (Part 3.5 of the guide).
+- **`smfc` discovers how many zones your board has.** At startup it probes the per-zone failsafe flag upward and stops at the first zone the board does not have, so an `ipmi_zone=` beyond that is rejected with a message naming the real count instead of failing later with a bare IPMI error.
+- **`min_level=0` is silently raised to 5%.** A manual duty write has no floor of its own: the 15% floor belongs to the BMC's automatic control, which a latched zone is no longer under, so a real 0% would leave nothing regulating the fans.
+- **A zone held at 100% by the BMC failsafe is reported.** Failsafe outranks manual mode, so while it lasts the BMC discards every duty `smfc` writes and restoring fan control cannot recover it. A fan reading 0 RPM is the usual trigger — and on a board whose fans turn slower than the BMC tacho can resolve, a healthy fan reads as 0 while running normally (Part 2 of the guide).
 
 **On the ATEN stack**, the lever is a single **global bypass flag** that suspends the BMC's automatic control loop for every zone at once. Two consequences:
 
 - 🔴 **List every zone your board has in `ipmi_zone=`.** The bypass is global, so a zone you did not configure is bypassed along with the rest and sits **frozen at its last duty with nothing regulating it** — unlike the OpenBMC stack, where an unlatched zone keeps running automatically. `smfc` cannot fix this for you: there is no reliable way to learn how many zones a board has, and driving zones you did not configure would move fans you never asked it to move.
 - **`min_level=0` is silently raised to 5%.** One of the two ATEN duty paths has no floor of its own, and `smfc` cannot tell which path a board uses, so it never writes a duty below 5% — with the BMC's thermal loop suspended by the bypass, a real 0% would leave nothing regulating the fans.
 
-Per Part 5.3 of the guide, the ATEN path is **confirmed on H14 hardware**, while the OpenBMC duty write is **not yet confirmed on any board**.
+The ATEN path is confirmed on H14 hardware. On the OpenBMC stack, verify once that a low duty holds against the automatic control loop before relying on it.
 
 If you own an X14 or H14 board and test `smfc`, please share your experience in [discussion #106](https://github.com/petersulyok/smfc/discussions/106) — your feedback is essential to stabilize this support.
 
@@ -771,19 +772,6 @@ exit_level=100
 # shutdown (one level write per zone plus the platform release) inside systemd's 90 s stop window.
 # Use 0 to wait indefinitely, which is how smfc behaved before this parameter existed.
 #ipmitool_timeout=10
-# OpenBMC X14/H14 boards only: fan sensor number of each IPMI zone (comma- or space-separated list
-# of int, decimal or 0x-prefixed hex, list index = IPMI zone, default=0x41).
-# smfc reads a zone's fan level from one representative fan of that zone. Zone 0 is FAN1 (0x41) on
-# every documented board, so the default covers single-zone boards; add one value per further zone.
-# Read the numbers off your board with `ipmitool sdr elist full | grep -i fan` (second field, e.g.
-# `41h`), or take them from doc/X14H14_MANUAL_FANCONTROL.md Part 5.1.
-# The map belongs to the base fan mode that was active when it was measured: changing the fan mode
-# from the BMC web UI or Redfish reshapes the zones, so re-measure it then (Part 3.5).
-# Ignored on ATEN X14/H14 boards and on every other platform.
-# A zone missing from the list is not an error: smfc logs its level as unknown and the CONST controller
-# writes its level unconditionally instead of skipping a redundant write. Only the reported level is
-# lost - fan control itself never depends on this setting.
-#x14_zone_sensors=0x41, 0x46
 
 
 # CPU fan controller: works based on CPU(s) temperature.

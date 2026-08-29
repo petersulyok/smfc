@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Callable, List, Optional
 import pytest
 from mock import MagicMock, call
-from smfc.platform import ControlState, FanLevelUnavailable, FanMode, IpmiError, Platform
+from smfc.platform import ControlState, FanMode, IpmiError, Platform
 from smfc.config import PlatformName
 from smfc.generic import GenericPlatform
 from smfc.genericx9 import GenericX9Platform
@@ -53,11 +53,9 @@ def _x9_set_cmd(zone: int, wire: int) -> List[str]:
 
 # The X14 zone -> fan sensor map used by the tests: zone 0 is FAN1 (0x41) on every documented board, the
 # other three are the X14DBI-SP layout (FAN6 and the lettered fans).
-X14_ZONE_SENSORS = {0: 0x41, 1: 0x46, 2: 0x47, 3: 0x48}
-
-
 def _x14_get_cmd(zone: int) -> List[str]:
-    return ["raw", "0x30", "0x70", "0x88", f"0x{X14_ZONE_SENSORS[zone]:02x}"]
+    # The duty read addresses the same 0-based zone as the write; selector 0x00 reads, 0x01 writes.
+    return ["raw", "0x30", "0x70", "0x66", "0x00", f"0x{zone:02x}"]
 
 
 def _x14_set_cmd(zone: int, wire: int) -> List[str]:
@@ -225,12 +223,10 @@ PLATFORMS: List[PlatformSpec] = [
     ),
     PlatformSpec(
         label="x14_openbmc",
-        make=lambda exec_fn: X14OpenBmcPlatform(PlatformName.GENERIC_X14, exec_fn, X14_ZONE_SENSORS),
+        make=lambda exec_fn: X14OpenBmcPlatform(PlatformName.GENERIC_X14, exec_fn),
         get_mode_values=(0, 1, 2, 4, 0x0B),
         get_level_cmd=_x14_get_cmd,
-        get_level_vectors=(
-            (0, " 64 2d", 0x64), (1, " 32 28", 0x32), (2, " 00 1e", 0x00), (3, " 4b 32", 0x4B),
-        ),
+        get_level_vectors=((0, " 64", 0x64), (1, " 32", 0x32), (2, " 00", 0x00), (3, " 4b", 0x4B)),
         bad_zones=(-1, 5),
         start_stdout=" 01",
         start_calls=_X14_START_CALLS,
@@ -600,9 +596,9 @@ class TestX14OpenBmcPlatform:
     the two-byte duty reply."""
 
     @staticmethod
-    def _platform(mock_exec: MagicMock, zone_sensors=None) -> X14OpenBmcPlatform:
+    def _platform(mock_exec: MagicMock) -> X14OpenBmcPlatform:
         """Build an X14OpenBmcPlatform around the given mock exec callback."""
-        return X14OpenBmcPlatform(PlatformName.GENERIC_X14, mock_exec, zone_sensors)
+        return X14OpenBmcPlatform(PlatformName.GENERIC_X14, mock_exec)
 
     def test_start_latch_not_confirmed(self, mock_exec: MagicMock) -> None:
         """Negative unit test for X14OpenBmcPlatform.start() method. It contains the following steps:
@@ -690,49 +686,6 @@ class TestX14OpenBmcPlatform:
                     call(_x14_set_manual_cmd(0, False)), call(_x14_set_manual_cmd(1, False))]
         assert mock_exec.call_args_list == expected
 
-    def test_get_fan_level_unmapped_zone(self, mock_exec: MagicMock) -> None:
-        """Negative unit test for X14OpenBmcPlatform.get_fan_level() method. It contains the following steps:
-        - mock the ipmitool exec callback (no BMC interaction expected)
-        - build the platform with the default zone -> fan sensor map, which only covers zone 0
-        - invoke get_fan_level() for zone 1
-        - ASSERT: get_fan_level() raises FanLevelUnavailable naming the configuration parameter that supplies
-          the map. The dedicated type is what lets callers degrade: the reading backs a redundant-write
-          optimisation and two display paths, never a control decision, so an incomplete cosmetic setting
-          must not stop fan control
-        - ASSERT: it is not an IpmiError - nothing failed and retrying will not help
-        - ASSERT: no ipmitool command is issued, because there is no sensor number to address
-        """
-        platform = self._platform(mock_exec)
-        with pytest.raises(FanLevelUnavailable) as excinfo:
-            platform.get_fan_level(1)
-        assert "x14_zone_sensors" in str(excinfo.value)
-        assert not isinstance(excinfo.value, IpmiError), "must not look like a BMC failure"
-        mock_exec.assert_not_called()
-
-    def test_get_fan_level_default_sensor(self, mock_exec: MagicMock) -> None:
-        """Positive unit test for X14OpenBmcPlatform.get_fan_level() method. It contains the following steps:
-        - mock the ipmitool exec callback to return the two-byte duty + temperature reply of FAN1
-        - build the platform without a zone -> fan sensor map, so the default applies
-        - invoke get_fan_level() for zone 0
-        - ASSERT: zone 0 is read from sensor 0x41 (FAN1), the default that is correct on every documented board
-        - ASSERT: the duty is decoded from the first reply byte as a hexadecimal percentage
-        """
-        mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=" 32 2d")
-        platform = self._platform(mock_exec)
-        assert platform.get_fan_level(0) == 50
-        mock_exec.assert_called_with(["raw", "0x30", "0x70", "0x88", "0x41"])
-
-    def test_get_fan_level_unavailable(self, mock_exec: MagicMock) -> None:
-        """Negative unit test for X14OpenBmcPlatform.get_fan_level() method. It contains the following steps:
-        - mock the ipmitool exec callback to return 0xff as the duty byte, the BMC's "value unavailable" marker
-        - build the platform and invoke get_fan_level() for zone 0
-        - ASSERT: get_fan_level() raises ValueError instead of reporting a 255% fan level
-        """
-        mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=" ff ff")
-        platform = self._platform(mock_exec)
-        with pytest.raises(ValueError):
-            platform.get_fan_level(0)
-
     def test_end_exit_level_none_still_releases(self, mock_exec: MagicMock) -> None:
         """Positive unit test for X14OpenBmcPlatform.end() method. It contains the following steps:
         - mock the ipmitool exec callback to record the sequence of issued commands
@@ -799,7 +752,7 @@ class TestX14OpenBmcBehaviour:
     @staticmethod
     def _platform(bmc: FakeOpenBmc) -> X14OpenBmcPlatform:
         """Build an X14OpenBmcPlatform driven against the modelled board."""
-        return X14OpenBmcPlatform(PlatformName.GENERIC_X14, bmc, dict(bmc.zone_sensors))
+        return X14OpenBmcPlatform(PlatformName.GENERIC_X14, bmc)
 
     def test_start_latches_exactly_the_controlled_zones(self) -> None:
         """Positive unit test for X14OpenBmcPlatform.start() method. It contains the following steps:
@@ -936,6 +889,22 @@ class TestX14OpenBmcBehaviour:
         expected = [level] * len(self.ZONES) if level >= 0 else [30] * len(self.ZONES)
         assert [bmc.duty_at_release[z] for z in self.ZONES] == expected, f"{f}: exit level in force at release"
 
+
+    def test_duty_reads_back_exactly_what_was_written(self) -> None:
+        """Positive unit test for X14OpenBmcPlatform.get_fan_level() method. It contains the following steps:
+        - build a modelled board and latch every zone
+        - write each duty in turn and read it straight back
+        - ASSERT: every duty reads back as the exact value written, including ones that are not multiples of
+          20. The read addresses the same 0-based zone as the write, so nothing is converted on the way and
+          the redundant-write check of the CONST controller matches instead of rewriting on every poll
+        """
+        f = "TestX14OpenBmcBehaviour.test_duty_reads_back_exactly_what_was_written"
+        bmc = FakeOpenBmc()
+        platform = self._platform(bmc)
+        platform.start([0])
+        for level in (7, 33, 50, 67, 99, 100):
+            platform.set_fan_level(0, level)
+            assert platform.get_fan_level(0) == level, f"{f}: {level}% round-trip"
 
     def test_start_rejects_a_zone_the_board_does_not_have(self) -> None:
         """Negative unit test for X14OpenBmcPlatform.start() method. It contains the following steps:

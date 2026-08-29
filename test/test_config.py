@@ -36,50 +36,6 @@ class TestConfigStaticMethods:
     @pytest.mark.parametrize(
         "input_str, expected",
         [
-            pytest.param("0x41", {0: 0x41}, id="single-hex"),
-            pytest.param("65", {0: 65}, id="single-decimal"),
-            pytest.param("0x41,0x46", {0: 0x41, 1: 0x46}, id="comma-no-space"),
-            pytest.param("0x41, 0x46", {0: 0x41, 1: 0x46}, id="comma-with-space"),
-            pytest.param("0x41 0x46", {0: 0x41, 1: 0x46}, id="space-separated"),
-            pytest.param("  0x41  0x46  0x47  ", {0: 0x41, 1: 0x46, 2: 0x47}, id="extra-whitespace"),
-            pytest.param("0x41 0x44 0x45 0x46", {0: 0x41, 1: 0x44, 2: 0x45, 3: 0x46}, id="four-zones"),
-            pytest.param("", {}, id="empty-string"),
-        ],
-    )
-    def test_parse_x14_zone_sensors_valid(self, input_str: str, expected: Dict[int, int]):
-        """Positive unit test for Config.parse_x14_zone_sensors() method. It contains the following steps:
-        - no external mocks
-        - call Config.parse_x14_zone_sensors() with a valid sensor string (hexadecimal, decimal, comma, space
-          and whitespace variants)
-        - ASSERT: parse_x14_zone_sensors returns a map whose keys are the IPMI zones in list order, so the
-          first value belongs to zone 0
-        - ASSERT: an empty string yields an empty map, i.e. no zone can be read back
-        """
-        assert Config.parse_x14_zone_sensors(input_str) == expected
-
-    @pytest.mark.parametrize(
-        "input_str",
-        [
-            pytest.param("-1", id="negative"),
-            pytest.param("256", id="over-255"),
-            pytest.param("0x100", id="over-255-hex"),
-            pytest.param("fan1", id="non-numeric"),
-            pytest.param("0x41, fan2", id="mixed-valid-invalid"),
-        ],
-    )
-    def test_parse_x14_zone_sensors_invalid(self, input_str: str):
-        """Negative unit test for Config.parse_x14_zone_sensors() method. It contains the following steps:
-        - no external mocks
-        - call Config.parse_x14_zone_sensors() with a non-numeric value or one outside the IPMI sensor number
-          range (a byte)
-        - ASSERT: parse_x14_zone_sensors raises ValueError for invalid input
-        """
-        with pytest.raises(ValueError):
-            Config.parse_x14_zone_sensors(input_str)
-
-    @pytest.mark.parametrize(
-        "input_str, expected",
-        [
             pytest.param("0", [0], id="single-zone-0"),
             pytest.param("1", [1], id="single-zone-1"),
             pytest.param("0, 1", [0, 1], id="comma-with-space"),
@@ -435,11 +391,8 @@ class TestIpmiConfigParsing:
         - ASSERT: ipmi.platform_name equals Config.DV_IPMI_PLATFORM_NAME
         - ASSERT: ipmi.enforce_fan_mode equals Config.DV_IPMI_ENFORCE_FAN_MODE
         - ASSERT: ipmi.exit_level equals Config.DV_IPMI_EXIT_LEVEL
-        - ASSERT: ipmi.x14_zone_sensors maps zone 0 to 0x41 (FAN1), the default that holds on every documented
-          X14 board
         """
         cfg = create_config("[Ipmi]\n")
-        assert cfg.ipmi.x14_zone_sensors == {0: 0x41}
         assert cfg.ipmi.exit_level == Config.DV_IPMI_EXIT_LEVEL
         assert cfg.ipmi.command == Config.DV_IPMI_COMMAND
         assert cfg.ipmi.fan_mode_delay == Config.DV_IPMI_FAN_MODE_DELAY
@@ -581,43 +534,6 @@ exit_level = 60
         """
         with pytest.raises(ValueError):
             create_config(f"[Ipmi]\nexit_level = {value}\n")
-
-    @pytest.mark.parametrize(
-        "value, expected",
-        [
-            pytest.param("0x41", {0: 0x41}, id="single-hex"),
-            pytest.param("0x41, 0x46", {0: 0x41, 1: 0x46}, id="two-zones-comma"),
-            pytest.param("0x41 0x47 0x48 0x49", {0: 0x41, 1: 0x47, 2: 0x48, 3: 0x49}, id="four-zones-space"),
-            pytest.param("65 70", {0: 65, 1: 70}, id="decimal"),
-        ],
-    )
-    def test_ipmi_x14_zone_sensors_parsing(self, create_config, value: str, expected: Dict[int, int]):
-        """Positive unit test for the [Ipmi] section parser inside Config.__init__(). It contains the steps:
-        - mock the on-disk config via the create_config fixture (tmp_path-backed)
-        - write [Ipmi] with x14_zone_sensors = <accepted value> and instantiate Config
-        - inspect ipmi.x14_zone_sensors
-        - ASSERT: the list index becomes the IPMI zone, so the first sensor number belongs to zone 0
-        - ASSERT: both hexadecimal and decimal sensor numbers are accepted, with comma or space separators
-        """
-        cfg = create_config(f"[Ipmi]\nx14_zone_sensors = {value}\n")
-        assert cfg.ipmi.x14_zone_sensors == expected
-
-    @pytest.mark.parametrize(
-        "value",
-        [
-            pytest.param("256", id="above-byte-range"),
-            pytest.param("0x41, 0x1ff", id="second-above-byte-range"),
-            pytest.param("FAN1", id="not-a-number"),
-        ],
-    )
-    def test_ipmi_x14_zone_sensors_invalid(self, create_config, value: str):
-        """Negative unit test for the [Ipmi] section parser inside Config.__init__(). It contains the steps:
-        - mock the on-disk config via the create_config fixture (tmp_path-backed)
-        - write [Ipmi] with x14_zone_sensors = <rejected value> and call Config()
-        - ASSERT: ValueError is raised for a value outside the IPMI sensor number range and for a fan name
-        """
-        with pytest.raises(ValueError):
-            create_config(f"[Ipmi]\nx14_zone_sensors = {value}\n")
 
     @pytest.mark.parametrize(
         "param, value",
