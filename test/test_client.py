@@ -16,6 +16,9 @@ from smfc.client import (
     EXIT_IPMI_ERROR,
     EXIT_UDEV_ERROR,
 )
+from smfc.config import PlatformName
+from smfc.genericx14 import X14OpenBmcPlatform
+from .test_fixtures import FakeOpenBmc
 
 
 def _make_offline_cfg() -> MagicMock:
@@ -439,26 +442,84 @@ class TestFormatReport:
         assert "not in FULL mode" in out
         assert "ERROR" not in out
 
-    def test_fan_mode_is_manual_control_on_x14(self) -> None:
+    @staticmethod
+    def _x14_ipmi(bmc: FakeOpenBmc) -> MagicMock:
+        """Build a fake Ipmi whose platform is a real X14OpenBmcPlatform driven against a modelled board."""
+        ipmi = _make_fake_ipmi()
+        ipmi.platform = X14OpenBmcPlatform(PlatformName.GENERIC_X14, bmc)
+        ipmi.get_fan_mode.side_effect = ipmi.platform.get_fan_mode
+        ipmi.get_fan_level.side_effect = ipmi.platform.get_fan_level
+        return ipmi
+
+    def test_fan_mode_is_manual_control_when_the_latch_is_held(self) -> None:
         """Positive unit test for smfc.client._format_report() function. It contains the following steps:
-        - build a fake Ipmi MagicMock with fan_mode_value=0 (STANDARD) whose platform reports
-          ENFORCES_FULL_MODE=False, i.e. an X14/H14 board that is not driven through a fan mode
+        - drive a real X14OpenBmcPlatform against a modelled board and latch the configured zone
         - call _format_report() with use_color=False
         - ASSERT: the fan mode line reads 'manual control', naming how the board is actually driven
-        - ASSERT: the base fan mode name is not printed. smfc never sets it there, so showing it invites
-          the reader to judge fan control by a value that has nothing to do with it
+        - ASSERT: the base fan mode name is not printed. While the latch is held the fans do not follow
+          that curve, so reporting it would invite the reader to judge fan control by an unrelated value
         - ASSERT: the 'not in FULL mode' warning is absent
-        - ASSERT: the BMC is not asked for the fan mode at all, since it is not reported
         """
-        ipmi = _make_fake_ipmi(fan_mode_value=0)
-        ipmi.platform.ENFORCES_FULL_MODE = False
-        cpu = _make_fake_cpu_controller()
-        entries = [("CPU", "cpu", cpu, None)]
-        out = client._format_report(ipmi, entries, "x.conf", use_color=False)
+        bmc = FakeOpenBmc(fan_mode=0)
+        ipmi = self._x14_ipmi(bmc)
+        ipmi.platform.start([0])
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", use_color=False)
         assert "Fan mode      : manual control" in out
         assert "STANDARD" not in out
         assert "not in FULL mode" not in out
-        ipmi.get_fan_mode.assert_not_called()
+
+    def test_fan_mode_shows_the_base_mode_when_the_latch_is_not_held(self) -> None:
+        """Positive unit test for smfc.client._format_report() function. It contains the following steps:
+        - drive a real X14OpenBmcPlatform against a modelled board whose base fan mode is STANDARD, and
+          latch nothing - the state smfc-client finds when smfc is not running
+        - call _format_report() with use_color=False
+        - ASSERT: the base fan mode is reported, because with no latch the BMC's own curve is what the
+          fans are actually following, so that value is the honest answer here
+        - ASSERT: the line does not claim manual control, which nothing is holding
+        """
+        bmc = FakeOpenBmc(fan_mode=0)
+        ipmi = self._x14_ipmi(bmc)
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", use_color=False)
+        assert "Fan mode      : STANDARD (0)" in out
+        assert "manual control" not in out
+
+    def test_fan_mode_names_the_zones_left_on_the_bmc_curve(self) -> None:
+        """Negative unit test for smfc.client._format_report() function. It contains the following steps:
+        - drive a real X14OpenBmcPlatform against a modelled board, latch zone 0 and clear zone 1 on the
+          board, i.e. a half-taken-over board of the kind an unclean smfc stop leaves behind
+        - call _format_report() with use_color=False, with controllers configured for zones 0 and 1
+        - ASSERT: the line still reads 'manual control', because one configured zone is held
+        - ASSERT: it names the zone that is not, so a partly released board is visible rather than
+          reported as if smfc owned every zone
+        """
+        bmc = FakeOpenBmc(fan_mode=0)
+        ipmi = self._x14_ipmi(bmc)
+        ipmi.platform.start([0, 1])
+        bmc.manual[1] = False
+        entries = [("CPU", "cpu", _make_fake_cpu_controller(zones=[0]), None),
+                   ("HD", "hd", _make_fake_cpu_controller(zones=[1]), None)]
+        out = client._format_report(ipmi, entries, "x.conf", use_color=False)
+        assert "Fan mode      : manual control" in out
+        assert "zone(s) 1 on the BMC curve" in out
+
+    def test_fan_mode_says_so_when_the_control_state_cannot_be_read(self) -> None:
+        """Negative unit test for smfc.client._format_report() function. It contains the following steps:
+        - build a fake Ipmi whose platform reports ENFORCES_FULL_MODE=False but exposes no readable
+          manual mode flag, as the ATEN stack does - its bypass flag is write-only
+        - call _format_report() with use_color=False
+        - ASSERT: the base fan mode is reported rather than a claim about control
+        - ASSERT: the line says the control state is not readable, so the missing answer is visible
+          instead of being silently replaced by a guess
+        """
+        ipmi = _make_fake_ipmi(fan_mode_value=0)
+        ipmi.platform = MagicMock(spec=["name", "ENFORCES_FULL_MODE"])
+        ipmi.platform.ENFORCES_FULL_MODE = False
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", use_color=False)
+        assert "Fan mode      : STANDARD (0)" in out
+        assert "control state is not readable on this BMC" in out
 
     def test_zones_table_unions_zones(self) -> None:
         """Positive unit test for smfc.client._format_report() function. It contains the following steps:

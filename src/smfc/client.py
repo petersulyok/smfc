@@ -394,6 +394,75 @@ def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_co
     return lines
 
 
+def _configured_zones(entries: List[ControllerEntry]) -> List[int]:
+    """The sorted union of IPMI zones across the controllers that were constructed.
+    Args:
+        entries (List[ControllerEntry]): controllers
+    Returns:
+        List[int]: sorted, de-duplicated IPMI zone IDs
+    """
+    zones: List[int] = []
+    for _section, _type_label, controller, _error in entries:
+        if controller is None:
+            continue
+        for z in controller.config.ipmi_zone:
+            if z not in zones:
+                zones.append(z)
+    return sorted(zones)
+
+
+def _format_manual_fan_mode(ipmi: Ipmi, entries: List[ControllerEntry], use_color: bool) -> str:
+    """Format the fan mode line of a platform that is not driven through FULL fan mode (X14/H14).
+
+    `smfc` may not be running when this path executes, and on these boards the fans are then on the base
+    fan mode's curve - so the base mode is the honest answer whenever the control state is not held, and
+    the label is the honest answer only when it is. Which of the two applies has to be read, not assumed.
+
+    The OpenBMC stack answers that directly: its per-zone manual mode flag is readable without a running
+    service. The ATEN stack cannot - its global bypass flag is write-only - so there the base fan mode is
+    reported with a note saying the control state is not knowable from outside.
+    Args:
+        ipmi (Ipmi): Ipmi instance
+        entries (List[ControllerEntry]): controllers, for the zones to inspect
+        use_color (bool): whether to emit ANSI colors
+    Returns:
+        str: the text after "Fan mode      : "
+    """
+    get_manual = getattr(ipmi.platform, "_get_manual_mode", None)
+    zones = _configured_zones(entries) or [0]
+    if get_manual is None:
+        note = _wrap("  (control state is not readable on this BMC)", DIM, use_color)
+        return f"{_safe_fan_mode(ipmi, use_color)}{note}"
+    try:
+        held = [z for z in zones if get_manual(z)]
+    except Exception as e:  # pylint: disable=broad-except
+        return _wrap(f"ERROR: {e}", RED, use_color)
+    if not held:
+        # Nothing is latched, so the BMC's own curve is driving every configured zone: the base fan mode
+        # is what the fans are actually following.
+        return _safe_fan_mode(ipmi, use_color)
+    loose = [z for z in zones if z not in held]
+    if loose:
+        detail = _wrap(f"  (zone(s) {', '.join(str(z) for z in loose)} on the BMC curve)", RED, use_color)
+        return f"{FAN_MODE_MANUAL}{detail}"
+    return FAN_MODE_MANUAL
+
+
+def _safe_fan_mode(ipmi: Ipmi, use_color: bool) -> str:
+    """Read the base fan mode and format it as `NAME (id)`, or an ERROR cell if it cannot be read.
+    Args:
+        ipmi (Ipmi): Ipmi instance
+        use_color (bool): whether to emit ANSI colors
+    Returns:
+        str: the formatted mode, or an error string
+    """
+    try:
+        mode = ipmi.get_fan_mode()
+    except Exception as e:  # pylint: disable=broad-except
+        return _wrap(f"ERROR: {e}", RED, use_color)
+    return f"{Ipmi.get_fan_mode_name(mode)} ({mode})"
+
+
 def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: bool) -> List[str]:
     """Format the live IPMI zone level table (union of zones across enabled controllers).
     Args:
@@ -404,16 +473,9 @@ def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: b
         List[str]: list of output lines
     """
     lines: List[str] = []
-    zones: List[int] = []
-    for _section, _type_label, controller, _error in entries:
-        if controller is None:
-            continue
-        for z in controller.config.ipmi_zone:
-            if z not in zones:
-                zones.append(z)
+    zones = _configured_zones(entries)
     if not zones:
         return lines
-    zones.sort()
     # Dash widths: max(header_word, longest_value_in_column). Zone IDs are 1-2 digits in
     # practice; Level cells are ' NN %' (5 chars) or 'ERROR' (5 chars).
     level_strs = [_safe_zone_level(ipmi, z) for z in zones]
@@ -586,9 +648,7 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
         lines.append(f"  Platform      : {type(ipmi.platform).__name__}")
     # Fan mode (live read) closes the BMC block.
     if not ipmi.platform.ENFORCES_FULL_MODE:
-        # X14/H14 boards are not driven through a fan mode: smfc holds an explicit BMC fan control state
-        # and leaves the base fan mode alone, so the mode value says nothing about who owns the fans.
-        lines.append(f"  Fan mode      : {FAN_MODE_MANUAL}")
+        lines.append(f"  Fan mode      : {_format_manual_fan_mode(ipmi, entries, use_color)}")
     else:
         try:
             mode = ipmi.get_fan_mode()
