@@ -205,12 +205,14 @@ def check(name: str, scn: Scenario, duration: int) -> tuple:
         # The probe of Part 1.1 must run before anything else, and must select the OpenBMC class.
         if "X14OpenBmcPlatform" not in log:                   problems.append("x14-openbmc-not-detected")
         # The CONST controller drives zone 3 at a fixed 50%, so the duty write is exact and 0-based.
-        if "0x30 0x70 0x66 0x00 0x03 0x32" not in log:        problems.append("x14-set-bytes-missing")
-        # OpenBMC start() must latch manual mode per zone via the 0x2c 0x04 0xcf 0xc2 OEM cmd, with the
+        # Selector 0x01 writes the duty; 0x00 is the read, and a duty write sent with it changes nothing.
+        if "0x30 0x70 0x66 0x01 0x03 0x32" not in log:        problems.append("x14-set-bytes-missing")
+        if "0x30 0x70 0x66 0x00 0x03 0x32" in log:            problems.append("x14-set-uses-read-selector")
+        # OpenBMC start() must latch manual mode per zone via the 0x2e 0x04 0xcf 0xc2 OEM cmd, with the
         # 1-based zone byte (zone 0 -> 0x01), and confirm it with the op 0x00 read-back.
-        if "0x2c 0x04 0xcf 0xc2 0x00 0x01 0x01 0x01" not in log:
+        if "0x2e 0x04 0xcf 0xc2 0x00 0x01 0x01 0x01" not in log:
             problems.append("x14-manual-mode-missing")
-        if "0x2c 0x04 0xcf 0xc2 0x00 0x00 0x01" not in log:   problems.append("x14-manual-readback-missing")
+        if "0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01" not in log:   problems.append("x14-manual-readback-missing")
         # The base fan mode must never be written on X14: it would clear manual mode on every zone.
         if "0x30 0x45 0x01" in log:                           problems.append("x14-fan-mode-written")
         # The latch must be released at exit, whatever the exit level: a latch that is never released

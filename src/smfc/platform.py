@@ -31,8 +31,8 @@ class IpmiError(RuntimeError):
     unchanged. The completion code is what separates a command the BMC *rejected* (e.g. 0xC1 - this
     command does not exist on this BMC stack) from an unreachable BMC, a wedged `/dev/ipmi0` or a
     `sudo` problem, all of which are otherwise indistinguishable by exception type. The X14/H14 stack
-    probe depends on that distinction: only `rsp=0xc1` means ATEN, and guessing moves fans
-    (see `doc/X14H14_MANUAL_FANCONTROL.md`, Part 1.3).
+    probe depends on that distinction: only `rsp=0xc1` means ATEN, and a wrong stack applies the wrong
+    lever to the fans (see `doc/X14H14_MANUAL_FANCONTROL.md`, Part 1.3).
     """
 
     completion_code: Optional[int]   # IPMI completion code, None when ipmitool failed for another reason

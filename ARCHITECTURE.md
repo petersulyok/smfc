@@ -288,7 +288,7 @@ flowchart TD
     C --> F[create_platform name]
     D --> F
     F --> K{GENERIC_X14, or name<br/>startswith X14 / H14?}
-    K -- yes --> P["probe BMC:<br/>raw 0x2c 0x04 0xcf 0xc2 0x00 0x00 0x01"]
+    K -- yes --> P["probe BMC:<br/>raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01"]
     P -- data byte --> XOB[X14OpenBmcPlatform]
     P -- rsp=0xc1 --> XAT[X14AtenPlatform]
     P -- anything else --> ERR([fatal: stack undetermined])
@@ -348,7 +348,7 @@ encodings:
 |------------------------|-------------------------------------------------|----------------------------------------------------------|
 | `GenericPlatform`      | `raw 0x30 0x70 0x66 0x01 zone level`            | Level in %, 0x00–0x64                                    |
 | `GenericX9Platform`    | `raw 0x30 0x91 0x5a 0x03 reg duty`              | Zone → reg (0x10+zone), level × 255/100                  |
-| `X14OpenBmcPlatform`   | `raw 0x30 0x70 0x66 0x00 zone level`            | Level in %, 0x00–0x64; per-zone manual mode via OEM `0x2c 0x04 0xcf 0xc2` (see [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md), Part 3) |
+| `X14OpenBmcPlatform`   | `raw 0x30 0x70 0x66 0x01 zone level`            | Level in %, 0x00–0x64; per-zone manual mode via OEM `0x2e 0x04 0xcf 0xc2` (see [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md), Part 3) |
 | `X14AtenPlatform`      | `raw 0x30 0x70 0x66 0x01 zone level`            | Inherited from `GenericPlatform` unchanged — ATEN *is* the X9–X13 firmware line — but clamped to ≥ 5%; the lever is the global bypass flag `0x30 0x70 0x66 0x02 0x01` (Part 4) |
 | `X10QBi`               | `raw 0x30 0x91 0x5c 0x03 reg duty` + TMFR setup| Nuvoton NCT7904D, zone → 0x10+zone, level × 255/100      |
 
@@ -388,7 +388,7 @@ shutdown via `Service.exit_func()`:
   FULL fan mode only if the BMC is not in FULL already; `end()` writes the exit level.
 - `X14OpenBmcPlatform`: an outlier (`ENFORCES_FULL_MODE = False`). Being in control
   means per-zone *manual mode* is latched, so `start()` latches it in the controlled
-  zones via OEM command `0x2c 0x04 0xcf 0xc2` and reads the flag back, raising if a
+  zones via OEM command `0x2e 0x04 0xcf 0xc2` and reads the flag back, raising if a
   zone does not confirm. It never writes the base fan mode — that would clear manual
   mode on every zone, and the base mode is only the fallback curve. `end()` applies
   the exit level and then releases manual mode, restoring automatic BMC fan control.

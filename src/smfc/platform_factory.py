@@ -15,7 +15,7 @@ from smfc.x10qbi import X10QBi
 
 # Part 1.1 of `doc/X14H14_MANUAL_FANCONTROL.md`: read the manual-mode flag of zone 1. This is the only
 # command that is safe to send to an X14/H14 board whose firmware stack is unknown - it changes nothing.
-X14_STACK_PROBE: List[str] = ["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", "0x00", "0x01"]
+X14_STACK_PROBE: List[str] = ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x00", "0x01"]
 CC_INVALID_COMMAND: int = 0xC1      # The OEM manual-mode command does not exist -> ATEN firmware
 STACK_PROBE_DOC: str = "doc/X14H14_MANUAL_FANCONTROL.md, Part 1"
 
@@ -29,11 +29,11 @@ def _create_x14_platform(platform_name: str, exec_ipmitool: Callable[[List[str]]
     boards `X14SDW`/`X14SDV` run ATEN. The BMC product name therefore cannot decide which command set
     applies, and a runtime probe must.
 
-    There is deliberately no "try one, fall back to the other" branch. Part 1.3: `0x30 0x70 0x66 0x00 <zone>`
-    is a duty *read* on ATEN and a *truncated duty write* on OpenBMC, and the OpenBMC handler accepts payloads
-    of two or three bytes, so the short form is not caught by a length check - it executes as a duty write
-    with no duty value. Guessing the stack does not return an error, it moves fans. Only completion code 0xC1
-    means ATEN; every other failure is fatal.
+    There is deliberately no "try one, fall back to the other" branch. Part 1.3: the two stacks share the
+    `0x30 0x70 0x66` layout - selector 0x00 reads a duty, 0x01 writes one - but selector 0x02 means per-zone
+    manual mode on OpenBMC and a global bypass flag on ATEN. A fallback would therefore be accepted by the
+    board and apply the wrong lever, taking over every zone where only one was meant, or none at all. Only
+    completion code 0xC1 means ATEN; every other failure is fatal.
     Args:
         platform_name (str): the platform name (configuration value or BMC product name)
         exec_ipmitool (Callable): function that executes ipmitool commands
@@ -50,9 +50,11 @@ def _create_x14_platform(platform_name: str, exec_ipmitool: Callable[[List[str]]
         if e.completion_code == CC_INVALID_COMMAND:
             return X14AtenPlatform(platform_name, exec_ipmitool)
         raise RuntimeError(f"Cannot determine the BMC fan control stack (see {STACK_PROBE_DOC}): {e}") from e
-    # A reply the probe cannot interpret is not evidence of either stack, so it must not be guessed away.
+    # The reply echoes the IANA ID of the OEM command back before the payload (`cf c2 00 <flag>`), so the
+    # flag is the last byte. A reply the probe cannot interpret is not evidence of either stack, so it must
+    # not be guessed away.
     try:
-        flag = int(r.stdout.split()[0], 16)
+        flag = int(r.stdout.split()[-1], 16)
     except (IndexError, ValueError) as e:
         raise RuntimeError(f"Cannot determine the BMC fan control stack (see {STACK_PROBE_DOC}): the manual "
                            f"fan mode flag could not be parsed from '{r.stdout.strip()}'.") from e

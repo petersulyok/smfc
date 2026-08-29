@@ -828,7 +828,7 @@ class TestIpmi:
         assert sdr_calls == expected_sdr_calls
 
     @pytest.mark.parametrize("stderr, expected", [
-        pytest.param("Unable to send RAW command (channel=0x0 netfn=0x2c lun=0x0 cmd=0x4 rsp=0xc1): "
+        pytest.param("Unable to send RAW command (channel=0x0 netfn=0x2e lun=0x0 cmd=0x4 rsp=0xc1): "
                      "Invalid command", 0xC1, id="0xc1-invalid-command"),
         pytest.param("Unable to send RAW command (channel=0x0 netfn=0x30 lun=0x0 cmd=0x70 rsp=0xd4): "
                      "Insufficient privilege level", 0xD4, id="0xd4-lockdown"),
@@ -854,20 +854,20 @@ class TestIpmi:
     def test_exec_ipmitool_carries_the_completion_code(self, mocker: MockerFixture) -> None:
         """Negative unit test for Ipmi._exec_ipmitool() method. It contains the following steps:
         - mock subprocess.run to fail with an ipmitool error line carrying `rsp=0xc1`
-        - build a bare Ipmi and call Ipmi._exec_ipmitool(["raw", "0x2c"]) inside pytest.raises
+        - build a bare Ipmi and call Ipmi._exec_ipmitool(["raw", "0x2e"]) inside pytest.raises
         - ASSERT: the raised IpmiError carries the parsed completion code, so callers can distinguish a
           rejected command from an unreachable BMC without matching the error message text - matching text
           would leave a latent trap, since a change to the wording would silently turn a fatal condition into
           a wrong-stack guess
         """
         f = "TestIpmi.test_exec_ipmitool_carries_the_completion_code"
-        stderr = "Unable to send RAW command (channel=0x0 netfn=0x2c lun=0x0 cmd=0x4 rsp=0xc1): Invalid command"
+        stderr = "Unable to send RAW command (channel=0x0 netfn=0x2e lun=0x0 cmd=0x4 rsp=0xc1): Invalid command"
         mocker.patch("subprocess.run", MagicMock(return_value=subprocess.CompletedProcess([], 1, stderr=stderr)))
         my_ipmi = Ipmi.__new__(Ipmi)
         my_ipmi.config = create_ipmi_config(command="")
         my_ipmi.sudo = False
         with pytest.raises(IpmiError) as cm:
-            my_ipmi._exec_ipmitool(["raw", "0x2c"])
+            my_ipmi._exec_ipmitool(["raw", "0x2e"])
         assert cm.value.completion_code == 0xC1, f"{f}: completion code"
 
     @pytest.mark.parametrize("timeout", [10, 0], ids=["timeout-10s", "timeout-disabled"])

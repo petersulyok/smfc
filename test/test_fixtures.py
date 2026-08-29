@@ -173,10 +173,12 @@ class TestData:
         return self.create_command_file(f"""
 # ipmitool emulation
 
-# State file emulating the X14 per-zone manual mode latch (see the 0x2c 0x04 branch below).
+# State file emulating the X14 per-zone manual mode latch (see the 0x2e 0x04 branch below).
 MANUAL_FLAG_FILE="${{BASH_SOURCE[0]}}.x14manual"
 # State file emulating the ATEN per-zone duty register (see the 0x30 0x70 0x66 branches below).
 ATEN_DUTY_FILE="${{BASH_SOURCE[0]}}.atenduty"
+# State file emulating the OpenBMC per-zone duty register (see the 0x30 0x70 0x66 branches below).
+OPENBMC_DUTY_FILE="${{BASH_SOURCE[0]}}.openbmcduty"
 # Which of the two 14th generation BMC firmware stacks this fake BMC is: 'openbmc', 'aten' or unset
 # (the historical, stack-agnostic behaviour every non-X14 test relies on).
 BMC_STACK="${{SMFC_TEST_BMC_STACK:-{bmc_stack}}}"
@@ -235,10 +237,17 @@ if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x45" && $4 = "0x01" ]] ; then
 	exit 0
 fi
 
-# raw 0x30 0x70 0x66 0x00 <zone> [<level>] — the opcode whose meaning depends on the stack (Part 1.3):
-# a duty write on OpenBMC (which accepts both the two- and the three-byte payload), a duty read on ATEN.
+# raw 0x30 0x70 0x66 0x00 <zone> — a duty read on both stacks (Part 1.3). A trailing duty byte is ignored,
+# so a caller that mistakes this for the write selector changes nothing.
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x00" ]] ; then
 	if [[ "$BMC_STACK" = "openbmc" ]] ; then
+		zone=$(( $6 ))
+		duty=50
+		if [[ -f "$OPENBMC_DUTY_FILE" ]] ; then
+			stored=$(grep "^${{zone}}=" "$OPENBMC_DUTY_FILE" | tail -1 | cut -d= -f2)
+			if [[ -n "$stored" ]] ; then duty=$stored ; fi
+		fi
+		printf " %02x\\n" "$duty"
 		exit 0
 	fi
 	if [[ "$BMC_STACK" = "aten" ]] ; then
@@ -268,6 +277,9 @@ if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x01" ]] 
 	if [[ "$BMC_STACK" = "aten" ]] ; then
 		echo "$(( $6 ))=$(( $7 ))" >> "$ATEN_DUTY_FILE"
 	fi
+	if [[ "$BMC_STACK" = "openbmc" ]] ; then
+		echo "$(( $6 ))=$(( $7 ))" >> "$OPENBMC_DUTY_FILE"
+	fi
 	exit 0
 fi
 
@@ -277,29 +289,30 @@ if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x88" ]] ; then
 	exit 0
 fi
 
-# X14 manual/failsafe OEM command (raw 0x2c 0x04 0xcf 0xc2 0x00 <op> <zone> [<value>]):
-# op 0x00 reads the manual mode flag, 0x01 writes it, 0x02 reads the failsafe flag.
+# X14 manual/failsafe OEM command (raw 0x2e 0x04 0xcf 0xc2 0x00 <op> <zone> [<value>]):
+# op 0x00 reads the manual mode flag, 0x01 writes it, 0x02 reads the failsafe flag. Every reply echoes the
+# IANA ID of the command back before the payload, so it reads `cf c2 00 <flag>`.
 # This whole command set is what the ATEN stack does not have: it answers 0xC1, which is the Part 1.1
 # stack probe. The manual mode flag reads back as latched right after a write and randomly loses the
 # latch otherwise, emulating the BMC restart / firmware update that clears it on real hardware.
-if [[ $1 = "raw" && $2 = "0x2c" && $3 = "0x04" && $4 = "0xcf" && $5 = "0xc2" ]] ; then
+if [[ $1 = "raw" && $2 = "0x2e" && $3 = "0x04" && $4 = "0xcf" && $5 = "0xc2" ]] ; then
 	if [[ "$BMC_STACK" = "aten" ]] ; then
-		echo "Unable to send RAW command (channel=0x0 netfn=0x2c lun=0x0 cmd=0x4 rsp=0xc1): Invalid command" >&2
+		echo "Unable to send RAW command (channel=0x0 netfn=0x2e lun=0x0 cmd=0x4 rsp=0xc1): Invalid command" >&2
 		exit 1
 	fi
 	if [[ $7 = "0x00" ]] ; then
 		if [[ -f "$MANUAL_FLAG_FILE" ]] ; then
 			rm -f "$MANUAL_FLAG_FILE"
-			echo " 01"
+			echo " cf c2 00 01"
 		elif [[ $((RANDOM % 4)) -eq 0 ]] ; then
-			echo " 00"
+			echo " cf c2 00 00"
 		else
-			echo " 01"
+			echo " cf c2 00 01"
 		fi
 	elif [[ $7 = "0x01" ]] ; then
 		touch "$MANUAL_FLAG_FILE"
 	elif [[ $7 = "0x02" ]] ; then
-		echo " 00"
+		echo " cf c2 00 00"
 	fi
 	exit 0
 fi

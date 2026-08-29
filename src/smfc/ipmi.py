@@ -14,7 +14,7 @@ from smfc.config import IpmiConfig, Config, PlatformName
 
 
 # `ipmitool` reports the IPMI completion code of a rejected command in its failure line, e.g.
-# `Unable to send RAW command (channel=0x0 netfn=0x2c lun=0x0 cmd=0x4 rsp=0xc1): Invalid command`.
+# `Unable to send RAW command (channel=0x0 netfn=0x2e lun=0x0 cmd=0x4 rsp=0xc1): Invalid command`.
 RSP_CODE_RE = re.compile(r"rsp=0x([0-9a-fA-F]{1,2})")
 
 
@@ -23,7 +23,7 @@ def parse_completion_code(stderr: str) -> Optional[int]:
 
     Parsed in exactly one place: matching the message text at the call sites would work too, but it
     leaves a latent trap - a future change to the wording would silently turn a fatal condition into a
-    wrong-stack guess, and on X14/H14 a wrong-stack guess moves fans instead of returning an error
+    wrong-stack guess, and on X14/H14 the wrong stack applies the wrong lever to the fans
     (see `doc/X14H14_MANUAL_FANCONTROL.md`, Part 1.3).
     Args:
         stderr (str): stderr of the failed `ipmitool` command

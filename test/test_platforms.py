@@ -60,17 +60,17 @@ def _x14_get_cmd(zone: int) -> List[str]:
 
 
 def _x14_set_cmd(zone: int, wire: int) -> List[str]:
-    # Duty commands address zones 0-based.
-    return ["raw", "0x30", "0x70", "0x66", "0x00", f"0x{zone:02x}", f"0x{wire:02x}"]
+    # Duty commands address zones 0-based; selector 0x01 writes a duty, 0x00 reads one.
+    return ["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{wire:02x}"]
 
 
 def _x14_set_manual_cmd(zone: int, enabled: bool) -> List[str]:
     # Manual mode commands address zones 1-based.
-    return ["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", "0x01", f"0x{zone + 1:02x}", "0x01" if enabled else "0x00"]
+    return ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x01", f"0x{zone + 1:02x}", "0x01" if enabled else "0x00"]
 
 
 def _x14_get_manual_cmd(zone: int) -> List[str]:
-    return ["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", "0x00", f"0x{zone + 1:02x}"]
+    return ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x00", f"0x{zone + 1:02x}"]
 
 
 def _x10qbi_get_cmd(zone: int) -> List[str]:
@@ -210,7 +210,7 @@ PLATFORMS: List[PlatformSpec] = [
         get_level_vectors=(
             (0, " 64 2d", 0x64), (1, " 32 28", 0x32), (2, " 00 1e", 0x00), (3, " 4b 32", 0x4B),
         ),
-        bad_zones=(-1, 4),
+        bad_zones=(-1, 5),
         start_stdout=" 01",
         start_calls=_X14_START_CALLS,
         start_returns=False,
@@ -223,11 +223,11 @@ PLATFORMS: List[PlatformSpec] = [
         set_mode_invalid=(-1, 0x0C, 100),
         set_level_cmd=_x14_set_cmd,
         set_level_extra_calls=0,
-        set_level_vectors=((0, 100, 100), (1, 50, 50), (2, 0, 0), (3, 75, 75)),
-        bad_levels=((-1, 50), (4, 50), (0, -1), (0, 101)),
+        set_level_vectors=((0, 100, 100), (1, 50, 50), (2, 0, 0), (3, 75, 75), (4, 40, 40)),
+        bad_levels=((-1, 50), (5, 50), (0, -1), (0, 101)),
         multi_extra_calls=0,
-        multi_vectors=(([0, 1], 100, 100), ([0, 1, 2], 50, 50), ([2], 0, 0), ([0, 3], 75, 75)),
-        multi_bad=(([-1, 0], 50), ([0, 4], 50), ([0], -1), ([0], 101)),
+        multi_vectors=(([0, 1], 100, 100), ([0, 1, 2], 50, 50), ([2], 0, 0), ([0, 3], 75, 75), ([0, 4], 60, 60)),
+        multi_bad=(([-1, 0], 50), ([0, 5], 50), ([0], -1), ([0], 101)),
     ),
     PlatformSpec(
         # The ATEN duty commands are byte-for-byte GenericPlatform's (ATEN *is* the X9-X13 firmware line),
@@ -598,6 +598,29 @@ class TestX14OpenBmcPlatform:
         assert "IPMI zone 0" in str(excinfo.value)
         assert "doc/X14H14_MANUAL_FANCONTROL.md, Part 3.5" in str(excinfo.value)
 
+    @pytest.mark.parametrize("reply, latched", [(" cf c2 00 01", True), (" cf c2 00 00", False)],
+                             ids=["latched", "cleared"])
+    def test_manual_flag_is_the_last_reply_byte(self, reply: str, latched: bool, mock_exec: MagicMock) -> None:
+        """Positive and negative unit test for X14OpenBmcPlatform._get_manual_mode(). It contains the steps:
+        - mock the ipmitool exec callback to answer with the OEM reply the BMC really sends, which echoes the
+          IANA ID of the command back before the payload: `cf c2 00 <flag>`
+        - build the platform and invoke start() for zone 0
+        - ASSERT: the latched reply is read as latched, i.e. start() succeeds and records the zone. Reading
+          the first byte instead of the last would see `cf` and never confirm a latch
+        - ASSERT: the cleared reply is read as cleared, i.e. start() raises rather than pretending smfc
+          controls a zone the BMC still drives itself
+        """
+        f = "TestX14OpenBmcPlatform.test_manual_flag_is_the_last_reply_byte"
+        mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=reply)
+        platform = self._platform(mock_exec)
+        if latched:
+            platform.start([0])
+            assert platform.latched_zones == [0], f"{f}: latched zones"
+        else:
+            with pytest.raises(RuntimeError):
+                platform.start([0])
+            assert platform.latched_zones == [], f"{f}: nothing latched"
+
     def test_start_latches_only_controlled_zones(self, mock_exec: MagicMock) -> None:
         """Positive unit test for X14OpenBmcPlatform.start() method. It contains the following steps:
         - mock the ipmitool exec callback to report a latched manual mode flag
@@ -612,11 +635,11 @@ class TestX14OpenBmcPlatform:
         assert mock_exec.call_count == 2
         mock_exec.assert_has_calls([call(_x14_set_manual_cmd(1, True)), call(_x14_get_manual_cmd(1))])
 
-    @pytest.mark.parametrize("zone", [-1, 4], ids=["below-range", "above-range"])
+    @pytest.mark.parametrize("zone", [-1, 5], ids=["below-range", "above-range"])
     def test_start_invalid_zone(self, zone: int, mock_exec: MagicMock) -> None:
         """Negative unit test for X14OpenBmcPlatform.start() method. It contains the following steps:
         - mock the ipmitool exec callback (no BMC interaction expected)
-        - build the platform and invoke start() with a zone outside the documented 0-3 range
+        - build the platform and invoke start() with a zone outside the documented 0-4 range
         - ASSERT: start() raises ValueError
         - ASSERT: no ipmitool command is issued, so an invalid configuration never touches the BMC
         """
@@ -713,7 +736,7 @@ class TestX14OpenBmcPlatform:
         ok = subprocess.CompletedProcess([], returncode=0, stdout="")
 
         def exec_fn(args):
-            if args[:5] == ["raw", "0x30", "0x70", "0x66", "0x00"]:
+            if args[:5] == ["raw", "0x30", "0x70", "0x66", "0x01"]:
                 raise IpmiError("ipmitool error (1): Unable to establish IPMI v2 session.", None)
             return ok
 

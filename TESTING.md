@@ -441,8 +441,8 @@ Notes:
   board name — decides:
     - `platform_x14_openbmc`: the probe answers with a data byte, so
       `X14OpenBmcPlatform` is selected. Duty writes use
-      `raw 0x30 0x70 0x66 0x00 …` with direct-% encoding, preceded by the OEM
-      `raw 0x2c 0x04 0xcf 0xc2 …` per-zone manual-mode latch and its read-back.
+      `raw 0x30 0x70 0x66 0x01 …` with direct-% encoding, preceded by the OEM
+      `raw 0x2e 0x04 0xcf 0xc2 …` per-zone manual-mode latch and its read-back.
     - `platform_x14_aten`: the probe answers `0xC1`, so `X14AtenPlatform` is
       selected instead. Its duty commands are `GenericPlatform`'s byte for byte
       (ATEN is the firmware line shipped through X9–X13); what differs is the

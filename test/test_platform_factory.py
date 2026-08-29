@@ -42,18 +42,21 @@ class TestCreatePlatform:
         assert isinstance(platform, GenericX9Platform), f"{f}: should be GenericX9Platform"
         assert platform.name == PlatformName.GENERIC_X9, f"{f}: platform name"
 
-    def test_create_genericx14_openbmc(self) -> None:
+    @pytest.mark.parametrize("flag", [" cf c2 00 01", " cf c2 00 00"], ids=["manual", "automatic"])
+    def test_create_genericx14_openbmc(self, flag: str) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
-        - mock Exec dependency with a BMC answering the Part 1.1 stack probe with a data byte
+        - mock Exec dependency with a BMC answering the Part 1.1 stack probe with the OEM reply, which echoes
+          the IANA ID of the command back before the flag byte: `cf c2 00 <flag>`
         - call `create_platform(name=PlatformName.GENERIC_X14, exec=mock_exec)`
         - ASSERT: the Part 1.1 stack probe was the command sent
-        - ASSERT: returned platform is an instance of X14OpenBmcPlatform
+        - ASSERT: returned platform is an instance of X14OpenBmcPlatform for both flag values - the probe
+          identifies the stack, and a zone that happens to be under automatic control is still OpenBMC
         - ASSERT: returned platform's name equals PlatformName.GENERIC_X14
         """
         f = "TestCreatePlatform.test_create_genericx14_openbmc"
-        mock_exec = openbmc_exec()
+        mock_exec = openbmc_exec(flag)
         platform = create_platform(PlatformName.GENERIC_X14, mock_exec)
-        probe = ["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00", "0x00", "0x01"]
+        probe = ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x00", "0x01"]
         assert mock_exec.call_args_list[0].args[0] == probe, f"{f}: stack probe command"
         assert isinstance(platform, X14OpenBmcPlatform), f"{f}: should be X14OpenBmcPlatform"
         assert platform.name == PlatformName.GENERIC_X14, f"{f}: platform name"
@@ -79,15 +82,16 @@ class TestCreatePlatform:
         MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")),
         MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=" zz", stderr="")),
         MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=" 7f", stderr="")),
+        MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=" cf c2 00 7f", stderr="")),
     ])
     def test_create_genericx14_undetermined(self, exec_fn: MagicMock) -> None:
         """Negative unit test for create_platform() function. It contains the following steps:
         - mock Exec dependency with a BMC that neither returns a valid manual mode flag nor 0xC1:
-          an unreachable BMC, a different completion code, an empty reply, an unparsable reply and a
-          reply that is neither 0x00 nor 0x01
+          an unreachable BMC, a different completion code, an empty reply, an unparsable reply, and a flag
+          byte that is neither 0x00 nor 0x01 in both the bare and the IANA-prefixed reply form
         - call `create_platform(name=PlatformName.GENERIC_X14, exec=exec_fn)`
-        - ASSERT: RuntimeError is raised in all five cases - there is deliberately no fallback branch,
-          because guessing the stack executes a duty write instead of returning an error (Part 1.3)
+        - ASSERT: RuntimeError is raised in all six cases - there is deliberately no fallback branch,
+          because a guessed stack applies the wrong lever to the fans (Part 1.3)
         - ASSERT: the error message names the guide and its Part 1
         """
         f = "TestCreatePlatform.test_create_genericx14_undetermined"

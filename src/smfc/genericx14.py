@@ -30,14 +30,14 @@ class X14OpenBmcPlatform(Platform):
     Part 5.1 for the per-board zone tables.
     """
 
-    FANCTL_COUNT: int = 4           # Number of fan zones (0-3), the documented board maximum
+    FANCTL_COUNT: int = 5           # Number of fan zones (0-4); a duty zone byte above 0x04 is rejected
     ENFORCES_FULL_MODE: bool = False
     valid_fan_modes: List[int] = [
         FanMode.STANDARD, FanMode.FULL, FanMode.OPTIMAL, FanMode.PUE, FanMode.HEAVY_IO,
         0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
     ]
     # OEM command prefix for the manual/failsafe fan control commands (IANA 0x0000C2CF).
-    OEM_PREFIX: List[str] = ["raw", "0x2c", "0x04", "0xcf", "0xc2", "0x00"]
+    OEM_PREFIX: List[str] = ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00"]
     OEM_OP_READ_MANUAL: str = "0x00"        # Read the manual mode flag of a zone
     OEM_OP_SET_MANUAL: str = "0x01"         # Set the manual mode flag of a zone
     DEFAULT_ZONE_SENSOR: int = 0x41         # FAN1, zone 0 on every documented X14 board
@@ -67,9 +67,13 @@ class X14OpenBmcPlatform(Platform):
         return f"0x{zone + 1:02x}"
 
     def _get_manual_mode(self, zone: int) -> bool:
-        """Return True if manual fan mode is active in the given zone."""
+        """Return True if manual fan mode is active in the given zone.
+
+        The reply echoes the IANA ID of the OEM command back before the payload, so it reads
+        `cf c2 00 <flag>` and the flag is the last byte.
+        """
         r = self._exec(self.OEM_PREFIX + [self.OEM_OP_READ_MANUAL, self._manual_zone(zone)])
-        return int(r.stdout, 16) == 1
+        return int(r.stdout.split()[-1], 16) == 1
 
     def _set_manual_mode(self, zone: int, enabled: bool) -> None:
         """Enable or disable manual fan mode in the given zone."""
@@ -198,19 +202,21 @@ class X14OpenBmcPlatform(Platform):
 
     def set_fan_level(self, zone: int, level: int) -> None:
         """Set the fan duty cycle percentage for the given zone."""
-        # OpenBMC uses the percentage directly (0x00-0x64); manual mode must be latched first (start()).
+        # Selector 0x01 writes a duty, 0x00 reads one. The value is a percentage (0x00-0x64), and manual
+        # mode must be latched first (start()) or the automatic loop overwrites it.
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         validate_input_range(level, "level", 0, 100)
-        self._exec(["raw", "0x30", "0x70", "0x66", "0x00", f"0x{zone:02x}", f"0x{level:02x}"])
+        self._exec(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{level:02x}"])
 
     def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
         """Set the same fan duty cycle percentage for all given zones."""
-        # OpenBMC uses the percentage directly (0x00-0x64); manual mode must be latched first (start()).
+        # Selector 0x01 writes a duty, 0x00 reads one. The value is a percentage (0x00-0x64), and manual
+        # mode must be latched first (start()) or the automatic loop overwrites it.
         for zone in zone_list:
             validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         validate_input_range(level, "level", 0, 100)
         for zone in zone_list:
-            self._exec(["raw", "0x30", "0x70", "0x66", "0x00", f"0x{zone:02x}", f"0x{level:02x}"])
+            self._exec(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{level:02x}"])
 
 
 class X14AtenPlatform(GenericPlatform):
