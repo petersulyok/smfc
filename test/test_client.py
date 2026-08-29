@@ -17,6 +17,7 @@ from smfc.client import (
     EXIT_UDEV_ERROR,
 )
 from smfc.config import PlatformName
+from smfc.platform import IpmiError
 from smfc.genericx14 import X14OpenBmcPlatform
 from .test_fixtures import FakeOpenBmc
 
@@ -550,6 +551,49 @@ class TestFormatReport:
                                     "x.conf", False, False, service_reachable=False)
         assert "Fan mode      : STANDARD (0)" in out
         assert "smfc is not running" not in out
+
+    def test_fan_mode_reports_a_bmc_that_stops_answering_the_latch_read(self) -> None:
+        """Negative unit test for smfc.client._format_report() function. It contains the following steps:
+        - drive a real X14OpenBmcPlatform against a modelled board whose OEM manual mode read fails, i.e.
+          a BMC that answered the startup probe and then stopped responding
+        - call _format_report() with use_color=False
+        - ASSERT: the fan mode cell reports the error instead of a control state. Neither answer is known
+          here, so claiming either one would be a guess dressed as a reading
+        """
+        bmc = FakeOpenBmc()
+
+        def failing(args):
+            if args[:7] == ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x00"]:
+                raise IpmiError("ipmitool error (1): Unable to establish IPMI v2 session.", None)
+            return bmc(args)
+
+        ipmi = _make_fake_ipmi()
+        ipmi.platform = X14OpenBmcPlatform(PlatformName.GENERIC_X14, failing)
+        ipmi.get_fan_mode.side_effect = ipmi.platform.get_fan_mode
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", use_color=False)
+        assert "Fan mode      : ERROR: ipmitool error (1)" in out
+
+    def test_fan_mode_reports_a_bmc_that_stops_answering_the_mode_read(self) -> None:
+        """Negative unit test for smfc.client._format_report() function. It contains the following steps:
+        - drive a real X14OpenBmcPlatform against a modelled board with nothing latched, so the base fan
+          mode is what would be reported, and make that read fail
+        - call _format_report() with use_color=False
+        - ASSERT: the fan mode cell reports the error rather than an empty or invented mode
+        """
+        bmc = FakeOpenBmc()
+
+        def failing(args):
+            if args[:4] == ["raw", "0x30", "0x45", "0x00"]:
+                raise IpmiError("ipmitool error (1): Unable to establish IPMI v2 session.", None)
+            return bmc(args)
+
+        ipmi = _make_fake_ipmi()
+        ipmi.platform = X14OpenBmcPlatform(PlatformName.GENERIC_X14, failing)
+        ipmi.get_fan_mode.side_effect = ipmi.platform.get_fan_mode
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", use_color=False)
+        assert "Fan mode      : ERROR: ipmitool error (1)" in out
 
     def test_fan_mode_says_so_when_the_control_state_cannot_be_read(self) -> None:
         """Negative unit test for smfc.client._format_report() function. It contains the following steps:
