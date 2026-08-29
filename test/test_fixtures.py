@@ -525,24 +525,25 @@ class FakeOpenBmc:
 
     ZONE_OUT_OF_RANGE: int = 0xCC       # Completion code for a zone the board does not have
 
-    SUPPORTED_MODES: int = 0x0FFF       # Bitmask of the base fan modes the modelled board supports
-
     zones: int                          # Number of fan zones the modelled board has
     auto_duty: int                      # Duty the automatic control loop drives an unlatched zone to
     manual: Dict[int, bool]             # IPMI zone -> manual mode flag
     failsafe: Dict[int, bool]           # IPMI zone -> failsafe flag (zone forced to 100%)
     duty: Dict[int, int]                # IPMI zone -> current duty in %
     fan_mode: int                       # Base fan mode, the curve an unlatched zone falls back to
+    supported_modes: int                # Bitmask of the base fan modes the modelled board supports
     fan_mode_writes: int                # How often the base fan mode was written
     duty_at_release: Dict[int, int]     # Duty of every zone at the moment manual mode was last released
     commands: List[List[str]]           # Every command received, in order
 
-    def __init__(self, zones: int = 5, auto_duty: int = 30, fan_mode: int = 1) -> None:
+    def __init__(self, zones: int = 5, auto_duty: int = 30, fan_mode: int = 1,
+                 supported_modes: int = 0x0FFF) -> None:
         """Initialize the modelled board.
         Args:
             zones (int): number of fan zones the board has
             auto_duty (int): duty the automatic control loop drives an unlatched zone to
             fan_mode (int): base fan mode reported by `0x30 0x45 0x00`
+            supported_modes (int): bitmask of the base fan modes the board reports (default: 0x00-0x0B)
         """
         self.zones = zones
         self.auto_duty = auto_duty
@@ -550,6 +551,7 @@ class FakeOpenBmc:
         self.failsafe = {z: False for z in range(zones)}
         self.duty = {z: auto_duty for z in range(zones)}
         self.fan_mode = fan_mode
+        self.supported_modes = supported_modes
         self.fan_mode_writes = 0
         self.duty_at_release = {}
         self.commands = []
@@ -611,7 +613,7 @@ class FakeOpenBmc:
             return self._reply(f"{self.fan_mode}")
         if args[3] == "0x02":
             # Two bytes, little-endian, one bit per mode value.
-            return self._reply(f" {self.SUPPORTED_MODES & 0xFF:02x} {self.SUPPORTED_MODES >> 8:02x}")
+            return self._reply(f" {self.supported_modes & 0xFF:02x} {self.supported_modes >> 8:02x}")
         self.fan_mode_writes += 1
         self.fan_mode = int(args[4], 16)
         # A base fan mode change clears manual mode on every zone.

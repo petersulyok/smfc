@@ -605,8 +605,7 @@ class TestFormatReport:
           instead of being silently replaced by a guess
         """
         ipmi = _make_fake_ipmi(fan_mode_value=0)
-        ipmi.platform = MagicMock(spec=["name", "ENFORCES_FULL_MODE"])
-        ipmi.platform.ENFORCES_FULL_MODE = False
+        ipmi.platform = MagicMock(spec=["name", "ENFORCES_FULL_MODE"], ENFORCES_FULL_MODE=False)
         out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
                                     "x.conf", use_color=False)
         assert "Fan mode      : STANDARD (0)" in out

@@ -5,7 +5,7 @@
 #
 # pylint: disable=redefined-outer-name,unused-argument
 from configparser import MissingSectionHeaderError, DuplicateSectionError
-from typing import Callable, Dict, List
+from typing import Callable, List
 import pytest
 from smfc.config import Config
 

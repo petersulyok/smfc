@@ -1049,8 +1049,7 @@ class TestX14OpenBmcBehaviour:
           silently and reads back correctly while a different fan table is loaded
         """
         f = "TestX14OpenBmcBehaviour.test_supported_fan_modes_come_from_the_board"
-        bmc = FakeOpenBmc()
-        bmc.SUPPORTED_MODES = 0x0C02
+        bmc = FakeOpenBmc(supported_modes=0x0C02)
         platform = self._platform(bmc)
         assert platform.valid_fan_modes == [1, 10, 11], f"{f}: decoded bitmask"
         with pytest.raises(ValueError):
