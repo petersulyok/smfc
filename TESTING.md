@@ -164,7 +164,7 @@ contain several test classes grouped by feature.
 | `cpufc.py`                       | `test_cpufc.py`              | Hwmon discovery, ordinal `cpuN` device names |
 | `exporter.py`                    | `test_exporter.py`           | Prometheus text rendering, HTTP server endpoints (`/snapshot`, `/metrics`, `/healthz`), 404/500 handling, idempotent stop |
 | `fancontroller.py`               | `test_fancontroller.py`      | Base contract: construction, `get_hwmon_path`, `get_temp` modes, per-device temp caching, `set_fan_level`, deferred level application, `run()` mapping, smoothing algorithm, `error_tolerance` handling (reuse / escalation / per-device counters), LUT construction (legacy vs. user-defined `control_function=`) |
-| `generic.py`, `genericx9.py`, `genericx14.py`, `x10qbi.py` | `test_platforms.py` | Matrix-driven: same 8-method contract for all four platforms |
+| `generic.py`, `genericx9.py`, `genericx14.py`, `x10qbi.py` | `test_platforms.py` | Matrix-driven: same 8-method contract for all five platforms; plus the X14 OpenBMC command table and the behavioural tests driven against `FakeOpenBmc` |
 | `gpufc.py`                       | `test_gpufc.py`              | `exec_smi` (Nvidia/AMD), AMD sensor selection, temp parse errors, tolerated truncated SMI output |
 | `hdfc.py`                        | `test_hdfc.py`               | `exec_smartctl` (sudo / rc / exceptions), standby-state formatting, `check_standby_state`, `go_standby_state`, standby-guard `run`, smartctl debug path, tolerated transient HWMON/smartctl read errors |
 | `ipmi.py`                        | `test_ipmi.py`               | Init (positive/negative, BMC timeout, client mode), `exec_ipmitool` (remote args, sudo, rc, exceptions), `get/set_fan_mode`, fan-mode name mapping, `get/set_fan_level`, `set_multiple_fan_levels`, exception surface |
@@ -186,12 +186,35 @@ Behind that table sit two cross-cutting topics worth knowing about:
   Each subclass test then asserts only its device-specific surface
   (`exec_smartctl`, `exec_smi`, standby handling), with `build_*` / `make_bare_*`
   helpers from `test_fc_helpers.py` absorbing the discovery-mock boilerplate.
-- **Platforms share a matrix.** All four platforms (`Generic`, `GenericX9`,
-  `GenericX14`, `X10QBi`) implement the same 8-method `Platform` interface
-  but with very different raw IPMI byte sequences and level encodings. A
-  single `test_platforms.py` module drives every platform through every
-  method via a `PlatformSpec` per platform. Adding a new Supermicro platform
-  is one `PLATFORMS` entry; the test count grows automatically.
+- **Platforms share a matrix.** All five platforms (`GenericPlatform`,
+  `GenericX9Platform`, `X14OpenBmcPlatform`, `X14AtenPlatform`, `X10QBi`)
+  implement the same 8-method `Platform` interface but with very different raw
+  IPMI byte sequences and level encodings. A single `test_platforms.py` module
+  drives every platform through every method via a `PlatformSpec` per platform.
+  Adding a new Supermicro platform is one `PLATFORMS` entry; the test count
+  grows automatically.
+- **The matrix is not the only gate for X14 OpenBMC.** It asserts which commands
+  the platform sends, and it builds the expected argv the same way the
+  implementation builds it — so it pins the wire format but cannot catch a
+  command the board accepts and ignores. `FakeOpenBmc` in `test_fixtures.py` is
+  an `exec_ipmitool` callback holding the state a real board holds (a per-zone
+  manual mode flag, a per-zone failsafe flag and a per-zone duty register), so
+  `TestX14OpenBmcBehaviour` can assert what the *fans* end up doing: which zones
+  `start()` latches, that a duty reaches a latched zone and does not hold without
+  one, that `end()` releases on every exit path with the exit level in force at
+  that moment. Three rules make it a model rather than a command echo — a duty
+  only holds while its zone is latched, a failsafe zone discards duty writes, and
+  a written percentage is stored as 8-bit PWM and converted back on read.
+  `TestX14OpenBmcCmd` covers the third layer: it writes the expected byte
+  sequences out in full rather than composing them from the command table's own
+  constants, so it is a diff against `doc/X14H14_MANUAL_FANCONTROL.md` Part 3
+  rather than a restatement of the code.
+
+  When a command changes, the check that matters is a revert test: undo the fix
+  on its own and confirm `TestX14OpenBmcBehaviour` goes red. If it stays green
+  the model is not faithful enough yet. Clear `__pycache__` between runs —
+  several of these mutations are the same length as the original, so a
+  mutate-and-restore inside one second can leave stale bytecode in place.
 
 ### Where to add new unit tests
 

@@ -136,7 +136,7 @@ A **completion code** other than success is not data. `ipmitool` reports it as a
 line naming the code:
 
 ```
-Unable to send RAW command (channel=0x0 netfn=0x2c lun=0x0 cmd=0x4 rsp=0xc1): Invalid command
+Unable to send RAW command (channel=0x0 netfn=0x2e lun=0x0 cmd=0x4 rsp=0xc1): Invalid command
 ```
 
 Never parse such a line as a value. In a script, check `ipmitool`'s exit status, or test
@@ -240,8 +240,8 @@ overwritten within about a second.
 | --- | --- | --- |
 | `0x30 0x45 0x00` | 1 byte, the mode | — |
 | `0x30 0x45 0x01 <mode>` | no data | `0xC1` if `<mode>` is above `0x0B`; no mode is changed |
-| `0x2e 0x04 … 0x00 <zone>` | 1 byte `01`/`00` | `0xC1` if the command is short (both op and zone must be present) or the op is above `0x02`; another code if that zone does not exist |
-| `0x2e 0x04 … 0x02 <zone>` | 1 byte `01`/`00` | as above |
+| `0x2e 0x04 … 0x00 <zone>` | 4 bytes `cf c2 00 <flag>` | `0xC1` if the command is short (both op and zone must be present) or the op is above `0x02`; another code if that zone does not exist |
+| `0x2e 0x04 … 0x02 <zone>` | 4 bytes `cf c2 00 <flag>` | as above |
 | `0x2e 0x04 … 0x01 <zone> <0\|1>` | no data | as above |
 | `0x30 0x70 0x66 0x00 <zone>` | 1 byte: that zone's duty | `0xCC` if `<zone>` is above `0x04`; `0xC7` if the payload after `0x66` is not 2 or 3 bytes |
 | `0x30 0x70 0x66 0x01 <zone> <duty%>` | no data (completion code) | `0xCC` if `<zone>` is above `0x04`; `0xC7` if the payload after `0x66` is not 2 or 3 bytes |
@@ -469,7 +469,7 @@ On a multi-zone board extend the loop over each zone pair (`ZONE_M` = 1, 2, … 
 
 ```bash
 ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 0x01 0x00   # manual OFF, zone 1
-ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01        # confirm -> expect 00
+ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01        # confirm -> expect cf c2 00 00
 ```
 
 Repeat for every zone you enabled, or release all at once with

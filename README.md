@@ -334,7 +334,7 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 | `auto`                     | automatic discovery based on BMC information | Reads BMC product name; selects `generic_x14` if it starts with `X14` or `H14`, `X10QBi` if it starts with `X10QBi`, `generic_x9` if it starts with `X9`, otherwise falls back to `generic` |
 | `generic`                  | Generic X10-X13/H10-H13 Supermicro boards    | Uses standard Supermicro IPMI raw commands                                                       |
 | `generic_x9`               | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                  |
-| `generic_x14`              | Supermicro X14 **and** H14 boards            | A platform *family* covering both 14th generation BMC firmware stacks; the stack is detected at startup, not guessed from the board name (see [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md)). Up to 4 fan zones (0-3), duty cycle 0-100%, and neither stack uses `FULL` fan mode — see the notes below. **Experimental**, see [issue #98](https://github.com/petersulyok/smfc/issues/98), [discussion #106](https://github.com/petersulyok/smfc/discussions/106) |
+| `generic_x14`              | Supermicro X14 **and** H14 boards            | A platform *family* covering both 14th generation BMC firmware stacks; the stack is detected at startup, not guessed from the board name (see [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md)). Up to 5 fan zones (0-4) — `smfc` discovers how many the board really has — duty cycle 0-100%, and neither stack uses `FULL` fan mode — see the notes below. **Experimental**, see [issue #98](https://github.com/petersulyok/smfc/issues/98), [discussion #106](https://github.com/petersulyok/smfc/discussions/106) |
 | `X10QBi`                   | Supermicro X10QBi motherboard                | Nuvoton NCT7904D fan controller, 4 fan zones (0x10-0x13), duty cycle 0-255 scale, see [PR #97](https://github.com/petersulyok/smfc/pull/97) and [discussion #110](https://github.com/petersulyok/smfc/discussions/110) |
 
 With this abstraction layer, new Supermicro motherboards can also be added to `smfc` with a good understanding of their IPMI raw commands and fan control logic.
@@ -367,6 +367,7 @@ What both stacks have in common:
 
 - 🔴 **List every zone your board has in `ipmi_zone=`.** The bypass is global, so a zone you did not configure is bypassed along with the rest and sits **frozen at its last duty with nothing regulating it** — unlike the OpenBMC stack, where an unlatched zone keeps running automatically. `smfc` cannot fix this for you: there is no reliable way to learn how many zones a board has, and driving zones you did not configure would move fans you never asked it to move.
 - **`min_level=0` is silently raised to 5%.** One of the two ATEN duty paths has no floor of its own, and `smfc` cannot tell which path a board uses, so it never writes a duty below 5% — with the BMC's thermal loop suspended by the bypass, a real 0% would leave nothing regulating the fans.
+- **A duty reads back one percent low off the 20% grid.** The BMC keeps it as an 8-bit PWM value and converts back on read, so a `CONST` controller configured for 50% sees 49% and rewrites it on every poll. That costs one IPMI command and does not move the fans; the same is true on the OpenBMC stack.
 
 The ATEN path is confirmed on H14 hardware. On the OpenBMC stack, verify once that a low duty holds against the automatic control loop before relying on it.
 
@@ -793,8 +794,8 @@ min_temp=30.0
 # Maximum CPU temperature (float, C, default=60.0)
 max_temp=60.0
 # Minimum CPU fan level (int, %, default=35)
-# On ATEN X14/H14 boards a value below 5 is silently raised to 5%: that duty path has no floor of
-# its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
+# On X14/H14 boards a value below 5 is silently raised to 5%: the duty smfc writes there has no floor
+# of its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
 # Maximum CPU fan level (int, %, default=100)
 max_level=100
@@ -828,8 +829,8 @@ min_temp=32.0
 # Maximum HD temperature (float, C, default=46.0)
 max_temp=46.0
 # Minimum HD fan level (int, %, default=35)
-# On ATEN X14/H14 boards a value below 5 is silently raised to 5%: that duty path has no floor of
-# its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
+# On X14/H14 boards a value below 5 is silently raised to 5%: the duty smfc writes there has no floor
+# of its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
 # Maximum HD fan level (int, %, default=100)
 max_level=100
@@ -875,8 +876,8 @@ min_temp=35.0
 # Maximum NVMe temperature (float, C, default=70.0)
 max_temp=70.0
 # Minimum NVMe fan level (int, %, default=35)
-# On ATEN X14/H14 boards a value below 5 is silently raised to 5%: that duty path has no floor of
-# its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
+# On X14/H14 boards a value below 5 is silently raised to 5%: the duty smfc writes there has no floor
+# of its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
 # Maximum NVMe fan level (int, %, default=100)
 max_level=100
@@ -919,8 +920,8 @@ min_temp=40.0
 # Maximum GPU temperature (float, C, default=70.0)
 max_temp=70.0
 # Minimum GPU fan level (int, %, default=35)
-# On ATEN X14/H14 boards a value below 5 is silently raised to 5%: that duty path has no floor of
-# its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
+# On X14/H14 boards a value below 5 is silently raised to 5%: the duty smfc writes there has no floor
+# of its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
 # Maximum GPU fan level (int, %, default=100)
 max_level=100

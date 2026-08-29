@@ -60,11 +60,12 @@ src/smfc/
 ├── config.py             Config + per-controller dataclasses (typed view of INI)
 ├── log.py                Log — log-level/output routing (stdout/stderr/syslog)
 ├── ipmi.py               Ipmi — wraps ipmitool, owns Platform instance
-├── platform.py           Platform ABC, FanMode enum, PlatformName enum
+├── platform.py           Platform ABC, ControlState/ControlStatus, FanMode enum, IpmiError
 ├── platform_factory.py   create_platform() — selects implementation by name/BMC
 ├── generic.py            GenericPlatform — X10/X11/X12/X13/H10-H13 IPMI raw
 ├── genericx9.py          GenericX9Platform — X9 IPMI raw (different opcodes)
-├── genericx14.py         X14OpenBmcPlatform / X14AtenPlatform — the two X14/H14 BMC stacks
+├── genericx14.py         X14OpenBmcPlatform / X14AtenPlatform — the two X14/H14 BMC stacks,
+│                        plus X14OpenBmcCmd, the raw command table of the OpenBMC stack
 ├── x10qbi.py             X10QBi — Nuvoton NCT7904D variant
 ├── fancontroller.py      FanController base (temperature-driven) + Protocol
 ├── cpufc.py              CpuFc — Intel coretemp / AMD k10temp source
@@ -139,6 +140,15 @@ classDiagram
     class GenericPlatform
     class GenericX9Platform
     class X14OpenBmcPlatform
+    class X14OpenBmcCmd {
+        +read_manual(zone)
+        +set_manual(zone, enabled)
+        +read_failsafe(zone)
+        +read_duty(zone)
+        +write_duty(zone, level)
+        +set_manual_all(enabled)
+        +get_supported_modes()
+    }
     class X14AtenPlatform
     class X10QBi
 
@@ -289,7 +299,7 @@ flowchart TD
     D --> F
     F --> K{GENERIC_X14, or name<br/>startswith X14 / H14?}
     K -- yes --> P["probe BMC:<br/>raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01"]
-    P -- data byte --> XOB[X14OpenBmcPlatform]
+    P -- "cf c2 00 &lt;flag&gt;" --> XOB[X14OpenBmcPlatform]
     P -- rsp=0xc1 --> XAT[X14AtenPlatform]
     P -- anything else --> ERR([fatal: stack undetermined])
     K -- no --> I{exact PlatformName enum match?}
@@ -324,13 +334,14 @@ board `H14SHM` runs OpenBMC and every other H14 runs ATEN. The board name theref
 cannot decide which command set applies.
 
 There is deliberately **no fallback branch** — no "try OpenBMC, fall back to ATEN",
-and no treating an arbitrary error as ATEN. `0x30 0x70 0x66 0x00 <zone>` is a duty
-*read* on ATEN and a *truncated duty write* on OpenBMC, and the OpenBMC handler
-accepts payloads of two **or** three bytes, so the short form is not caught by a
-length check: guessing the stack does not return an error, it moves fans. Only the
-completion code `0xC1` means ATEN, which is why `Ipmi._exec_ipmitool()` raises
-`IpmiError` carrying the parsed code rather than flattening every failure into one
-indistinguishable `RuntimeError`. Any other outcome is fatal.
+and no treating an arbitrary error as ATEN. The two stacks share the `0x30 0x70 0x66`
+layout (selector `0x00` reads a duty, `0x01` writes one), so a wrong guess is not
+caught by the board rejecting the command; what differs is selector `0x02`, which is
+per-zone manual mode on OpenBMC and a global bypass flag on ATEN. Guessing therefore
+applies the wrong lever — taking over every zone where only one was meant, or none at
+all. Only the completion code `0xC1` means ATEN, which is why `Ipmi._exec_ipmitool()`
+raises `IpmiError` carrying the parsed code rather than flattening every failure into
+one indistinguishable `RuntimeError`. Any other outcome is fatal.
 
 The probe runs in the factory, not lazily inside the platform, for three reasons:
 `Ipmi.__init__` calls the factory right after parsing `mc info`, so the BMC has just
@@ -348,7 +359,7 @@ encodings:
 |------------------------|-------------------------------------------------|----------------------------------------------------------|
 | `GenericPlatform`      | `raw 0x30 0x70 0x66 0x01 zone level`            | Level in %, 0x00–0x64                                    |
 | `GenericX9Platform`    | `raw 0x30 0x91 0x5a 0x03 reg duty`              | Zone → reg (0x10+zone), level × 255/100                  |
-| `X14OpenBmcPlatform`   | `raw 0x30 0x70 0x66 0x01 zone level`            | Level in %, 0x00–0x64; per-zone manual mode via OEM `0x2e 0x04 0xcf 0xc2` (see [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md), Part 3) |
+| `X14OpenBmcPlatform`   | `raw 0x30 0x70 0x66 0x01 zone level`            | Level in %, 0x00–0x64; clamped to ≥ 5%; per-zone manual mode via OEM `0x2e 0x04 0xcf 0xc2`, built by `X14OpenBmcCmd` (see [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md), Part 3) |
 | `X14AtenPlatform`      | `raw 0x30 0x70 0x66 0x01 zone level`            | Inherited from `GenericPlatform` unchanged — ATEN *is* the X9–X13 firmware line — but clamped to ≥ 5%; the lever is the global bypass flag `0x30 0x70 0x66 0x02 0x01` (Part 4) |
 | `X10QBi`               | `raw 0x30 0x91 0x5c 0x03 reg duty` + TMFR setup| Nuvoton NCT7904D, zone → 0x10+zone, level × 255/100      |
 
@@ -393,8 +404,11 @@ shutdown via `Service.exit_func()`:
   mode on every zone, and the base mode is only the fallback curve. `end()` applies
   the exit level and then releases manual mode, restoring automatic BMC fan control.
   Zone numbering differs between the two command families (manual commands are
-  1-based, duty commands 0-based); smfc zone IDs stay 0-based and the platform
-  converts in one place. Three things it reads from the board rather than assuming:
+  1-based, duty commands 0-based); smfc zone IDs stay 0-based everywhere and
+  `X14OpenBmcCmd` applies the +1 in the single place it builds the OEM commands.
+  Duty writes are clamped to ≥ 5%: a manual write has no floor of its own, because the
+  15% floor belongs to the automatic control a latched zone is no longer under.
+  Three things it reads from the board rather than assuming:
   the zone count (probed once at `start()`), the supported base fan modes
   (`0x30 0x45 0x02`), and the per-zone failsafe flag, which `check_fan_mode()` reports
   as a lost control state because failsafe outranks manual mode and re-acquiring
@@ -782,6 +796,14 @@ level applied to one or more zones. Its `run()`:
 
 The "verify before write" pattern is important — it avoids spamming the BMC
 once steady state is reached.
+
+It does not save a write on every platform. Both X14/H14 stacks keep a zone's duty as
+an 8-bit PWM value, `pwm = percent * 255 / 100`, and convert back when it is read,
+truncating both divisions: a duty reads back exact at multiples of 20 and one percent
+low elsewhere. So a configured `level=50` reads back as 49 and is rewritten on every
+poll. That costs one `ipmitool` command and does not move the fans — the value written
+is the value already in force — so it is accepted rather than worked around with a
+tolerance that would also hide a real drift of one count.
 
 ---
 
