@@ -112,14 +112,11 @@ fi
   firmware types and the board name does not tell you which one you have, so
   smfc detects it at startup. On boards with the second type taking the fans
   over affects every zone, so list all of them in ipmi_zone=.
-- Changed: a wrong ipmi_zone= on X14/H14 boards now says what is wrong. smfc
-  detects how many fan zones the board has, so ipmi_zone=3 on a two-zone board
-  stops the service naming the zone and the real count, instead of the BMC's
-  own rsp=0xcc. The check runs before anything is written, so a rejected
-  configuration no longer leaves the zones listed before the bad one under
-  smfc control with nothing regulating them. smfc-client does not warn about a
-  non-FULL fan mode there any more; it reports what is actually driving the
-  fans.
+- Changed: smfc stops at startup if a configured ipmi_zone= does not exist on
+  an X14/H14 board. It reads the zone count from the board and names the wrong
+  zone in the error, instead of failing on a raw IPMI error code. smfc-client
+  does not warn about a non-FULL fan mode there any more; it reports what is
+  actually driving the fans.
 - Fixed: fan control was non-functional on X14/H14 motherboards. smfc reported
   that it had taken the fans over while the BMC kept running them on its own
   curve, because the commands it sent were wrong and the fan level never
