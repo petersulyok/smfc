@@ -30,9 +30,11 @@ class X14OpenBmcPlatform(Platform):
     Part 5.1 for the per-board zone tables.
     """
 
-    FANCTL_COUNT: int = 5           # Number of fan zones (0-4); a duty zone byte above 0x04 is rejected
+    FANCTL_COUNT: int = 5           # Firmware bound: the duty commands reject a zone byte above 0x04
     ENFORCES_FULL_MODE: bool = False
-    valid_fan_modes: List[int] = [
+    MIN_LEVEL: int = 5                      # Never write a duty below this, see _clamp_level()
+    FAILSAFE_REPORT_AFTER: int = 3          # Consecutive observations before failsafe is named as the cause
+    DEFAULT_FAN_MODES: List[int] = [
         FanMode.STANDARD, FanMode.FULL, FanMode.OPTIMAL, FanMode.PUE, FanMode.HEAVY_IO,
         0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
     ]
@@ -40,10 +42,15 @@ class X14OpenBmcPlatform(Platform):
     OEM_PREFIX: List[str] = ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00"]
     OEM_OP_READ_MANUAL: str = "0x00"        # Read the manual mode flag of a zone
     OEM_OP_SET_MANUAL: str = "0x01"         # Set the manual mode flag of a zone
+    OEM_OP_READ_FAILSAFE: str = "0x02"      # Read the failsafe flag of a zone
+    GET_SUPPORTED_MODES: List[str] = ["raw", "0x30", "0x45", "0x02"]     # Supported fan mode bitmask
     DEFAULT_ZONE_SENSOR: int = 0x41         # FAN1, zone 0 on every documented X14 board
 
     zone_sensors: Dict[int, int]            # IPMI zone -> representative fan sensor number
     latched_zones: List[int]                # Zones manual mode was latched in by start()
+    _zone_count: Optional[int]              # Zones the board has, discovered by probe() on first use
+    _supported_modes: Optional[List[int]]   # Fan modes the board supports, read from the BMC on first use
+    _failsafe_count: Dict[int, int]         # IPMI zone -> consecutive observations in failsafe
 
     def __init__(self, name: str, exec_ipmitool: Callable[[List[str]], subprocess.CompletedProcess],
                  zone_sensors: Optional[Dict[int, int]] = None) -> None:
@@ -60,6 +67,68 @@ class X14OpenBmcPlatform(Platform):
         super().__init__(name, exec_ipmitool)
         self.zone_sensors = dict(zone_sensors) if zone_sensors else {0: self.DEFAULT_ZONE_SENSOR}
         self.latched_zones = []
+        self._zone_count = None
+        self._supported_modes = None
+        self._failsafe_count = {}
+
+    @property
+    def valid_fan_modes(self) -> List[int]:
+        """The base fan modes this board supports, from the bitmask the BMC reports.
+
+        The bitmask is two bytes, little-endian, one bit per mode value: `02 0c` is 0x0C02, bits 1, 10 and
+        11, i.e. FullSpeed, Performance and Silent. Reading it is the only way to know a mode is real - a
+        mode the board does not have is accepted silently and reads back correctly while a different fan
+        table is loaded (Part 3.4). Firmware without the command falls back to the documented 0x00-0x0B
+        range, which is the widest a board can support.
+        """
+        if self._supported_modes is None:
+            try:
+                reply = self._exec(self.GET_SUPPORTED_MODES).stdout or ""
+                mask = int("".join(reversed(reply.split())), 16)
+                self._supported_modes = [mode for mode in range(mask.bit_length()) if mask >> mode & 1]
+            except (RuntimeError, ValueError):
+                self._supported_modes = list(self.DEFAULT_FAN_MODES)
+        return self._supported_modes
+
+    @property
+    def zone_count(self) -> int:
+        """The number of fan zones this board has, discovered once by probing the failsafe flag upward.
+
+        There is no command that reports the zone layout, so the count is found by reading a per-zone flag
+        for zone 1, 2, 3 ... and stopping at the first zone the BMC does not have (Part 5.1). The failsafe
+        flag is used rather than the manual mode flag because it is unrelated to the lever `start()` is
+        about to operate, so probing cannot disturb the state being established. A board that answers for
+        no zone at all leaves nothing to validate against, so the firmware bound stands and the BMC rejects
+        a zone it does not have.
+        """
+        if self._zone_count is None:
+            count = 0
+            for zone in range(self.FANCTL_COUNT):
+                try:
+                    self._exec(self.OEM_PREFIX + [self.OEM_OP_READ_FAILSAFE, self._manual_zone(zone)])
+                except (RuntimeError, ValueError):
+                    break
+                count += 1
+            self._zone_count = count or self.FANCTL_COUNT
+        return self._zone_count
+
+    def _clamp_level(self, level: int) -> int:
+        """Raise a duty below the 5 % floor, so that a legal configuration cannot stop the fans.
+
+        `Config` permits `min_level=0`, and a manual duty write has no floor of its own: the 15 % floor
+        belongs to the BMC's automatic control, which a latched zone is no longer under. A written `0x00`
+        would therefore reach the fans as a real 0 % with nothing regulating them.
+        Args:
+            level (int): the requested duty percentage
+        Returns:
+            int: the duty percentage actually written
+        """
+        return max(self.MIN_LEVEL, level)
+
+    def _get_failsafe(self, zone: int) -> bool:
+        """Return True if the BMC has forced the given zone to 100 % by failsafe."""
+        r = self._exec(self.OEM_PREFIX + [self.OEM_OP_READ_FAILSAFE, self._manual_zone(zone)])
+        return int(r.stdout.split()[-1], 16) == 1
 
     @staticmethod
     def _manual_zone(zone: int) -> str:
@@ -101,6 +170,10 @@ class X14OpenBmcPlatform(Platform):
         """
         for zone in zones:
             validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
+        beyond = [zone for zone in zones if zone >= self.zone_count]
+        if beyond:
+            raise ValueError(f"IPMI zone(s) {beyond} do not exist on this board, which has {self.zone_count} "
+                             f"zone(s) (see doc/X14H14_MANUAL_FANCONTROL.md, Part 5.1).")
         latched: List[int] = []
         for zone in zones:
             self._set_manual_mode(zone, True)
@@ -133,11 +206,38 @@ class X14OpenBmcPlatform(Platform):
         try:
             fan_mode = self.get_fan_mode()
             lost = [zone for zone in zones if not self._get_manual_mode(zone)]
+            pinned = [zone for zone in zones if self._get_failsafe(zone)]
         except (RuntimeError, ValueError) as e:
             return ControlStatus(ControlState.LOST, f"Manual fan mode could not be read: {e}", -1, confirmed=False)
+        for zone in zones:
+            self._failsafe_count[zone] = self._failsafe_count.get(zone, 0) + 1 if zone in pinned else 0
         if lost:
             return ControlStatus(ControlState.LOST, f"Manual fan mode was cleared in IPMI zone(s) {lost}", fan_mode)
+        if pinned:
+            return ControlStatus(ControlState.LOST, self._failsafe_detail(pinned), fan_mode)
         return ControlStatus(ControlState.OK, "", fan_mode)
+
+    def _failsafe_detail(self, pinned: List[int]) -> str:
+        """Compose the user-facing reason for a zone the BMC holds at 100 %.
+
+        Manual mode is still latched, so nothing in the lever explains it, and re-acquiring cannot win the
+        zone back: failsafe outranks manual mode and the BMC discards every duty written to that zone until
+        the trip clears. The cause is only named once it has persisted, so that a single poll landing on a
+        transient trip does not send the user after a fan that is not faulty - on a board whose fans turn
+        slower than the tacho can resolve, a healthy fan reads as 0 RPM and trips failsafe by itself.
+        Args:
+            pinned (List[int]): IPMI zones whose failsafe flag is set
+        Returns:
+            str: the reason, logged verbatim by `Service`
+        """
+        settled = [zone for zone in pinned if self._failsafe_count.get(zone, 0) >= self.FAILSAFE_REPORT_AFTER]
+        if settled:
+            return (f"IPMI zone(s) {settled} are held at 100% by the BMC failsafe, which outranks manual fan "
+                    f"mode, so the fan duty smfc writes is discarded and restoring fan control cannot "
+                    f"recover it. A fan reading 0 RPM is the usual trigger, and a fan that turns slower than "
+                    f"the BMC tacho can resolve reads as 0 while running normally (see "
+                    f"doc/X14H14_MANUAL_FANCONTROL.md, Part 2 and Part 3.1)")
+        return f"IPMI zone(s) {pinned} are not following the fan duty smfc wrote"
 
     def end(self, zones: List[int], level: int) -> None:
         """Apply the exit fan level to the configured zones, then release manual fan mode in all zones,
@@ -201,22 +301,24 @@ class X14OpenBmcPlatform(Platform):
         return duty
 
     def set_fan_level(self, zone: int, level: int) -> None:
-        """Set the fan duty cycle percentage for the given zone."""
+        """Set the fan duty cycle percentage for the given zone, never below the 5 % floor."""
         # Selector 0x01 writes a duty, 0x00 reads one. The value is a percentage (0x00-0x64), and manual
         # mode must be latched first (start()) or the automatic loop overwrites it.
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         validate_input_range(level, "level", 0, 100)
-        self._exec(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{level:02x}"])
+        written = self._clamp_level(level)
+        self._exec(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{written:02x}"])
 
     def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
-        """Set the same fan duty cycle percentage for all given zones."""
+        """Set the same fan duty cycle percentage for all given zones, never below the 5 % floor."""
         # Selector 0x01 writes a duty, 0x00 reads one. The value is a percentage (0x00-0x64), and manual
         # mode must be latched first (start()) or the automatic loop overwrites it.
         for zone in zone_list:
             validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         validate_input_range(level, "level", 0, 100)
+        written = self._clamp_level(level)
         for zone in zone_list:
-            self._exec(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{level:02x}"])
+            self._exec(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{written:02x}"])
 
 
 class X14AtenPlatform(GenericPlatform):

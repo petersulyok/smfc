@@ -242,6 +242,13 @@ if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x45" && $4 = "0x01" ]] ; then
 	exit 0
 fi
 
+# IPMI get supported fan modes (raw 0x30 0x45 0x02) — 2 bytes, little-endian, one bit per mode value.
+# 0x0FFF is every documented mode, 0x00-0x0B.
+if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x45" && $4 = "0x02" ]] ; then
+	echo " ff 0f"
+	exit 0
+fi
+
 # raw 0x30 0x70 0x66 0x00 <zone> — a duty read on both stacks (Part 1.3). A trailing duty byte is ignored,
 # so a caller that mistakes this for the write selector changes nothing.
 if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x70" && $4 = "0x66" && $5 = "0x00" ]] ; then
@@ -522,6 +529,8 @@ class FakeOpenBmc:
 
     ZONE_OUT_OF_RANGE: int = 0xCC       # Completion code for a zone the board does not have
 
+    SUPPORTED_MODES: int = 0x0FFF       # Bitmask of the base fan modes the modelled board supports
+
     zones: int                          # Number of fan zones the modelled board has
     auto_duty: int                      # Duty the automatic control loop drives an unlatched zone to
     manual: Dict[int, bool]             # IPMI zone -> manual mode flag
@@ -610,6 +619,9 @@ class FakeOpenBmc:
         # Base fan mode: read, and written (which smfc must never do on this stack).
         if args[:4] == ["raw", "0x30", "0x45", "0x00"]:
             return self._reply(f"{self.fan_mode}")
+        if args[:4] == ["raw", "0x30", "0x45", "0x02"]:
+            # Two bytes, little-endian, one bit per mode value.
+            return self._reply(f" {self.SUPPORTED_MODES & 0xFF:02x} {self.SUPPORTED_MODES >> 8:02x}")
         if args[:4] == ["raw", "0x30", "0x45", "0x01"]:
             self.fan_mode_writes += 1
             self.fan_mode = int(args[4], 16)

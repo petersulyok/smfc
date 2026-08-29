@@ -59,21 +59,17 @@ discard the validated part and re-derive the part that keeps moving.
 - Correctness first (§1), then the test gate (§2), then behaviour (§3), then removal (§4).
 - Each phase is a standalone commit that leaves the branch green.
 
-### Open decisions — needed before §3 and §4 start
+### Decisions taken with the user, continued
 
-1. **A duty floor for OpenBMC?** `X14AtenPlatform` clamps to ≥ 5 % (`_clamp_level()`), OpenBMC has no
-   floor at all. Part 3.1 states the BMC's own automatic control never drives below 15 % but a manual
-   write has no such floor, so `min_level=0` on a latched zone can stop the fans with the automatic
-   loop suspended. Options: clamp at 15 % (match the BMC), clamp at 5 % (match ATEN), or leave it and
-   treat it as the user's call. Affects §3.
-2. **How should a failsafe trip be reported?** `ControlState` has `OK`/`LOST` only, deliberately. A
-   failsafe trip is not "control lost" in the sense `Service` means it: re-acquiring cannot clear it,
-   so reporting `LOST` sends the recovery path into a loop it can never win. Adding a third state
-   changes a base-class contract shared by every platform. Affects §3.
-3. **Is §4 in scope for this change?** It is the largest diff and the only user-visible change.
-   Everything else is a bug fix or behaviour-preserving.
-
-§1 and §2 are unambiguous and independent of all three answers.
+- **The OpenBMC duty floor is 5 %**, the same clamp `X14AtenPlatform` applies, so both X14 stacks behave
+  identically. It guards against a written `0x00` stopping the fans of a latched zone with nothing
+  regulating them; it does not second-guess a user who deliberately wants a very low duty.
+- **A failsafe trip is reported as `LOST`** with its own `ControlStatus.detail`, not as a new
+  `ControlState`. `ControlState` keeps its two values and the base-class contract is untouched. The cost is
+  accepted: `Service` re-acquires on every poll and re-acquiring cannot clear a failsafe trip, so the
+  detail must name the cause and must not repeat on every poll - `X14AtenPlatform.PINNED_REPORT_AFTER`
+  is the precedent.
+- **§4 is in scope**: `x14_zone_sensors` is removed in this change, while doing so is still free.
 
 ---
 
@@ -187,7 +183,8 @@ a duty read-back. OpenBMC can read the flag directly. The asymmetry is backwards
 lets the OpenBMC class report the cause with certainty where ATEN can only call it likely.
 
 Cost: one extra read per zone per poll, the same order as what `X14AtenPlatform.check_fan_mode()`
-already does. Depends on open decision 2 for how the state is surfaced.
+already does. A trip is reported as `LOST` with its own detail, which must name the cause and must not
+repeat on every poll.
 
 > ⚠️ Part 2 of the guide notes that on workstation boards fitted with slow fans the tacho counter
 > cannot resolve below roughly 420 RPM and reports 0, which the BMC reads as a fan failure. On such a
@@ -278,8 +275,8 @@ Last, once behaviour is settled:
   stays — it is a read that changes nothing and it returns the right *class* — but the reasoning
   becomes "the stacks share the `0x66` layout but not the meaning of selector `0x02`, so a fallback
   would silently apply the wrong lever". `platform.py:34-35` and `ipmi.py:27` carry the same retracted claim.
-- `README.md` / `config/smfc.conf` — remove `x14_zone_sensors=` if §4 lands; add the OpenBMC duty floor
-  if open decision 1 lands.
+- `README.md` / `config/smfc.conf` — remove `x14_zone_sensors=`, and note that `min_level=0` is raised to
+  the 5 % floor on both X14 stacks.
 - `CHANGELOG.md` — the OpenBMC duty write never having worked is a user-visible fix, not an internal
   correction, and should say so plainly.
 - `doc/X14H14_MANUAL_FANCONTROL.md` — fix the internal contradiction: §3.2 (`:243-244`) says the flag
@@ -300,7 +297,7 @@ Last, once behaviour is settled:
 ## Out of scope
 
 - **`X14AtenPlatform`.** Confirmed on H14 hardware, unaffected by every fact this revision corrects.
-- Any change to `ControlState`/`ControlStatus` beyond what open decision 2 settles.
+- Any change to `ControlState`/`ControlStatus`: the two states and the base-class contract stay as they are.
 - `/snapshot`, `/metrics` and the Grafana contract.
 - Whether the ATEN bypass also helps X13 and older boards — same firmware line, plausible, untested,
   separate decision.

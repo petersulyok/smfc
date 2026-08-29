@@ -74,6 +74,24 @@ def _x14_get_manual_cmd(zone: int) -> List[str]:
     return ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x00", f"0x{zone + 1:02x}"]
 
 
+def _x14_get_failsafe_cmd(zone: int) -> List[str]:
+    return ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x02", f"0x{zone + 1:02x}"]
+
+
+def _x14_exec(stdout: str) -> Callable[[List[str]], subprocess.CompletedProcess]:
+    """Answer every command with `stdout`, except the OEM failsafe read, which reports a healthy zone.
+
+    The X14 rows drive the whole matrix from one reply string, and the failsafe flag shares the reply
+    shape of the manual mode flag. Without this the same `01` would mean both "manual mode is latched"
+    and "the BMC has forced this zone to 100%", which are opposite states.
+    """
+    def exec_fn(args: List[str]) -> subprocess.CompletedProcess:
+        if args[:7] == ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x02"]:
+            return subprocess.CompletedProcess([], returncode=0, stdout=" cf c2 00 00")
+        return subprocess.CompletedProcess([], returncode=0, stdout=stdout)
+    return exec_fn
+
+
 def _x10qbi_get_cmd(zone: int) -> List[str]:
     return ["raw", "0x30", "0x90", "0x5c", "0x03", f"0x{0x10 + zone:x}", "0x01"]
 
@@ -88,7 +106,8 @@ START_ZONES = (0, 1)
 _FULL_START_CALLS = (call(GET_FAN_MODE_CMD),)
 _FULL_ACQUIRE_CALLS = (call(GET_FAN_MODE_CMD), call(_set_fan_mode_cmd(FanMode.FULL)))
 # X14 latches manual mode per zone and reads the flag back, instead of writing the fan mode.
-_X14_START_CALLS = tuple(
+_X14_PROBE_CALLS = tuple(call(_x14_get_failsafe_cmd(zone)) for zone in range(X14OpenBmcPlatform.FANCTL_COUNT))
+_X14_START_CALLS = _X14_PROBE_CALLS + tuple(
     c for zone in START_ZONES
     for c in (call(_x14_set_manual_cmd(zone, True)), call(_x14_get_manual_cmd(zone)))
 )
@@ -148,6 +167,7 @@ class PlatformSpec:
     multi_extra_calls: int                              # extra exec calls before set_multiple_fan_levels() writes
     multi_vectors: tuple                                # (zones, level, wire_level)
     multi_bad: tuple                                    # (zones, level) rejected by set_multiple_fan_levels()
+    set_mode_extra_calls: int = 0                       # extra exec calls before the fan mode write
     roundtrip_min: int = 0                              # duty floor the platform clamps every write to
 
 
@@ -222,13 +242,15 @@ PLATFORMS: List[PlatformSpec] = [
         end_calls=_X14_END_CALLS,
         set_mode_valid=(FanMode.STANDARD, FanMode.FULL, FanMode.OPTIMAL, FanMode.PUE, FanMode.HEAVY_IO, 0x0B),
         set_mode_invalid=(-1, 0x0C, 100),
+        set_mode_extra_calls=1,
         set_level_cmd=_x14_set_cmd,
         set_level_extra_calls=0,
-        set_level_vectors=((0, 100, 100), (1, 50, 50), (2, 0, 0), (3, 75, 75), (4, 40, 40)),
+        set_level_vectors=((0, 100, 100), (1, 50, 50), (2, 0, 5), (3, 75, 75), (4, 40, 40)),
         bad_levels=((-1, 50), (5, 50), (0, -1), (0, 101)),
         multi_extra_calls=0,
-        multi_vectors=(([0, 1], 100, 100), ([0, 1, 2], 50, 50), ([2], 0, 0), ([0, 3], 75, 75), ([0, 4], 60, 60)),
+        multi_vectors=(([0, 1], 100, 100), ([0, 1, 2], 50, 50), ([2], 0, 5), ([0, 3], 75, 75), ([0, 4], 60, 60)),
         multi_bad=(([-1, 0], 50), ([0, 5], 50), ([0], -1), ([0], 101)),
+        roundtrip_min=5,
     ),
     PlatformSpec(
         # The ATEN duty commands are byte-for-byte GenericPlatform's (ATEN *is* the X9-X13 firmware line),
@@ -390,7 +412,7 @@ class TestPlatforms:
         - ASSERT: start() returns spec.start_returns, i.e. False whenever no fan mode was written, so the caller
           skips the fan_mode_delay sleep
         """
-        mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=spec.start_stdout)
+        mock_exec.side_effect = _x14_exec(spec.start_stdout)
         platform = spec.make(mock_exec)
         assert platform.start(list(START_ZONES)) is spec.start_returns
         assert mock_exec.call_count == len(spec.start_calls)
@@ -425,7 +447,7 @@ class TestPlatforms:
         - ASSERT: the status is confirmed, i.e. the state was really read from the BMC
         - ASSERT: the observed fan mode is cached in ControlStatus.fan_mode for the snapshot
         """
-        mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=spec.start_stdout)
+        mock_exec.side_effect = _x14_exec(spec.start_stdout)
         platform = spec.make(mock_exec)
         status = platform.check_fan_mode(list(START_ZONES))
         assert status.state == ControlState.OK
@@ -444,7 +466,7 @@ class TestPlatforms:
         """
         if spec.lost_stdout is None:
             pytest.skip(f"{spec.label} has no readable lever; its loss detection is covered by TestX14AtenPlatform")
-        mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=spec.lost_stdout)
+        mock_exec.side_effect = _x14_exec(spec.lost_stdout)
         platform = spec.make(mock_exec)
         status = platform.check_fan_mode(list(START_ZONES))
         assert status.state == ControlState.LOST
@@ -500,7 +522,7 @@ class TestPlatforms:
         platform = spec.make(mock_exec)
         platform.set_fan_mode(mode)
         mock_exec.assert_called_with(_set_fan_mode_cmd(mode))
-        assert mock_exec.call_count == 1
+        assert mock_exec.call_count == spec.set_mode_extra_calls + 1
 
     @pytest.mark.parametrize("spec, mode", _cases("set_mode_invalid"))
     def test_set_fan_mode_invalid(self, spec: PlatformSpec, mode: int, mock_exec: MagicMock) -> None:
@@ -628,12 +650,13 @@ class TestX14OpenBmcPlatform:
         - build the platform and invoke start() for zone 1 only
         - ASSERT: only zone 1 is latched (as the 1-based zone byte 0x02), because latching a zone smfc does not
           drive would freeze it at its current duty with nothing regulating it
-        - ASSERT: exec callback is invoked exactly twice, i.e. the latch write and its read-back confirmation
+        - ASSERT: exec callback is invoked exactly twice beyond the zone count probe, i.e. the latch write and
+          its read-back confirmation, and nothing for the zones smfc does not drive
         """
-        mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=" 01")
+        mock_exec.side_effect = _x14_exec(" 01")
         platform = self._platform(mock_exec)
         platform.start([1])
-        assert mock_exec.call_count == 2
+        assert mock_exec.call_count == len(_X14_PROBE_CALLS) + 2
         mock_exec.assert_has_calls([call(_x14_set_manual_cmd(1, True)), call(_x14_get_manual_cmd(1))])
 
     @pytest.mark.parametrize("zone", [-1, 5], ids=["below-range", "above-range"])
@@ -912,6 +935,116 @@ class TestX14OpenBmcBehaviour:
         assert platform.get_fan_level(0) == 30, f"{f}: automatic control resumed"
         expected = [level] * len(self.ZONES) if level >= 0 else [30] * len(self.ZONES)
         assert [bmc.duty_at_release[z] for z in self.ZONES] == expected, f"{f}: exit level in force at release"
+
+
+    def test_start_rejects_a_zone_the_board_does_not_have(self) -> None:
+        """Negative unit test for X14OpenBmcPlatform.start() method. It contains the following steps:
+        - build a modelled board with two zones and a platform driven against it
+        - invoke start() for zones 0 and 2, i.e. one zone beyond what the board has
+        - ASSERT: start() raises ValueError, because the zone count is discovered from the board rather than
+          assumed from the firmware bound
+        - ASSERT: the message names the offending zone and the number of zones the board really has
+        - ASSERT: nothing was latched, so a misconfiguration never leaves the board half taken over
+        """
+        f = "TestX14OpenBmcBehaviour.test_start_rejects_a_zone_the_board_does_not_have"
+        bmc = FakeOpenBmc(zones=2)
+        platform = self._platform(bmc)
+        with pytest.raises(ValueError) as excinfo:
+            platform.start([0, 2])
+        assert "[2]" in str(excinfo.value), f"{f}: message names the zone"
+        assert "2 zone(s)" in str(excinfo.value), f"{f}: message names the discovered count"
+        assert bmc.latched_zones == [], f"{f}: nothing latched"
+
+    def test_zone_count_is_probed_once(self) -> None:
+        """Positive unit test for X14OpenBmcPlatform.zone_count property. It contains the following steps:
+        - build a modelled board with three zones and a platform driven against it
+        - read the zone count twice
+        - ASSERT: the discovered count matches the board
+        - ASSERT: the board saw the probe only once. It runs on every recovery path through start(), so a
+          probe per call would add an IPMI read per zone to every lost-control poll
+        """
+        f = "TestX14OpenBmcBehaviour.test_zone_count_is_probed_once"
+        bmc = FakeOpenBmc(zones=3)
+        platform = self._platform(bmc)
+        assert platform.zone_count == 3, f"{f}: discovered zone count"
+        before = len(bmc.commands)
+        assert platform.zone_count == 3, f"{f}: cached zone count"
+        assert len(bmc.commands) == before, f"{f}: probed only once"
+
+    def test_supported_fan_modes_come_from_the_board(self) -> None:
+        """Positive unit test for X14OpenBmcPlatform.valid_fan_modes property. It contains the following steps:
+        - build a modelled board reporting the FullSpeed, Performance and Silent bitmask of Part 3.1
+        - read the supported fan modes, then try to write a mode outside them
+        - ASSERT: the modes decoded from the little-endian bitmask are exactly bits 1, 10 and 11
+        - ASSERT: set_fan_mode() rejects a mode the board does not have. Such a mode is otherwise accepted
+          silently and reads back correctly while a different fan table is loaded
+        """
+        f = "TestX14OpenBmcBehaviour.test_supported_fan_modes_come_from_the_board"
+        bmc = FakeOpenBmc()
+        bmc.SUPPORTED_MODES = 0x0C02
+        platform = self._platform(bmc)
+        assert platform.valid_fan_modes == [1, 10, 11], f"{f}: decoded bitmask"
+        with pytest.raises(ValueError):
+            platform.set_fan_mode(FanMode.STANDARD)
+
+    def test_check_fan_mode_reports_a_failsafe_trip(self) -> None:
+        """Negative unit test for X14OpenBmcPlatform.check_fan_mode() method. It contains the following steps:
+        - build a modelled board, latch zones 0 and 1, and trip zone 1 into failsafe
+        - poll check_fan_mode() until the cause has persisted
+        - ASSERT: the state is LOST although manual mode is still latched in both zones, which is the case
+          the manual mode flag alone cannot show
+        - ASSERT: once the trip has persisted, the detail names the zone and says that restoring fan control
+          cannot recover it, so the log does not send the user after a lever that is already in place
+        - ASSERT: the detail also names the tacho cause, because on a board whose fans turn slower than the
+          BMC can measure a healthy fan trips failsafe by itself
+        """
+        f = "TestX14OpenBmcBehaviour.test_check_fan_mode_reports_a_failsafe_trip"
+        bmc = FakeOpenBmc()
+        platform = self._platform(bmc)
+        platform.start(self.ZONES)
+        bmc.failsafe[1] = True
+        for _ in range(X14OpenBmcPlatform.FAILSAFE_REPORT_AFTER):
+            status = platform.check_fan_mode(self.ZONES)
+        assert bmc.latched_zones == self.ZONES, f"{f}: manual mode still latched"
+        assert status.state == ControlState.LOST, f"{f}: failsafe is a loss of control"
+        assert "[1]" in status.detail, f"{f}: detail names the pinned zone"
+        assert "cannot recover it" in status.detail, f"{f}: detail says re-acquiring will not help"
+        assert "0 RPM" in status.detail, f"{f}: detail names the usual trigger"
+
+    def test_check_fan_mode_recovers_when_the_failsafe_trip_clears(self) -> None:
+        """Positive unit test for X14OpenBmcPlatform.check_fan_mode() method. It contains the following steps:
+        - build a modelled board, latch zones 0 and 1, trip zone 1 into failsafe and poll once
+        - clear the trip on the board and poll again
+        - ASSERT: the state is OK again, i.e. a failsafe trip is not sticky in smfc's own bookkeeping
+        - ASSERT: a later trip has to persist again before the cause is named, so a zone that trips
+          intermittently does not carry a stale count into its next trip
+        """
+        f = "TestX14OpenBmcBehaviour.test_check_fan_mode_recovers_when_the_failsafe_trip_clears"
+        bmc = FakeOpenBmc()
+        platform = self._platform(bmc)
+        platform.start(self.ZONES)
+        bmc.failsafe[1] = True
+        platform.check_fan_mode(self.ZONES)
+        bmc.failsafe[1] = False
+        assert platform.check_fan_mode(self.ZONES).state == ControlState.OK, f"{f}: trip cleared"
+        bmc.failsafe[1] = True
+        assert "cannot recover it" not in platform.check_fan_mode(self.ZONES).detail, f"{f}: count restarted"
+
+    def test_a_zero_duty_never_reaches_the_fans(self) -> None:
+        """Negative unit test for X14OpenBmcPlatform.set_fan_level() method. It contains the following steps:
+        - build a modelled board and latch zones 0 and 1
+        - write a duty of 0% to one zone and to both zones at once
+        - ASSERT: the board runs at the 5% floor, not at 0%. `min_level=0` is a legal configuration, and a
+          manual duty write has no floor of its own: the 15% floor belongs to the automatic control a
+          latched zone is no longer under, so a written 0 would stop the fans with nothing regulating them
+        """
+        f = "TestX14OpenBmcBehaviour.test_a_zero_duty_never_reaches_the_fans"
+        bmc = FakeOpenBmc()
+        platform = self._platform(bmc)
+        platform.start(self.ZONES)
+        platform.set_fan_level(0, 0)
+        platform.set_multiple_fan_levels(self.ZONES, 0)
+        assert [bmc.duty[z] for z in self.ZONES] == [5, 5], f"{f}: duty floor"
 
 
 class TestX14AtenPlatform:
