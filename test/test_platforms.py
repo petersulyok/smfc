@@ -20,6 +20,7 @@ from smfc.generic import GenericPlatform
 from smfc.genericx9 import GenericX9Platform
 from smfc.genericx14 import X14AtenPlatform, X14OpenBmcPlatform
 from smfc.x10qbi import X10QBi
+from .test_fixtures import FakeOpenBmc
 
 # ipmitool argument lists shared by every platform.
 GET_FAN_MODE_CMD = ["raw", "0x30", "0x45", "0x00"]
@@ -758,6 +759,159 @@ class TestX14OpenBmcPlatform:
         platform = self._platform(mock_exec)
         platform.start([0, 2])
         assert platform.latched_zones == [0, 2], f"{f}: latched zones"
+
+
+class TestX14OpenBmcBehaviour:
+    """Behavioural tests for X14OpenBmcPlatform, driven against the `FakeOpenBmc` model of the board.
+
+    The PlatformSpec matrix and the TestX14OpenBmcPlatform tests above assert which commands the platform
+    sends, which pins the wire format but cannot catch a command the board accepts and ignores: the expected
+    argv is built the same way the implementation builds it, so both are wrong together. These tests assert
+    the state the *board* ends up in instead - which zones are latched, and what duty each zone is running -
+    so a command that reaches the BMC and does nothing fails here.
+    """
+
+    ZONES = [0, 1]
+
+    @staticmethod
+    def _platform(bmc: FakeOpenBmc) -> X14OpenBmcPlatform:
+        """Build an X14OpenBmcPlatform driven against the modelled board."""
+        return X14OpenBmcPlatform(PlatformName.GENERIC_X14, bmc, dict(bmc.zone_sensors))
+
+    def test_start_latches_exactly_the_controlled_zones(self) -> None:
+        """Positive unit test for X14OpenBmcPlatform.start() method. It contains the following steps:
+        - build a five-zone modelled board and a platform driven against it
+        - invoke start() for zones 0 and 2
+        - ASSERT: the board reports zones 0 and 2 latched, i.e. the OEM command reached it and took effect
+        - ASSERT: no other zone is latched. Latching a zone smfc does not drive would freeze it at its
+          current duty with nothing regulating it
+        - ASSERT: the base fan mode was never written; on this stack that would clear manual mode everywhere
+        """
+        f = "TestX14OpenBmcBehaviour.test_start_latches_exactly_the_controlled_zones"
+        bmc = FakeOpenBmc()
+        self._platform(bmc).start([0, 2])
+        assert bmc.latched_zones == [0, 2], f"{f}: latched zones"
+        assert bmc.fan_mode_writes == 0, f"{f}: base fan mode untouched"
+
+    def test_duty_reaches_the_fans_of_a_latched_zone(self) -> None:
+        """Positive unit test for X14OpenBmcPlatform.set_fan_level() method. It contains the following steps:
+        - build a modelled board whose automatic curve holds every zone at 30%
+        - latch zone 1 with start(), then write 40% to it
+        - ASSERT: the board's zone 1 is running at 40%, i.e. the duty write moved the fans. A write sent
+          with the read selector is accepted by the BMC and changes nothing, which this catches
+        - ASSERT: get_fan_level() reads the same 40% back from the board
+        - ASSERT: the untouched zone 0 is still on the automatic curve
+        """
+        f = "TestX14OpenBmcBehaviour.test_duty_reaches_the_fans_of_a_latched_zone"
+        bmc = FakeOpenBmc(auto_duty=30)
+        platform = self._platform(bmc)
+        platform.start([1])
+        platform.set_fan_level(1, 40)
+        assert bmc.duty[1] == 40, f"{f}: duty of the latched zone"
+        assert platform.get_fan_level(1) == 40, f"{f}: duty read back"
+        assert bmc.duty[0] == 30, f"{f}: uncontrolled zone left alone"
+
+    def test_duty_does_not_hold_without_manual_mode(self) -> None:
+        """Negative unit test for X14OpenBmcPlatform.set_fan_level() method. It contains the following steps:
+        - build a modelled board whose automatic curve holds every zone at 30%
+        - write 40% to zone 1 without latching manual mode first
+        - ASSERT: the board reports zone 1 back at 30%, because the automatic control loop reclaims every
+          unlatched zone within about a second. The duty write is not the lever, the manual mode flag is
+        """
+        f = "TestX14OpenBmcBehaviour.test_duty_does_not_hold_without_manual_mode"
+        bmc = FakeOpenBmc(auto_duty=30)
+        platform = self._platform(bmc)
+        platform.set_fan_level(1, 40)
+        assert platform.get_fan_level(1) == 30, f"{f}: automatic control took the zone back"
+
+    def test_set_multiple_fan_levels_reaches_every_zone(self) -> None:
+        """Positive unit test for X14OpenBmcPlatform.set_multiple_fan_levels() method. It contains the steps:
+        - build a modelled board and latch zones 0, 1 and 2
+        - write 60% to all three in one call
+        - ASSERT: all three zones are running at 60% on the board
+        - ASSERT: the zones that were not written are still on the automatic curve
+        """
+        f = "TestX14OpenBmcBehaviour.test_set_multiple_fan_levels_reaches_every_zone"
+        bmc = FakeOpenBmc(auto_duty=30)
+        platform = self._platform(bmc)
+        platform.start([0, 1, 2])
+        platform.set_multiple_fan_levels([0, 1, 2], 60)
+        assert [bmc.duty[z] for z in (0, 1, 2)] == [60, 60, 60], f"{f}: written zones"
+        assert [bmc.duty[z] for z in (3, 4)] == [30, 30], f"{f}: untouched zones"
+
+    def test_check_fan_mode_sees_the_board_clear_the_latch(self) -> None:
+        """Negative unit test for X14OpenBmcPlatform.check_fan_mode() method. It contains the following steps:
+        - build a modelled board, latch zones 0 and 1, and confirm the platform reports OK
+        - clear zone 1's manual mode flag on the board, as a BMC restart or a fan mode change from another
+          interface does
+        - ASSERT: check_fan_mode() reports ControlState.LOST, i.e. the loss is observed on the board and not
+          merely inferred from what smfc last wrote
+        - ASSERT: the detail names zone 1 and not zone 0, so the log points at the zone that was taken away
+        """
+        f = "TestX14OpenBmcBehaviour.test_check_fan_mode_sees_the_board_clear_the_latch"
+        bmc = FakeOpenBmc()
+        platform = self._platform(bmc)
+        platform.start(self.ZONES)
+        assert platform.check_fan_mode(self.ZONES).state == ControlState.OK, f"{f}: latched"
+        bmc.manual[1] = False
+        status = platform.check_fan_mode(self.ZONES)
+        assert status.state == ControlState.LOST, f"{f}: latch cleared"
+        assert "[1]" in status.detail, f"{f}: detail names the lost zone"
+
+    def test_start_reacquires_a_zone_the_board_took_back(self) -> None:
+        """Positive unit test for X14OpenBmcPlatform.start() method as the recovery path. It contains the
+        steps:
+        - build a modelled board, latch zones 0 and 1 and drive them to 60%
+        - clear both manual mode flags on the board, so the automatic curve reclaims the zones
+        - invoke start() again, as `Service` does on a lost control state, and re-apply the level
+        - ASSERT: both zones are latched again, i.e. start() is idempotent and usable as the recovery path
+        - ASSERT: both zones are back at 60%, so recovery restores the duty and not only the flag
+        """
+        f = "TestX14OpenBmcBehaviour.test_start_reacquires_a_zone_the_board_took_back"
+        bmc = FakeOpenBmc(auto_duty=30)
+        platform = self._platform(bmc)
+        platform.start(self.ZONES)
+        platform.set_multiple_fan_levels(self.ZONES, 60)
+        bmc.manual = {z: False for z in range(bmc.zones)}
+        platform.start(self.ZONES)
+        platform.set_multiple_fan_levels(self.ZONES, 60)
+        assert bmc.latched_zones == self.ZONES, f"{f}: re-latched"
+        assert [bmc.duty[z] for z in self.ZONES] == [60, 60], f"{f}: duty restored"
+
+    def test_a_failsafe_zone_ignores_the_duty(self) -> None:
+        """Negative unit test for X14OpenBmcPlatform.set_fan_level() method. It contains the following steps:
+        - build a modelled board and latch zone 1
+        - trip zone 1 into failsafe, as the BMC does on a fan failure or a missing thermal sensor
+        - write 40% to it
+        - ASSERT: the zone reads back 100%, not 40%: failsafe outranks manual mode, so the duty smfc writes
+          is discarded while the trip lasts and re-writing it cannot win the zone back
+        """
+        f = "TestX14OpenBmcBehaviour.test_a_failsafe_zone_ignores_the_duty"
+        bmc = FakeOpenBmc()
+        platform = self._platform(bmc)
+        platform.start([1])
+        bmc.failsafe[1] = True
+        platform.set_fan_level(1, 40)
+        assert platform.get_fan_level(1) == 100, f"{f}: zone pinned by failsafe"
+
+    @pytest.mark.parametrize("level", [50, -1], ids=["with-exit-level", "without-exit-level"])
+    def test_end_releases_every_zone(self, level: int) -> None:
+        """Positive unit test for X14OpenBmcPlatform.end() method. It contains the following steps:
+        - build a modelled board and latch zones 0 and 1
+        - invoke end() for both zones, once with an exit level and once with exit_level=-1
+        - ASSERT: no zone is latched on the board afterwards. The release runs on every exit path; a latch
+          left armed freezes the zones at their last duty with nothing regulating them
+        - ASSERT: the board is back under automatic control, i.e. the zones return to the automatic curve
+        """
+        f = "TestX14OpenBmcBehaviour.test_end_releases_every_zone"
+        bmc = FakeOpenBmc(auto_duty=30)
+        platform = self._platform(bmc)
+        platform.start(self.ZONES)
+        platform.end(self.ZONES, level)
+        assert bmc.latched_zones == [], f"{f}: nothing latched"
+        assert platform.get_fan_level(0) == 30, f"{f}: automatic control resumed"
+        expected = [level] * len(self.ZONES) if level >= 0 else [30] * len(self.ZONES)
+        assert [bmc.duty_at_release[z] for z in self.ZONES] == expected, f"{f}: exit level in force at release"
 
 
 class TestX14AtenPlatform:

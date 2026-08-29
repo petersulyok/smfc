@@ -13,8 +13,11 @@ import configparser
 import json
 import os
 import random
+import subprocess
 import tempfile
-from typing import List
+from typing import Dict, List, Optional
+
+from smfc.platform import IpmiError
 
 
 class TestData:
@@ -146,16 +149,18 @@ class TestData:
     def create_ipmi_command(self, bmc_stack: str = "", aten_duty_path: str = "pwm") -> str:
         """Creates a bash script emulating ipmitool.
 
-        Supermicro's 14th generation ships two unrelated BMC firmware stacks, and the same opcode means
-        different things on each (`doc/X14H14_MANUAL_FANCONTROL.md`, Part 1.3), so the emulation has to be
-        stack-dependent. The arguments are baked into the generated script (the matching `SMFC_TEST_*`
-        environment variables still override them, for driving the script by hand):
+        Supermicro's 14th generation ships two unrelated BMC firmware stacks with different command sets
+        (`doc/X14H14_MANUAL_FANCONTROL.md`, Part 1), so the emulation has to be stack-dependent. The
+        arguments are baked into the generated script (the matching `SMFC_TEST_*` environment variables
+        still override them, for driving the script by hand):
 
-        - `bmc_stack="openbmc"`  the Part 1 probe answers with a data byte, and
-          `0x30 0x70 0x66 0x00 <zone> [<level>]` is always a duty *write* (the real handler accepts two or
-          three bytes, which is exactly why guessing the stack is unsafe).
-        - `bmc_stack="aten"`     the Part 1 probe answers `0xC1`, and `0x30 0x70 0x66 0x00 <zone>` is a
-          duty *read* while `0x30 0x70 0x66 0x01 <zone> <level>` is the write.
+        - `bmc_stack="openbmc"`  the Part 1 probe answers with a data byte, and the OEM manual/failsafe
+          command set of netfn `0x2e` exists.
+        - `bmc_stack="aten"`     the Part 1 probe answers `0xC1`, and netfn `0x2e` does not exist.
+
+        Both stacks share the `0x30 0x70 0x66` layout: selector `0x00` reads a zone's duty, `0x01` writes
+        it, `0x02` toggles automatic control. What differs is what `0x02` means - per-zone manual mode on
+        OpenBMC, a global bypass flag on ATEN.
         - `bmc_stack=""` (default): the historical, stack-agnostic behaviour every non-X14 test relies on.
 
         On the ATEN stack `aten_duty_path` selects which of the two duty paths of Part 4.4 the board has,
@@ -492,6 +497,167 @@ printf '{fmt_str}' $args
         with os.fdopen(h, "w+t") as f:
             f.write(content)
         return name
+
+
+class FakeOpenBmc:
+    """In-process model of the fan control of an X14/H14 board running the OpenBMC firmware stack.
+
+    It is an `exec_ipmitool` callback, so a real `Platform` can be driven against it, and it holds the state
+    the BMC holds: a per-zone manual mode flag, a per-zone failsafe flag and a per-zone duty register. That
+    lets a test assert what the *fans* end up doing rather than which bytes were sent, which is the only way
+    to catch a command that the board accepts and ignores.
+
+    Three rules make it a model rather than a command echo, all from
+    `doc/X14H14_MANUAL_FANCONTROL.md` Part 3:
+
+    - a written duty is only honoured while that zone's manual mode flag is latched; the automatic control
+      loop reclaims every unlatched zone (`auto_duty`) within about a second, which the model applies before
+      each command;
+    - a zone in failsafe is pinned at 100% and every duty written to it is discarded;
+    - selector `0x00` of `0x30 0x70 0x66` reads a duty and writes nothing, whatever follows the zone byte.
+
+    Attributes are public so a test can seed a state (`failsafe[2] = True`) or assert one
+    (`manual == {0: True, ...}`) directly.
+    """
+
+    ZONE_OUT_OF_RANGE: int = 0xCC       # Completion code for a zone the board does not have
+
+    zones: int                          # Number of fan zones the modelled board has
+    auto_duty: int                      # Duty the automatic control loop drives an unlatched zone to
+    manual: Dict[int, bool]             # IPMI zone -> manual mode flag
+    failsafe: Dict[int, bool]           # IPMI zone -> failsafe flag (zone forced to 100%)
+    duty: Dict[int, int]                # IPMI zone -> current duty in %
+    zone_sensors: Dict[int, int]        # IPMI zone -> representative fan sensor number
+    fan_mode: int                       # Base fan mode, the curve an unlatched zone falls back to
+    fan_mode_writes: int                # How often the base fan mode was written
+    duty_at_release: Dict[int, int]     # Duty of every zone at the moment manual mode was last released
+    commands: List[List[str]]           # Every command received, in order
+
+    def __init__(self, zones: int = 5, auto_duty: int = 30, fan_mode: int = 1,
+                 zone_sensors: Optional[Dict[int, int]] = None) -> None:
+        """Initialize the modelled board.
+        Args:
+            zones (int): number of fan zones the board has
+            auto_duty (int): duty the automatic control loop drives an unlatched zone to
+            fan_mode (int): base fan mode reported by `0x30 0x45 0x00`
+            zone_sensors (Optional[Dict[int, int]]): IPMI zone -> fan sensor number, for `0x30 0x70 0x88`
+        """
+        self.zones = zones
+        self.auto_duty = auto_duty
+        self.manual = {z: False for z in range(zones)}
+        self.failsafe = {z: False for z in range(zones)}
+        self.duty = {z: auto_duty for z in range(zones)}
+        self.zone_sensors = dict(zone_sensors) if zone_sensors else {z: 0x41 + z for z in range(zones)}
+        self.fan_mode = fan_mode
+        self.fan_mode_writes = 0
+        self.duty_at_release = {}
+        self.commands = []
+
+    @property
+    def latched_zones(self) -> List[int]:
+        """The zones whose manual mode flag is currently set."""
+        return sorted(z for z, latched in self.manual.items() if latched)
+
+    def _settle(self) -> None:
+        """Let the BMC's own loop run: failsafe pins its zone at 100%, and the automatic curve reclaims
+        every zone that is not latched."""
+        for zone in range(self.zones):
+            if self.failsafe[zone]:
+                self.duty[zone] = 100
+            elif not self.manual[zone]:
+                self.duty[zone] = self.auto_duty
+
+    def _record_release(self) -> None:
+        """Snapshot the duty of every zone as manual mode is released.
+
+        The exit level is a transition on this stack: the BMC's own curve takes the zones back within about
+        a second, so the level cannot be observed after the fact. This is what makes the ordering inside
+        `end()` visible - a release that runs before the level write hands the fans back at the automatic
+        duty, and the level never reaches them at all.
+        """
+        self.duty_at_release = dict(self.duty)
+
+    def _zone(self, arg: str, offset: int = 0) -> int:
+        """Decode a zone byte, raising the board's own completion code for a zone it does not have.
+        Args:
+            arg (str): the zone byte as ipmitool receives it
+            offset (int): 1 for the OEM manual/failsafe commands, which count zones from 1
+        Returns:
+            int: the 0-based zone ID
+        """
+        zone = int(arg, 16) - offset
+        if zone < 0 or zone >= self.zones:
+            raise IpmiError(f"ipmitool error (1): rsp=0x{self.ZONE_OUT_OF_RANGE:02x}.", self.ZONE_OUT_OF_RANGE)
+        return zone
+
+    @staticmethod
+    def _reply(stdout: str) -> subprocess.CompletedProcess:
+        """Wrap a reply the way `Ipmi._exec_ipmitool()` hands it to a platform."""
+        return subprocess.CompletedProcess([], returncode=0, stdout=stdout, stderr="")
+
+    def __call__(self, args: List[str]) -> subprocess.CompletedProcess:
+        """Execute one ipmitool command against the modelled board.
+        Args:
+            args (List[str]): ipmitool arguments, as a platform passes them to its exec callback
+        Returns:
+            subprocess.CompletedProcess: the BMC reply
+        Raises:
+            IpmiError: the board rejected the command, carrying its completion code
+        """
+        self.commands.append(list(args))
+        self._settle()
+
+        # Base fan mode: read, and written (which smfc must never do on this stack).
+        if args[:4] == ["raw", "0x30", "0x45", "0x00"]:
+            return self._reply(f"{self.fan_mode}")
+        if args[:4] == ["raw", "0x30", "0x45", "0x01"]:
+            self.fan_mode_writes += 1
+            self.fan_mode = int(args[4], 16)
+            # A base fan mode change clears manual mode on every zone.
+            self.manual = {z: False for z in range(self.zones)}
+            return self._reply("")
+
+        # OEM manual/failsafe commands. Every reply echoes the IANA ID back before the payload.
+        if args[:6] == ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00"]:
+            op = args[6]
+            zone = self._zone(args[7], offset=1)
+            if op == "0x00":
+                return self._reply(f" cf c2 00 {int(self.manual[zone]):02x}")
+            if op == "0x02":
+                return self._reply(f" cf c2 00 {int(self.failsafe[zone]):02x}")
+            if op == "0x01":
+                if self.manual[zone] and args[8] == "0x00":
+                    self._record_release()
+                self.manual[zone] = args[8] == "0x01"
+                return self._reply("")
+            raise IpmiError("ipmitool error (1): rsp=0xc1.", 0xC1)
+
+        # Duty commands: 0x00 reads, 0x01 writes, 0x02 toggles manual mode in every zone.
+        if args[:4] == ["raw", "0x30", "0x70", "0x66"]:
+            selector = args[4]
+            if selector == "0x00":
+                # A trailing duty byte is ignored: this selector never writes.
+                return self._reply(f" {self.duty[self._zone(args[5])]:02x}")
+            if selector == "0x01":
+                zone = self._zone(args[5])
+                if not self.failsafe[zone]:
+                    self.duty[zone] = int(args[6], 16)
+                return self._reply("")
+            if selector == "0x02":
+                if args[5] == "0x00" and any(self.manual.values()):
+                    self._record_release()
+                self.manual = {z: args[5] == "0x01" for z in range(self.zones)}
+                return self._reply("")
+
+        # Duty and temperature of one fan, addressed by sensor number.
+        if args[:4] == ["raw", "0x30", "0x70", "0x88"]:
+            sensor = int(args[4], 16)
+            for zone, zone_sensor in self.zone_sensors.items():
+                if zone_sensor == sensor:
+                    return self._reply(f" {self.duty[zone]:02x} 2d")
+            return self._reply(" ff ff")
+
+        raise IpmiError("ipmitool error (1): rsp=0xc1.", 0xC1)
 
 
 # End.
