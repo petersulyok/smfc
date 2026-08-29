@@ -44,6 +44,8 @@ DIM: str = "\x1b[2m"
 GREEN: str = "\x1b[32m"
 YELLOW: str = "\x1b[33m"   # warm — upper 30 % of a controller's steering window
 RED: str = "\x1b[31m"
+# Fan mode label of the platforms that are not driven through FULL fan mode (X14/H14).
+FAN_MODE_MANUAL: str = "manual control"
 BLUE: str = "\x1b[1;94m"   # bold bright-blue — section headers (BMC, Fan controllers, blocks, IPMI zones)
 RESET: str = "\x1b[0m"
 
@@ -583,23 +585,24 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
         # Platform shows the factory class only — the product name is already on the line above.
         lines.append(f"  Platform      : {type(ipmi.platform).__name__}")
     # Fan mode (live read) closes the BMC block.
-    try:
-        mode = ipmi.get_fan_mode()
-        mode_name = Ipmi.get_fan_mode_name(mode)
-        if mode == int(Ipmi.FULL_MODE):
-            mode_str = _wrap(mode_name, GREEN, use_color)
-            lines.append(f"  Fan mode      : {mode_str} ({mode})")
-        elif ipmi.platform.ENFORCES_FULL_MODE:
-            mode_str = _wrap(mode_name, RED, use_color)
-            warn = _wrap("  ! not in FULL mode - smfc may not be controlling the fans", RED, use_color)
-            lines.append(f"  Fan mode      : {mode_str} ({mode}){warn}")
-        else:
-            # X14 does not use FULL mode: the base fan mode is only the fallback curve and smfc leaves it
-            # alone, so a non-FULL mode is the normal state there and must not be flagged as a problem.
-            lines.append(f"  Fan mode      : {mode_name} ({mode})")
-    except Exception as e:  # pylint: disable=broad-except
-        err_str = _wrap(f"ERROR: {e}", RED, use_color)
-        lines.append(f"  Fan mode      : {err_str}")
+    if not ipmi.platform.ENFORCES_FULL_MODE:
+        # X14/H14 boards are not driven through a fan mode: smfc holds an explicit BMC fan control state
+        # and leaves the base fan mode alone, so the mode value says nothing about who owns the fans.
+        lines.append(f"  Fan mode      : {FAN_MODE_MANUAL}")
+    else:
+        try:
+            mode = ipmi.get_fan_mode()
+            mode_name = Ipmi.get_fan_mode_name(mode)
+            if mode == int(Ipmi.FULL_MODE):
+                mode_str = _wrap(mode_name, GREEN, use_color)
+                lines.append(f"  Fan mode      : {mode_str} ({mode})")
+            else:
+                mode_str = _wrap(mode_name, RED, use_color)
+                warn = _wrap("  ! not in FULL mode - smfc may not be controlling the fans", RED, use_color)
+                lines.append(f"  Fan mode      : {mode_str} ({mode}){warn}")
+        except Exception as e:  # pylint: disable=broad-except
+            err_str = _wrap(f"ERROR: {e}", RED, use_color)
+            lines.append(f"  Fan mode      : {err_str}")
     lines.append("")
 
     # Controllers table
@@ -829,7 +832,12 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
         detail = _wrap(f"  (enforced {enforced}x, read {age_s:.1f}s ago)", DIM, use_color)
     else:
         detail = _wrap(f"  (enforcement disabled, read {age_s:.1f}s ago)", DIM, use_color)
-    lines.append(f"  Fan mode      : {_wrap(str(mode_name), mode_color, use_color)} ({mode_id}){detail}")
+    if not fan_mode.get("enforces_full_mode", True):
+        # See the standalone path: on these boards the mode value is the fallback curve, not the state
+        # smfc holds, so it is neither shown nor coloured against FULL.
+        lines.append(f"  Fan mode      : {FAN_MODE_MANUAL}{detail}")
+    else:
+        lines.append(f"  Fan mode      : {_wrap(str(mode_name), mode_color, use_color)} ({mode_id}){detail}")
     lines.append("")
 
     # Controllers table.

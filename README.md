@@ -356,7 +356,7 @@ Because the BMC product name cannot decide which command set applies, `smfc` **p
 
 What both stacks have in common:
 
-- **Fan control is not acquired through `FULL` fan mode.** Each stack has its own lever (see below), and on both of them the base fan mode (Standard, Optimal, …) is only the curve the fans fall back to when that lever is lost. `smfc` reads the base fan mode but **never writes it**. Consequently the `Fan mode` line of `smfc-client` is not flagged when it is not `FULL` on this platform, and `enforce_fan_mode=` guards the lever instead of the fan mode.
+- **Fan control is not acquired through `FULL` fan mode.** Each stack has its own lever (see below), and on both of them the base fan mode (Standard, Optimal, …) is only the curve the fans fall back to when that lever is lost. `smfc` reads the base fan mode but **never writes it**. Consequently `smfc-client` reports `Fan mode : manual control` on these boards instead of the base fan mode value, which says nothing about who is driving the fans, and `enforce_fan_mode=` guards the lever instead of the fan mode.
 - 🔴 **The exit level is a transition, not a resting state.** On both stacks `smfc` releases its lever when it stops — including with `exit_level=-1`, where no fan level is written at all but the release still runs. Releasing hands the fans back to the BMC, so within about a second the BMC's own curve takes over. That curve regulates on CPU and system sensors only, so **drive temperatures are not part of it**.
 
 **On the OpenBMC stack**, `smfc` latches an explicit OEM *manual mode* in each zone it drives; zones it does not drive keep running under automatic control. Two consequences:

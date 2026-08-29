@@ -439,22 +439,26 @@ class TestFormatReport:
         assert "not in FULL mode" in out
         assert "ERROR" not in out
 
-    def test_fan_mode_not_flagged_on_x14(self) -> None:
+    def test_fan_mode_is_manual_control_on_x14(self) -> None:
         """Positive unit test for smfc.client._format_report() function. It contains the following steps:
         - build a fake Ipmi MagicMock with fan_mode_value=0 (STANDARD) whose platform reports
-          ENFORCES_FULL_MODE=False, i.e. an X14 board where the base fan mode is only the fallback curve
+          ENFORCES_FULL_MODE=False, i.e. an X14/H14 board that is not driven through a fan mode
         - call _format_report() with use_color=False
-        - ASSERT: the mode label is still printed, so the user sees the base fan mode
-        - ASSERT: the 'not in FULL mode' warning is absent, because smfc deliberately leaves that mode alone
-          on this platform and a non-FULL mode is its normal state
+        - ASSERT: the fan mode line reads 'manual control', naming how the board is actually driven
+        - ASSERT: the base fan mode name is not printed. smfc never sets it there, so showing it invites
+          the reader to judge fan control by a value that has nothing to do with it
+        - ASSERT: the 'not in FULL mode' warning is absent
+        - ASSERT: the BMC is not asked for the fan mode at all, since it is not reported
         """
         ipmi = _make_fake_ipmi(fan_mode_value=0)
         ipmi.platform.ENFORCES_FULL_MODE = False
         cpu = _make_fake_cpu_controller()
         entries = [("CPU", "cpu", cpu, None)]
         out = client._format_report(ipmi, entries, "x.conf", use_color=False)
-        assert "STANDARD" in out
+        assert "Fan mode      : manual control" in out
+        assert "STANDARD" not in out
         assert "not in FULL mode" not in out
+        ipmi.get_fan_mode.assert_not_called()
 
     def test_zones_table_unions_zones(self) -> None:
         """Positive unit test for smfc.client._format_report() function. It contains the following steps:
@@ -1150,6 +1154,23 @@ class TestFormatReportFromSnapshot:
         assert "Super Micro Computer Inc." not in out
         assert "X11SCH-LN4F" in out
         assert "Platform" not in out
+
+    def test_fan_mode_is_manual_control_on_x14_from_snapshot(self) -> None:
+        """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the steps:
+        - build a snapshot whose fan_mode block carries enforces_full_mode=False and a non-FULL mode
+        - call _format_report_from_snapshot() with use_color=False
+        - ASSERT: the fan mode line reads 'manual control', matching the standalone path
+        - ASSERT: the base fan mode name is not printed
+        - ASSERT: the enforcement counter is still shown, because a restored control state is worth
+          reporting on this platform too
+        """
+        snapshot = _sample_snapshot_dict()
+        snapshot["fan_mode"] = {"id": 0, "name": "STANDARD", "age_s": 0.5,
+                                "enforce_fan_mode": True, "enforces_full_mode": False}
+        out = client._format_report_from_snapshot(snapshot, "x.conf", use_color=False)
+        assert "Fan mode      : manual control" in out
+        assert "STANDARD" not in out
+        assert "enforced" in out
 
     def test_verbose_header_shows_uptime(self) -> None:
         """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
