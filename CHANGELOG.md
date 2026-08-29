@@ -14,8 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [doc/X14H14_MANUAL_FANCONTROL.md](https://github.com/petersulyok/smfc/blob/main/doc/X14H14_MANUAL_FANCONTROL.md): a reference for both firmware types - which one your board runs, how to drive the fans by hand, and the fan and zone layout of the documented boards.
 
 ### Changed
-- **A wrong `ipmi_zone=` fails at startup on X14/H14 boards.** `smfc` detects how many fan zones the board has, so a zone it does not have is rejected immediately with a message naming the real number, instead of running until the first fan level write fails with a bare IPMI error.
-- `smfc-client` does not warn about a non-FULL fan mode on X14/H14 any more. These boards are not controlled through FULL mode, so any other mode is normal there. The mode is still shown.
+- **A wrong `ipmi_zone=` on X14/H14 boards now says what is wrong.** `smfc` detects how many fan zones the board has, so `ipmi_zone=3` on a two-zone board stops the service with `IPMI zone(s) [3] do not exist on this board, which has 2 zone(s)` instead of the BMC's own `ipmitool error (1): rsp=0xcc`. The check also runs before anything is written, so a rejected configuration no longer leaves the board half taken over - previously the zones listed before the bad one were already under `smfc` control when it gave up, and stayed there with nothing regulating them.
+- `smfc-client` does not warn about a non-FULL fan mode on X14/H14 anymore. These boards are not controlled through FULL mode, so any other mode is normal there. The mode is still shown.
 
 ### Fixed
 - **Fan control works on X14/H14 motherboards.** It did not before: `smfc` reported that it had taken the fans over while the BMC kept running them on its own curve, because the commands it sent were wrong and the fan level never reached the board. If you tried `platform_name=generic_x14` earlier and saw no effect on your fans, this is why.
