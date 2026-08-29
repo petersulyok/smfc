@@ -122,9 +122,10 @@ fi
   curve, because the commands it sent were wrong and the fan level never
   reached the board.
 - Fixed: the fans are always handed back to the BMC when smfc stops,
-  exit_level=-1 included; a zone the BMC holds at 100% after a fan failure is
-  reported instead of looking healthy; and min_level=0 can no longer stop the
-  fans on X14/H14, where levels below 5% are raised to 5%.
+  exit_level=-1 included; a zone the BMC has forced to 100% after a fan
+  failure is detected instead of looking healthy, and stops smfc with exit
+  code 11 when enforce_fan_mode=0; and min_level=0 can no longer stop the fans
+  on X14/H14, where levels below 5% are raised to 5%.
 
 * Mon Aug 24 2026 Peter Sulyok <peter@sulyok.net> - 6.2.1-1
 - Fixed: the startup BMC fan subsystem readiness check did not recognize fan
