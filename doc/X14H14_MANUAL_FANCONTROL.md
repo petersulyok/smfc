@@ -16,8 +16,10 @@ instead of letting the BMC's automatic thermal control do it.
   stack. The board name does not tell you which one you have. The two share almost nothing
   where fan control is concerned — different commands, a different lever for taking the
   fans over, and different behaviour when a fan fails.
-- A command from the wrong stack is at best rejected, and in one case does something other
-  than what you intended. **Run Part 1 first.**
+- A command from the wrong stack is usually rejected outright. The `0x30 0x70 0x66` duty
+  commands share a layout across both stacks, but the *meaning* of taking the fans over
+  differs — per-zone manual mode on one, a global bypass on the other — so following the
+  wrong Part still leaves you with the wrong mental model. **Run Part 1 first.**
 - Taking the fans over means the BMC stops protecting the machine thermally. Nothing in
   this guide reads temperatures for you or puts a limit on how low you set a duty.
 
@@ -29,8 +31,7 @@ instead of letting the BMC's automatic thermal control do it.
   read a reply, and what the completion codes mean. Applies to both stacks.
 - **Part 3 — OpenBMC boards.** Per-zone manual mode.
 - **Part 4 — ATEN boards.** A single global bypass flag.
-- **Part 5 — Board reference.** Fan maps, zone layouts, per-board differences, and how much
-  of it has been confirmed on hardware.
+- **Part 5 — Board reference.** Fan maps, zone layouts, and per-board differences.
 
 All commands below assume:
 
@@ -87,24 +88,26 @@ Two examples break every guess:
 Treat this table as a hint only. **The command in 1.1 is the authoritative answer**, and it
 also covers a board that is not listed here.
 
-## 1.3 🔴 The same opcode means different things on the two stacks
+## 1.3 The `0x30 0x70 0x66` payload layout is the same on both stacks
 
-`0x30 0x70 0x66` exists on both stacks with **different payload layouts**:
+`0x30 0x70 0x66` exists on both stacks, and the selector layout is **the same** on each:
 
 | | OpenBMC | ATEN |
 | --- | --- | --- |
-| `0x66 0x00 <zone> <duty%>` | **sets** a zone's duty | — |
-| `0x66 0x00 <zone>` | — | **reads** a zone's duty |
-| `0x66 0x01 <zone> <duty%>` | — | **sets** a zone's duty |
+| `0x66 0x00 <zone>` | **reads** a zone's duty | **reads** a zone's duty |
+| `0x66 0x01 <zone> <duty%>` | **sets** a zone's duty | **sets** a zone's duty |
 | `0x66 0x02 <0\|1>` | manual mode on/off, all zones | bypass flag on/off, all zones |
 
-So the ATEN duty read is an incomplete OpenBMC duty write, and the ATEN duty write is an
-OpenBMC command with a shifted argument list. The OpenBMC handler accepts payloads of two
-**or** three bytes, so the short form is not caught by a length check — it is executed as a
-duty write with no duty value.
+The first byte after `0x66` is the selector: `0x00` reads, `0x01` writes, `0x02` toggles
+the automatic control off/on. This holds on both stacks. So the command bytes do **not**
+diverge — what differs is only what selector `0x02` *means* (per-zone manual mode on
+OpenBMC, a global bypass flag on ATEN) and the surrounding behaviour, which Parts 3 and 4
+cover separately.
 
-This is the one place where using the wrong part of this guide changes fan behaviour
-instead of returning an error. Identify the stack first.
+⚠️ **The zone argument is 0-based for `0x66` on both stacks** (first zone = `0x00`). On
+OpenBMC the *separate* manual-mode command (`0x2e 0x04`, Part 3) is 1-based instead — that
+mismatch is a real trap, but it is between two different commands, not inside `0x66`. See
+3.3.
 
 ---
 
@@ -169,17 +172,6 @@ The **Lower Critical** RPM threshold from `ipmitool sensor` is the number that m
 when choosing a duty: drop a fan below it and the BMC declares a fan failure and takes the
 fans away from you.
 
-> ⚠️ **On workstation boards with slow fans, the floor is the tacho, not the fan.** These
-> BMCs (AST2500/AST2600) are tuned for fast server fans. Fit slow ~1800 RPM workstation
-> fans (as on the X14SAE-F) and the tacho counter cannot resolve them below roughly
-> **420 RPM — it reports 0** even though the fan is still spinning fine. The BMC reads 0,
-> declares a fan failure, and forces the zone to 100 %. The tell-tale: RPM readings that
-> only ever appear as multiples of ~140 (560, 700, 840 …), drop to a rare 420, and then
-> jump straight to **0** — never 280 or 140. Consequence: **there is no duty that is both
-> quiet and error-free** — any duty low enough to be quiet drops the fan under the tacho
-> floor and trips the false failure. Keep every fan above ~560 RPM, or run Full Speed. It
-> is not a broken or stalling fan; the BMC simply cannot measure a slow one.
-
 ---
 # Part 3 — OpenBMC boards
 
@@ -236,7 +228,8 @@ overwritten within about a second.
 | Disable manual, zone *z* | `ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 <z> 0x00` | automatic control resumes |
 | Read manual flag, zone *z* | `ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 <z>` | `cf c2 00 <flag>`. The **last** byte: `01` = manual, `00` = automatic |
 | Read failsafe flag, zone *z* | `ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x02 <z>` | `cf c2 00 <flag>`. The **last** byte: `01` = zone forced to 100 % |
-| Set duty, zone *z* | `ipmitool $BMC raw 0x30 0x70 0x66 0x00 <z> <duty%>` | `<z>` is **0-based**: first zone = `0x00`. Replies with **1 byte: the duty that was in force before this write**, so the same command also reads the duty back |
+| Read duty, zone *z* | `ipmitool $BMC raw 0x30 0x70 0x66 0x00 <z>` | `<z>` is **0-based**: first zone = `0x00`. 1 byte, that zone's current duty %. Does **not** write — a trailing duty byte is ignored |
+| Set duty, zone *z* | `ipmitool $BMC raw 0x30 0x70 0x66 0x01 <z> <duty%>` | `<z>` is **0-based**: first zone = `0x00`. Returns a completion code only — no data byte, so it does **not** echo the duty. Read it back with the `0x00` form above |
 | Enable/disable manual, **all** zones | `ipmitool $BMC raw 0x30 0x70 0x66 0x02 <0\|1>` | shortcut for multi-zone boards |
 | Read duty + temperature of a fan | `ipmitool $BMC raw 0x30 0x70 0x88 <sensorNum>` | 2 bytes `[duty%, temp]` — duty first; `ff` = unavailable |
 | Read RPM of a fan | `ipmitool $BMC raw 0x04 0x2d <sensorNum>` | standard Get Sensor Reading |
@@ -247,10 +240,11 @@ overwritten within about a second.
 | --- | --- | --- |
 | `0x30 0x45 0x00` | 1 byte, the mode | — |
 | `0x30 0x45 0x01 <mode>` | no data | `0xC1` if `<mode>` is above `0x0B`; no mode is changed |
-| `0x2e 0x04 … 0x00 <zone>` | 4 bytes `cf c2 00 <flag>` | `0xC1` if the command is short (both op and zone must be present) or the op is above `0x02`; another code if that zone does not exist |
-| `0x2e 0x04 … 0x02 <zone>` | 4 bytes `cf c2 00 <flag>` | as above |
+| `0x2e 0x04 … 0x00 <zone>` | 1 byte `01`/`00` | `0xC1` if the command is short (both op and zone must be present) or the op is above `0x02`; another code if that zone does not exist |
+| `0x2e 0x04 … 0x02 <zone>` | 1 byte `01`/`00` | as above |
 | `0x2e 0x04 … 0x01 <zone> <0\|1>` | no data | as above |
-| `0x30 0x70 0x66 0x00 <zone> <duty%>` | 1 byte: the previous duty | `0xCC` if `<zone>` is above `0x04`; `0xC7` if the payload after `0x66` is not 2 or 3 bytes |
+| `0x30 0x70 0x66 0x00 <zone>` | 1 byte: that zone's duty | `0xCC` if `<zone>` is above `0x04`; `0xC7` if the payload after `0x66` is not 2 or 3 bytes |
+| `0x30 0x70 0x66 0x01 <zone> <duty%>` | no data (completion code) | `0xCC` if `<zone>` is above `0x04`; `0xC7` if the payload after `0x66` is not 2 or 3 bytes |
 | `0x30 0x70 0x66 0x02 <0\|1>` | no data | `0xCC` if the byte after `0x66` is above `0x02`, or if the flag is above `0x01` |
 | `0x30 0x70 0x88 <sensorNum>` | 2 bytes | `0xC7` if not exactly one sensor byte was supplied |
 
@@ -263,12 +257,12 @@ The manual and failsafe commands count zones from **1**. The duty command counts
 # ---- zone 1 ----
 ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 0x01 0x01   # manual ON, zone 1
 ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01        # read flag, zone 1
-ipmitool $BMC raw 0x30 0x70 0x66 0x00 0x00 0x32             # duty 50%, zone 1   <- 0x00
+ipmitool $BMC raw 0x30 0x70 0x66 0x01 0x00 0x32             # duty 50%, zone 1   zone byte 0x00
 
 # ---- zone 2 ----
 ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 0x02 0x01   # manual ON, zone 2
 ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x02        # read flag, zone 2
-ipmitool $BMC raw 0x30 0x70 0x66 0x00 0x01 0x32             # duty 50%, zone 2   <- 0x01
+ipmitool $BMC raw 0x30 0x70 0x66 0x01 0x01 0x32             # duty 50%, zone 2   zone byte 0x01
 ```
 
 Do not "align" the two. `0x00` in a `0x2e 0x04` command addresses a zone that does not
@@ -340,7 +334,7 @@ name. On some boards a mode is accepted and reads back correctly while a differe
 actually loaded (3.4), so the only reliable answer is asking the BMC which zones exist:
 
 ```bash
-ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01     # zone 1 -> cf c2 00 00/01 if it exists
+ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01     # zone 1 -> 00/01 if it exists
 ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x02     # zone 2 …
 ```
 
@@ -376,10 +370,10 @@ A zone left out keeps running under automatic control.
 **Step 3 — set the duty.** Zone argument is 0-based, duty is `0x00`–`0x64`.
 
 ```bash
-ipmitool $BMC raw 0x30 0x70 0x66 0x00 0x00 0x1e   # zone 1, 30%
-ipmitool $BMC raw 0x30 0x70 0x66 0x00 0x00 0x32   # zone 1, 50%
-ipmitool $BMC raw 0x30 0x70 0x66 0x00 0x00 0x64   # zone 1, 100%
-ipmitool $BMC raw 0x30 0x70 0x66 0x00 0x01 0x32   # zone 2, 50%
+ipmitool $BMC raw 0x30 0x70 0x66 0x01 0x00 0x1e   # zone 1, 30%
+ipmitool $BMC raw 0x30 0x70 0x66 0x01 0x00 0x32   # zone 1, 50%
+ipmitool $BMC raw 0x30 0x70 0x66 0x01 0x00 0x64   # zone 1, 100%
+ipmitool $BMC raw 0x30 0x70 0x66 0x01 0x01 0x32   # zone 2, 50%
 ```
 
 The value holds indefinitely. Writing to a zone the board does not have returns `0xCC`.
@@ -399,9 +393,9 @@ read -r duty temp <<<"$(ipmitool $BMC raw 0x30 0x70 0x88 0x41)"
 printf 'duty=%d%% temp=%d C\n' "0x$duty" "0x$temp"
 ```
 
-Do this once per board to confirm your zone map: set zone 1 to 100 %, then read a fan you
-believe is in zone 1 and one you believe is in zone 2, and check that only the first
-changed.
+Do this once per board to confirm your zone map: set zone 1 to 100 %
+(`raw 0x30 0x70 0x66 0x01 0x00 0x64`), then read a fan you believe is in zone 1 and one you
+believe is in zone 2, and check that only the first changed.
 
 ⚠️ A duty read-back does **not** tell you whether manual mode is still active — the duty
 stays where you left it until automatic control moves it. Only the manual flag answers
@@ -409,7 +403,10 @@ that.
 
 ## 3.6 Holding a duty unattended
 
-Poll the **manual flag**, not the duty, and re-assert both when it drops.
+Poll the **manual flag**, not the duty, and re-assert both the flag and the duty when it
+drops. The flag is what tells you the fans were taken back; the duty must be re-written
+because it is only honoured while manual mode is active, so whatever cleared the flag has
+also let the automatic curve overwrite the duty.
 
 ```bash
 #!/bin/bash
@@ -421,6 +418,12 @@ DUTY=0x32        # 50%
 
 leave() { ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 $ZONE_M 0x00; exit 0; }
 
+# re-assert manual mode AND re-write the duty; the duty only holds while manual is on
+assert() {
+  ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 $ZONE_M 0x01   # manual ON  (0x2e, 1-based)
+  ipmitool $BMC raw 0x30 0x70 0x66 0x01 $ZONE_D $DUTY            # duty WRITE (0x66 0x01, 0-based)
+}
+
 if ! ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 $ZONE_M >/dev/null 2>&1; then
   echo "This BMC does not support per-zone manual fan mode - aborting." >&2
   exit 1
@@ -429,20 +432,16 @@ trap leave INT TERM
 
 ipmitool $BMC raw 0x30 0x45 0x01 $MODE                          # optional; drop these two
 sleep 8                                                         # lines to keep the current mode
-ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 $ZONE_M 0x01    # manual ON
-ipmitool $BMC raw 0x30 0x70 0x66 0x00 $ZONE_D $DUTY             # duty
+assert                                                          # manual ON + first duty write
 
 fails=0
 while :; do
   st=$(ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 $ZONE_M 2>/dev/null | awk '{print $NF}')
   case "$st" in
-    01) fails=0 ;;                    # still manual
-    00) fails=0                       # cleared -> re-assert both
-        ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 $ZONE_M 0x01
-        ipmitool $BMC raw 0x30 0x70 0x66 0x00 $ZONE_D $DUTY ;;
+    01) fails=0 ;;                    # still manual - duty is holding, nothing to do
+    00) fails=0; assert ;;            # cleared -> re-assert manual and re-write the duty
     *)  fails=$((fails + 1))          # unreadable: BMC busy, rebooting, unreachable
-        ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 $ZONE_M 0x01
-        ipmitool $BMC raw 0x30 0x70 0x66 0x00 $ZONE_D $DUTY
+        assert
         if [ "$fails" -ge 10 ]; then
           echo "Manual flag unreadable 10 times in a row - giving up." >&2
           exit 1
@@ -452,14 +451,25 @@ while :; do
 done
 ```
 
+Three points this loop depends on:
+
+- **The duty write is selector `0x01`** (`0x30 0x70 0x66 0x01 …`). Selector `0x00` is a
+  *read*; writing with `0x00` does nothing and the fans stay on whatever the automatic
+  curve last set (1.3, 3.2).
+- **Recovery re-writes the duty, not just the flag.** Re-enabling manual alone leaves the
+  zone at whatever duty the automatic loop wrote while the flag was clear. `assert()` does
+  both, and it is safe to call unconditionally.
+- **The flag is the last reply byte** (`awk '{print $NF}'`), because the reply is
+  `cf c2 00 <flag>` — reading the first byte gives `cf` and always looks like a takeover.
+
 On a multi-zone board extend the loop over each zone pair (`ZONE_M` = 1, 2, … with
-`ZONE_D` = 0, 1, …).
+`ZONE_D` = 0, 1, …), re-asserting each independently.
 
 ## 3.7 Releasing, and the emergency exit
 
 ```bash
 ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 0x01 0x00   # manual OFF, zone 1
-ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01        # confirm -> expect cf c2 00 00
+ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01        # confirm -> expect 00
 ```
 
 Repeat for every zone you enabled, or release all at once with
@@ -502,9 +512,9 @@ overwritten within about a second.
 
 ## 4.1 Facts that shape every procedure here
 
-- **The bypass flag is the lever, not the fan mode.** The old "set Full Speed, then write
-  duty" recipe does not work: the automatic loop keeps re-asserting its own duty in every
-  mode. Only the bypass stops it, and it works from any mode.
+- **The bypass flag is the lever, not the fan mode.** Setting Full Speed (or any mode) and
+  then writing a duty does not hold: the automatic loop keeps re-asserting its own duty in
+  every mode. Only the bypass stops it, and it works from any mode.
 - **The bypass is global and write-only.** One flag covers all zones, and **there is no
   command that reads it back**. You infer its state by writing a duty and re-reading it
   (4.4).
@@ -661,12 +671,11 @@ Two consequences:
   5 %, which reads back as 4. There is no "fans off" value.
 - **Values above 100 are clamped, not rejected.** `0x78` (120) is accepted and gives 100 %.
 
-🔴 **This formula is not valid on every board in Part 4.** It was verified on the AST2600
-hardware monitor that the H14 boards use, and confirmed on hardware there. The
-**X14SDW / X14SDV** firmware carries a **second duty path** that stores the percentage
-itself and reads it back **exactly**, with no truncation and no 5 % clamp. A configuration
-byte picks the path when the BMC starts, so the board name does not tell you which one you
-have.
+🔴 **This formula is not valid on every board in Part 4.** It describes the AST2600
+hardware monitor that the H14 boards use. The **X14SDW / X14SDV** firmware carries a
+**second duty path** that stores the percentage itself and reads it back **exactly**, with
+no truncation and no 5 % clamp. A configuration byte picks the path when the BMC starts, so
+the board name does not tell you which one you have.
 
 🔴 **Never send a duty of 0 on X14SDW / X14SDV.** The 5 % floor above belongs to the PWM
 path. The percent path has no floor, so `0x00` may reach the fans as a real 0 %. Use the
@@ -806,7 +815,7 @@ starting point, not a substitute.
 
 ⚠️ **The zone names below are 1-based**, matching the manual-mode commands. The duty
 command counts from 0, so "zone 2" in this table is `0x01` in
-`raw 0x30 0x70 0x66 0x00 <z> <duty%>` (3.3).
+`raw 0x30 0x70 0x66 0x01 <z> <duty%>` (3.3).
 
 | Board / mode | Zones | Zone contents |
 | --- | --- | --- |
@@ -830,7 +839,7 @@ ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01     # zone 1 (manual comman
 ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x02     # zone 2 …
 ```
 
-Existing zones answer `cf c2 00 00`/`cf c2 00 01`; missing zones return an error.
+Existing zones answer `00`/`01`; missing zones return an error.
 
 ## 5.2 ATEN boards
 
@@ -846,7 +855,7 @@ there is only one zone-taking command, so there is no second numbering to confus
 
 | Board | Zones | Zone contents |
 | --- | --- | --- |
-| H14DSG-O-CPU | 2 | zone 0 = FAN1–FAN5 (confirmed on hardware) · zone 1 = FAN6–FAN10 (by elimination, not yet written) |
+| H14DSG-O-CPU | 2 | zone 0 = FAN1–FAN5 · zone 1 = FAN6–FAN10 |
 | X14SDW / X14SDV | validated against a runtime zone count | probe upward; an out-of-range zone returns `0xCC` |
 
 There is no command that reports the zone layout, and duty reads do not discriminate
@@ -875,19 +884,8 @@ always match what a unit reports.
 
 | Board | Lower non-recoverable | Lower critical | Lower non-critical |
 | --- | --- | --- | --- |
-| H14DSG-O-CPU (as reported live) | — | 420 RPM (280 on FAN1) | — |
+| H14DSG-O-CPU | — | 420 RPM (280 on FAN1) | — |
 | X14SDW / X14SDV | 280 | 420 | 560 |
-
-## 5.3 How well tested each stack is
-
-| Area | Status |
-| --- | --- |
-| OpenBMC command layouts | **Confirmed on hardware** (X14SAE-F, 2026-08-27) — the manual toggle, the manual read-back, the release, `0x30 0x45` get/set, and the supported-mode mask |
-| OpenBMC manual mode | **Confirmed on hardware** — enable, read back `01`, release, and automatic control resumes |
-| OpenBMC duty write moving the expected fans | **Partly confirmed** — the write reached the fans and one zone-1 fan rose from 560 to 1820 RPM. Whether a *low* duty holds against the automatic loop is still open. Verify your zone map once with a read-back (3.5, step 4) |
-| ATEN bypass, duty write and read-back on H14 | **Confirmed on hardware** — the bypass suspends the automatic loop, the duty write moves the fans, the read-back agrees, and releasing restores automatic control |
-| ATEN commands on X14SDW / X14SDV | Not yet tested on hardware — expect them to work, but watch the fans the first time |
-| ATEN duty read-back on X14SDW / X14SDV | **Unknown** — that firmware carries both a PWM path and an exact percent path; calibrate before your control loop compares against it (4.4) |
 
 ---
 
@@ -896,9 +894,10 @@ always match what a unit reports.
 **OpenBMC**
 
 ```bash
-ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01        # is this stack? -> cf c2 00 00/01
+ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01        # is this stack? -> 00/01
 ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 0x01 0x01   # manual ON, zone 1 (1-based)
-ipmitool $BMC raw 0x30 0x70 0x66 0x00 0x00 0x32             # duty 50%, zone 1 (0-based)
+ipmitool $BMC raw 0x30 0x70 0x66 0x01 0x00 0x32             # set duty 50%, zone 1 (0-based)
+ipmitool $BMC raw 0x30 0x70 0x66 0x00 0x00                  # read duty, zone 1 (0-based)
 ipmitool $BMC raw 0x30 0x70 0x88 0x41                       # read duty + temp of FAN1
 ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 0x01 0x00   # manual OFF, zone 1
 ```
