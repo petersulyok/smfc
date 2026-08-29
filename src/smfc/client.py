@@ -17,6 +17,7 @@ from smfc.constfc import ConstFc
 from smfc.cpufc import CpuFc
 from smfc.fancontroller import FanController
 from smfc.gpufc import GpuFc
+from smfc.npufc import NpuFc
 from smfc.hdfc import HdFc
 from smfc.ipmi import Ipmi
 from smfc.log import Log
@@ -173,6 +174,15 @@ def _construct_controllers(log: Log, cfg: Config, ipmi: Ipmi, udevc: Optional[Co
         except Exception as e:  # pylint: disable=broad-except
             entries.append((gpu_cfg.section, "gpu", None, str(e)))
 
+    for npu_cfg in cfg.npu:
+        if not npu_cfg.enabled:
+            continue
+        try:
+            controller = NpuFc(log, ipmi, npu_cfg)
+            entries.append((npu_cfg.section, "npu", controller, None))
+        except Exception as e:  # pylint: disable=broad-except
+            entries.append((npu_cfg.section, "npu", None, str(e)))
+
     for const_cfg in cfg.const:
         if not const_cfg.enabled:
             continue
@@ -227,11 +237,11 @@ def _display_device_name(name: str, type_label: str) -> str:
     HD and NVMe controllers store full /dev/disk/by-id/... paths to keep udev mappings stable
     across reboots; that's useful in config but noisy in the verbose block where every row
     repeats the same prefix. Strip to the basename for these two types so the per-device list
-    stays scannable. CPU/GPU (and CONST) keep their synthesized labels unchanged.
+    stays scannable. CPU/GPU/NPU (and CONST) keep their synthesized labels unchanged.
 
     Args:
         name (str): the raw device name (path or label)
-        type_label (str): controller type ("hd" / "nvme" / "cpu" / "gpu" / "const")
+        type_label (str): controller type ("hd" / "nvme" / "cpu" / "gpu" / "npu" / "const")
 
     Returns:
         str: display-friendly name
@@ -518,7 +528,7 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
 
     Args:
         section (str): controller's section name (e.g. "CPU", "HD")
-        type_label (str): short type label ("cpu", "hd", "nvme", "gpu")
+        type_label (str): short type label ("cpu", "hd", "nvme", "gpu", "npu")
         zones (List[int]): IPMI zones the controller drives
         polling (float): configured polling interval in seconds
         deferred (bool): whether deferred_apply is set on the controller

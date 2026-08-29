@@ -4,19 +4,22 @@
 #
 from smfc.log import Log
 from smfc.platform import FanMode, Platform
-from smfc.config import Config, IpmiConfig, CpuConfig, HdConfig, NvmeConfig, GpuConfig, ConstConfig, PlatformName
+from smfc.config import (Config, IpmiConfig, CpuConfig, HdConfig, NvmeConfig, GpuConfig, NpuConfig, ConstConfig,
+                         PlatformName)
 from smfc.ipmi import Ipmi
 from smfc.fancontroller import FanController
 from smfc.cpufc import CpuFc
 from smfc.hdfc import HdFc
 from smfc.nvmefc import NvmeFc
 from smfc.gpufc import GpuFc
+from smfc.npufc import NpuFc
 from smfc.constfc import ConstFc
 from smfc.service import Service
 from smfc.cmd import main
 
 __all__ = ["Log", "FanMode", "PlatformName", "Platform", "Config", "IpmiConfig", "CpuConfig", "HdConfig", "NvmeConfig",
-           "GpuConfig", "ConstConfig", "Ipmi", "FanController", "CpuFc", "HdFc", "NvmeFc", "GpuFc", "ConstFc",
+           "GpuConfig", "NpuConfig", "ConstConfig", "Ipmi", "FanController", "CpuFc", "HdFc", "NvmeFc", "GpuFc",
+           "NpuFc", "ConstFc",
            "Service", "main"]
 
 # End.

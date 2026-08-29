@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        6.2.1
+Version:        6.3.0
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -98,6 +98,16 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Thu Aug 27 2026 Peter Sulyok <peter@sulyok.net> - 6.3.0-1
+- Added: new NPU fan controller (sixth controller type) that drives one or
+  more IPMI zones from the temperature of Ascend NPUs, e.g. the Atlas 300I
+  Duo, read with npu-smi. A device is an NPU card (npu-smi -i id); for a
+  multi-chip card the hottest chip is used, and temp_calc= aggregates across
+  cards. New [NPU] / [NPU:1] / ... sections with npu_device_ids=,
+  npu_smi_path= and npu_smi_timeout=; all the shared parameters of the other
+  temperature-driven controllers are supported. The controller shows up in
+  smfc-client and the HTTP exporter like the other fan controllers.
+
 * Mon Aug 24 2026 Peter Sulyok <peter@sulyok.net> - 6.2.1-1
 - Fixed: the startup BMC fan subsystem readiness check did not recognize fan
   sensors whose name is not exactly FAN*. Boards reporting their fans as

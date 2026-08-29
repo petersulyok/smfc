@@ -17,10 +17,11 @@ from typing import Any, Dict, List, Optional
 import pyudev
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, CpuFc, HdFc, NvmeFc, GpuFc
+from smfc import Log, Ipmi, CpuFc, HdFc, NvmeFc, GpuFc, NpuFc
 from smfc.fancontroller import FanController
 from smfc.config import Config
-from .test_config_builders import create_cpu_config, create_hd_config, create_nvme_config, create_gpu_config
+from .test_config_builders import (create_cpu_config, create_hd_config, create_nvme_config, create_gpu_config,
+                                   create_npu_config)
 from .test_fixtures import TestData
 from .test_mocks import MockDevices, factory_mockdevice
 
@@ -220,6 +221,64 @@ def build_gpu_fc(mocker: MockerFixture, *, gpu_type: str = "nvidia", gpu_device_
 def make_bare_gpu_fc(config=None) -> GpuFc:
     """Build an uninitialized GpuFc with no super().__init__(); sets config + smi_called when a config is given."""
     fc = GpuFc.__new__(GpuFc)
+    if config is not None:
+        fc.config = config
+        fc.smi_called = 0
+    return fc
+
+
+# Real `npu-smi info -t temp -i <id>` output fragment (Atlas 300I Duo / 310P3): two chip lines plus the
+# MCU block, which must NOT be parsed (different keys: T_LM75A/T_CORE_M/...).
+NPU_SMI_TEMP_OUTPUT = """
+        NPU ID                         : 7
+        Chip Count                     : 2
+
+
+        Temperature (C)                : 39
+        Chip ID                        : 0
+
+
+        Temperature (C)                : 38
+        Chip ID                        : 1
+
+
+        T_LM75A  (C)                   : 29
+        T_LM75B  (C)                   : 35
+        T_CORE_M (C)                   : 40
+        T_CORE_S (C)                   : 39
+        Chip Name                      : MCU
+
+"""
+
+
+def build_npu_fc(mocker: MockerFixture, *, npu_device_ids: Optional[List[int]] = None,
+                 **cfg_kwargs) -> FcHarness:
+    """Build a fully-initialized NpuFc with _exec_smi() mocked (NPU has no udev/hwmon discovery).
+
+    The base FanController.__init__ reads an initial temperature, so _exec_smi() is mocked to return a
+    constant two-chip card reading (39C/38C, hottest 39C) in the format `npu-smi info -t temp` produces.
+
+    Args:
+        mocker (MockerFixture): pytest-mock fixture
+        npu_device_ids (Optional[List[int]]): NPU card ids (default: the NPU config default ids)
+        **cfg_kwargs: forwarded to create_npu_config() (e.g. npu_smi_path, npu_smi_timeout)
+    Returns:
+        FcHarness: the controller plus the references used to build it (td is None for NPU)
+    """
+    device_ids = npu_device_ids if npu_device_ids is not None else Config.parse_npu_ids(Config.DV_NPU_DEVICE_IDS)
+    mocker.patch("builtins.print", MagicMock())
+    # _exec_smi() returns the command's stdout (a string); feed it the real npu-smi output format.
+    mocker.patch("smfc.NpuFc._exec_smi", MagicMock(return_value=NPU_SMI_TEMP_OUTPUT))
+    cfg = create_npu_config(enabled=True, npu_device_ids=device_ids, **cfg_kwargs)
+    log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+    ipmi = Ipmi.__new__(Ipmi)
+    fc = NpuFc(log, ipmi, cfg)
+    return FcHarness(fc=fc, td=None, cfg=cfg, log=log, ipmi=ipmi)
+
+
+def make_bare_npu_fc(config=None) -> NpuFc:
+    """Build an uninitialized NpuFc with no super().__init__(); sets config + smi_called when a config is given."""
+    fc = NpuFc.__new__(NpuFc)
     if config is not None:
         fc.config = config
         fc.smi_called = 0

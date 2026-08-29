@@ -5,6 +5,7 @@
 #
 import atexit
 import os
+import shutil
 import signal
 import sys
 import time
@@ -16,6 +17,7 @@ from smfc.constfc import ConstFc
 from smfc.exporter import Exporter
 from smfc.fancontroller import FanController
 from smfc.gpufc import GpuFc
+from smfc.npufc import NpuFc
 from smfc.cpufc import CpuFc
 from smfc.hdfc import HdFc
 from smfc.nvmefc import NvmeFc
@@ -69,7 +71,8 @@ class Service:
         for fc in getattr(self, "controllers", []):
             zones.update(fc.config.ipmi_zone)
         if not zones and hasattr(self, "config"):
-            for cfg_list in (self.config.cpu, self.config.hd, self.config.nvme, self.config.gpu, self.config.const):
+            for cfg_list in (self.config.cpu, self.config.hd, self.config.nvme, self.config.gpu,
+                             self.config.npu, self.config.const):
                 for cfg in cfg_list:
                     if cfg.enabled:
                         zones.update(cfg.ipmi_zone)
@@ -172,6 +175,19 @@ class Service:
             else:
                 path = cfg.rocm_smi_path
             if not os.path.exists(path):
+                return f"ERROR: {path} command cannot be found!"
+
+        # Check dependencies for NPU fan controller. npu_smi_path may be a bare command name
+        # (resolved via PATH) or a full path.
+        for cfg in self.config.npu:
+            if not cfg.enabled:
+                continue
+            path = cfg.npu_smi_path
+            if os.path.isabs(path):
+                found = os.path.exists(path)
+            else:
+                found = shutil.which(path) is not None
+            if not found:
                 return f"ERROR: {path} command cannot be found!"
 
         # All required run-time dependencies are available.
@@ -422,7 +438,7 @@ class Service:
                                         f"{self.ipmi.get_fan_mode_name(self.last_fan_mode)} ({self.last_fan_mode})")
             configured_zones: Set[int] = set()
             for cfg_list in (self.config.cpu, self.config.hd, self.config.nvme,
-                             self.config.gpu, self.config.const):
+                             self.config.gpu, self.config.npu, self.config.const):
                 for cfg in cfg_list:
                     if cfg.enabled:
                         configured_zones.update(cfg.ipmi_zone)
@@ -473,6 +489,10 @@ class Service:
             if cfg.enabled:
                 self.log.msg(Log.LOG_DEBUG, f"GPU fan controller [{cfg.section}] enabled")
                 self.controllers.append(GpuFc(self.log, self.ipmi, cfg))
+        for cfg in self.config.npu:
+            if cfg.enabled:
+                self.log.msg(Log.LOG_DEBUG, f"NPU fan controller [{cfg.section}] enabled")
+                self.controllers.append(NpuFc(self.log, self.ipmi, cfg))
         for cfg in self.config.const:
             if cfg.enabled:
                 self.log.msg(Log.LOG_DEBUG, f"CONST fan controller [{cfg.section}] enabled")

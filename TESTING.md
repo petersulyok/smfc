@@ -145,9 +145,9 @@ The four shared-infra files form the foundation that every test module reuses:
   `create_cpu_config(steps=4)` without touching a real config file.
 - **`test_fc_helpers.py`** holds builders specific to the `FanController`
   hierarchy: `FcHarness`, `assert_fc_base_contract()`, and per-controller
-  `build_cpu_fc` / `build_hd_fc` / `build_nvme_fc` / `build_gpu_fc` helpers
-  that absorb the `pyudev.Context.__new__` / `Ipmi.__new__` / `print` mock
-  boilerplate.
+  `build_cpu_fc` / `build_hd_fc` / `build_nvme_fc` / `build_gpu_fc` /
+  `build_npu_fc` helpers that absorb the `pyudev.Context.__new__` /
+  `Ipmi.__new__` / `print` mock boilerplate.
 
 ### Source ↔ test mapping
 
@@ -159,7 +159,7 @@ contain several test classes grouped by feature.
 |----------------------------------|------------------------------|-------------------|
 | `client.py`                      | `test_client.py`             | Arg parsing, colour detection, offline report formatter, snapshot-driven report, snapshot fetch over HTTP, controller construction, main online/offline path selection |
 | `cmd.py`                         | `test_cmd.py`                | `__main__` entry point |
-| `config.py`                      | `test_config.py`             | Static parsers, per-section parsing + validation (`Ipmi` / `Exporter` / `CPU` / `HD` / `NVMe` / `GPU` / `Const`), control-function precedence, duplicate-zone detection, edge cases, full multi-section integration |
+| `config.py`                      | `test_config.py`             | Static parsers, per-section parsing + validation (`Ipmi` / `Exporter` / `CPU` / `HD` / `NVMe` / `GPU` / `NPU` / `Const`), control-function precedence, duplicate-zone detection, edge cases, full multi-section integration |
 | `constfc.py`                     | `test_constfc.py`            | Fixed-level controller init, `run`, deferred apply |
 | `cpufc.py`                       | `test_cpufc.py`              | Hwmon discovery, ordinal `cpuN` device names |
 | `exporter.py`                    | `test_exporter.py`           | Prometheus text rendering, HTTP server endpoints (`/snapshot`, `/metrics`, `/healthz`), 404/500 handling, idempotent stop |
@@ -170,15 +170,16 @@ contain several test classes grouped by feature.
 | `ipmi.py`                        | `test_ipmi.py`               | Init (positive/negative, BMC timeout, client mode), `exec_ipmitool` (remote args, sudo, rc, exceptions), `get/set_fan_mode`, fan-mode name mapping, `get/set_fan_level`, `set_multiple_fan_levels`, exception surface |
 | `log.py`                         | `test_log.py`                | Init (valid/invalid level+output combos), level/output/message-type mapping, message routing to stdout/stderr/syslog |
 | `nvmefc.py`                      | `test_nvmefc.py`             | NVMe name validation, smartctl-based temps |
+| `npufc.py`                       | `test_npufc.py`              | `exec_smi` (args, rc, timeout), `npu-smi` chip-temperature parsing (single/multi-chip, non-zero-based ids), per-card hottest-chip selection, `temp_calc` aggregation, error-tolerance budget, `control_function=` mapping |
 | `platform.py`                    | *(no dedicated module)*      | Exercised indirectly through `test_platforms.py` |
 | `platform_factory.py`            | `test_platform_factory.py`   | `create_platform` dispatch per platform name + fallback |
-| `service.py`                     | `test_service.py`            | Lifecycle (`exit_func`), dependency checks (CPU/HD/GPU/NVMe, AMD, invalid type), `run()` exit-code matrix, fan-mode drift enforcement, exporter start/stop wiring, **shared-zone arbitration** (`collect_desired_levels`, `apply_fan_levels` across single/shared/multi-zone, const winner/loser, caching, oscillation) |
-| `snapshot.py`                    | `test_snapshot.py`           | Schema/version, fan-mode block, per-controller entries (cpu/hd/nvme/gpu/const), curve vs. legacy min/max, zones block, applied levels, per-device temperatures and read-error counters |
+| `service.py`                     | `test_service.py`            | Lifecycle (`exit_func`), dependency checks (CPU/HD/GPU/NPU/NVMe, AMD, `npu-smi` via PATH, invalid type), `run()` exit-code matrix, fan-mode drift enforcement, exporter start/stop wiring, **shared-zone arbitration** (`collect_desired_levels`, `apply_fan_levels` across single/shared/multi-zone, const winner/loser, caching, oscillation) |
+| `snapshot.py`                    | `test_snapshot.py`           | Schema/version, fan-mode block, per-controller entries (cpu/hd/nvme/gpu/npu/const), curve vs. legacy min/max, zones block, applied levels, per-device temperatures and read-error counters |
 
 Behind that table sit two cross-cutting topics worth knowing about:
 
-- **Fan-controller subclasses share a contract.** The four `FanController`
-  subclasses (`CpuFc`, `HdFc`, `NvmeFc`, `GpuFc`) implement the same base
+- **Fan-controller subclasses share a contract.** The five `FanController`
+  subclasses (`CpuFc`, `HdFc`, `NvmeFc`, `GpuFc`, `NpuFc`) implement the same base
   contract but differ in how they discover devices. The shared base
   behaviours (construction, `set_fan_level`, deferred levels, the smoothing
   algorithm, read-error tolerance, LUT construction) are tested *once* in
@@ -335,7 +336,7 @@ A smoke run boots a real `Service` against fakes:
 The scenario itself is described by a single tuple:
 
 ```python
-Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf", "fault"], defaults=(None,))
+Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf", "fault", "npu"], defaults=(None, 0))
 ```
 
 — device counts, a `.conf` filename under `test/scenarios/`, and an optional
@@ -374,7 +375,8 @@ The scenario matrix is designed to exercise every meaningful combination of
 controllers, platforms, and configuration modes:
 
 - **Per-controller sanity**: `cpu_1` / `cpu_2` / `cpu_4`, `hd_1` / `hd_2` /
-  `hd_4` / `hd_8`, `nvme_4`, `const_level`, `gpu_8_nvidia` / `gpu_8_amd` —
+  `hd_4` / `hd_8`, `nvme_4`, `const_level`, `gpu_8_nvidia` / `gpu_8_amd`,
+  `npu_2` —
   scaling each controller type from 1 to 8 instances.
 - **Cross-controller integration**: `cpu_4` (CPU + HD + GPU), `nvme_4` (CPU +
   NVMe), `hd_4` (HD + GPU). These prove the wiring between distinct
@@ -404,32 +406,33 @@ controllers, platforms, and configuration modes:
 
 The full table — what each scenario contains:
 
-| Scenario             | conf                       | CPU                         | HD                          | NVME      | GPU           | CONST      | Standby guard |
-|----------------------|----------------------------|-----------------------------|-----------------------------|-----------|---------------|------------|---------------|
-| `cpu_1`              | `cpu_1.conf`               | 1 x CPU                     | 1 x HD                      | disabled  | disabled      | enabled    | enabled       |
-| `cpu_2`              | `cpu_2.conf`               | 2 x CPUs                    | disabled                    | disabled  | 1 GPU         | disabled   | disabled      |
-| `cpu_4`              | `cpu_4.conf`               | 4 x CPUs                    | 4 x HDs                     | disabled  | 4 GPUs        | disabled   | enabled       |
-| `hd_1`               | `hd_1.conf`                | disabled                    | 1 x HD                      | disabled  | disabled      | enabled    | enabled       |
-| `hd_2`               | `hd_2.conf`                | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
-| `hd_4`               | `hd_4.conf`                | disabled                    | 4 x HDs                     | disabled  | 2 GPUs        | disabled   | disabled      |
-| `hd_8`               | `hd_8.conf`                | 4 x CPUs                    | 8 x HDs                     | disabled  | disabled      | disabled   | enabled       |
-| `const_level`        | `const_level.conf`         | 1 x CPU                     | disabled                    | disabled  | disabled      | enabled    | enabled       |
-| `gpu_8_nvidia`       | `gpu_8_nvidia.conf`        | 1 x CPU                     | disabled                    | disabled  | 8 Nvidia GPUs | enabled    | disabled      |
-| `gpu_8_amd`          | `gpu_8_amd.conf`           | 1 x CPU                     | disabled                    | disabled  | 8 AMD GPUs    | enabled    | disabled      |
-| `nvme_4`             | `nvme_4.conf`              | 2 x CPU                     | disabled                    | 4 x NVME  | disabled      | enabled    | disabled      |
-| `shared_zones`       | `shared_zones.conf`        | 1 x CPU                     | disabled                    | 2 x NVMEs | disabled      | disabled   | disabled      |
-| `shared_zones_cpu_split` | `shared_zones_cpu_split.conf` | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
-| `control_function`   | `control_function.conf`    | 2 x CPUs                    | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
-| `platform_x9`        | `platform_x9.conf`         | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
-| `platform_x14_openbmc` | `platform_x14_openbmc.conf` | 1 x CPU                    | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
-| `platform_x14_aten`  | `platform_x14_aten.conf`   | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
-| `platform_x14_aten_percent` | `platform_x14_aten.conf` | 1 x CPU                   | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
-| `platform_x10qbi`    | `platform_x10qbi.conf`     | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | enabled    | disabled      |
-| `no_enforce_fan_mode`| `no_enforce_fan_mode.conf` | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | disabled      |
-| `hd_split_zones`     | `hd_split_zones.conf`      | disabled                    | 4 x HDs (`HD:0`, `HD:1`)    | disabled  | disabled      | disabled   | disabled      |
-| `smoothing_window`   | `smoothing_window.conf`    | 2 x CPUs (`smoothing=5`)    | 2 x HDs (`smoothing=3`)     | disabled  | disabled      | disabled   | disabled      |
-| `error_tolerance`    | `error_tolerance.conf`     | disabled                    | 4 x HDs (`error_tolerance=3`) | disabled  | disabled      | disabled   | disabled      |
-| `error_tolerance_exhausted` | `error_tolerance_exhausted.conf` | disabled           | 4 x HDs (`error_tolerance=1`) | disabled  | disabled      | disabled   | disabled      |
+| Scenario             | conf                       | CPU                         | HD                          | NVME      | GPU           | NPU        | CONST      | Standby guard |
+|----------------------|----------------------------|-----------------------------|-----------------------------|-----------|---------------|------------|------------|---------------|
+| `cpu_1`              | `cpu_1.conf`               | 1 x CPU                     | 1 x HD                      | disabled  | disabled      | disabled   | enabled    | enabled       |
+| `cpu_2`              | `cpu_2.conf`               | 2 x CPUs                    | disabled                    | disabled  | 1 GPU         | disabled   | disabled   | disabled      |
+| `cpu_4`              | `cpu_4.conf`               | 4 x CPUs                    | 4 x HDs                     | disabled  | 4 GPUs        | disabled   | disabled   | enabled       |
+| `hd_1`               | `hd_1.conf`                | disabled                    | 1 x HD                      | disabled  | disabled      | disabled   | enabled    | enabled       |
+| `hd_2`               | `hd_2.conf`                | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | disabled   | disabled      |
+| `hd_4`               | `hd_4.conf`                | disabled                    | 4 x HDs                     | disabled  | 2 GPUs        | disabled   | disabled   | disabled      |
+| `hd_8`               | `hd_8.conf`                | 4 x CPUs                    | 8 x HDs                     | disabled  | disabled      | disabled   | disabled   | enabled       |
+| `const_level`        | `const_level.conf`         | 1 x CPU                     | disabled                    | disabled  | disabled      | disabled   | enabled    | enabled       |
+| `gpu_8_nvidia`       | `gpu_8_nvidia.conf`        | 1 x CPU                     | disabled                    | disabled  | 8 Nvidia GPUs | disabled   | enabled    | disabled      |
+| `gpu_8_amd`          | `gpu_8_amd.conf`           | 1 x CPU                     | disabled                    | disabled  | 8 AMD GPUs    | disabled   | enabled    | disabled      |
+| `npu_2`              | `npu_2.conf`               | 1 x CPU                     | disabled                    | disabled  | disabled      | 2 x NPUs   | disabled   | disabled      |
+| `nvme_4`             | `nvme_4.conf`              | 2 x CPU                     | disabled                    | 4 x NVME  | disabled      | disabled   | enabled    | disabled      |
+| `shared_zones`       | `shared_zones.conf`        | 1 x CPU                     | disabled                    | 2 x NVMEs | disabled      | disabled   | disabled   | disabled      |
+| `shared_zones_cpu_split` | `shared_zones_cpu_split.conf` | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs                     | disabled  | disabled      | disabled   | disabled   | disabled      |
+| `control_function`   | `control_function.conf`    | 2 x CPUs                    | 2 x HDs                     | disabled  | disabled      | disabled   | disabled   | disabled      |
+| `platform_x9`        | `platform_x9.conf`         | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | enabled    | disabled      |
+| `platform_x14_openbmc` | `platform_x14_openbmc.conf` | 1 x CPU               | 2 x HDs                     | disabled  | disabled      | disabled   | enabled    | disabled      |
+| `platform_x14_aten`  | `platform_x14_aten.conf`   | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | enabled    | disabled      |
+| `platform_x14_aten_percent` | `platform_x14_aten.conf` | 1 x CPU               | 2 x HDs                     | disabled  | disabled      | disabled   | enabled    | disabled      |
+| `platform_x10qbi`    | `platform_x10qbi.conf`     | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | enabled    | disabled      |
+| `no_enforce_fan_mode`| `no_enforce_fan_mode.conf` | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | disabled   | disabled      |
+| `hd_split_zones`     | `hd_split_zones.conf`      | disabled                    | 4 x HDs (`HD:0`, `HD:1`)    | disabled  | disabled      | disabled   | disabled   | disabled      |
+| `smoothing_window`   | `smoothing_window.conf`    | 2 x CPUs (`smoothing=5`)    | 2 x HDs (`smoothing=3`)     | disabled  | disabled      | disabled   | disabled   | disabled      |
+| `error_tolerance`    | `error_tolerance.conf`     | disabled                    | 4 x HDs (`error_tolerance=3`) | disabled  | disabled      | disabled   | disabled   | disabled      |
+| `error_tolerance_exhausted` | `error_tolerance_exhausted.conf` | disabled           | 4 x HDs (`error_tolerance=1`) | disabled  | disabled      | disabled   | disabled   | disabled      |
 
 Notes:
 
@@ -444,6 +447,10 @@ Notes:
   share zone 1.
 - `gpu_8_nvidia` and `gpu_8_amd` test the GPU fan controller with Nvidia and
   AMD GPUs respectively.
+- `npu_2` tests the NPU fan controller with two Ascend cards in IPMI zone 1
+  (`temp_calc=maximum`), alongside a CPU controller in zone 0. The fake
+  `npu-smi` is called once per card with `-i <id>` and reports two chips per
+  card, so the hottest-chip-per-card selection is exercised end to end.
 - `control_function` tests the `control_function=` parameter: the CPU
   section uses a 4-point curve (`30-35, 50-40, 60-90, 65-100`) and the HD
   section uses a 3-point curve (`32-35, 38-45, 46-100`), both with
@@ -510,8 +517,8 @@ Notes:
   simulate realistic thermal behavior. A background thread updates hwmon
   temperature files (for CPU, HD, NVMe) every second, applying random
   changes of +/- 0-3 degrees within the configured min/max range. GPU
-  temperatures (both Nvidia and AMD) also change gradually between
-  invocations using a state file to track previous values.
+  temperatures (both Nvidia and AMD) and NPU temperatures also change
+  gradually between invocations using a state file to track previous values.
 
 ### The automatic smoke driver
 

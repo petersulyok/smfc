@@ -60,8 +60,8 @@ All metrics are gauges unless noted. Labels are enclosed in `{…}`.
 | `smfc_controller_level_min_percent` | `section`, `type`, `zone` | Fan-level-window floor |
 | `smfc_controller_level_max_percent` | `section`, `type`, `zone` | Fan-level-window ceiling |
 
-The `type` label is one of: `cpu`, `hd`, `nvme`, `gpu`, `const`.
-The `section` label matches the INI section name (`CPU`, `HD`, `NVME`, `GPU`, `CONST`).
+The `type` label is one of: `cpu`, `hd`, `nvme`, `gpu`, `npu`, `const`.
+The `section` label matches the INI section name (`CPU`, `HD`, `NVME`, `GPU`, `NPU`, `CONST`).
 Each enabled controller emits one row per IPMI zone it targets (controllers can target multiple zones).
 
 ### Dynamic runtime (updates every polling cycle)

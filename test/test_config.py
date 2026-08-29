@@ -133,6 +133,41 @@ class TestConfigStaticMethods:
     @pytest.mark.parametrize(
         "input_str, expected",
         [
+            pytest.param("7", [7], id="single-nonzero-id"),
+            pytest.param("0, 7", [0, 7], id="comma-with-space"),
+            pytest.param("7,8,9", [7, 8, 9], id="comma-no-space"),
+            pytest.param("0 1 2", [0, 1, 2], id="space-separated"),
+            pytest.param("  7  8  ", [7, 8], id="extra-whitespace"),
+        ],
+    )
+    def test_parse_npu_ids_valid(self, input_str: str, expected: List[int]):
+        """Positive unit test for Config.parse_npu_ids() method. It contains the following steps:
+        - no external mocks
+        - call Config.parse_npu_ids() with a valid id string (single non-zero, comma, space, whitespace variants)
+        - ASSERT: parse_npu_ids returns the expected list of NPU card id integers
+        """
+        assert Config.parse_npu_ids(input_str) == expected
+
+    @pytest.mark.parametrize(
+        "input_str",
+        [
+            pytest.param("-1", id="negative"),
+            pytest.param("101", id="over-100"),
+            pytest.param("abc", id="non-numeric"),
+        ],
+    )
+    def test_parse_npu_ids_invalid(self, input_str: str):
+        """Negative unit test for Config.parse_npu_ids() method. It contains the following steps:
+        - no external mocks
+        - call Config.parse_npu_ids() with a negative, out-of-range, or non-numeric value
+        - ASSERT: parse_npu_ids raises ValueError for invalid input
+        """
+        with pytest.raises(ValueError):
+            Config.parse_npu_ids(input_str)
+
+    @pytest.mark.parametrize(
+        "input_str, expected",
+        [
             pytest.param("30-35, 65-100", [(30, 35), (65, 100)], id="2-point-comma"),
             pytest.param("30-35, 50-40, 60-90, 65-100", [(30, 35), (50, 40), (60, 90), (65, 100)],
                          id="4-point-comma"),
@@ -187,6 +222,7 @@ class TestControlFunctionSectionWiring:
             pytest.param("HD", id="hd"),
             pytest.param("NVME", id="nvme"),
             pytest.param("GPU", id="gpu"),
+            pytest.param("NPU", id="npu"),
         ],
     )
     def test_section_without_control_function_defaults_to_empty(self, create_config, section: str):
@@ -198,7 +234,7 @@ class TestControlFunctionSectionWiring:
         """
         body = "[Ipmi]\n[" + section + "]\nenabled = 0\n"
         cfg = create_config(body)
-        sec_list = {"CPU": cfg.cpu, "HD": cfg.hd, "NVME": cfg.nvme, "GPU": cfg.gpu}[section]
+        sec_list = {"CPU": cfg.cpu, "HD": cfg.hd, "NVME": cfg.nvme, "GPU": cfg.gpu, "NPU": cfg.npu}[section]
         assert sec_list[0].control_function == []
 
     @pytest.mark.parametrize(
@@ -208,6 +244,7 @@ class TestControlFunctionSectionWiring:
             pytest.param("HD", id="hd"),
             pytest.param("NVME", id="nvme"),
             pytest.param("GPU", id="gpu"),
+            pytest.param("NPU", id="npu"),
         ],
     )
     def test_section_with_control_function_parsed(self, create_config, section: str):
@@ -220,7 +257,7 @@ class TestControlFunctionSectionWiring:
         body = ("[Ipmi]\n[" + section + "]\nenabled = 0\nsteps = 4\n"
                 "control_function = 30-35, 50-40, 60-90, 65-100\n")
         cfg = create_config(body)
-        sec_list = {"CPU": cfg.cpu, "HD": cfg.hd, "NVME": cfg.nvme, "GPU": cfg.gpu}[section]
+        sec_list = {"CPU": cfg.cpu, "HD": cfg.hd, "NVME": cfg.nvme, "GPU": cfg.gpu, "NPU": cfg.npu}[section]
         expected = [(30, 35), (50, 40), (60, 90), (65, 100)]
         assert sec_list[0].control_function == expected
 
@@ -311,6 +348,7 @@ class TestConfigFileLoading:
         assert cfg.hd == []
         assert cfg.nvme == []
         assert cfg.gpu == []
+        assert cfg.npu == []
         assert cfg.const == []
 
     def test_config_missing_ipmi_section(self, create_config_file):
@@ -1301,6 +1339,179 @@ gpu_device_ids = 1
         assert cfg.gpu[1].gpu_type == "amd"
 
 
+class TestNpuConfigParsing:
+    """Unit tests for [NPU] section parsing."""
+
+    @pytest.mark.parametrize(
+        "param, value",
+        [
+            pytest.param("temp_calc", "5", id="invalid-temp-calc"),
+            pytest.param("steps", "0", id="steps-zero"),
+            pytest.param("steps", "-1", id="steps-negative"),
+            # steps > max_level - min_level (default max_level=100, min_level=35 -> 65)
+            pytest.param("steps", "66", id="steps-over-range"),
+            pytest.param("sensitivity", "0", id="sensitivity-zero"),
+            pytest.param("sensitivity", "-1", id="sensitivity-negative"),
+            pytest.param("polling", "-1", id="polling-negative"),
+            pytest.param("smoothing", "0", id="smoothing-zero"),
+            pytest.param("smoothing", "-1", id="smoothing-negative"),
+            pytest.param("error_tolerance", "-1", id="error-tolerance-negative"),
+            pytest.param("error_tolerance", "abc", id="error-tolerance-not-an-int"),
+            pytest.param("min_temp", "-1", id="min-temp-negative"),
+            pytest.param("max_temp", "201", id="max-temp-over-200"),
+            pytest.param("min_level", "-1", id="min-level-negative"),
+            pytest.param("max_level", "101", id="max-level-over-100"),
+            pytest.param("npu_smi_timeout", "0", id="timeout-zero"),
+            pytest.param("npu_smi_timeout", "-1", id="timeout-negative"),
+        ],
+    )
+    def test_npu_validation_errors(self, create_config_file, param: str, value: str):
+        """Negative unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
+        - write [NPU] with one invalid numeric parameter and call Config(path)
+        - ASSERT: Config(path) raises ValueError
+        """
+        config_path = create_config_file(f"[Ipmi]\n[NPU]\nenabled = 1\n{param} = {value}\n")
+        with pytest.raises(ValueError):
+            Config(config_path)
+
+    def test_npu_max_temp_less_than_min_error(self, create_config_file):
+        """Negative unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
+        - write [NPU] with min_temp = 80 and max_temp = 40 and call Config(path)
+        - ASSERT: Config(path) raises ValueError
+        - ASSERT: the error message mentions both "max_temp" and "min_temp"
+        """
+        config_path = create_config_file("[Ipmi]\n[NPU]\nenabled = 1\nmin_temp = 80\nmax_temp = 40\n")
+        with pytest.raises(ValueError) as exc_info:
+            Config(config_path)
+        assert "max_temp" in str(exc_info.value) and "min_temp" in str(exc_info.value)
+
+    def test_npu_max_level_less_than_min_error(self, create_config_file):
+        """Negative unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
+        - write [NPU] with min_level = 100 and max_level = 35 and call Config(path)
+        - ASSERT: Config(path) raises ValueError
+        - ASSERT: the error message mentions both "max_level" and "min_level"
+        """
+        config_path = create_config_file("[Ipmi]\n[NPU]\nenabled = 1\nmin_level = 100\nmax_level = 35\n")
+        with pytest.raises(ValueError) as exc_info:
+            Config(config_path)
+        assert "max_level" in str(exc_info.value) and "min_level" in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        "temp_calc",
+        [
+            pytest.param(0, id="calc-min"),
+            pytest.param(1, id="calc-avg"),
+            pytest.param(2, id="calc-max"),
+        ],
+    )
+    def test_npu_temp_calc_all_values(self, create_config, temp_calc: int):
+        """Positive unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [NPU] with temp_calc = {0,1,2} and instantiate Config
+        - ASSERT: cfg.npu[0].temp_calc equals the written value
+        """
+        cfg = create_config(f"[Ipmi]\n[NPU]\nenabled = 1\ntemp_calc = {temp_calc}\n")
+        assert cfg.npu[0].temp_calc == temp_calc
+
+    def test_npu_defaults(self, create_config):
+        """Positive unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [NPU] with enabled = 1 only and instantiate Config
+        - inspect the single NpuConfig in cfg.npu
+        - ASSERT: exactly one NPU entry is parsed
+        - ASSERT: section "NPU", enabled is True, device ids/paths/timeout/temp keys match DV_NPU_*
+        """
+        cfg = create_config("[Ipmi]\n[NPU]\nenabled = 1\n")
+        assert len(cfg.npu) == 1
+        npu = cfg.npu[0]
+        assert npu.section == "NPU"
+        assert npu.enabled is True
+        assert npu.npu_device_ids == Config.parse_npu_ids(Config.DV_NPU_DEVICE_IDS)
+        assert npu.npu_smi_path == Config.DV_NPU_SMI_PATH
+        assert npu.npu_smi_timeout == Config.DV_NPU_SMI_TIMEOUT
+        assert npu.min_temp == Config.DV_NPU_MIN_TEMP
+        assert npu.max_temp == Config.DV_NPU_MAX_TEMP
+        assert npu.error_tolerance == Config.DV_NPU_ERROR_TOLERANCE
+
+    def test_npu_multiple_ids(self, create_config):
+        """Positive unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [NPU] with npu_device_ids = 7, 8 and instantiate Config
+        - ASSERT: cfg.npu[0].npu_device_ids equals [7, 8]
+        """
+        cfg = create_config("[Ipmi]\n[NPU]\nenabled = 1\nnpu_device_ids = 7, 8\n")
+        assert cfg.npu[0].npu_device_ids == [7, 8]
+
+    def test_npu_invalid_device_ids_error(self, create_config_file):
+        """Negative unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
+        - write [NPU] with npu_device_ids = 101 (out of range) and call Config(path)
+        - ASSERT: Config(path) raises ValueError
+        - ASSERT: the error message mentions "npu_device_ids"
+        """
+        config_path = create_config_file("[Ipmi]\n[NPU]\nenabled = 1\nnpu_device_ids = 101\n")
+        with pytest.raises(ValueError) as exc_info:
+            Config(config_path)
+        assert "npu_device_ids" in str(exc_info.value)
+
+    def test_npu_empty_smi_path_error(self, create_config_file):
+        """Negative unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
+        - write [NPU] with enabled = 1 and npu_smi_path = (empty) and call Config(path)
+        - ASSERT: Config(path) raises ValueError
+        - ASSERT: the error message mentions "npu_smi_path"
+        """
+        config_path = create_config_file("[Ipmi]\n[NPU]\nenabled = 1\nnpu_smi_path =\n")
+        with pytest.raises(ValueError) as exc_info:
+            Config(config_path)
+        assert "npu_smi_path" in str(exc_info.value)
+
+    def test_npu_disabled_empty_smi_path_ok(self, create_config):
+        """Positive unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [NPU] with enabled = 0 and npu_smi_path = (empty) and instantiate Config
+        - ASSERT: Config parses fine (the path is only required when the controller is enabled)
+        """
+        cfg = create_config("[Ipmi]\n[NPU]\nenabled = 0\nnpu_smi_path =\n")
+        assert cfg.npu[0].enabled is False
+        assert cfg.npu[0].npu_smi_path == ""
+
+    def test_npu_custom_path_and_timeout(self, create_config):
+        """Positive unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [NPU] with a full npu_smi_path and a custom npu_smi_timeout and instantiate Config
+        - ASSERT: cfg.npu[0].npu_smi_path equals "/opt/ascend/bin/npu-smi"
+        - ASSERT: cfg.npu[0].npu_smi_timeout equals 30.0
+        """
+        cfg = create_config("[Ipmi]\n[NPU]\nenabled = 1\nnpu_smi_path = /opt/ascend/bin/npu-smi\n"
+                            "npu_smi_timeout = 30\n")
+        assert cfg.npu[0].npu_smi_path == "/opt/ascend/bin/npu-smi"
+        assert cfg.npu[0].npu_smi_timeout == 30.0
+
+    def test_npu_numbered_sections(self, create_config):
+        """Positive unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [NPU] and [NPU:0] sections and instantiate Config
+        - ASSERT: cfg.npu has length 2 with sections "NPU" and "NPU:0"
+        """
+        cfg = create_config("""[Ipmi]
+[NPU]
+enabled = 1
+ipmi_zone = 1
+[NPU:0]
+enabled = 1
+ipmi_zone = 2
+npu_device_ids = 7
+""")
+        assert len(cfg.npu) == 2
+        assert cfg.npu[0].section == "NPU"
+        assert cfg.npu[1].section == "NPU:0"
+        assert cfg.npu[1].npu_device_ids == [7]
+
+
 class TestConstConfigParsing:
     """Unit tests for [CONST] section parsing."""
 
@@ -1734,13 +1945,14 @@ class TestEdgeCases:
         """Positive unit test for Config.__init__() file-loading path. It contains the following steps:
         - mock the on-disk config via the create_config fixture (tmp_path-backed)
         - write only [Ipmi] with a command key and instantiate Config
-        - ASSERT: cfg.cpu, cfg.hd, cfg.nvme, cfg.gpu, cfg.const are all empty lists
+        - ASSERT: cfg.cpu, cfg.hd, cfg.nvme, cfg.gpu, cfg.npu, cfg.const are all empty lists
         """
         cfg = create_config("[Ipmi]\ncommand = /usr/bin/ipmitool\n")
         assert cfg.cpu == []
         assert cfg.hd == []
         assert cfg.nvme == []
         assert cfg.gpu == []
+        assert cfg.npu == []
         assert cfg.const == []
 
     def test_numbered_sections_only(self, create_config):
