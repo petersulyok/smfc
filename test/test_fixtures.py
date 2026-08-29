@@ -515,7 +515,9 @@ class FakeOpenBmc:
       loop reclaims every unlatched zone (`auto_duty`) within about a second, which the model applies before
       each command;
     - a zone in failsafe is pinned at 100% and every duty written to it is discarded;
-    - selector `0x00` of `0x30 0x70 0x66` reads a duty and writes nothing, whatever follows the zone byte.
+    - selector `0x00` of `0x30 0x70 0x66` reads a duty and writes nothing, whatever follows the zone byte;
+    - a written percentage is stored as an 8-bit PWM value and converted back on read, truncating both
+      divisions, so a duty is exact at multiples of 20 and one percent low elsewhere.
 
     Attributes are public so a test can seed a state (`failsafe[2] = True`) or assert one
     (`manual == {0: True, ...}`) directly.
@@ -590,6 +592,15 @@ class FakeOpenBmc:
         return zone
 
     @staticmethod
+    def _stored(percent: int) -> int:
+        """The duty a written percentage actually becomes.
+
+        The BMC keeps an 8-bit PWM value, `pwm = percent * 255 / 100`, and converts back when the duty is
+        read, truncating both divisions. So a write of 50% is running at, and reads back as, 49%.
+        """
+        return ((percent * 255) // 100) * 100 // 255
+
+    @staticmethod
     def _reply(stdout: str) -> subprocess.CompletedProcess:
         """Wrap a reply the way `Ipmi._exec_ipmitool()` hands it to a platform."""
         return subprocess.CompletedProcess([], returncode=0, stdout=stdout, stderr="")
@@ -631,7 +642,7 @@ class FakeOpenBmc:
         if selector == "0x01":
             zone = self._zone(args[5])
             if not self.failsafe[zone]:
-                self.duty[zone] = int(args[6], 16)
+                self.duty[zone] = self._stored(int(args[6], 16))
             return self._reply("")
         if selector == "0x02":
             if args[5] == "0x00" and any(self.manual.values()):

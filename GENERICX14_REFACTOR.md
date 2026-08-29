@@ -127,7 +127,7 @@ Then a behavioural test class that asserts outcomes rather than calls:
 | Scenario | Assertion |
 | --- | --- |
 | `start([0, 2])` | zones 0 and 2 latched, zone 1 untouched and still automatic |
-| `set_fan_level(2, 40)` | `get_fan_level(2) == 40` — round-trip through the model |
+| `set_fan_level(2, 40)` | `get_fan_level(2) == 40` — 40% is on the PWM grid, so it round-trips exactly |
 | duty write to an unlatched zone | does **not** stick; the model's automatic value wins |
 | model clears a flag | next `check_fan_mode()` reports `LOST` naming that zone |
 | `end()` on all three exit paths | nothing latched afterwards (`exit_level=-1`, normal, level write raising) |
@@ -224,9 +224,12 @@ by name gets a plausible, wrong answer. And `DEFAULT_ZONE_SENSOR = 0x41` is docu
 on every documented X14 board", which the X14SAE-F table already falsifies: there zone 1 is FAN2+FAN3
 (`0x44`) and `0x41` is zone 4.
 
-Free side effect: reading the duty back through the path it was written removes the
-`pwm = pct * 255 / 100` round-trip, whose one-count error makes `ConstFc`'s redundant-write check
-(`constfc.py:81-92`) mismatch on most levels and rewrite the duty on every poll.
+The `pwm = pct * 255 / 100` conversion stays, because it happens inside the BMC's own duty register
+rather than on the way to a fan sensor: a duty reads back exact at multiples of 20 and one percent low
+elsewhere, whichever command reads it (Part 3.1). So `ConstFc`'s redundant-write check
+(`constfc.py:81-92`) still mismatches on most levels and rewrites the duty on every poll. That is
+accepted, not overlooked - it is what the ATEN PWM duty path already does, and a duty write costs one
+IPMI command with no effect on the fans.
 
 **Safe to remove:** `x14_zone_sensors` is not on `main` — it exists only on this branch, so no released
 configuration breaks and no deprecation cycle is owed.

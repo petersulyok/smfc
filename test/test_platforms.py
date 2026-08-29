@@ -976,25 +976,35 @@ class TestX14OpenBmcBehaviour:
         platform.end(self.ZONES, level)
         assert bmc.latched_zones == [], f"{f}: nothing latched"
         assert platform.get_fan_level(0) == 30, f"{f}: automatic control resumed"
-        expected = [level] * len(self.ZONES) if level >= 0 else [30] * len(self.ZONES)
+        # 50% is held as 49% once the BMC has converted it to an 8-bit PWM value and back.
+        expected = [49] * len(self.ZONES) if level >= 0 else [30] * len(self.ZONES)
         assert [bmc.duty_at_release[z] for z in self.ZONES] == expected, f"{f}: exit level in force at release"
 
 
-    def test_duty_reads_back_exactly_what_was_written(self) -> None:
+    @pytest.mark.parametrize("written, read_back", [
+        pytest.param(20, 20, id="exact-at-multiple-of-20"),
+        pytest.param(100, 100, id="exact-at-100"),
+        pytest.param(7, 6, id="one-low-7"),
+        pytest.param(33, 32, id="one-low-33"),
+        pytest.param(50, 49, id="one-low-50"),
+        pytest.param(99, 98, id="one-low-99"),
+    ])
+    def test_duty_reads_back_one_low_off_the_pwm_grid(self, written: int, read_back: int) -> None:
         """Positive unit test for X14OpenBmcPlatform.get_fan_level() method. It contains the following steps:
-        - build a modelled board and latch every zone
-        - write each duty in turn and read it straight back
-        - ASSERT: every duty reads back as the exact value written, including ones that are not multiples of
-          20. The read addresses the same 0-based zone as the write, so nothing is converted on the way and
-          the redundant-write check of the CONST controller matches instead of rewriting on every poll
+        - build a modelled board, latch zone 0 and write a duty
+        - read the duty straight back
+        - ASSERT: the value read is the one the BMC really holds, which is the written percentage converted
+          to an 8-bit PWM value and back with both divisions truncated: exact at multiples of 20 and one
+          percent low elsewhere
+        - ASSERT: nothing in the platform hides that difference. A caller comparing a read against what it
+          wrote must tolerate one count, exactly as on the ATEN PWM duty path
         """
-        f = "TestX14OpenBmcBehaviour.test_duty_reads_back_exactly_what_was_written"
+        f = "TestX14OpenBmcBehaviour.test_duty_reads_back_one_low_off_the_pwm_grid"
         bmc = FakeOpenBmc()
         platform = self._platform(bmc)
         platform.start([0])
-        for level in (7, 33, 50, 67, 99, 100):
-            platform.set_fan_level(0, level)
-            assert platform.get_fan_level(0) == level, f"{f}: {level}% round-trip"
+        platform.set_fan_level(0, written)
+        assert platform.get_fan_level(0) == read_back, f"{f}: {written}% round-trip"
 
     def test_start_rejects_a_zone_the_board_does_not_have(self) -> None:
         """Negative unit test for X14OpenBmcPlatform.start() method. It contains the following steps:
@@ -1093,9 +1103,11 @@ class TestX14OpenBmcBehaviour:
         """Negative unit test for X14OpenBmcPlatform.set_fan_level() method. It contains the following steps:
         - build a modelled board and latch zones 0 and 1
         - write a duty of 0% to one zone and to both zones at once
-        - ASSERT: the board runs at the 5% floor, not at 0%. `min_level=0` is a legal configuration, and a
+        - ASSERT: the fans are still turning, not stopped. `min_level=0` is a legal configuration, and a
           manual duty write has no floor of its own: the 15% floor belongs to the automatic control a
           latched zone is no longer under, so a written 0 would stop the fans with nothing regulating them
+        - ASSERT: the board holds 4%, which is what the 5% floor becomes once the BMC has converted it to
+          an 8-bit PWM value and back. The floor guards against a stopped fan, not against a precise value
         """
         f = "TestX14OpenBmcBehaviour.test_a_zero_duty_never_reaches_the_fans"
         bmc = FakeOpenBmc()
@@ -1103,7 +1115,8 @@ class TestX14OpenBmcBehaviour:
         platform.start(self.ZONES)
         platform.set_fan_level(0, 0)
         platform.set_multiple_fan_levels(self.ZONES, 0)
-        assert [bmc.duty[z] for z in self.ZONES] == [5, 5], f"{f}: duty floor"
+        assert all(bmc.duty[z] > 0 for z in self.ZONES), f"{f}: fans not stopped"
+        assert [bmc.duty[z] for z in self.ZONES] == [4, 4], f"{f}: the 5% floor as the BMC holds it"
 
 
 class TestX14AtenPlatform:
