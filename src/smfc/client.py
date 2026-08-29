@@ -646,7 +646,8 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     banner = _wrap(f"smfc-client {pkg_version}", BOLD, use_color)
     lines.append(banner)
     lines.append(_wrap(f"  config: {config_path}", DIM, use_color))
-    lines.append(_format_source_line(online=False, use_color=use_color))
+    lines.append(_format_source_line(online=False, use_color=use_color,
+                                     service_reachable=service_reachable))
     lines.append("")
 
     # BMC section. Non-verbose mode shows only Product + Fan mode (the two lines that matter
@@ -791,17 +792,29 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _format_source_line(online: bool, use_color: bool) -> str:
+def _format_source_line(online: bool, use_color: bool, service_reachable: Optional[bool] = None) -> str:
     """Render the tabbed "source:" line printed below the banner.
+
+    Reaching the BMC directly does not by itself mean the service is down: `--standalone` asks for a
+    direct read, and a configuration without an exporter leaves nothing to ask. The line therefore says
+    the service is not reachable only when that was established, and otherwise says only that it was not
+    queried - which is what the reader can act on.
 
     Args:
         online (bool): True if the snapshot came from the smfc service exporter.
         use_color (bool): whether to emit ANSI colors.
+        service_reachable (Optional[bool]): False when the caller established that the `smfc` service is
+            not running; None when it could not tell.
 
     Returns:
         str: the formatted line (without trailing newline).
     """
-    label = "smfc service (live snapshot)" if online else "ipmitool (smfc service is not reachable)"
+    if online:
+        label = "smfc service (live snapshot)"
+    elif service_reachable is False:
+        label = "ipmitool (smfc service is not reachable)"
+    else:
+        label = "ipmitool (smfc service not queried)"
     return _wrap(f"  source: {label}", DIM, use_color)
 
 

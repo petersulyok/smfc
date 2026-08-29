@@ -2143,6 +2143,23 @@ class TestMainOnlinePath:
         assert "  source: ipmitool (smfc service is not reachable)" in out
         assert "smfc-client" in out
 
+    def test_source_line_states_only_what_was_established(self) -> None:
+        """Positive unit test for smfc.client._format_source_line() function. It contains the steps:
+        - render the line for the three cases the client can be in
+        - ASSERT: the online case names the live snapshot
+        - ASSERT: an exporter that was asked and did not answer reports the service as not reachable
+        - ASSERT: a direct read that never asked reports only that, because `--standalone` and a
+          configuration without an exporter both leave the service running for all the client knows
+        """
+        f = "TestMain.test_source_line_states_only_what_was_established"
+        online = client._format_source_line(online=True, use_color=False)
+        unreachable = client._format_source_line(online=False, use_color=False, service_reachable=False)
+        not_asked = client._format_source_line(online=False, use_color=False, service_reachable=None)
+        assert "smfc service (live snapshot)" in online, f"{f}: online"
+        assert "smfc service is not reachable" in unreachable, f"{f}: asked and silent"
+        assert "smfc service not queried" in not_asked, f"{f}: never asked"
+        assert "not reachable" not in not_asked, f"{f}: no unfounded claim"
+
     def test_standalone_flag_forces_offline(self, mocker: MockerFixture,
                                             capsys: pytest.CaptureFixture) -> None:
         """Positive unit test for smfc.client.main() function. It contains the following steps:
@@ -2151,7 +2168,8 @@ class TestMainOnlinePath:
         - mock smfc.client.Ipmi, Context, and _construct_controllers to provide a CPU stub
         - call main() with -c dummy, -nc, and --standalone
         - ASSERT: main returns EXIT_OK
-        - ASSERT: stdout source line reports 'ipmitool (smfc service is not reachable)' (standalone path used)
+        - ASSERT: stdout source line reports 'ipmitool (smfc service not queried)'. The service was never
+          asked, so the report must not claim it is unreachable - it may well be running and driving the fans
         - ASSERT: _try_fetch_snapshot was not called (--standalone bypasses the probe)
         """
         mocker.patch("smfc.client.Config", return_value=self._exporter_enabled_cfg())
@@ -2164,7 +2182,7 @@ class TestMainOnlinePath:
         rc = client.main(["-c", "/dummy.conf", "-nc", "--standalone"])
         assert rc == EXIT_OK
         out = capsys.readouterr().out
-        assert "  source: ipmitool (smfc service is not reachable)" in out
+        assert "  source: ipmitool (smfc service not queried)" in out
         assert try_fetch.call_count == 0, "_try_fetch_snapshot must not be called when --standalone is passed"
 
 
