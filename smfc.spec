@@ -98,7 +98,7 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
-* Thu Aug 27 2026 Peter Sulyok <peter@sulyok.net> - 6.3.0-1
+* Sat Aug 29 2026 Peter Sulyok <peter@sulyok.net> - 6.3.0-1
 - Added: new NPU fan controller (sixth controller type) that drives one or
   more IPMI zones from the temperature of Ascend NPUs, e.g. the Atlas 300I
   Duo, read with npu-smi. A device is an NPU card (npu-smi -i id); for a
@@ -107,6 +107,23 @@ fi
   npu_smi_path= and npu_smi_timeout=; all the shared parameters of the other
   temperature-driven controllers are supported. The controller shows up in
   smfc-client and the HTTP exporter like the other fan controllers.
+- Added: H14 motherboard support. platform_name=generic_x14 covers both X14
+  and H14 boards now. Supermicro's 14th generation ships two different BMC
+  firmware types and the board name does not tell you which one you have, so
+  smfc detects it at startup. On boards with the second type taking the fans
+  over affects every zone, so list all of them in ipmi_zone=.
+- Changed: the generic_x14 platform detects how many fan zones the board has
+  and which fan modes it supports, instead of assuming. smfc-client does not
+  warn about a non-FULL fan mode on X14/H14 any more; it reports what is
+  actually driving the fans.
+- Fixed: fan control was non-functional on X14/H14 motherboards. smfc reported
+  that it had taken the fans over while the BMC kept running them on its own
+  curve, because the commands it sent were wrong and the fan level never
+  reached the board.
+- Fixed: the fans are always handed back to the BMC when smfc stops,
+  exit_level=-1 included; a zone the BMC holds at 100% after a fan failure is
+  reported instead of looking healthy; and min_level=0 can no longer stop the
+  fans on X14/H14, where levels below 5% are raised to 5%.
 
 * Mon Aug 24 2026 Peter Sulyok <peter@sulyok.net> - 6.2.1-1
 - Fixed: the startup BMC fan subsystem readiness check did not recognize fan

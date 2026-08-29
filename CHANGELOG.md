@@ -5,9 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [6.3.0] - 2026.08.29
 
 ### Added
+- New `NPU` fan controller (sixth controller type) that drives one or more IPMI zones from the temperature of Ascend NPUs, e.g. the Atlas 300I Duo, read with `npu-smi`. A device is an NPU card (`npu-smi -i <id>`); for a multi-chip card the hottest chip is used, and `temp_calc=` (minimum/average/maximum) aggregates across cards. The section is `[NPU]` / `[NPU:1]` / ... with `npu_device_ids=` (the card IDs reported by `npu-smi info -m`, which may not start from 0), `npu_smi_path=` (a bare command name resolved via `PATH` or a full path), and `npu_smi_timeout=` (seconds, guards against a hung `npu-smi` call). All the shared parameters of the other temperature-driven controllers (`ipmi_zone=`, `temp_calc=`, `sensitivity=`, `polling=`, `steps=`, `min_temp`/`max_temp`/`min_level`/`max_level` or `control_function=`, `smoothing=`, `error_tolerance=`) are supported. The controller shows up in `smfc-client` and the HTTP exporter like the other fan controllers. Contributed by [@akalagov](https://github.com/akalagov) in [PR #121](https://github.com/petersulyok/smfc/pull/121).
+- New sample configuration `config/samples/smfc-sample10.conf`: an NPU-only setup with two Ascend cards in IPMI zone 1.
 - **H14 motherboards are supported.** `platform_name=generic_x14` covers both X14 and H14 boards now. Supermicro's 14th generation ships two different BMC firmware types and the board name does not tell you which one you have, so `smfc` detects it at startup and reports what it found. On boards with the second type, taking the fans over affects **every** zone on the board rather than only the configured ones - so list all of them in `ipmi_zone=`, or the ones you leave out stay at whatever level they had. See [README chapter 5](https://github.com/petersulyok/smfc/blob/main/README.md#5-supermicro-compatibility).
 - [doc/X14H14_MANUAL_FANCONTROL.md](https://github.com/petersulyok/smfc/blob/main/doc/X14H14_MANUAL_FANCONTROL.md): a reference for both firmware types - which one your board runs, how to drive the fans by hand, and the fan and zone layout of the documented boards.
 
@@ -21,16 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A zone the BMC holds at 100% is reported.** After a fan failure the BMC takes a zone over and ignores every level `smfc` writes to it; `smfc` used to report everything as fine. It now says which zone is affected and that it cannot get it back. A fan reading 0 RPM is the usual trigger - note that a fan turning slower than the BMC can measure also reads as 0 while running perfectly well.
 - **`min_level=0` can no longer stop the fans on X14/H14.** While `smfc` drives the fans there, the BMC's own thermal protection is suspended, so a level of 0 would leave nothing regulating them. Levels below 5% are raised to 5%.
 - **An unreachable BMC is not counted as fan mode drift any more.** `smfc` retries as it does for any other lost state, but without counting it in the `smfc_fan_mode_enforced_total` metric and without stopping the service when `enforce_fan_mode=0`.
-
-## [6.3.0] - 2026.08.27
-
-### Added
-- New `NPU` fan controller (sixth controller type) that drives one or more IPMI zones from the temperature of Ascend NPUs, e.g. the Atlas 300I Duo, read with `npu-smi`. A device is an NPU card (`npu-smi -i <id>`); for a multi-chip card the hottest chip is used, and `temp_calc=` (minimum/average/maximum) aggregates across cards. The section is `[NPU]` / `[NPU:1]` / ... with `npu_device_ids=` (the card IDs reported by `npu-smi info -m`, which may not start from 0), `npu_smi_path=` (a bare command name resolved via `PATH` or a full path), and `npu_smi_timeout=` (seconds, guards against a hung `npu-smi` call). All the shared parameters of the other temperature-driven controllers (`ipmi_zone=`, `temp_calc=`, `sensitivity=`, `polling=`, `steps=`, `min_temp`/`max_temp`/`min_level`/`max_level` or `control_function=`, `smoothing=`, `error_tolerance=`) are supported. The controller shows up in `smfc-client` and the HTTP exporter like the other fan controllers. Contributed by [@akalagov](https://github.com/akalagov) in [PR #121](https://github.com/petersulyok/smfc/pull/121).
-- New sample configuration `config/samples/smfc-sample10.conf`: an NPU-only setup with two Ascend cards in IPMI zone 1.
-
-### Fixed
 - `config/samples/smfc-sample8.conf` could not be loaded: its `hd_names=` value was `nvme_names=SPECIFIED_BY_USER`, a copy-paste error, so `smfc` rejected the file with `NVMe drives are not allowed in [HD], use [NVME] instead`. The other samples use `hd_names=SPECIFIED BY THE USER`.
-
 
 ## [6.2.1] - 2026.08.24
 
