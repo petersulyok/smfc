@@ -9,13 +9,15 @@ from typing import Callable, List
 from smfc.config import PlatformName
 from smfc.generic import GenericPlatform
 from smfc.genericx9 import GenericX9Platform
-from smfc.genericx14 import X14AtenPlatform, X14OpenBmcPlatform
+from smfc.genericx14 import X14AtenPlatform, X14OpenBmcCmd, X14OpenBmcPlatform
 from smfc.platform import IpmiError, Platform
 from smfc.x10qbi import X10QBi
 
 # Part 1.1 of `doc/X14H14_MANUAL_FANCONTROL.md`: read the manual-mode flag of zone 1. This is the only
 # command that is safe to send to an X14/H14 board whose firmware stack is unknown - it changes nothing.
-X14_STACK_PROBE: List[str] = ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x00", "0x01"]
+# It is taken from the OpenBMC command table rather than spelled out again: the probe asks whether that
+# command set exists, so the bytes it sends must be the bytes the platform would send.
+X14_STACK_PROBE: List[str] = X14OpenBmcCmd.read_manual(0)
 CC_INVALID_COMMAND: int = 0xC1      # The OEM manual-mode command does not exist -> ATEN firmware
 STACK_PROBE_DOC: str = "doc/X14H14_MANUAL_FANCONTROL.md, Part 1"
 

@@ -11,6 +11,71 @@ from smfc.platform import (ControlState, ControlStatus, FanMode, IpmiError, Plat
                            validate_input_range)
 
 
+class X14OpenBmcCmd:
+    """Every `ipmitool raw` command of the OpenBMC fan control stack, in one place.
+
+    The bytes are the whole of what `smfc` knows about this BMC, and they are the part that gets revised
+    when a board is measured. Keeping them in one class means reconciling the code against Part 3.1 and
+    Part 3.2 of `doc/X14H14_MANUAL_FANCONTROL.md` is reading one table against another, rather than
+    grepping for hexadecimal literals across two modules.
+
+    Two command families with two zone numberings meet here, which is the other reason they belong
+    together: the OEM manual/failsafe commands count zones from 1, the duty commands from 0. smfc zone IDs
+    are 0-based everywhere - configuration, controllers, every other platform - so `_oem_zone()` is the one
+    place the +1 is applied.
+    """
+
+    # OEM manual/failsafe commands: netfn 0x2e (OEM/Group) carrying IANA ID 0x0000C2CF. Every reply echoes
+    # that ID back before the payload, so a flag reads as `cf c2 00 <flag>`.
+    _OEM: List[str] = ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00"]
+    _OP_READ_MANUAL: str = "0x00"
+    _OP_SET_MANUAL: str = "0x01"
+    _OP_READ_FAILSAFE: str = "0x02"
+    # Duty commands: the selector after 0x66 is 0x00 to read a zone's duty, 0x01 to write it, 0x02 to
+    # toggle manual mode in every zone at once.
+    _DUTY: List[str] = ["raw", "0x30", "0x70", "0x66"]
+
+    @staticmethod
+    def _oem_zone(zone: int) -> str:
+        """Convert an smfc (0-based) zone ID to the 1-based zone byte the OEM commands use."""
+        return f"0x{zone + 1:02x}"
+
+    @classmethod
+    def read_manual(cls, zone: int) -> List[str]:
+        """Read the manual mode flag of a zone. Reply: `cf c2 00 <flag>`, 01 = manual, 00 = automatic."""
+        return cls._OEM + [cls._OP_READ_MANUAL, cls._oem_zone(zone)]
+
+    @classmethod
+    def set_manual(cls, zone: int, enabled: bool) -> List[str]:
+        """Enable or disable manual fan mode in a zone."""
+        return cls._OEM + [cls._OP_SET_MANUAL, cls._oem_zone(zone), "0x01" if enabled else "0x00"]
+
+    @classmethod
+    def read_failsafe(cls, zone: int) -> List[str]:
+        """Read the failsafe flag of a zone. Reply: `cf c2 00 <flag>`, 01 = the zone is forced to 100 %."""
+        return cls._OEM + [cls._OP_READ_FAILSAFE, cls._oem_zone(zone)]
+
+    @classmethod
+    def read_duty(cls, zone: int) -> List[str]:
+        """Read a zone's duty. Reply: 1 byte, the duty in %. Writes nothing, whatever follows the zone byte."""
+        return cls._DUTY + ["0x00", f"0x{zone:02x}"]
+
+    @classmethod
+    def write_duty(cls, zone: int, level: int) -> List[str]:
+        """Write a zone's duty, as a percentage (0x00-0x64). Reply: completion code only."""
+        return cls._DUTY + ["0x01", f"0x{zone:02x}", f"0x{level:02x}"]
+
+    @classmethod
+    def set_manual_all(cls, enabled: bool) -> List[str]:
+        """Enable or disable manual fan mode in every zone with one command."""
+        return cls._DUTY + ["0x02", "0x01" if enabled else "0x00"]
+
+    @staticmethod
+    def get_supported_modes() -> List[str]:
+        """Read the supported base fan modes. Reply: 2 bytes, little-endian, one bit per mode value."""
+        return ["raw", "0x30", "0x45", "0x02"]
+
+
 class X14OpenBmcPlatform(Platform):
     """Platform implementation for Supermicro X14/H14 motherboards running the OpenBMC
     (`openbmc-phosphor`) firmware stack.
@@ -20,9 +85,12 @@ class X14OpenBmcPlatform(Platform):
     fall back to when manual mode is lost. `smfc` therefore reads the base fan mode but never writes it -
     writing it would clear manual mode on every zone.
 
-    Zone numbering is the crux of this platform: the OEM manual/failsafe commands count zones from 1, the duty
-    commands from 0. smfc zone IDs are 0-based everywhere (configuration, controllers, all other platforms),
-    so the +1 is applied in exactly one place, `_manual_zone()`.
+    Every raw command it sends is built by `X14OpenBmcCmd`, including the two zone numberings the two
+    command families use. smfc zone IDs are 0-based everywhere, and this class passes them on unconverted.
+
+    Three things are read from the board rather than assumed: how many zones it has (`zone_count`), which
+    base fan modes it supports (`valid_fan_modes`), and whether the BMC has forced a zone to 100 %
+    (`_get_failsafe()`).
 
     The stack is not implied by the board name - most X14 boards run OpenBMC but `X14SDW`/`X14SDV` do not,
     and the H14 board `H14SHM` does - so this class is selected by the runtime probe in `platform_factory`,
@@ -38,12 +106,6 @@ class X14OpenBmcPlatform(Platform):
         FanMode.STANDARD, FanMode.FULL, FanMode.OPTIMAL, FanMode.PUE, FanMode.HEAVY_IO,
         0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
     ]
-    # OEM command prefix for the manual/failsafe fan control commands (IANA 0x0000C2CF).
-    OEM_PREFIX: List[str] = ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00"]
-    OEM_OP_READ_MANUAL: str = "0x00"        # Read the manual mode flag of a zone
-    OEM_OP_SET_MANUAL: str = "0x01"         # Set the manual mode flag of a zone
-    OEM_OP_READ_FAILSAFE: str = "0x02"      # Read the failsafe flag of a zone
-    GET_SUPPORTED_MODES: List[str] = ["raw", "0x30", "0x45", "0x02"]     # Supported fan mode bitmask
 
     latched_zones: List[int]                # Zones manual mode was latched in by start()
     _zone_count: Optional[int]              # Zones the board has, discovered by probe() on first use
@@ -74,7 +136,7 @@ class X14OpenBmcPlatform(Platform):
         """
         if self._supported_modes is None:
             try:
-                reply = self._exec(self.GET_SUPPORTED_MODES).stdout or ""
+                reply = self._exec(X14OpenBmcCmd.get_supported_modes()).stdout or ""
                 mask = int("".join(reversed(reply.split())), 16)
                 self._supported_modes = [mode for mode in range(mask.bit_length()) if mask >> mode & 1]
             except (RuntimeError, ValueError):
@@ -96,7 +158,7 @@ class X14OpenBmcPlatform(Platform):
             count = 0
             for zone in range(self.FANCTL_COUNT):
                 try:
-                    self._exec(self.OEM_PREFIX + [self.OEM_OP_READ_FAILSAFE, self._manual_zone(zone)])
+                    self._get_failsafe(zone)
                 except (RuntimeError, ValueError):
                     break
                 count += 1
@@ -118,13 +180,8 @@ class X14OpenBmcPlatform(Platform):
 
     def _get_failsafe(self, zone: int) -> bool:
         """Return True if the BMC has forced the given zone to 100 % by failsafe."""
-        r = self._exec(self.OEM_PREFIX + [self.OEM_OP_READ_FAILSAFE, self._manual_zone(zone)])
+        r = self._exec(X14OpenBmcCmd.read_failsafe(zone))
         return int(r.stdout.split()[-1], 16) == 1
-
-    @staticmethod
-    def _manual_zone(zone: int) -> str:
-        """Convert an smfc (0-based) zone ID to the 1-based zone byte of the OEM manual/failsafe commands."""
-        return f"0x{zone + 1:02x}"
 
     def _get_manual_mode(self, zone: int) -> bool:
         """Return True if manual fan mode is active in the given zone.
@@ -132,13 +189,12 @@ class X14OpenBmcPlatform(Platform):
         The reply echoes the IANA ID of the OEM command back before the payload, so it reads
         `cf c2 00 <flag>` and the flag is the last byte.
         """
-        r = self._exec(self.OEM_PREFIX + [self.OEM_OP_READ_MANUAL, self._manual_zone(zone)])
+        r = self._exec(X14OpenBmcCmd.read_manual(zone))
         return int(r.stdout.split()[-1], 16) == 1
 
     def _set_manual_mode(self, zone: int, enabled: bool) -> None:
         """Enable or disable manual fan mode in the given zone."""
-        value = "0x01" if enabled else "0x00"
-        self._exec(self.OEM_PREFIX + [self.OEM_OP_SET_MANUAL, self._manual_zone(zone), value])
+        self._exec(X14OpenBmcCmd.set_manual(zone, enabled))
 
     def start(self, zones: List[int]) -> bool:
         """Latch manual fan mode in the controlled zones and confirm it was accepted.
@@ -260,7 +316,7 @@ class X14OpenBmcPlatform(Platform):
             # a zone in an earlier run. Firmware that rejects the shortcut is handled per zone, over the
             # zones start() actually latched.
             try:
-                self._exec(["raw", "0x30", "0x70", "0x66", "0x02", "0x00"])
+                self._exec(X14OpenBmcCmd.set_manual_all(False))
             except RuntimeError:
                 for zone in self.latched_zones or zones:
                     self._set_manual_mode(zone, False)
@@ -281,7 +337,7 @@ class X14OpenBmcPlatform(Platform):
             RuntimeError: ipmitool execution problem
         """
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
-        r = self._exec(["raw", "0x30", "0x70", "0x66", "0x00", f"0x{zone:02x}"])
+        r = self._exec(X14OpenBmcCmd.read_duty(zone))
         return int(r.stdout.split()[-1], 16)
 
     def set_fan_level(self, zone: int, level: int) -> None:
@@ -291,7 +347,7 @@ class X14OpenBmcPlatform(Platform):
         validate_input_range(zone, "zone", 0, self.FANCTL_COUNT - 1)
         validate_input_range(level, "level", 0, 100)
         written = self._clamp_level(level)
-        self._exec(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{written:02x}"])
+        self._exec(X14OpenBmcCmd.write_duty(zone, written))
 
     def set_multiple_fan_levels(self, zone_list: List[int], level: int) -> None:
         """Set the same fan duty cycle percentage for all given zones, never below the 5 % floor."""
@@ -302,7 +358,7 @@ class X14OpenBmcPlatform(Platform):
         validate_input_range(level, "level", 0, 100)
         written = self._clamp_level(level)
         for zone in zone_list:
-            self._exec(["raw", "0x30", "0x70", "0x66", "0x01", f"0x{zone:02x}", f"0x{written:02x}"])
+            self._exec(X14OpenBmcCmd.write_duty(zone, written))
 
 
 class X14AtenPlatform(GenericPlatform):

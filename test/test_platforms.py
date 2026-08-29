@@ -18,7 +18,7 @@ from smfc.platform import ControlState, FanMode, IpmiError, Platform
 from smfc.config import PlatformName
 from smfc.generic import GenericPlatform
 from smfc.genericx9 import GenericX9Platform
-from smfc.genericx14 import X14AtenPlatform, X14OpenBmcPlatform
+from smfc.genericx14 import X14AtenPlatform, X14OpenBmcCmd, X14OpenBmcPlatform
 from smfc.x10qbi import X10QBi
 from .test_fixtures import FakeOpenBmc
 
@@ -735,6 +735,96 @@ class TestX14OpenBmcPlatform:
         platform = self._platform(mock_exec)
         platform.start([0, 2])
         assert platform.latched_zones == [0, 2], f"{f}: latched zones"
+
+
+class TestX14OpenBmcCmd:
+    """Unit tests for the OpenBMC command table.
+
+    Every raw command of this stack is built here, so this is the one place to diff against Part 3.1 and
+    Part 3.2 of `doc/X14H14_MANUAL_FANCONTROL.md`. The expected byte sequences below are written out in
+    full and deliberately not composed from the class's own constants: a test that reuses the code's
+    building blocks can only confirm the code agrees with itself.
+    """
+
+    @pytest.mark.parametrize("args, expected", [
+        pytest.param((0,), ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x00", "0x01"], id="zone-0"),
+        pytest.param((4,), ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x00", "0x05"], id="zone-4"),
+    ])
+    def test_read_manual(self, args: tuple, expected: List[str]) -> None:
+        """Positive unit test for X14OpenBmcCmd.read_manual(). It contains the following steps:
+        - call read_manual() for the first and the last zone
+        - ASSERT: the command matches Part 3.1 byte for byte, on netfn 0x2e and carrying the IANA ID
+        - ASSERT: the zone byte is 1-based, so smfc zone 0 is 0x01
+        """
+        assert X14OpenBmcCmd.read_manual(*args) == expected
+
+    @pytest.mark.parametrize("enabled, expected", [
+        pytest.param(True, ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x01", "0x01", "0x01"], id="on"),
+        pytest.param(False, ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x01", "0x01", "0x00"], id="off"),
+    ])
+    def test_set_manual(self, enabled: bool, expected: List[str]) -> None:
+        """Positive unit test for X14OpenBmcCmd.set_manual(). It contains the following steps:
+        - call set_manual() for zone 0, enabling and disabling
+        - ASSERT: the command matches Part 3.1, with operation byte 0x01 and the flag last
+        """
+        assert X14OpenBmcCmd.set_manual(0, enabled) == expected
+
+    def test_read_failsafe(self) -> None:
+        """Positive unit test for X14OpenBmcCmd.read_failsafe(). It contains the following steps:
+        - call read_failsafe() for zone 1
+        - ASSERT: the command matches Part 3.1, with operation byte 0x02 and the 1-based zone byte
+        """
+        assert X14OpenBmcCmd.read_failsafe(1) == ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x02", "0x02"]
+
+    def test_read_duty(self) -> None:
+        """Positive unit test for X14OpenBmcCmd.read_duty(). It contains the following steps:
+        - call read_duty() for zone 1
+        - ASSERT: selector 0x00 and a 0-based zone byte, i.e. the same zone the write addresses by the same
+          number, and no duty byte - this selector never writes
+        """
+        assert X14OpenBmcCmd.read_duty(1) == ["raw", "0x30", "0x70", "0x66", "0x00", "0x01"]
+
+    @pytest.mark.parametrize("zone, level, expected", [
+        pytest.param(0, 50, ["raw", "0x30", "0x70", "0x66", "0x01", "0x00", "0x32"], id="zone-0-50pc"),
+        pytest.param(4, 100, ["raw", "0x30", "0x70", "0x66", "0x01", "0x04", "0x64"], id="zone-4-100pc"),
+    ])
+    def test_write_duty(self, zone: int, level: int, expected: List[str]) -> None:
+        """Positive unit test for X14OpenBmcCmd.write_duty(). It contains the following steps:
+        - call write_duty() for the first and the last zone
+        - ASSERT: selector 0x01 and a 0-based zone byte, with the duty as a percentage (0x00-0x64)
+        """
+        assert X14OpenBmcCmd.write_duty(zone, level) == expected
+
+    @pytest.mark.parametrize("enabled, expected", [
+        pytest.param(True, ["raw", "0x30", "0x70", "0x66", "0x02", "0x01"], id="on"),
+        pytest.param(False, ["raw", "0x30", "0x70", "0x66", "0x02", "0x00"], id="off"),
+    ])
+    def test_set_manual_all(self, enabled: bool, expected: List[str]) -> None:
+        """Positive unit test for X14OpenBmcCmd.set_manual_all(). It contains the following steps:
+        - call set_manual_all() enabling and disabling
+        - ASSERT: selector 0x02 and the flag, i.e. the all-zones shortcut of Part 3.1
+        """
+        assert X14OpenBmcCmd.set_manual_all(enabled) == expected
+
+    def test_get_supported_modes(self) -> None:
+        """Positive unit test for X14OpenBmcCmd.get_supported_modes(). It contains the following steps:
+        - call get_supported_modes()
+        - ASSERT: the command matches Part 3.1, which returns the supported fan mode bitmask
+        """
+        assert X14OpenBmcCmd.get_supported_modes() == ["raw", "0x30", "0x45", "0x02"]
+
+    def test_the_two_zone_numberings_do_not_get_aligned(self) -> None:
+        """Negative unit test for the zone numbering of X14OpenBmcCmd. It contains the following steps:
+        - build the manual mode and duty commands for the same smfc zone
+        - ASSERT: the OEM command's zone byte is exactly one higher than the duty command's, for every zone
+        - ASSERT: no OEM command ever addresses zone 0x00, which does not exist and returns an error
+        """
+        f = "TestX14OpenBmcCmd.test_the_two_zone_numberings_do_not_get_aligned"
+        for zone in range(X14OpenBmcPlatform.FANCTL_COUNT):
+            oem = int(X14OpenBmcCmd.read_manual(zone)[-1], 16)
+            duty = int(X14OpenBmcCmd.read_duty(zone)[-1], 16)
+            assert oem == duty + 1, f"{f}: zone {zone} numbering"
+            assert oem != 0x00, f"{f}: zone {zone} is never addressed as 0x00"
 
 
 class TestX14OpenBmcBehaviour:
