@@ -78,8 +78,12 @@ class Service:
     def exit_func(self) -> None:
         """This function is called at exit (both on a normal service stop and when exceptions or runtime errors
         cannot be handled), and it applies the configured `[Ipmi] exit_level=` to all configured zones to avoid
-        overheating while `smfc` is not running. The BMC is left in FULL fan mode - it is already in FULL mode at
-        this point, so no mode change is needed."""
+        overheating while `smfc` is not running.
+
+        What the fans are left under is platform-specific. On the FULL-mode platforms the BMC stays in FULL, so
+        the exit level is what the fans keep; no mode change is needed, the BMC is in FULL already. On X14/H14
+        `Platform.end()` also releases the manual mode latch or the global bypass, which hands the fans back to
+        the BMC's own curve within about a second - so there the exit level is only a transition."""
         # Stop the exporter first so no /snapshot request can race with the BMC access below.
         if getattr(self, "exporter", None) is not None:
             try:

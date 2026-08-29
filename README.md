@@ -194,21 +194,23 @@ A lower value (e.g. `exit_level=40`) is a compromise for quiet systems: the fans
 go to full speed every time the service is stopped or restarted.
 
 > [!IMPORTANT]
-> **X14 motherboards behave differently.** Instead of FULL mode, this platform uses an explicit OEM manual-fan-control
-> mode, which stays latched until it is released - the BMC never takes the fans back on its own. Therefore, on X14 the
-> exit is a two-step operation:
+> **X14/H14 motherboards behave differently.** Instead of FULL mode these platforms hold an explicit BMC fan control
+> state - per-zone manual mode on the OpenBMC stack, a single global bypass flag on ATEN - which stays armed until
+> `smfc` releases it. The BMC never takes the fans back on its own. So the exit is a two-step operation:
 >
->   1. `exit_level` is applied to all configured zones (it must be first: after step 2 the BMC owns the fans and a level
->      command would be a no-op)
->   2. manual mode is released in all zones, so **automatic BMC fan control is restored**
+>   1. `exit_level` is applied to all configured zones, unless it is `-1`
+>   2. the fan control state is released, so **automatic BMC fan control is restored**. On ATEN the bypass is global,
+>      so this releases zones `smfc` never drove as well
 >
-> This means `exit_level` is only a transitional value on X14: within seconds the BMC starts applying its own fan curve
-> and overwrites it. Be aware that the BMC regulates on CPU and system sensors only, so hard disk and NVMe temperatures
-> are not part of that control loop.
+> **Step 2 always runs** - with `exit_level=-1`, and equally when the step 1 write fails. A state left armed freezes
+> every zone at its last duty with the BMC's own thermal loop suspended and nothing regulating them.
 >
-> `exit_level=-1` skips **the whole exit sequence, step 2 included**. It does not simply mean _"let the BMC decide"_ -
-> manual mode stays latched, the zones stay frozen at the last level `smfc` applied, and nothing regulates them until
-> `smfc` (or something else) takes control again. This is the least safe option on this platform.
+> **`exit_level` has almost no effect here.** Releasing the state hands the fans to the BMC, which applies its own
+> curve within about a second and overwrites whatever was written - so `exit_level=100` and `exit_level=-1` end up in
+> the same place and neither is safer than the other.
+>
+> What does matter on both stacks: the BMC regulates on CPU and system sensors only, so hard disk and NVMe
+> temperatures are not part of the curve the fans end up on.
 
 ### 2. User-defined control function
 Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval. Two forms are supported in each temperature-driven section: a **simple linear** mapping (chapter 2.1) or an **advanced multi-segment** piecewise-linear curve (chapter 2.2). When both are present in the same section, `control_function=` takes precedence and the `min_temp/max_temp/min_level/max_level` keys are ignored.
