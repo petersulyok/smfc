@@ -411,20 +411,28 @@ def _configured_zones(entries: List[ControllerEntry]) -> List[int]:
     return sorted(zones)
 
 
-def _format_manual_fan_mode(ipmi: Ipmi, entries: List[ControllerEntry], use_color: bool) -> str:
+def _format_manual_fan_mode(ipmi: Ipmi, entries: List[ControllerEntry], use_color: bool,
+                            service_reachable: Optional[bool] = None) -> str:
     """Format the fan mode line of a platform that is not driven through FULL fan mode (X14/H14).
 
     `smfc` may not be running when this path executes, and on these boards the fans are then on the base
     fan mode's curve - so the base mode is the honest answer whenever the control state is not held, and
     the label is the honest answer only when it is. Which of the two applies has to be read, not assumed.
 
-    The OpenBMC stack answers that directly: its per-zone manual mode flag is readable without a running
-    service. The ATEN stack cannot - its global bypass flag is write-only - so there the base fan mode is
-    reported with a note saying the control state is not knowable from outside.
+    A latch that is held while nothing is holding it is the dangerous case: the zones stay frozen at
+    their last level with the BMC's own thermal loop suspended. It is only reported when the caller could
+    establish that the service is not running, because a latch found while `smfc` drives the fans is the
+    normal state and must not be flagged.
+
+    The OpenBMC stack answers all of this directly: its per-zone manual mode flag is readable without a
+    running service. The ATEN stack cannot - its global bypass flag is write-only - so there the base fan
+    mode is reported with a note saying the control state is not knowable from outside.
     Args:
         ipmi (Ipmi): Ipmi instance
         entries (List[ControllerEntry]): controllers, for the zones to inspect
         use_color (bool): whether to emit ANSI colors
+        service_reachable (Optional[bool]): False when the caller established that the `smfc` service is
+            not running; None when it could not tell (`--standalone`, or no exporter configured)
     Returns:
         str: the text after "Fan mode      : "
     """
@@ -441,11 +449,16 @@ def _format_manual_fan_mode(ipmi: Ipmi, entries: List[ControllerEntry], use_colo
         # Nothing is latched, so the BMC's own curve is driving every configured zone: the base fan mode
         # is what the fans are actually following.
         return _safe_fan_mode(ipmi, use_color)
+    notes: List[str] = []
+    if service_reachable is False:
+        zone_list = ", ".join(str(z) for z in held)
+        notes.append(f"! smfc is not running - zone(s) {zone_list} are frozen at their last level")
     loose = [z for z in zones if z not in held]
     if loose:
-        detail = _wrap(f"  (zone(s) {', '.join(str(z) for z in loose)} on the BMC curve)", RED, use_color)
-        return f"{FAN_MODE_MANUAL}{detail}"
-    return FAN_MODE_MANUAL
+        notes.append(f"zone(s) {', '.join(str(z) for z in loose)} on the BMC curve")
+    if not notes:
+        return FAN_MODE_MANUAL
+    return f"{FAN_MODE_MANUAL}{_wrap('  (' + '; '.join(notes) + ')', RED, use_color)}"
 
 
 def _safe_fan_mode(ipmi: Ipmi, use_color: bool) -> str:
@@ -615,7 +628,7 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
 
 
 def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str, use_color: bool,
-                   verbose: bool = False) -> str:
+                   verbose: bool = False, service_reachable: Optional[bool] = None) -> str:
     """Build the full snapshot report (standalone path: reads ipmitool/smartctl directly).
     Args:
         ipmi (Ipmi): Ipmi instance
@@ -623,6 +636,8 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
         config_path (str): path to the loaded configuration file
         use_color (bool): whether to emit ANSI colors
         verbose (bool): whether to include the per-device Devices section
+        service_reachable (Optional[bool]): False when the caller established that the `smfc` service is
+            not running; None when it could not tell
     Returns:
         str: full report text
     """
@@ -648,7 +663,8 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
         lines.append(f"  Platform      : {type(ipmi.platform).__name__}")
     # Fan mode (live read) closes the BMC block.
     if not ipmi.platform.ENFORCES_FULL_MODE:
-        lines.append(f"  Fan mode      : {_format_manual_fan_mode(ipmi, entries, use_color)}")
+        lines.append(f"  Fan mode      : "
+                     f"{_format_manual_fan_mode(ipmi, entries, use_color, service_reachable)}")
     else:
         try:
             mode = ipmi.get_fan_mode()
@@ -1090,6 +1106,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Online path: when [Exporter] is enabled in config and --standalone wasn't passed,
     # try /snapshot first. On any failure (connection refused, timeout, malformed JSON),
     # transparently fall back to the standalone path below.
+    # `service_reachable` stays None unless the exporter was configured and did not answer: only then is
+    # "the service is not running" established rather than merely unknown. With `--standalone`, or with no
+    # exporter configured, smfc may well be running and holding the fans.
+    service_reachable: Optional[bool] = None
     if cfg.exporter.enabled and not args.standalone:
         snapshot = _try_fetch_snapshot(cfg.exporter)
         if snapshot is not None:
@@ -1097,6 +1117,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             sys.stdout.write(report)
             sys.stdout.flush()
             return EXIT_OK
+        service_reachable = False
 
     # Standalone path: reach the BMC and disks directly.
     log = _build_silent_log()
@@ -1125,7 +1146,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return EXIT_UDEV_ERROR
 
     entries = _construct_controllers(log, cfg, ipmi, udevc, args.sudo)
-    report = _format_report(ipmi, entries, args.config_file, use_color, args.verbose)
+    report = _format_report(ipmi, entries, args.config_file, use_color, args.verbose, service_reachable)
     sys.stdout.write(report)
     sys.stdout.flush()
     return EXIT_OK
