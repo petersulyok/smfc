@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [doc/X14H14_MANUAL_FANCONTROL.md](https://github.com/petersulyok/smfc/blob/main/doc/X14H14_MANUAL_FANCONTROL.md): a reference for both firmware types - which one your board runs, how to drive the fans by hand, and the fan and zone layout of the documented boards.
 
 ### Changed
-- **`smfc` asks the board about itself instead of assuming.** It detects how many fan zones your board has, so an `ipmi_zone=` your board does not have is now rejected at startup with a message naming the real number, instead of failing later with an IPMI error. It also reads which fan modes the board supports.
+- **A wrong `ipmi_zone=` fails at startup on X14/H14 boards.** `smfc` detects how many fan zones the board has, so a zone it does not have is rejected immediately with a message naming the real number, instead of running until the first fan level write fails with a bare IPMI error.
 - `smfc-client` does not warn about a non-FULL fan mode on X14/H14 any more. These boards are not controlled through FULL mode, so any other mode is normal there. The mode is still shown.
 
 ### Fixed
