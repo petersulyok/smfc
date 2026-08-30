@@ -869,10 +869,17 @@ grows linearly with disk count.
 
 ```python
 while True:
-    for fc in self.controllers:
-        fc.run()
-    if self.shared_zones:
-        self._apply_fan_levels()
+    try:
+        for fc in self.controllers:
+            fc.run()
+            if not fc.deferred_apply:                 # record non-deferred levels for the snapshot
+                for zone in fc.config.ipmi_zone:
+                    self.applied_levels[zone] = fc.last_level
+        if self.shared_zones:
+            self._apply_fan_levels()
+    except IpmiError as e:                            # a BMC/ipmitool fault is not fatal (§6.3.1)
+        self.log.msg(Log.LOG_ERROR, f"Fan level update failed: {e}")
+    self._check_fan_mode()                            # re-acquire control on observed drift (§6.3)
     time.sleep(wait)
 ```
 
@@ -880,6 +887,11 @@ while True:
   is sampled at most one half-polling-interval late.
 - Each `fc.run()` is internally rate-limited by its own `polling`, so the
   outer loop firing more often than a controller's `polling` is harmless.
+- Only `IpmiError` is caught: a wedged BMC or an `ipmitool_timeout` expiry
+  (§6.3.1) is logged and the iteration abandoned, never the service; a
+  controller fault (a vanished sensor) still terminates as before.
+- `_check_fan_mode()` runs every iteration regardless of the outcome above,
+  so drift is re-acquired even on a tick where the level write failed.
 
 ### 8.3 Shutdown
 
