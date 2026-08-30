@@ -283,7 +283,7 @@ To run **every** scenario in turn with automated pass/fail assertions per
 scenario, use the non-interactive driver:
 
 ```commandline
-./test/automatic_smoke_runner/run_all.sh           # all 20 scenarios (~2 min)
+./test/automatic_smoke_runner/run_all.sh           # all 25 scenarios (~2 min)
 ./test/automatic_smoke_runner/run_all.sh --only platform_x9
 ./test/automatic_smoke_runner/run_all.sh --quiet   # PASS/FAIL only, no log tails
 ```
@@ -297,7 +297,7 @@ for the full flag list and what each scenario's checks look for.
 test/
 ├── smoke_runner.py          ← end-to-end smoke harness (one scenario per run)
 ├── run_smoke.sh             ← interactive smoke-test entry point (Ctrl-C to stop)
-├── scenarios/               ← 20 .conf files, one per smoke scenario
+├── scenarios/               ← 24 .conf files driving 25 smoke scenarios
 └── automatic_smoke_runner/  ← non-interactive driver that exercises every scenario
 ```
 
@@ -353,12 +353,12 @@ Two scenarios break that pattern, and only one of them stops *on an error*:
 
 | Ending | Scenarios | Exit | What it means |
 |--------|-----------|------|---------------|
-| Ctrl-C / SIGINT from the operator or the automatic driver | 20 of 22 | `2` (or `130`) | Positive test: the service was still healthy when it was interrupted. Being interrupted **is** the pass condition. |
+| Ctrl-C / SIGINT from the operator or the automatic driver | 23 of 25 | `2` (or `130`) | Positive test: the service was still healthy when it was interrupted. Being interrupted **is** the pass condition. |
 | Clean self-termination (`sys.exit(11)`) | `no_enforce_fan_mode` | `1` | Positive test of a *configured* behaviour: `enforce_fan_mode=0` tells smfc to quit on the first BMC fan-mode drift, and it does so through its own documented exit path. |
 | Self-termination **on an error** | `error_tolerance_exhausted` | `1` | The only **negative** smoke test: the injected fault is never repaired, the `error_tolerance` budget runs out, and the re-raised read exception propagates out of the main loop. The service dies with a Python traceback and the exit handler drives all fans to 100%. |
 
 This matters when you run a scenario interactively with
-`./test/run_smoke.sh <scenario>`: for 20 of them the prompt does not come back
+`./test/run_smoke.sh <scenario>`: for 23 of them the prompt does not come back
 until you press Ctrl-C, for `no_enforce_fan_mode` it returns within a few
 seconds, and for `error_tolerance_exhausted` it returns after ~3 seconds with a
 traceback — **that traceback is the expected result, not a broken test**.
