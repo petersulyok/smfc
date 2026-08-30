@@ -134,6 +134,12 @@ fi
   failure is detected instead of looking healthy, and stops smfc with exit
   code 11 when enforce_fan_mode=0; and min_level=0 can no longer stop the fans
   on X14/H14, where levels below 5% are raised to 5%.
+- Fixed: an unreachable BMC is not counted as fan mode drift any more. smfc
+  cannot tell whether the fans drifted when the BMC does not answer, so it no
+  longer increments the smfc_fan_mode_enforced_total metric and no longer stops
+  the service when enforce_fan_mode=0. It keeps running and retries on every
+  loop, so a temporary BMC outage (e.g. a ~90 second BMC reset) is ridden out
+  rather than fatal.
 
 * Mon Aug 24 2026 Peter Sulyok <peter@sulyok.net> - 6.2.1-1
 - Fixed: the startup BMC fan subsystem readiness check did not recognize fan
