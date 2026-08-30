@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The fans are handed back to the BMC on every exit path - `exit_level=-1` included, and even when the exit level cannot be written - so they are never left frozen with nothing regulating them. Here the exit level is only a transition: the BMC's own curve takes over about a second later, and it does not include disk temperatures ([README chapter 1.6](https://github.com/petersulyok/smfc/blob/main/README.md#16-service-termination)).
   - A zone the BMC has forced to 100% after a fan failure is detected: `smfc` logs which zone is affected, and with `enforce_fan_mode=0` it stops with exit code 11 like any other loss of fan control.
   - `min_level=0` can no longer stop the fans: while `smfc` drives them the BMC's thermal protection is suspended, so levels below 5% are raised to 5%.
-- **An unreachable BMC is not counted as fan mode drift any more.** `smfc` retries as it does for any other lost state, but without counting it in the `smfc_fan_mode_enforced_total` metric and without stopping the service when `enforce_fan_mode=0`.
+- **An unreachable BMC is not counted as fan mode drift any more.** `smfc` cannot tell whether the fans drifted when the BMC does not answer, so it no longer treats that as observed drift: it does not increment the `smfc_fan_mode_enforced_total` metric and does not stop the service when `enforce_fan_mode=0`. It keeps running and retries every loop, logging an error each cycle - so a temporary BMC outage (e.g. a ~90 second BMC reset, during which the BMC itself usually holds the fans at 100%) is ridden out rather than fatal, and control is re-acquired on the first loop after the BMC returns.
 
 ## [6.2.1] - 2026.08.24
 
