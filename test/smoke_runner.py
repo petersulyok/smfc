@@ -26,8 +26,12 @@ from .test_mocks import MockedContextGood
 # Smoke scenario matrix — single source of truth (replaces the per-scenario run_test_*.sh wrappers).
 # Each scenario maps a name to device counts plus the config template (in this directory) under test.
 # The optional `fault` field selects a fault injector (see FAULT_INJECTORS); None = no fault.
-# `npu` is last (and keyword-only in practice) so the existing positional entries stay unchanged.
-Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf", "fault", "npu"], defaults=(None, 0))
+# `bmc_stack` and `aten_duty_path` pick which 14th generation BMC firmware the fake ipmitool emulates;
+# the defaults give the stack-agnostic behaviour every other scenario relies on. `npu` is the NPU card
+# count. All four are appended after `fault`, so the existing positional entries stay unchanged.
+Scenario = namedtuple("Scenario",
+                      ["cpu", "hd", "gpu", "nvme", "conf", "fault", "bmc_stack", "aten_duty_path", "npu"],
+                      defaults=(None, "", "pwm", 0))
 
 SCENARIOS = {
     "cpu_1":             Scenario(1, 1, 0, 0, "cpu_1.conf"),
@@ -46,7 +50,9 @@ SCENARIOS = {
     "shared_zones_cpu_split": Scenario(2, 2, 0, 0, "shared_zones_cpu_split.conf"),
     "control_function":  Scenario(2, 2, 0, 0, "control_function.conf"),
     "platform_x9":       Scenario(1, 2, 0, 0, "platform_x9.conf"),
-    "platform_x14":      Scenario(1, 2, 0, 0, "platform_x14.conf"),
+    "platform_x14_openbmc": Scenario(1, 2, 0, 0, "platform_x14_openbmc.conf", None, "openbmc"),
+    "platform_x14_aten": Scenario(1, 2, 0, 0, "platform_x14_aten.conf", None, "aten"),
+    "platform_x14_aten_percent": Scenario(1, 2, 0, 0, "platform_x14_aten.conf", None, "aten", "percent"),
     "platform_x10qbi":   Scenario(1, 2, 0, 0, "platform_x10qbi.conf"),
     "no_enforce_fan_mode": Scenario(1, 2, 0, 0, "no_enforce_fan_mode.conf"),
     "hd_split_zones":    Scenario(0, 4, 0, 0, "hd_split_zones.conf"),
@@ -252,7 +258,7 @@ class TestSmoke:
                 temp_updater_stop.wait(1.0)
 
         atexit.register(exit_func)
-        cmd_ipmi = my_td.create_ipmi_command()
+        cmd_ipmi = my_td.create_ipmi_command(scenario.bmc_stack, scenario.aten_duty_path)
         cmd_smart = my_td.create_smart_command()
         cmd_nvidia = ""
         cmd_rocm = ""

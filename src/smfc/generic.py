@@ -13,30 +13,11 @@ class GenericPlatform(Platform):
 
     valid_fan_modes: List[FanMode] = [FanMode.STANDARD, FanMode.FULL, FanMode.OPTIMAL, FanMode.PUE, FanMode.HEAVY_IO]
 
-    def get_fan_mode(self) -> int:
-        """Return the current IPMI fan mode."""
-        r = self._exec(["raw", "0x30", "0x45", "0x00"])
-        return int(r.stdout)
-
     def get_fan_level(self, zone: int) -> int:
         """Return the current fan duty cycle percentage for the given zone."""
         validate_input_range(zone, "zone", 0, 100)
         r = self._exec(["raw", "0x30", "0x70", "0x66", "0x00", f"0x{zone:x}"])
         return int(r.stdout, 16)
-
-    def start(self) -> None:
-        """No manual-mode preparation needed on this platform."""
-
-    def end(self, zones: List[int], level: int) -> None:
-        """Apply the exit fan level to the configured zones. The BMC stays in FULL fan mode, so the fans keep
-        this level until something else changes it."""
-        self.set_multiple_fan_levels(zones, level)
-
-    def set_fan_mode(self, mode: int) -> None:
-        """Set the IPMI fan mode."""
-        if mode not in self.valid_fan_modes:
-            raise ValueError(f"Invalid value: fan mode ({mode}).")
-        self._exec(["raw", "0x30", "0x45", "0x01", f"0x{mode:02x}"])
 
     def set_fan_level(self, zone: int, level: int) -> None:
         """Set the fan duty cycle percentage for the given zone."""

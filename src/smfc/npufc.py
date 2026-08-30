@@ -27,8 +27,13 @@ class NpuFc(FanController):
     smi_called: float                # Timestamp when the last npu-smi call was issued
     npu_temperature: List[float]     # Cached per-card temperatures (hottest chip of each card)
     # Chip-temperature line key, anchored to the line start so "Soc Max Temperature (C)" (from
-    # `npu-smi -t sensors`) and the MCU block keys (T_LM75A/T_CORE_M/...) are never matched.
+    # `npu-smi -t sensors`) and the MCU block keys (T_LM75A/T_CORE_M/...) are never matched. The
+    # `\s*` between the key and `(C)` spans both spellings: chips print `Temperature(C)` on npu-smi
+    # 1.0.0-1.0.10 and `Temperature (C)` from 1.0.11 on.
     _temp_line_re = re.compile(r"^\s*Temperature\s*\(C\)\s*:\s*(-?\d+)", re.MULTILINE)
+    # A chip block is the one that carries a `Chip ID` line; the MCU block carries `Chip Name`.
+    # "Chip Count" does not match, because the key needs whitespace and then `ID`.
+    _chip_id_re = re.compile(r"^\s*Chip\s+ID\s*:", re.MULTILINE)
 
     def __init__(self, log: Log, ipmi: Ipmi, cfg: NpuConfig) -> None:
         """Initialize the NPU fan controller class and raise exception in case of invalid configuration.
@@ -78,14 +83,31 @@ class NpuFc(FanController):
     def parse_card_temps(cls, output: str) -> List[float]:
         """Parse per-chip temperatures from `npu-smi info -t temp` output.
 
-        Only chip temperature lines ("Temperature (C) : <int>") are matched; MCU block lines
-        (T_LM75A/T_CORE_M/...) and "Soc Max Temperature" use different keys and are ignored.
+        The output is a sequence of blank-line-delimited blocks, and only the chip blocks are read.
+        A chip block carries a `Chip ID` line; the MCU block carries `Chip Name` instead. That
+        discriminator is what keeps the MCU out of the result, because on npu-smi 1.0.11-1.0.15 the
+        MCU block prints the identical `Temperature (C)` key the chips use. Counting it as a chip
+        breaks the controller at idle: the MCU is a board sensor that barely follows the workload, so
+        a card with chips at 36-38 C and an MCU at 55 C reports 55 C and the fans never spin down.
+
+        An output with no `Chip ID` anywhere is read whole. That is the `-c <chip>` form, which prints
+        a bare temperature line and no block structure, and it is also the safe answer for a layout
+        this method does not recognize - an empty list would reach `_get_nth_temp()` as a read error.
+
+        On firmware <= 1.73.5.5 the MCU block prints `Chip ID` instead of `Chip Name`. There the MCU
+        is indistinguishable from a chip and it is counted as one.
         Args:
             output (str): stdout of `npu-smi info -t temp -i <card_id>`
         Returns:
             List[float]: temperature of each chip in the card
         """
-        return [float(m.group(1)) for m in cls._temp_line_re.finditer(output)]
+        temps: List[float] = []
+        for block in re.split(r"\n\s*\n", output):
+            if cls._chip_id_re.search(block):
+                temps.extend(float(m.group(1)) for m in cls._temp_line_re.finditer(block))
+        if not temps:
+            return [float(m.group(1)) for m in cls._temp_line_re.finditer(output)]
+        return temps
 
     def _get_nth_temp(self, index: int) -> float:
         """Get the temperature of the nth configured NPU card (hottest chip).

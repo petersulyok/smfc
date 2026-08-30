@@ -179,6 +179,14 @@ def build_snapshot(service: "Service") -> Dict[str, Any]:
             "name": Ipmi.get_fan_mode_name(last_fan_mode),
             "age_s": round(age_s, 3),
             "enforce_fan_mode": bool(ipmi.config.enforce_fan_mode),
+            # False on the platforms where FULL fan mode is not the controlled state, so a reader knows
+            # the mode above is the fallback curve rather than the state smfc holds.
+            "enforces_full_mode": bool(getattr(ipmi.platform, "ENFORCES_FULL_MODE", True)),
+            # The control verdict of the last check. It means the same thing on every platform - FULL fan
+            # mode where that is the controlled state, the per-zone manual latch on X14/H14 - so it is the
+            # one field a reader can act on without knowing which board this is.
+            "control_held": bool(getattr(service, "last_control_held", True)),
+            "control_detail": str(getattr(service, "last_control_detail", "")),
         },
         "fan_controllers": controllers_section,
         "zones": zones_section,

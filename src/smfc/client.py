@@ -45,6 +45,8 @@ DIM: str = "\x1b[2m"
 GREEN: str = "\x1b[32m"
 YELLOW: str = "\x1b[33m"   # warm — upper 30 % of a controller's steering window
 RED: str = "\x1b[31m"
+# Fan mode label of the platforms that are not driven through FULL fan mode (X14/H14).
+FAN_MODE_MANUAL: str = "manual control"
 BLUE: str = "\x1b[1;94m"   # bold bright-blue — section headers (BMC, Fan controllers, blocks, IPMI zones)
 RESET: str = "\x1b[0m"
 
@@ -402,6 +404,88 @@ def _format_controllers_table(entries: List[ControllerEntry], ipmi: Ipmi, use_co
     return lines
 
 
+def _configured_zones(entries: List[ControllerEntry]) -> List[int]:
+    """The sorted union of IPMI zones across the controllers that were constructed.
+    Args:
+        entries (List[ControllerEntry]): controllers
+    Returns:
+        List[int]: sorted, de-duplicated IPMI zone IDs
+    """
+    zones: List[int] = []
+    for _section, _type_label, controller, _error in entries:
+        if controller is None:
+            continue
+        for z in controller.config.ipmi_zone:
+            if z not in zones:
+                zones.append(z)
+    return sorted(zones)
+
+
+def _format_manual_fan_mode(ipmi: Ipmi, entries: List[ControllerEntry], use_color: bool,
+                            service_reachable: Optional[bool] = None) -> str:
+    """Format the fan mode line of a platform that is not driven through FULL fan mode (X14/H14).
+
+    `smfc` may not be running when this path executes, and on these boards the fans are then on the base
+    fan mode's curve - so the base mode is the honest answer whenever the control state is not held, and
+    the label is the honest answer only when it is. Which of the two applies has to be read, not assumed.
+
+    A latch that is held while nothing is holding it is the dangerous case: the zones stay frozen at
+    their last level with the BMC's own thermal loop suspended. It is only reported when the caller could
+    establish that the service is not running, because a latch found while `smfc` drives the fans is the
+    normal state and must not be flagged.
+
+    The OpenBMC stack answers all of this directly: its per-zone manual mode flag is readable without a
+    running service. The ATEN stack cannot - its global bypass flag is write-only - so there the base fan
+    mode is reported with a note saying the control state is not knowable from outside.
+    Args:
+        ipmi (Ipmi): Ipmi instance
+        entries (List[ControllerEntry]): controllers, for the zones to inspect
+        use_color (bool): whether to emit ANSI colors
+        service_reachable (Optional[bool]): False when the caller established that the `smfc` service is
+            not running; None when it could not tell (`--standalone`, or no exporter configured)
+    Returns:
+        str: the text after "Fan mode      : "
+    """
+    get_manual = getattr(ipmi.platform, "_get_manual_mode", None)
+    zones = _configured_zones(entries) or [0]
+    if get_manual is None:
+        note = _wrap("  (control state is not readable on this BMC)", DIM, use_color)
+        return f"{_safe_fan_mode(ipmi, use_color)}{note}"
+    try:
+        held = [z for z in zones if get_manual(z)]
+    except Exception as e:  # pylint: disable=broad-except
+        return _wrap(f"ERROR: {e}", RED, use_color)
+    if not held:
+        # Nothing is latched, so the BMC's own curve is driving every configured zone: the base fan mode
+        # is what the fans are actually following.
+        return _safe_fan_mode(ipmi, use_color)
+    notes: List[str] = []
+    if service_reachable is False:
+        zone_list = ", ".join(str(z) for z in held)
+        notes.append(f"! smfc is not running - zone(s) {zone_list} are frozen at their last level")
+    loose = [z for z in zones if z not in held]
+    if loose:
+        notes.append(f"zone(s) {', '.join(str(z) for z in loose)} on the BMC curve")
+    if not notes:
+        return FAN_MODE_MANUAL
+    return f"{FAN_MODE_MANUAL}{_wrap('  (' + '; '.join(notes) + ')', RED, use_color)}"
+
+
+def _safe_fan_mode(ipmi: Ipmi, use_color: bool) -> str:
+    """Read the base fan mode and format it as `NAME (id)`, or an ERROR cell if it cannot be read.
+    Args:
+        ipmi (Ipmi): Ipmi instance
+        use_color (bool): whether to emit ANSI colors
+    Returns:
+        str: the formatted mode, or an error string
+    """
+    try:
+        mode = ipmi.get_fan_mode()
+    except Exception as e:  # pylint: disable=broad-except
+        return _wrap(f"ERROR: {e}", RED, use_color)
+    return f"{Ipmi.get_fan_mode_name(mode)} ({mode})"
+
+
 def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: bool) -> List[str]:
     """Format the live IPMI zone level table (union of zones across enabled controllers).
     Args:
@@ -412,16 +496,9 @@ def _format_zones_table(entries: List[ControllerEntry], ipmi: Ipmi, use_color: b
         List[str]: list of output lines
     """
     lines: List[str] = []
-    zones: List[int] = []
-    for _section, _type_label, controller, _error in entries:
-        if controller is None:
-            continue
-        for z in controller.config.ipmi_zone:
-            if z not in zones:
-                zones.append(z)
+    zones = _configured_zones(entries)
     if not zones:
         return lines
-    zones.sort()
     # Dash widths: max(header_word, longest_value_in_column). Zone IDs are 1-2 digits in
     # practice; Level cells are ' NN %' (5 chars) or 'ERROR' (5 chars).
     level_strs = [_safe_zone_level(ipmi, z) for z in zones]
@@ -561,7 +638,7 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
 
 
 def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str, use_color: bool,
-                   verbose: bool = False) -> str:
+                   verbose: bool = False, service_reachable: Optional[bool] = None) -> str:
     """Build the full snapshot report (standalone path: reads ipmitool/smartctl directly).
     Args:
         ipmi (Ipmi): Ipmi instance
@@ -569,6 +646,8 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
         config_path (str): path to the loaded configuration file
         use_color (bool): whether to emit ANSI colors
         verbose (bool): whether to include the per-device Devices section
+        service_reachable (Optional[bool]): False when the caller established that the `smfc` service is
+            not running; None when it could not tell
     Returns:
         str: full report text
     """
@@ -577,7 +656,8 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     banner = _wrap(f"smfc-client {pkg_version}", BOLD, use_color)
     lines.append(banner)
     lines.append(_wrap(f"  config: {config_path}", DIM, use_color))
-    lines.append(_format_source_line(online=False, use_color=use_color))
+    lines.append(_format_source_line(online=False, use_color=use_color,
+                                     service_reachable=service_reachable))
     lines.append("")
 
     # BMC section. Non-verbose mode shows only Product + Fan mode (the two lines that matter
@@ -593,19 +673,23 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
         # Platform shows the factory class only — the product name is already on the line above.
         lines.append(f"  Platform      : {type(ipmi.platform).__name__}")
     # Fan mode (live read) closes the BMC block.
-    try:
-        mode = ipmi.get_fan_mode()
-        mode_name = Ipmi.get_fan_mode_name(mode)
-        if mode == int(Ipmi.FULL_MODE):
-            mode_str = _wrap(mode_name, GREEN, use_color)
-            lines.append(f"  Fan mode      : {mode_str} ({mode})")
-        else:
-            mode_str = _wrap(mode_name, RED, use_color)
-            warn = _wrap("  ! not in FULL mode - smfc may not be controlling the fans", RED, use_color)
-            lines.append(f"  Fan mode      : {mode_str} ({mode}){warn}")
-    except Exception as e:  # pylint: disable=broad-except
-        err_str = _wrap(f"ERROR: {e}", RED, use_color)
-        lines.append(f"  Fan mode      : {err_str}")
+    if not ipmi.platform.ENFORCES_FULL_MODE:
+        lines.append(f"  Fan mode      : "
+                     f"{_format_manual_fan_mode(ipmi, entries, use_color, service_reachable)}")
+    else:
+        try:
+            mode = ipmi.get_fan_mode()
+            mode_name = Ipmi.get_fan_mode_name(mode)
+            if mode == int(Ipmi.FULL_MODE):
+                mode_str = _wrap(mode_name, GREEN, use_color)
+                lines.append(f"  Fan mode      : {mode_str} ({mode})")
+            else:
+                mode_str = _wrap(mode_name, RED, use_color)
+                warn = _wrap("  ! not in FULL mode - smfc may not be controlling the fans", RED, use_color)
+                lines.append(f"  Fan mode      : {mode_str} ({mode}){warn}")
+        except Exception as e:  # pylint: disable=broad-except
+            err_str = _wrap(f"ERROR: {e}", RED, use_color)
+            lines.append(f"  Fan mode      : {err_str}")
     lines.append("")
 
     # Controllers table
@@ -718,17 +802,29 @@ def _format_report(ipmi: Ipmi, entries: List[ControllerEntry], config_path: str,
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _format_source_line(online: bool, use_color: bool) -> str:
+def _format_source_line(online: bool, use_color: bool, service_reachable: Optional[bool] = None) -> str:
     """Render the tabbed "source:" line printed below the banner.
+
+    Reaching the BMC directly does not by itself mean the service is down: `--standalone` asks for a
+    direct read, and a configuration without an exporter leaves nothing to ask. The line therefore says
+    the service is not reachable only when that was established, and otherwise says only that it was not
+    queried - which is what the reader can act on.
 
     Args:
         online (bool): True if the snapshot came from the smfc service exporter.
         use_color (bool): whether to emit ANSI colors.
+        service_reachable (Optional[bool]): False when the caller established that the `smfc` service is
+            not running; None when it could not tell.
 
     Returns:
         str: the formatted line (without trailing newline).
     """
-    label = "smfc service (live snapshot)" if online else "ipmitool (smfc service is not reachable)"
+    if online:
+        label = "smfc service (live snapshot)"
+    elif service_reachable is False:
+        label = "ipmitool (smfc service is not reachable)"
+    else:
+        label = "ipmitool (smfc service not queried)"
     return _wrap(f"  source: {label}", DIM, use_color)
 
 
@@ -828,14 +924,27 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     fan_mode = snapshot.get("fan_mode", {}) or {}
     mode_id = fan_mode.get("id", -1)
     mode_name = fan_mode.get("name", "?")
-    mode_color = GREEN if mode_id == int(Ipmi.FULL_MODE) else RED
+    # The service already decided whether it holds the fans, and what that means differs per platform. The
+    # verdict is reported as it stands, instead of measuring the mode against FULL - which is the wrong
+    # question on X14/H14, where the mode names the curve the fans fall back to.
+    held = bool(fan_mode.get("control_held", True))
+    state_color = GREEN if held else RED
     age_s = float(fan_mode.get("age_s", 0.0) or 0.0)
     if fan_mode.get("enforce_fan_mode", True):
         enforced = int(snapshot.get("fan_mode_enforced_count", 0) or 0)
         detail = _wrap(f"  (enforced {enforced}x, read {age_s:.1f}s ago)", DIM, use_color)
     else:
         detail = _wrap(f"  (enforcement disabled, read {age_s:.1f}s ago)", DIM, use_color)
-    lines.append(f"  Fan mode      : {_wrap(str(mode_name), mode_color, use_color)} ({mode_id}){detail}")
+    if not fan_mode.get("enforces_full_mode", True):
+        # See the standalone path: on these boards the mode value is the fallback curve, not the state
+        # smfc holds, so it is not shown.
+        state = _wrap(FAN_MODE_MANUAL, state_color, use_color)
+    else:
+        state = f"{_wrap(str(mode_name), state_color, use_color)} ({mode_id})"
+    control_detail = str(fan_mode.get("control_detail", "") or "")
+    if not held and control_detail:
+        detail = f"{detail}{_wrap('  ! ' + control_detail, RED, use_color)}"
+    lines.append(f"  Fan mode      : {state}{detail}")
     lines.append("")
 
     # Controllers table.
@@ -1028,6 +1137,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Online path: when [Exporter] is enabled in config and --standalone wasn't passed,
     # try /snapshot first. On any failure (connection refused, timeout, malformed JSON),
     # transparently fall back to the standalone path below.
+    # `service_reachable` stays None unless the exporter was configured and did not answer: only then is
+    # "the service is not running" established rather than merely unknown. With `--standalone`, or with no
+    # exporter configured, smfc may well be running and holding the fans.
+    service_reachable: Optional[bool] = None
     if cfg.exporter.enabled and not args.standalone:
         snapshot = _try_fetch_snapshot(cfg.exporter)
         if snapshot is not None:
@@ -1035,6 +1148,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             sys.stdout.write(report)
             sys.stdout.flush()
             return EXIT_OK
+        service_reachable = False
 
     # Standalone path: reach the BMC and disks directly.
     log = _build_silent_log()
@@ -1063,7 +1177,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return EXIT_UDEV_ERROR
 
     entries = _construct_controllers(log, cfg, ipmi, udevc, args.sudo)
-    report = _format_report(ipmi, entries, args.config_file, use_color, args.verbose)
+    report = _format_report(ipmi, entries, args.config_file, use_color, args.verbose, service_reachable)
     sys.stdout.write(report)
     sys.stdout.flush()
     return EXIT_OK

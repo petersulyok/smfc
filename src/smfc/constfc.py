@@ -77,8 +77,9 @@ class ConstFc:  # pylint: disable=too-few-public-methods
             # otherwise set the fan level again.
             for zone in self.config.ipmi_zone:
                 level = self.ipmi.get_fan_level(zone)
+                current = f"{level}%"
                 if self.log.log_level >= Log.LOG_DEBUG:
-                    self.log.msg(Log.LOG_DEBUG, f"{self.name}: zone {zone} current={level}% "
+                    self.log.msg(Log.LOG_DEBUG, f"{self.name}: zone {zone} current={current} "
                                  f"expected={self.config.level}%")
                 if level != self.config.level:
                     self.ipmi.set_fan_level(zone, self.config.level)

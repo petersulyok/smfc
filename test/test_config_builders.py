@@ -15,7 +15,8 @@ def create_ipmi_config(command=Config.DV_IPMI_COMMAND, fan_mode_delay=Config.DV_
                        remote_parameters=Config.DV_IPMI_REMOTE_PARAMETERS,
                        platform_name=Config.DV_IPMI_PLATFORM_NAME,
                        enforce_fan_mode=Config.DV_IPMI_ENFORCE_FAN_MODE,
-                       exit_level=Config.DV_IPMI_EXIT_LEVEL):
+                       exit_level=Config.DV_IPMI_EXIT_LEVEL,
+                       ipmitool_timeout=Config.DV_IPMI_IPMITOOL_TIMEOUT):
     """Factory function to create IpmiConfig instances for testing without needing a config file.
 
     Args:
@@ -26,13 +27,15 @@ def create_ipmi_config(command=Config.DV_IPMI_COMMAND, fan_mode_delay=Config.DV_
         platform_name (str): Platform name (default: "auto")
         enforce_fan_mode (bool): Re-assert FULL fan mode on BMC drift (default: True)
         exit_level (int): Fan level applied to all configured zones at exit (default: 100)
+        ipmitool_timeout (int): Timeout of one ipmitool execution in seconds (default: 10, 0 = none)
 
     Returns:
         IpmiConfig: configured IpmiConfig instance
     """
     return IpmiConfig(command=command, fan_mode_delay=fan_mode_delay, fan_level_delay=fan_level_delay,
                       remote_parameters=remote_parameters, platform_name=platform_name,
-                      enforce_fan_mode=enforce_fan_mode, exit_level=exit_level)
+                      enforce_fan_mode=enforce_fan_mode, exit_level=exit_level,
+                      ipmitool_timeout=ipmitool_timeout)
 
 
 def create_cpu_config(section="CPU", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,

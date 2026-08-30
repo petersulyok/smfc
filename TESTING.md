@@ -164,7 +164,7 @@ contain several test classes grouped by feature.
 | `cpufc.py`                       | `test_cpufc.py`              | Hwmon discovery, ordinal `cpuN` device names |
 | `exporter.py`                    | `test_exporter.py`           | Prometheus text rendering, HTTP server endpoints (`/snapshot`, `/metrics`, `/healthz`), 404/500 handling, idempotent stop |
 | `fancontroller.py`               | `test_fancontroller.py`      | Base contract: construction, `get_hwmon_path`, `get_temp` modes, per-device temp caching, `set_fan_level`, deferred level application, `run()` mapping, smoothing algorithm, `error_tolerance` handling (reuse / escalation / per-device counters), LUT construction (legacy vs. user-defined `control_function=`) |
-| `generic.py`, `genericx9.py`, `genericx14.py`, `x10qbi.py` | `test_platforms.py` | Matrix-driven: same 8-method contract for all four platforms |
+| `generic.py`, `genericx9.py`, `genericx14.py`, `x10qbi.py` | `test_platforms.py` | Matrix-driven: same 8-method contract for all five platforms; plus the X14 OpenBMC command table and the behavioural tests driven against `FakeOpenBmc` |
 | `gpufc.py`                       | `test_gpufc.py`              | `exec_smi` (Nvidia/AMD), AMD sensor selection, temp parse errors, tolerated truncated SMI output |
 | `hdfc.py`                        | `test_hdfc.py`               | `exec_smartctl` (sudo / rc / exceptions), standby-state formatting, `check_standby_state`, `go_standby_state`, standby-guard `run`, smartctl debug path, tolerated transient HWMON/smartctl read errors |
 | `ipmi.py`                        | `test_ipmi.py`               | Init (positive/negative, BMC timeout, client mode), `exec_ipmitool` (remote args, sudo, rc, exceptions), `get/set_fan_mode`, fan-mode name mapping, `get/set_fan_level`, `set_multiple_fan_levels`, exception surface |
@@ -187,12 +187,35 @@ Behind that table sit two cross-cutting topics worth knowing about:
   Each subclass test then asserts only its device-specific surface
   (`exec_smartctl`, `exec_smi`, standby handling), with `build_*` / `make_bare_*`
   helpers from `test_fc_helpers.py` absorbing the discovery-mock boilerplate.
-- **Platforms share a matrix.** All four platforms (`Generic`, `GenericX9`,
-  `GenericX14`, `X10QBi`) implement the same 8-method `Platform` interface
-  but with very different raw IPMI byte sequences and level encodings. A
-  single `test_platforms.py` module drives every platform through every
-  method via a `PlatformSpec` per platform. Adding a new Supermicro platform
-  is one `PLATFORMS` entry; the test count grows automatically.
+- **Platforms share a matrix.** All five platforms (`GenericPlatform`,
+  `GenericX9Platform`, `X14OpenBmcPlatform`, `X14AtenPlatform`, `X10QBi`)
+  implement the same 8-method `Platform` interface but with very different raw
+  IPMI byte sequences and level encodings. A single `test_platforms.py` module
+  drives every platform through every method via a `PlatformSpec` per platform.
+  Adding a new Supermicro platform is one `PLATFORMS` entry; the test count
+  grows automatically.
+- **The matrix is not the only gate for X14 OpenBMC.** It asserts which commands
+  the platform sends, and it builds the expected argv the same way the
+  implementation builds it — so it pins the wire format but cannot catch a
+  command the board accepts and ignores. `FakeOpenBmc` in `test_fixtures.py` is
+  an `exec_ipmitool` callback holding the state a real board holds (a per-zone
+  manual mode flag, a per-zone failsafe flag and a per-zone duty register), so
+  `TestX14OpenBmcBehaviour` can assert what the *fans* end up doing: which zones
+  `start()` latches, that a duty reaches a latched zone and does not hold without
+  one, that `end()` releases on every exit path with the exit level in force at
+  that moment. Three rules make it a model rather than a command echo — a duty
+  only holds while its zone is latched, a failsafe zone discards duty writes, and
+  a written percentage is stored as 8-bit PWM and converted back on read.
+  `TestX14OpenBmcCmd` covers the third layer: it writes the expected byte
+  sequences out in full rather than composing them from the command table's own
+  constants, so it is a diff against `doc/X14H14_MANUAL_FANCONTROL.md` Part 3
+  rather than a restatement of the code.
+
+  When a command changes, the check that matters is a revert test: undo the fix
+  on its own and confirm `TestX14OpenBmcBehaviour` goes red. If it stays green
+  the model is not faithful enough yet. Clear `__pycache__` between runs —
+  several of these mutations are the same length as the original, so a
+  mutate-and-restore inside one second can leave stale bytecode in place.
 
 ### Where to add new unit tests
 
@@ -260,7 +283,7 @@ To run **every** scenario in turn with automated pass/fail assertions per
 scenario, use the non-interactive driver:
 
 ```commandline
-./test/automatic_smoke_runner/run_all.sh           # all 20 scenarios (~2 min)
+./test/automatic_smoke_runner/run_all.sh           # all 25 scenarios (~2 min)
 ./test/automatic_smoke_runner/run_all.sh --only platform_x9
 ./test/automatic_smoke_runner/run_all.sh --quiet   # PASS/FAIL only, no log tails
 ```
@@ -274,7 +297,7 @@ for the full flag list and what each scenario's checks look for.
 test/
 ├── smoke_runner.py          ← end-to-end smoke harness (one scenario per run)
 ├── run_smoke.sh             ← interactive smoke-test entry point (Ctrl-C to stop)
-├── scenarios/               ← 20 .conf files, one per smoke scenario
+├── scenarios/               ← 24 .conf files driving 25 smoke scenarios
 └── automatic_smoke_runner/  ← non-interactive driver that exercises every scenario
 ```
 
@@ -330,12 +353,12 @@ Two scenarios break that pattern, and only one of them stops *on an error*:
 
 | Ending | Scenarios | Exit | What it means |
 |--------|-----------|------|---------------|
-| Ctrl-C / SIGINT from the operator or the automatic driver | 20 of 22 | `2` (or `130`) | Positive test: the service was still healthy when it was interrupted. Being interrupted **is** the pass condition. |
+| Ctrl-C / SIGINT from the operator or the automatic driver | 23 of 25 | `2` (or `130`) | Positive test: the service was still healthy when it was interrupted. Being interrupted **is** the pass condition. |
 | Clean self-termination (`sys.exit(11)`) | `no_enforce_fan_mode` | `1` | Positive test of a *configured* behaviour: `enforce_fan_mode=0` tells smfc to quit on the first BMC fan-mode drift, and it does so through its own documented exit path. |
 | Self-termination **on an error** | `error_tolerance_exhausted` | `1` | The only **negative** smoke test: the injected fault is never repaired, the `error_tolerance` budget runs out, and the re-raised read exception propagates out of the main loop. The service dies with a Python traceback and the exit handler drives all fans to 100%. |
 
 This matters when you run a scenario interactively with
-`./test/run_smoke.sh <scenario>`: for 20 of them the prompt does not come back
+`./test/run_smoke.sh <scenario>`: for 23 of them the prompt does not come back
 until you press Ctrl-C, for `no_enforce_fan_mode` it returns within a few
 seconds, and for `error_tolerance_exhausted` it returns after ~3 seconds with a
 traceback — **that traceback is the expected result, not a broken test**.
@@ -366,7 +389,8 @@ controllers, platforms, and configuration modes:
   `hd_split_zones` (multi-HD pool across zones).
 - **Curve modes**: `control_function` (user-defined T→L curves on both CPU
   and HD, with the legacy `min_temp`/`max_temp` keys omitted).
-- **Platform overrides**: `platform_x9`, `platform_x14`, `platform_x10qbi`
+- **Platform overrides**: `platform_x9`, `platform_x14_openbmc`, `platform_x14_aten`,
+  `platform_x14_aten_percent`, `platform_x10qbi`
   drive the non-default platform code paths end-to-end. Each platform emits
   a distinctive IPMI raw byte sequence that proves the platform layer is
   actually engaged.
@@ -400,7 +424,9 @@ The full table — what each scenario contains:
 | `shared_zones_cpu_split` | `shared_zones_cpu_split.conf` | 2 x CPUs (`CPU:0`, `CPU:1`) | 2 x HDs                     | disabled  | disabled      | disabled   | disabled   | disabled      |
 | `control_function`   | `control_function.conf`    | 2 x CPUs                    | 2 x HDs                     | disabled  | disabled      | disabled   | disabled   | disabled      |
 | `platform_x9`        | `platform_x9.conf`         | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | enabled    | disabled      |
-| `platform_x14`       | `platform_x14.conf`        | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | enabled    | disabled      |
+| `platform_x14_openbmc` | `platform_x14_openbmc.conf` | 1 x CPU               | 2 x HDs                     | disabled  | disabled      | disabled   | enabled    | disabled      |
+| `platform_x14_aten`  | `platform_x14_aten.conf`   | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | enabled    | disabled      |
+| `platform_x14_aten_percent` | `platform_x14_aten.conf` | 1 x CPU               | 2 x HDs                     | disabled  | disabled      | disabled   | enabled    | disabled      |
 | `platform_x10qbi`    | `platform_x10qbi.conf`     | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | enabled    | disabled      |
 | `no_enforce_fan_mode`| `no_enforce_fan_mode.conf` | 1 x CPU                     | 2 x HDs                     | disabled  | disabled      | disabled   | disabled   | disabled      |
 | `hd_split_zones`     | `hd_split_zones.conf`      | disabled                    | 4 x HDs (`HD:0`, `HD:1`)    | disabled  | disabled      | disabled   | disabled   | disabled      |
@@ -429,14 +455,37 @@ Notes:
   section uses a 4-point curve (`30-35, 50-40, 60-90, 65-100`) and the HD
   section uses a 3-point curve (`32-35, 38-45, 46-100`), both with
   `min_temp`/`max_temp`/`min_level`/`max_level` omitted.
-- `platform_x9`, `platform_x14`, `platform_x10qbi` force a specific platform
-  via `platform_name=` (overriding the BMC auto-detect path). Each platform
-  produces a distinctive raw IPMI byte sequence on `set_fan_level`: X9 uses
-  `raw 0x30 0x91 0x5a 0x03 …` with the 0–255 scaled level encoding, X14 uses
-  `raw 0x30 0x70 0x88 …` with direct-% encoding plus an OEM
-  `raw 0x2c 0x04 0xcf 0xc2 …` manual-mode-enable sequence at startup, and
-  X10QBi uses `raw 0x30 0x91 0x5c 0x03 …` preceded by an 11-line Nuvoton
-  NCT7904D TMFR/FOMC init.
+- `platform_x9`, the three `platform_x14_*` scenarios and `platform_x10qbi`
+  force a specific platform via `platform_name=` (overriding the BMC
+  auto-detect path). Each produces a distinctive raw IPMI byte sequence on
+  `set_fan_level`: X9 uses `raw 0x30 0x91 0x5a 0x03 …` with the 0–255 scaled
+  level encoding, and X10QBi uses `raw 0x30 0x91 0x5c 0x03 …` preceded by an
+  11-line Nuvoton NCT7904D TMFR/FOMC init.
+- The `platform_x14_*` trio is different in kind: all three set the **same**
+  `platform_name=generic_x14`, which names a platform *family* rather than a
+  class. Supermicro's 14th generation ships two unrelated BMC firmware stacks
+  and the split does not follow the board name, so `smfc` probes the BMC at
+  startup and picks the implementation from the answer. The fake `ipmitool`
+  emulates a chosen stack (`TestData.create_ipmi_command(bmc_stack=…)`), so the
+  three scenarios assert that the probe — not the configuration and not the
+  board name — decides:
+    - `platform_x14_openbmc`: the probe answers with a data byte, so
+      `X14OpenBmcPlatform` is selected. Duty writes use
+      `raw 0x30 0x70 0x66 0x01 …` with direct-% encoding, preceded by the OEM
+      `raw 0x2e 0x04 0xcf 0xc2 …` per-zone manual-mode latch and its read-back.
+    - `platform_x14_aten`: the probe answers `0xC1`, so `X14AtenPlatform` is
+      selected instead. Its duty commands are `GenericPlatform`'s byte for byte
+      (ATEN is the firmware line shipped through X9–X13); what differs is the
+      lever, a global bypass flag `raw 0x30 0x70 0x66 0x02 0x01` armed at
+      startup and cleared at exit, watched through a duty read-back because the
+      flag itself cannot be read.
+    - `platform_x14_aten_percent`: the same config file and stack, but the fake
+      BMC uses the other ATEN duty path, which reports the written percentage
+      back exactly instead of truncating it. Both paths must read as "still in
+      control", which is why the platform compares the read-back against a
+      *set* of accepted values rather than one computed value.
+  Neither X14/H14 stack ever writes the base fan mode: `raw 0x30 0x45 0x01`
+  must not appear in either log.
 - `no_enforce_fan_mode` sets `enforce_fan_mode=0` in `[Ipmi]`. Unlike every
   other scenario, the service is **designed to exit immediately**
   (`SystemExit(11)`) the first time the BMC fan-mode reads as anything other

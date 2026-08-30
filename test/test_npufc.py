@@ -156,12 +156,49 @@ class TestNpuFc:
     @pytest.mark.parametrize(
         "output, expected",
         [
-            # Real two-chip card output (310P3); MCU block must be ignored.
+            # Real two-chip card output (310P3, npu-smi 26.1.1); MCU block must be ignored.
             pytest.param(NPU_SMI_TEMP_OUTPUT, [39.0, 38.0], id="2chips-with-mcu-block"),
+            # npu-smi 1.0.0-1.0.10 (Atlas 300I 3010): chips print "Temperature(C)", the MCU prints
+            # "Temperature (C)". Both spellings match the key pattern, so only the block filter keeps
+            # the MCU out.
+            pytest.param("NPU ID                         : 1\n"
+                         "Chip Count                     : 2\n"
+                         "\n"
+                         "Chip ID                        : 0\n"
+                         "Temperature(C)                 : 43\n"
+                         "\n"
+                         "Chip ID                        : 1\n"
+                         "Temperature(C)                 : 46\n"
+                         "\n"
+                         "Temperature (C)                : 39\n"
+                         "Chip Name                      : MCU\n", [43.0, 46.0], id="1.0.0-1.0.10-loaded"),
+            # npu-smi 1.0.11-1.0.15 under load: chips and MCU use the identical key. max() would still
+            # answer correctly here, which is why the defect stays invisible on a busy card.
+            pytest.param("        Chip ID                        : 0\n"
+                         "        Temperature (C)                : 67\n"
+                         "\n"
+                         "        Chip ID                        : 1\n"
+                         "        Temperature (C)                : 58\n"
+                         "\n"
+                         "        Temperature (C)                : 55\n"
+                         "        Chip Name                      : MCU\n", [67.0, 58.0], id="1.0.11-1.0.15-loaded"),
+            # The same layout at idle, which is the case that breaks: the MCU (55 C) is hotter than
+            # both chips, so counting it would pin the card at 55 C and the fans would never spin down.
+            pytest.param("        Chip ID                        : 0\n"
+                         "        Temperature (C)                : 38\n"
+                         "\n"
+                         "        Chip ID                        : 1\n"
+                         "        Temperature (C)                : 36\n"
+                         "\n"
+                         "        Temperature (C)                : 55\n"
+                         "        Chip Name                      : MCU\n", [38.0, 36.0], id="1.0.11-1.0.15-idle"),
+            # The `-c <chip>` form prints a bare temperature line and no block structure at all, so
+            # the fallback reads the whole output.
+            pytest.param("        Temperature (C)                : 68\n", [68.0], id="single-chip-form"),
             # Single-chip card.
             pytest.param("        Temperature (C)                : 55\n        Chip ID                        : 0\n",
                          [55.0], id="1chip"),
-            # Three-chip card.
+            # Three-chip card with no block structure: the fallback reads every line.
             pytest.param("        Temperature (C)                : 30\n"
                          "        Temperature (C)                : 31\n"
                          "        Temperature (C)                : 32\n", [30.0, 31.0, 32.0], id="3chips"),
@@ -174,8 +211,10 @@ class TestNpuFc:
     def test_parse_card_temps(self, output: str, expected: List[float]):
         """Positive/negative unit test for NpuFc.parse_card_temps() static method. It contains the following steps:
         - mock nothing (pure parsing)
-        - call NpuFc.parse_card_temps(output) with the parametrized output
+        - call NpuFc.parse_card_temps(output) with the parametrized output, one per documented npu-smi layout
         - ASSERT: the returned per-chip temperature list equals the expected list
+        - ASSERT: on the layouts that carry an MCU block, the MCU temperature is not among them
+        - ASSERT: on the layouts with no block structure, every temperature line is returned instead
         """
         assert NpuFc.parse_card_temps(output) == expected
 

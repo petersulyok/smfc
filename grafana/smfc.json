@@ -158,7 +158,7 @@
       "gridPos": {
         "x": 0,
         "y": 5,
-        "w": 6,
+        "w": 4,
         "h": 4
       },
       "targets": [
@@ -202,17 +202,94 @@
       }
     },
     {
-      "id": 5,
+      "id": 17,
       "type": "stat",
-      "title": "Fan-mode enforcements",
+      "title": "Fan control",
+      "description": "Whether smfc is in control of the fans. What that means is platform-specific: FULL fan mode on most Supermicro boards, the per-zone manual latch on X14/H14.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 6,
+        "x": 4,
         "y": 5,
-        "w": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "smfc_fan_control_held",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "lost",
+                  "index": 0
+                },
+                "1": {
+                  "text": "held",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Fan control enforcements",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 5,
+        "w": 4,
         "h": 4
       },
       "targets": [
@@ -261,7 +338,8 @@
           "decimals": 0
         },
         "overrides": []
-      }
+      },
+      "description": "How often smfc had to take the fans back after losing control, as commanded by enforce_fan_mode=. It counts confirmed losses only: a BMC that could not be read is not counted."
     },
     {
       "id": 6,

@@ -16,6 +16,10 @@ from smfc.client import (
     EXIT_IPMI_ERROR,
     EXIT_UDEV_ERROR,
 )
+from smfc.config import PlatformName
+from smfc.platform import IpmiError
+from smfc.genericx14 import X14OpenBmcPlatform
+from .test_fixtures import FakeOpenBmc
 
 
 def _make_offline_cfg() -> MagicMock:
@@ -438,6 +442,174 @@ class TestFormatReport:
         assert "STANDARD" in out
         assert "not in FULL mode" in out
         assert "ERROR" not in out
+
+    @staticmethod
+    def _x14_ipmi(bmc: FakeOpenBmc) -> MagicMock:
+        """Build a fake Ipmi whose platform is a real X14OpenBmcPlatform driven against a modelled board."""
+        ipmi = _make_fake_ipmi()
+        ipmi.platform = X14OpenBmcPlatform(PlatformName.GENERIC_X14, bmc)
+        ipmi.get_fan_mode.side_effect = ipmi.platform.get_fan_mode
+        ipmi.get_fan_level.side_effect = ipmi.platform.get_fan_level
+        return ipmi
+
+    def test_fan_mode_is_manual_control_when_the_latch_is_held(self) -> None:
+        """Positive unit test for smfc.client._format_report() function. It contains the following steps:
+        - drive a real X14OpenBmcPlatform against a modelled board and latch the configured zone
+        - call _format_report() with use_color=False
+        - ASSERT: the fan mode line reads 'manual control', naming how the board is actually driven
+        - ASSERT: the base fan mode name is not printed. While the latch is held the fans do not follow
+          that curve, so reporting it would invite the reader to judge fan control by an unrelated value
+        - ASSERT: the 'not in FULL mode' warning is absent
+        """
+        bmc = FakeOpenBmc(fan_mode=0)
+        ipmi = self._x14_ipmi(bmc)
+        ipmi.platform.start([0])
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", use_color=False)
+        assert "Fan mode      : manual control" in out
+        assert "STANDARD" not in out
+        assert "not in FULL mode" not in out
+
+    def test_fan_mode_shows_the_base_mode_when_the_latch_is_not_held(self) -> None:
+        """Positive unit test for smfc.client._format_report() function. It contains the following steps:
+        - drive a real X14OpenBmcPlatform against a modelled board whose base fan mode is STANDARD, and
+          latch nothing - the state smfc-client finds when smfc is not running
+        - call _format_report() with use_color=False
+        - ASSERT: the base fan mode is reported, because with no latch the BMC's own curve is what the
+          fans are actually following, so that value is the honest answer here
+        - ASSERT: the line does not claim manual control, which nothing is holding
+        """
+        bmc = FakeOpenBmc(fan_mode=0)
+        ipmi = self._x14_ipmi(bmc)
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", use_color=False)
+        assert "Fan mode      : STANDARD (0)" in out
+        assert "manual control" not in out
+
+    def test_fan_mode_names_the_zones_left_on_the_bmc_curve(self) -> None:
+        """Negative unit test for smfc.client._format_report() function. It contains the following steps:
+        - drive a real X14OpenBmcPlatform against a modelled board, latch zone 0 and clear zone 1 on the
+          board, i.e. a half-taken-over board of the kind an unclean smfc stop leaves behind
+        - call _format_report() with use_color=False, with controllers configured for zones 0 and 1
+        - ASSERT: the line still reads 'manual control', because one configured zone is held
+        - ASSERT: it names the zone that is not, so a partly released board is visible rather than
+          reported as if smfc owned every zone
+        """
+        bmc = FakeOpenBmc(fan_mode=0)
+        ipmi = self._x14_ipmi(bmc)
+        ipmi.platform.start([0, 1])
+        bmc.manual[1] = False
+        entries = [("CPU", "cpu", _make_fake_cpu_controller(zones=[0]), None),
+                   ("HD", "hd", _make_fake_cpu_controller(zones=[1]), None)]
+        out = client._format_report(ipmi, entries, "x.conf", use_color=False)
+        assert "Fan mode      : manual control" in out
+        assert "zone(s) 1 on the BMC curve" in out
+
+    def test_fan_mode_flags_a_latch_nobody_is_holding(self) -> None:
+        """Negative unit test for smfc.client._format_report() function. It contains the following steps:
+        - drive a real X14OpenBmcPlatform against a modelled board and latch the configured zone, then
+          report it with service_reachable=False, i.e. the caller established that smfc is not running
+        - ASSERT: the line still reads 'manual control', because the latch really is held
+        - ASSERT: it says smfc is not running and names the frozen zone. This is the state an unclean stop
+          leaves behind: the zone stays at its last level with the BMC's thermal loop suspended and
+          nothing regulating it, and it is otherwise indistinguishable from a healthy running system
+        """
+        bmc = FakeOpenBmc(fan_mode=0)
+        ipmi = self._x14_ipmi(bmc)
+        ipmi.platform.start([0])
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", False, False, service_reachable=False)
+        assert "Fan mode      : manual control" in out
+        assert "smfc is not running" in out
+        assert "zone(s) 0 are frozen" in out
+
+    def test_fan_mode_does_not_flag_a_latch_when_smfc_may_be_running(self) -> None:
+        """Positive unit test for smfc.client._format_report() function. It contains the following steps:
+        - latch the configured zone and report it with service_reachable=None, i.e. the caller could not
+          tell whether smfc runs - what `--standalone`, or a configuration without an exporter, gives
+        - ASSERT: the line reads 'manual control' with no warning. A held latch is the normal state while
+          smfc drives the fans, so it must not be reported as abandoned on a guess
+        """
+        bmc = FakeOpenBmc(fan_mode=0)
+        ipmi = self._x14_ipmi(bmc)
+        ipmi.platform.start([0])
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", False, False, service_reachable=None)
+        assert "Fan mode      : manual control" in out
+        assert "smfc is not running" not in out
+
+    def test_fan_mode_does_not_flag_a_released_board_when_smfc_is_gone(self) -> None:
+        """Positive unit test for smfc.client._format_report() function. It contains the following steps:
+        - report a board with nothing latched and service_reachable=False, i.e. smfc stopped cleanly and
+          released the fans on its way out
+        - ASSERT: the base fan mode is shown, because the BMC's own curve is driving the fans
+        - ASSERT: no warning is printed - this is the state a correct shutdown produces
+        """
+        bmc = FakeOpenBmc(fan_mode=0)
+        ipmi = self._x14_ipmi(bmc)
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", False, False, service_reachable=False)
+        assert "Fan mode      : STANDARD (0)" in out
+        assert "smfc is not running" not in out
+
+    def test_fan_mode_reports_a_bmc_that_stops_answering_the_latch_read(self) -> None:
+        """Negative unit test for smfc.client._format_report() function. It contains the following steps:
+        - drive a real X14OpenBmcPlatform against a modelled board whose OEM manual mode read fails, i.e.
+          a BMC that answered the startup probe and then stopped responding
+        - call _format_report() with use_color=False
+        - ASSERT: the fan mode cell reports the error instead of a control state. Neither answer is known
+          here, so claiming either one would be a guess dressed as a reading
+        """
+        bmc = FakeOpenBmc()
+
+        def failing(args):
+            if args[:7] == ["raw", "0x2e", "0x04", "0xcf", "0xc2", "0x00", "0x00"]:
+                raise IpmiError("ipmitool error (1): Unable to establish IPMI v2 session.", None)
+            return bmc(args)
+
+        ipmi = _make_fake_ipmi()
+        ipmi.platform = X14OpenBmcPlatform(PlatformName.GENERIC_X14, failing)
+        ipmi.get_fan_mode.side_effect = ipmi.platform.get_fan_mode
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", use_color=False)
+        assert "Fan mode      : ERROR: ipmitool error (1)" in out
+
+    def test_fan_mode_reports_a_bmc_that_stops_answering_the_mode_read(self) -> None:
+        """Negative unit test for smfc.client._format_report() function. It contains the following steps:
+        - drive a real X14OpenBmcPlatform against a modelled board with nothing latched, so the base fan
+          mode is what would be reported, and make that read fail
+        - call _format_report() with use_color=False
+        - ASSERT: the fan mode cell reports the error rather than an empty or invented mode
+        """
+        bmc = FakeOpenBmc()
+
+        def failing(args):
+            if args[:4] == ["raw", "0x30", "0x45", "0x00"]:
+                raise IpmiError("ipmitool error (1): Unable to establish IPMI v2 session.", None)
+            return bmc(args)
+
+        ipmi = _make_fake_ipmi()
+        ipmi.platform = X14OpenBmcPlatform(PlatformName.GENERIC_X14, failing)
+        ipmi.get_fan_mode.side_effect = ipmi.platform.get_fan_mode
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", use_color=False)
+        assert "Fan mode      : ERROR: ipmitool error (1)" in out
+
+    def test_fan_mode_says_so_when_the_control_state_cannot_be_read(self) -> None:
+        """Negative unit test for smfc.client._format_report() function. It contains the following steps:
+        - build a fake Ipmi whose platform reports ENFORCES_FULL_MODE=False but exposes no readable
+          manual mode flag, as the ATEN stack does - its bypass flag is write-only
+        - call _format_report() with use_color=False
+        - ASSERT: the base fan mode is reported rather than a claim about control
+        - ASSERT: the line says the control state is not readable, so the missing answer is visible
+          instead of being silently replaced by a guess
+        """
+        ipmi = _make_fake_ipmi(fan_mode_value=0)
+        ipmi.platform = MagicMock(spec=["name", "ENFORCES_FULL_MODE"], ENFORCES_FULL_MODE=False)
+        out = client._format_report(ipmi, [("CPU", "cpu", _make_fake_cpu_controller(), None)],
+                                    "x.conf", use_color=False)
+        assert "Fan mode      : STANDARD (0)" in out
+        assert "control state is not readable on this BMC" in out
 
     def test_zones_table_unions_zones(self) -> None:
         """Positive unit test for smfc.client._format_report() function. It contains the following steps:
@@ -1145,6 +1317,23 @@ class TestFormatReportFromSnapshot:
         assert "X11SCH-LN4F" in out
         assert "Platform" not in out
 
+    def test_fan_mode_is_manual_control_on_x14_from_snapshot(self) -> None:
+        """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the steps:
+        - build a snapshot whose fan_mode block carries enforces_full_mode=False and a non-FULL mode
+        - call _format_report_from_snapshot() with use_color=False
+        - ASSERT: the fan mode line reads 'manual control', matching the standalone path
+        - ASSERT: the base fan mode name is not printed
+        - ASSERT: the enforcement counter is still shown, because a restored control state is worth
+          reporting on this platform too
+        """
+        snapshot = _sample_snapshot_dict()
+        snapshot["fan_mode"] = {"id": 0, "name": "STANDARD", "age_s": 0.5,
+                                "enforce_fan_mode": True, "enforces_full_mode": False}
+        out = client._format_report_from_snapshot(snapshot, "x.conf", use_color=False)
+        assert "Fan mode      : manual control" in out
+        assert "STANDARD" not in out
+        assert "enforced" in out
+
     def test_verbose_header_shows_uptime(self) -> None:
         """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
         - build a sample snapshot dict via _sample_snapshot_dict()
@@ -1386,17 +1575,28 @@ class TestFormatReportFromSnapshot:
         assert " 50 %" in out
         assert "Status" not in out
 
-    def test_non_full_fan_mode_renders_red(self) -> None:
+    def test_lost_fan_control_renders_red(self) -> None:
         """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
-        - build a sample snapshot dict and override fan_mode to STANDARD (id=0)
+        - build a sample snapshot dict and override fan_mode to a lost control state on a drifted STANDARD mode
         - call _format_report_from_snapshot() with use_color=True
-        - ASSERT: RED escape sequence appears (non-FULL mode is emphasized in red)
+        - ASSERT: RED escape sequence appears, because the service reported that control was lost
+        - ASSERT: the reason the service gave is shown after the fan mode line
+        - build a second snapshot where the same STANDARD mode is reported with control held
+        - call _format_report_from_snapshot() with use_color=True
+        - ASSERT: no RED escape sequence appears, because the verdict decides the colour, not the mode value
         """
+        detail = "BMC fan mode drifted from FULL to STANDARD"
         snap = _sample_snapshot_dict()
-        snap["fan_mode"] = {"id": 0, "name": "STANDARD", "age_s": 0.5}
+        snap["fan_mode"] = {"id": 0, "name": "STANDARD", "age_s": 0.5, "control_held": False,
+                            "control_detail": detail}
         out = client._format_report_from_snapshot(snap, "x.conf", use_color=True)
-        # The label is wrapped in RED (not GREEN) when mode != FULL.
+        # The label is wrapped in RED (not GREEN) when the service is not in control of the fans.
         assert client.RED in out
+        assert detail in out
+        snap["fan_mode"] = {"id": 0, "name": "STANDARD", "age_s": 0.5, "control_held": True,
+                            "control_detail": ""}
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=True)
+        assert client.RED not in out
 
     def test_standby_states_shorter_than_devices_truncates(self) -> None:
         """Negative unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
@@ -2008,6 +2208,23 @@ class TestMainOnlinePath:
         assert "  source: ipmitool (smfc service is not reachable)" in out
         assert "smfc-client" in out
 
+    def test_source_line_states_only_what_was_established(self) -> None:
+        """Positive unit test for smfc.client._format_source_line() function. It contains the steps:
+        - render the line for the three cases the client can be in
+        - ASSERT: the online case names the live snapshot
+        - ASSERT: an exporter that was asked and did not answer reports the service as not reachable
+        - ASSERT: a direct read that never asked reports only that, because `--standalone` and a
+          configuration without an exporter both leave the service running for all the client knows
+        """
+        f = "TestMain.test_source_line_states_only_what_was_established"
+        online = client._format_source_line(online=True, use_color=False)
+        unreachable = client._format_source_line(online=False, use_color=False, service_reachable=False)
+        not_asked = client._format_source_line(online=False, use_color=False, service_reachable=None)
+        assert "smfc service (live snapshot)" in online, f"{f}: online"
+        assert "smfc service is not reachable" in unreachable, f"{f}: asked and silent"
+        assert "smfc service not queried" in not_asked, f"{f}: never asked"
+        assert "not reachable" not in not_asked, f"{f}: no unfounded claim"
+
     def test_standalone_flag_forces_offline(self, mocker: MockerFixture,
                                             capsys: pytest.CaptureFixture) -> None:
         """Positive unit test for smfc.client.main() function. It contains the following steps:
@@ -2016,7 +2233,8 @@ class TestMainOnlinePath:
         - mock smfc.client.Ipmi, Context, and _construct_controllers to provide a CPU stub
         - call main() with -c dummy, -nc, and --standalone
         - ASSERT: main returns EXIT_OK
-        - ASSERT: stdout source line reports 'ipmitool (smfc service is not reachable)' (standalone path used)
+        - ASSERT: stdout source line reports 'ipmitool (smfc service not queried)'. The service was never
+          asked, so the report must not claim it is unreachable - it may well be running and driving the fans
         - ASSERT: _try_fetch_snapshot was not called (--standalone bypasses the probe)
         """
         mocker.patch("smfc.client.Config", return_value=self._exporter_enabled_cfg())
@@ -2029,7 +2247,7 @@ class TestMainOnlinePath:
         rc = client.main(["-c", "/dummy.conf", "-nc", "--standalone"])
         assert rc == EXIT_OK
         out = capsys.readouterr().out
-        assert "  source: ipmitool (smfc service is not reachable)" in out
+        assert "  source: ipmitool (smfc service not queried)" in out
         assert try_fetch.call_count == 0, "_try_fetch_snapshot must not be called when --standalone is passed"
 
 

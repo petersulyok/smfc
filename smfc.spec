@@ -19,7 +19,7 @@ Recommends:     smartmontools
 
 %description
 smfc is a systemd service to control fans in Linux on Supermicro X9,
-X10-X13/H10-H13, X10QBi and X14/H14 (experimental) motherboards with
+X10-X13/H10-H14, X10QBi and X14 (experimental) motherboards with
 IPMI fan function.
 
 %prep
@@ -98,7 +98,7 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
-* Thu Aug 27 2026 Peter Sulyok <peter@sulyok.net> - 6.3.0-1
+* Sun Aug 30 2026 Peter Sulyok <peter@sulyok.net> - 6.3.0-1
 - Added: new NPU fan controller (sixth controller type) that drives one or
   more IPMI zones from the temperature of Ascend NPUs, e.g. the Atlas 300I
   Duo, read with npu-smi. A device is an NPU card (npu-smi -i id); for a
@@ -107,6 +107,33 @@ fi
   npu_smi_path= and npu_smi_timeout=; all the shared parameters of the other
   temperature-driven controllers are supported. The controller shows up in
   smfc-client and the HTTP exporter like the other fan controllers.
+- Added: H14 motherboard support. platform_name=generic_x14 covers both X14
+  and H14 boards now. Supermicro's 14th generation ships two different BMC
+  firmware types and the board name does not tell you which one you have, so
+  smfc detects it at startup. On boards with the second type taking the fans
+  over affects every zone, so list all of them in ipmi_zone=.
+- Added: new smfc_fan_control_held metric in /metrics, and control_held and
+  control_detail fields in /snapshot. They report whether smfc is in control of
+  the fans, which means the same thing on every board: FULL fan mode where that
+  is the controlled state, and the per-zone manual latch on X14/H14.
+  smfc_bmc_info carries a new enforces_full_mode label naming which of the two
+  applies. smfc-client colours its fan mode line by this state instead of
+  measuring the fan mode against FULL, and prints the reason when control is
+  lost. The sample Grafana dashboard shows it as the Fan control panel.
+- Changed: smfc stops at startup if a configured ipmi_zone= does not exist on
+  an X14/H14 board. It reads the zone count from the board and names the wrong
+  zone in the error, instead of failing on a raw IPMI error code. smfc-client
+  does not warn about a non-FULL fan mode there any more; it reports what is
+  actually driving the fans.
+- Fixed: fan control was non-functional on X14/H14 motherboards. smfc reported
+  that it had taken the fans over while the BMC kept running them on its own
+  curve, because the commands it sent were wrong and the fan level never
+  reached the board.
+- Fixed: the fans are always handed back to the BMC when smfc stops,
+  exit_level=-1 included; a zone the BMC has forced to 100% after a fan
+  failure is detected instead of looking healthy, and stops smfc with exit
+  code 11 when enforce_fan_mode=0; and min_level=0 can no longer stop the fans
+  on X14/H14, where levels below 5% are raised to 5%.
 
 * Mon Aug 24 2026 Peter Sulyok <peter@sulyok.net> - 6.2.1-1
 - Fixed: the startup BMC fan subsystem readiness check did not recognize fan

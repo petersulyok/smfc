@@ -47,8 +47,9 @@ All metrics are gauges unless noted. Labels are enclosed in `{…}`.
 |---|---|---|---|
 | `smfc_up` | `version` | 1 | Liveness; carries the running `smfc` version |
 | `smfc_start_time_seconds` | — | Unix time | Wall-clock start time of the `smfc` process |
-| `smfc_bmc_info` | `product_name`, `firmware_version`, `manufacturer_name` | 1 | BMC identity from `ipmitool bmc info` |
-| `smfc_fan_mode_enforced_total` | — | counter | Times `smfc` re-asserted FULL after the BMC fan mode drifted |
+| `smfc_bmc_info` | `product_name`, `firmware_version`, `manufacturer_name`, `enforces_full_mode` | 1 | BMC identity from `ipmitool bmc info`. `enforces_full_mode="0"` on X14/H14, where FULL fan mode is not the controlled state |
+| `smfc_fan_control_held` | — | 1 or 0 | `smfc` is in control of the fans (1) or control was lost (0). It means FULL fan mode where that is the controlled state, and the per-zone manual latch on X14/H14 |
+| `smfc_fan_mode_enforced_total` | — | counter | Times `smfc` re-acquired fan control after an observed loss |
 
 ### Static configuration (changes only on restart)
 
@@ -94,9 +95,13 @@ smfc_start_time_seconds 1782230122.9168901
 
 # HELP smfc_bmc_info BMC identity reported by ipmitool bmc info.
 # TYPE smfc_bmc_info gauge
-smfc_bmc_info{product_name="X11SCH-LN4F",firmware_version="1.74",manufacturer_name="Super Micro Computer Inc."} 1
+smfc_bmc_info{product_name="X11SCH-LN4F",firmware_version="1.74",manufacturer_name="Super Micro Computer Inc.",enforces_full_mode="1"} 1
 
-# HELP smfc_fan_mode_enforced_total Times smfc re-asserted FULL after the BMC fan mode drifted.
+# HELP smfc_fan_control_held smfc is in control of the fans (1) or control was lost (0).
+# TYPE smfc_fan_control_held gauge
+smfc_fan_control_held 1
+
+# HELP smfc_fan_mode_enforced_total Times smfc re-acquired fan control after an observed loss.
 # TYPE smfc_fan_mode_enforced_total counter
 smfc_fan_mode_enforced_total 0
 
@@ -345,8 +350,15 @@ smfc_device_temp_read_errors > 0
 # Temperature read failures per hour, per device
 increase(smfc_device_temp_read_errors_total[1h])
 
-# How many times did smfc have to re-assert FULL mode?
+# How many times did smfc have to re-acquire fan control?
 smfc_fan_mode_enforced_total
+
+# Is smfc in control of the fans right now?
+smfc_fan_control_held
+
+# Alert on a lost control state. With enforce_fan_mode=0 the service exits instead, so alert on
+# `up` or a missing smfc_up as well - the counter below cannot rise in that case.
+smfc_fan_control_held == 0
 ```
 
 ---
@@ -385,7 +397,8 @@ The top row shows service-level status at a glance:
 - **smfc version** — the running version string from `smfc_up{version}`.
 - **Service uptime** — derived from `smfc_start_time_seconds`.
 - **BMC product** — board name from `smfc_bmc_info{product_name}`.
-- **Fan-mode enforcements** — lifetime count from `smfc_fan_mode_enforced_total`; turns red when non-zero.
+- **Fan control** — `held` or `lost`, from `smfc_fan_control_held`; turns red on a loss. It answers the same question on every board: FULL fan mode where that is the controlled state, the per-zone manual latch on X14/H14.
+- **Fan control enforcements** — how often `smfc` had to take the fans back after losing control, from `smfc_fan_mode_enforced_total`; turns red when non-zero.
 - **Zones ↔ controllers** — table built from `smfc_controller_zone`; one column per controller type, one row per IPMI zone, coloured cell marks an active assignment.
 
 #### IPMI Zone 0

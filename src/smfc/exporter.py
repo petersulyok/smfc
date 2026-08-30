@@ -28,7 +28,7 @@ def _escape_label_value(value: str) -> str:
 def _format_labels(pairs: List[tuple]) -> str:
     """Render a non-empty list of (name, value) label pairs into the Prometheus `{n1="v1",n2="v2"}` form.
 
-    Callers that emit label-less metrics (e.g. smfc_fan_mode) skip this helper entirely.
+    Callers that emit label-less metrics (e.g. smfc_start_time_seconds) skip this helper entirely.
     """
     parts = [f'{name}="{_escape_label_value(str(value))}"' for name, value in pairs]
     return "{" + ",".join(parts) + "}"
@@ -55,16 +55,31 @@ def render_prometheus(snapshot: Dict[str, Any]) -> str:
     lines.append("# TYPE smfc_start_time_seconds gauge")
     lines.append(f"smfc_start_time_seconds {float(snapshot.get('start_time', 0.0))}")
 
+    # `enforces_full_mode` never changes while the service runs - it is a property of the platform class, not
+    # an observation - so it rides along with the other constant BMC facts instead of a live metric.
+    enforces_full_mode = bool((snapshot.get("fan_mode", {}) or {}).get("enforces_full_mode", True))
     bmc_labels = _format_labels([("product_name", bmc.get("product_name", "")),
                                  ("firmware_version", bmc.get("firmware_rev", "")),
-                                 ("manufacturer_name", bmc.get("manufacturer_name", ""))])
+                                 ("manufacturer_name", bmc.get("manufacturer_name", "")),
+                                 ("enforces_full_mode", "1" if enforces_full_mode else "0")])
     lines.append("")
     lines.append("# HELP smfc_bmc_info BMC identity reported by ipmitool bmc info.")
     lines.append("# TYPE smfc_bmc_info gauge")
     lines.append(f"smfc_bmc_info{bmc_labels} 1")
 
+    fan_mode = snapshot.get("fan_mode", {}) or {}
+    # The control verdict, not the fan mode. It means the same thing on every platform: FULL fan mode where
+    # that is the controlled state, the per-zone manual latch on X14/H14. The base fan mode is deliberately
+    # not exported - on X14/H14 it names the fallback curve, so a dashboard measuring it against FULL would
+    # be wrong, and where FULL *is* the controlled state this gauge already says so.
     lines.append("")
-    lines.append("# HELP smfc_fan_mode_enforced_total Times smfc re-asserted FULL after the BMC fan mode drifted.")
+    lines.append("# HELP smfc_fan_control_held smfc is in control of the fans (1) or control was lost (0).")
+    lines.append("# TYPE smfc_fan_control_held gauge")
+    lines.append(f"smfc_fan_control_held {1 if fan_mode.get('control_held', True) else 0}")
+
+    lines.append("")
+    lines.append("# HELP smfc_fan_mode_enforced_total Times smfc re-acquired fan control after an observed"
+                 " loss.")
     lines.append("# TYPE smfc_fan_mode_enforced_total counter")
     lines.append(f"smfc_fan_mode_enforced_total {int(snapshot.get('fan_mode_enforced_count', 0))}")
 

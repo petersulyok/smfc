@@ -33,7 +33,13 @@ from collections import namedtuple
 from pathlib import Path
 
 # Mirrors test/smoke_runner.py::SCENARIOS. Keep this in sync when scenarios are added/removed.
-Scenario = namedtuple("Scenario", ["cpu", "hd", "gpu", "nvme", "conf", "fault", "npu"], defaults=(None, 0))
+# The optional `fault` field selects a fault injector (see FAULT_INJECTORS); None = no fault.
+# `bmc_stack` and `aten_duty_path` pick which 14th generation BMC firmware the fake ipmitool emulates;
+# the defaults give the stack-agnostic behaviour every other scenario relies on. `npu` is the NPU card
+# count. All four are appended after `fault`, so the existing positional entries stay unchanged.
+Scenario = namedtuple("Scenario",
+                      ["cpu", "hd", "gpu", "nvme", "conf", "fault", "bmc_stack", "aten_duty_path", "npu"],
+                      defaults=(None, "", "pwm", 0))
 SCENARIOS = {
     "cpu_1":               Scenario(1, 1, 0, 0, "cpu_1.conf"),
     "cpu_2":               Scenario(2, 0, 1, 0, "cpu_2.conf"),
@@ -51,7 +57,9 @@ SCENARIOS = {
     "shared_zones_cpu_split": Scenario(2, 2, 0, 0, "shared_zones_cpu_split.conf"),
     "control_function":    Scenario(2, 2, 0, 0, "control_function.conf"),
     "platform_x9":         Scenario(1, 2, 0, 0, "platform_x9.conf"),
-    "platform_x14":        Scenario(1, 2, 0, 0, "platform_x14.conf"),
+    "platform_x14_openbmc": Scenario(1, 2, 0, 0, "platform_x14_openbmc.conf", None, "openbmc"),
+    "platform_x14_aten":   Scenario(1, 2, 0, 0, "platform_x14_aten.conf", None, "aten"),
+    "platform_x14_aten_percent": Scenario(1, 2, 0, 0, "platform_x14_aten.conf", None, "aten", "percent"),
     "platform_x10qbi":     Scenario(1, 2, 0, 0, "platform_x10qbi.conf"),
     "no_enforce_fan_mode": Scenario(1, 2, 0, 0, "no_enforce_fan_mode.conf"),
     "hd_split_zones":      Scenario(0, 4, 0, 0, "hd_split_zones.conf"),
@@ -200,11 +208,52 @@ def check(name: str, scn: Scenario, duration: int) -> tuple:
     if name == "platform_x9":
         if "platform_name = generic_x9" not in log:           problems.append("x9-not-active")
         if "0x30 0x91 0x5a" not in log:                       problems.append("x9-set-bytes-missing")
-    elif name == "platform_x14":
+    elif name == "platform_x14_openbmc":
         if "platform_name = generic_x14" not in log:          problems.append("x14-not-active")
-        if "0x30 0x70 0x88" not in log:                       problems.append("x14-set-bytes-missing")
-        # X14 start() must enable manual mode per zone via 0x2c 0x04 0xcf 0xc2 OEM cmd.
-        if "0x2c 0x04 0xcf 0xc2" not in log:                  problems.append("x14-manual-mode-missing")
+        # The probe of Part 1.1 must run before anything else, and must select the OpenBMC class.
+        if "X14OpenBmcPlatform" not in log:                   problems.append("x14-openbmc-not-detected")
+        # The CONST controller drives zone 3 at a fixed 50%, so the duty write is exact and 0-based.
+        # Selector 0x01 writes the duty; 0x00 is the read, and a duty write sent with it changes nothing.
+        if "0x30 0x70 0x66 0x01 0x03 0x32" not in log:        problems.append("x14-set-bytes-missing")
+        if "0x30 0x70 0x66 0x00 0x03 0x32" in log:            problems.append("x14-set-uses-read-selector")
+        # OpenBMC start() must latch manual mode per zone via the 0x2e 0x04 0xcf 0xc2 OEM cmd, with the
+        # 1-based zone byte (zone 0 -> 0x01), and confirm it with the op 0x00 read-back.
+        if "0x2e 0x04 0xcf 0xc2 0x00 0x01 0x01 0x01" not in log:
+            problems.append("x14-manual-mode-missing")
+        if "0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01" not in log:   problems.append("x14-manual-readback-missing")
+        # The base fan mode must never be written on X14: it would clear manual mode on every zone.
+        if "0x30 0x45 0x01" in log:                           problems.append("x14-fan-mode-written")
+        # The latch must be released at exit, whatever the exit level: a latch that is never released
+        # leaves every zone frozen at its last duty with nothing regulating it.
+        if "0x30 0x70 0x66 0x02 0x00" not in log:             problems.append("x14-latch-not-released")
+    elif name.startswith("platform_x14_aten"):
+        if "platform_name = generic_x14" not in log:          problems.append("aten-not-active")
+        # The same configuration value must reach the *other* class here, chosen by the 0xC1 probe reply.
+        if "X14AtenPlatform" not in log:                      problems.append("aten-not-detected")
+        if "X14OpenBmcPlatform" in log:                       problems.append("aten-wrong-stack-selected")
+        # The lever is the global bypass flag, not FULL fan mode: without it the BMC's automatic control
+        # loop overwrites every duty within a second.
+        if "0x30 0x70 0x66 0x02 0x01" not in log:             problems.append("aten-bypass-not-armed")
+        # The duty write is GenericPlatform's, byte for byte (ATEN is the X9-X13 firmware line). Zone 0 is
+        # driven by the CPU controller, whose level follows the drifting temperature, so it always writes.
+        if "0x30 0x70 0x66 0x01 0x00 0x" not in log:          problems.append("aten-set-bytes-missing")
+        # The fixed 50% CONST write on zone 3 is expected on the PWM read-back path only. On the percent
+        # path the BMC reports the duty back exactly, so the controller sees "current=50% expected=50%" and
+        # correctly skips the write - which is precisely the behavioural difference between the two duty
+        # paths of Part 4.4, and the reason accepted() compares against a set rather than one value.
+        if name == "platform_x14_aten" and "0x30 0x70 0x66 0x01 0x03 0x32" not in log:
+            problems.append("aten-const-zone-write-missing")
+        if name == "platform_x14_aten_percent" and "CONST: zone 3 current=50% expected=50%" not in log:
+            problems.append("aten-percent-readback-not-exact")
+        # The bypass cannot be read back, so the watchdog reads each zone's duty instead.
+        if "0x30 0x70 0x66 0x00 0x3" not in log:              problems.append("aten-duty-readback-missing")
+        # The base fan mode must never be written: it persists across a BMC restart while the bypass does
+        # not, so a board left in Full Speed would come back at 100% with nothing to stop it.
+        if "0x30 0x45 0x01" in log:                           problems.append("aten-fan-mode-written")
+        # The bypass must be released at exit, or every zone on the board stays frozen at its last duty.
+        if "0x30 0x70 0x66 0x02 0x00" not in log:             problems.append("aten-bypass-not-released")
+        # The read-back path must not be mistaken for control loss on either kind of board.
+        if "restoring fan control" in log:                    problems.append("aten-false-control-loss")
     elif name == "platform_x10qbi":
         if "platform_name = X10QBi" not in log:               problems.append("x10qbi-not-active")
         if "0x30 0x91 0x5c" not in log:                       problems.append("x10qbi-set-bytes-missing")
@@ -214,12 +263,12 @@ def check(name: str, scn: Scenario, duration: int) -> tuple:
     # expected within a few polls. Required signals:
     #   - "enforce_fan_mode = False" in startup banner
     #   - "enforce_fan_mode is disabled, smfc exiting" log line (SystemExit(11) path)
-    #   - NO "restoring FULL" log line (that's the enforce=True branch)
+    #   - NO "restoring fan control" log line (that's the enforce=True branch)
     # The generic Ctrl-C / exit-code checks don't apply: smfc terminated on its own.
     if name == "no_enforce_fan_mode":
         if "enforce_fan_mode = False" not in log:
             problems.append("enforce-flag-still-on")
-        if "restoring FULL" in log:
+        if "restoring fan control" in log:
             problems.append("restored-FULL-despite-flag")
         if "enforce_fan_mode is disabled, smfc exiting" not in log:
             problems.append("no-autonomous-exit-on-drift")
