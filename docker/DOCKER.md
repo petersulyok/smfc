@@ -297,7 +297,7 @@ docker run --rm \
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
-  - **6.3.0** (2026.08.27): Updated to smfc 6.3.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
+  - **6.3.0** (2026.08.30): Updated to smfc 6.3.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
   - **6.2.1** (2026.08.24): Updated to smfc 6.2.1 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
   - **6.2.0** (2026.08.14): Updated to smfc 6.2.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
   - **6.1.0** (2026.07.31): Updated to smfc 6.1.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
