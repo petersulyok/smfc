@@ -12,8 +12,6 @@ Supermicro fan control for Linux (home) servers.
 
 This is a `systemd service` running on Linux that can control fans with the help of IPMI on Supermicro X10-X13/H10-H14, some X9, and X14 (experimental) motherboards.
 
-> ⚠️ X14 motherboard support does not work; please wait for the next release before testing it.
-
 ### 1. Prerequisites
  - a Supermicro motherboard with IPMI 2.0 (ASPEED AST2400/2500/2600 chip)
  - Python 3.10-3.14
@@ -25,7 +23,7 @@ This is a `systemd service` running on Linux that can control fans with the help
  - optional: `smartmontools` for SAS/SCSI disks and *standby guard* feature
  - optional: `nvidia-smi` for Nvidia GPUs
  - optional: `rocm-smi` for AMD GPUs
- - optional: `npu-smi` for Ascend NPUs (e.g. Atlas 300I Duo)
+ - optional: `npu-smi` for Ascend NPUs
 
 
 ### 2. Installation and configuration
@@ -60,7 +58,7 @@ Key features:
  - Standby guard feature for SATA hard disk arrays organized in RAID
  - Support for SATA, SAS/SCSI, and NVMe disks with automatic HWMON/smartctl fallback
  - Nvidia or AMD GPU temperature monitoring via `nvidia-smi` or `rocm-smi`
- - Ascend NPU temperature monitoring via `npu-smi` (e.g. Atlas 300I Duo, the hottest chip of each card is used)
+ - Ascend NPU temperature monitoring via `npu-smi`
  - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13, X14) and edge cases (X10QBi)
  - Remote IPMI access via `remote_parameters=` for VM setups (e.g. TrueNAS on Proxmox with PCI passthrough)
  - Distributed as a `systemd` service, Docker image, DEB/RPM/AUR package, or PyPI package
@@ -199,23 +197,15 @@ A lower value (e.g. `exit_level=40`) is a compromise for quiet systems: the fans
 go to full speed every time the service is stopped or restarted.
 
 > [!IMPORTANT]
-> **X14/H14 motherboards behave differently.** Instead of FULL mode these platforms hold an explicit BMC fan control
-> state - per-zone manual mode on the OpenBMC stack, a single global bypass flag on ATEN - which stays armed until
-> `smfc` releases it. The BMC never takes the fans back on its own. So the exit is a two-step operation:
+> **X14/H14 motherboards behave differently.** Instead of FULL mode they hold an explicit BMC fan control state
+> (per-zone manual mode on OpenBMC, a global bypass flag on ATEN) that stays armed until `smfc` releases it. The exit
+> is therefore two steps: (1) `exit_level` is applied to all configured zones unless it is `-1`, then (2) the state is
+> released and **automatic BMC fan control is restored** (on ATEN this also releases zones `smfc` never drove).
 >
->   1. `exit_level` is applied to all configured zones, unless it is `-1`
->   2. the fan control state is released, so **automatic BMC fan control is restored**. On ATEN the bypass is global,
->      so this releases zones `smfc` never drove as well
->
-> **Step 2 always runs** - with `exit_level=-1`, and equally when the step 1 write fails. A state left armed freezes
-> every zone at its last duty with the BMC's own thermal loop suspended and nothing regulating them.
->
-> **`exit_level` has almost no effect here.** Releasing the state hands the fans to the BMC, which applies its own
-> curve within about a second and overwrites whatever was written - so `exit_level=100` and `exit_level=-1` end up in
-> the same place and neither is safer than the other.
->
-> What does matter on both stacks: the BMC regulates on CPU and system sensors only, so hard disk and NVMe
-> temperatures are not part of the curve the fans end up on.
+> Step (2) always runs, even with `exit_level=-1` or after a failed step (1), because an armed state freezes every zone
+> at its last duty with the BMC's thermal loop suspended. `exit_level` itself has almost no effect: the BMC applies its
+> own curve within about a second, so `100` and `-1` end up in the same place. That curve uses CPU and system sensors
+> only - hard disk and NVMe temperatures are not part of it.
 
 ### 2. User-defined control function
 Fan controllers use user-defined control functions that map a temperature interval to a fan rotation level interval. Two forms are supported in each temperature-driven section: a **simple linear** mapping (chapter 2.1) or an **advanced multi-segment** piecewise-linear curve (chapter 2.2). When both are present in the same section, `control_function=` takes precedence and the `min_temp/max_temp/min_level/max_level` keys are ignored.
@@ -348,37 +338,12 @@ With this abstraction layer, new Supermicro motherboards can also be added to `s
 
 Some X9 motherboards are supported (since `smfc v5.2.0`) via the `generic_x9` platform, provided they support the specific IPMI raw commands used for fan control. X9 boards are auto-detected when the BMC product name starts with `X9`; you can also force the platform by setting `platform_name=generic_x9`. The `X10QBi` platform is auto-detected when the BMC product name starts with `X10QBi`.
 
-X14/H14 motherboard support (`generic_x14`) was introduced in `smfc v6.0.0` and is currently **in testing phase**. All the IPMI raw commands involved are documented in [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md).
+X14/H14 motherboard support (`generic_x14`) was introduced in `smfc v6.0.0` and is currently **in testing phase**. The 14th generation ships two BMC firmware stacks, OpenBMC and ATEN; `smfc` detects the stack at startup and it cannot be forced from the configuration file. [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md) covers both stacks, the board-to-stack table, and every raw command involved. What the split means for your configuration:
 
-**Supermicro's 14th generation ships two unrelated BMC firmware stacks, and the split does not follow the board generation:**
+- **`FULL` fan mode is not used.** X14/H14 boards have their own manual fan control mode, and `smfc` holds that mode instead. `enforce_fan_mode=` therefore counts the drift of that manual mode, not of the fan mode.
+- 🔴 **`exit_level=` behaves differently on these boards.** See [chapter 1.6](https://github.com/petersulyok/smfc/blob/main/README.md#16-service-termination).
 
-| Stack | Boards |
-|---|---|
-| **OpenBMC** (`openbmc-phosphor`) | Most X14 boards — plus the H14 board `H14SHM` |
-| **ATEN** (the firmware line shipped through X9-X13) | All other H14 boards — plus the SoC boards `X14SDW` and `X14SDV` |
-
-Because the BMC product name cannot decide which command set applies, `smfc` **probes the BMC at startup** with the one command that is safe to send to a board whose stack is unknown, and selects the implementation from the answer. There is deliberately no way to force a stack from the configuration file: the same opcode is a duty *read* on one stack and a duty *write* on the other, so guessing does not return an error — it moves fans. The detected class name is printed on the `platform_name` line at `CONFIG` log level and on the `Platform :` line of `smfc-client`.
-
-What both stacks have in common:
-
-- **Fan control is not acquired through `FULL` fan mode.** Each stack has its own lever (see below), and on both of them the base fan mode (Standard, Optimal, …) is only the curve the fans fall back to when that lever is lost. `smfc` reads the base fan mode but **never writes it**. Consequently the `Fan mode` line of `smfc-client` reports what is actually driving the fans: `manual control` while `smfc` holds the lever, and the base fan mode when it does not - which is the state you find if `smfc` is not running, because then the fans really are on that curve. On the OpenBMC stack this is read from the board, so when `smfc` is not running and `smfc-client` can establish that, a zone still latched is reported as frozen with nothing regulating it - the state an unclean stop leaves behind, which is otherwise invisible from outside. That check needs the exporter enabled, since it is how the client tells a stopped service from one it was simply told not to ask (`--standalone`). On ATEN the bypass flag cannot be read back and the line says so. `enforce_fan_mode=` guards the lever instead of the fan mode.
-- 🔴 **The exit level is a transition, not a resting state.** On both stacks `smfc` releases its lever when it stops — including with `exit_level=-1`, where no fan level is written at all but the release still runs. Releasing hands the fans back to the BMC, so within about a second the BMC's own curve takes over. That curve regulates on CPU and system sensors only, so **drive temperatures are not part of it**.
-
-**On the OpenBMC stack**, `smfc` latches an explicit OEM *manual mode* in each zone it drives; zones it does not drive keep running under automatic control. Two consequences:
-
-- **`smfc` discovers how many zones your board has.** At startup it probes the per-zone failsafe flag upward and stops at the first zone the board does not have, so an `ipmi_zone=` beyond that is rejected with a message naming the real count instead of failing later with a bare IPMI error.
-- **`min_level=0` is silently raised to 5%.** A manual duty write has no floor of its own: the 15% floor belongs to the BMC's automatic control, which a latched zone is no longer under, so a real 0% would leave nothing regulating the fans.
-- **A zone held at 100% by the BMC failsafe is reported.** Failsafe outranks manual mode, so while it lasts the BMC discards every duty `smfc` writes and restoring fan control cannot recover it. A fan reading 0 RPM is the usual trigger — and on a board whose fans turn slower than the BMC tacho can resolve, a healthy fan reads as 0 while running normally (Part 2 of the guide).
-
-**On the ATEN stack**, the lever is a single **global bypass flag** that suspends the BMC's automatic control loop for every zone at once. Two consequences:
-
-- 🔴 **List every zone your board has in `ipmi_zone=`.** The bypass is global, so a zone you did not configure is bypassed along with the rest and sits **frozen at its last duty with nothing regulating it** — unlike the OpenBMC stack, where an unlatched zone keeps running automatically. `smfc` cannot fix this for you: there is no reliable way to learn how many zones a board has, and driving zones you did not configure would move fans you never asked it to move.
-- **`min_level=0` is silently raised to 5%.** One of the two ATEN duty paths has no floor of its own, and `smfc` cannot tell which path a board uses, so it never writes a duty below 5% — with the BMC's thermal loop suspended by the bypass, a real 0% would leave nothing regulating the fans.
-- **A duty reads back one percent low off the 20% grid.** The BMC keeps it as an 8-bit PWM value and converts back on read, so a `CONST` controller configured for 50% sees 49% and rewrites it on every poll. That costs one IPMI command and does not move the fans; the same is true on the OpenBMC stack.
-
-The ATEN path is confirmed on H14 hardware. On the OpenBMC stack, verify once that a low duty holds against the automatic control loop before relying on it.
-
-If you own an X14 or H14 board and test `smfc`, please share your experience in [discussion #106](https://github.com/petersulyok/smfc/discussions/106) — your feedback is essential to stabilize this support.
+If you own an X14 or H14 board and test `smfc`, please share your experience in [discussion #106](https://github.com/petersulyok/smfc/discussions/106).
 
 The earlier X8 motherboards are NOT compatible with this software. They do not implement `IPMI FULL` mode, and they cannot control fan levels with IPMI raw commands.
 
