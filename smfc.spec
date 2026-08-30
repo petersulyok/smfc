@@ -120,6 +120,12 @@ fi
   applies. smfc-client colours its fan mode line by this state instead of
   measuring the fan mode against FULL, and prints the reason when control is
   lost. The sample Grafana dashboard shows it as the Fan control panel.
+- Added: new [Ipmi] ipmitool_timeout= parameter (seconds, default 10) that
+  bounds a single ipmitool execution. A wedged /dev/ipmi0 makes ipmitool block
+  forever, which would park the control loop with nothing regulating the fans.
+  A timed-out call is treated as any other IPMI failure: the control loop logs
+  it and retries on the next poll. Use 0 to wait indefinitely, which is how
+  smfc behaved before.
 - Changed: smfc stops at startup if a configured ipmi_zone= does not exist on
   an X14/H14 board. It reads the zone count from the board and names the wrong
   zone in the error, instead of failing on a raw IPMI error code. smfc-client
