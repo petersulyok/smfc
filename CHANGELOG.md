@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [6.3.0] - 2026.08.29
+## [6.3.0] - 2026.08.30
 
 ### Added
 - New `NPU` fan controller (sixth controller type) that drives one or more IPMI zones from the temperature of Ascend NPUs, e.g. the Atlas 300I Duo, read with `npu-smi`. A device is an NPU card (`npu-smi -i <id>`); for a multi-chip card the hottest chip is used, and `temp_calc=` (minimum/average/maximum) aggregates across cards. The section is `[NPU]` / `[NPU:1]` / ... with `npu_device_ids=` (the card IDs reported by `npu-smi info -m`, which may not start from 0), `npu_smi_path=` (a bare command name resolved via `PATH` or a full path), and `npu_smi_timeout=` (seconds, guards against a hung `npu-smi` call). All the shared parameters of the other temperature-driven controllers (`ipmi_zone=`, `temp_calc=`, `sensitivity=`, `polling=`, `steps=`, `min_temp`/`max_temp`/`min_level`/`max_level` or `control_function=`, `smoothing=`, `error_tolerance=`) are supported. The controller shows up in `smfc-client` and the HTTP exporter like the other fan controllers. A sample configuration is included as `config/samples/smfc-sample10.conf`: an NPU-only setup with two Ascend cards in IPMI zone 1. Contributed by [@akalagov](https://github.com/akalagov) in [PR #121](https://github.com/petersulyok/smfc/pull/121).
