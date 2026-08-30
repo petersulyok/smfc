@@ -37,7 +37,8 @@ def _sample_snapshot() -> Dict[str, Any]:
             "ipmi_version": "2.0",
             "platform": "auto -> GenericPlatform",
         },
-        "fan_mode": {"id": 1, "name": "FULL", "age_s": 1.5, "enforce_fan_mode": True},
+        "fan_mode": {"id": 1, "name": "FULL", "age_s": 1.5, "enforce_fan_mode": True,
+                     "enforces_full_mode": True, "control_held": True, "control_detail": ""},
         "fan_controllers": [
             {
                 "section": "CPU", "type": "cpu", "enabled": True,
@@ -120,7 +121,7 @@ class TestPrometheusRenderer:
                        "smfc_controller_level_percent", "smfc_zone_level_percent",
                        "smfc_controller_temperature_min_celsius", "smfc_controller_temperature_max_celsius",
                        "smfc_controller_level_min_percent", "smfc_controller_level_max_percent",
-                       "smfc_disk_standby"):
+                       "smfc_disk_standby", "smfc_fan_control_held"):
             assert f"# HELP {metric} " in out, f"missing HELP for {metric}"
             assert f"# TYPE {metric} gauge" in out, f"missing TYPE for {metric}"
         # The enforcement and per-device error metrics are counters, not gauges.
@@ -139,14 +140,41 @@ class TestPrometheusRenderer:
         - inspect the rendered Prometheus text output
         - ASSERT: smfc_up line carries only the version label and value 1
         - ASSERT: legacy "bmc_product" label is not present in the output
-        - ASSERT: smfc_bmc_info line carries product_name, firmware_version, and manufacturer_name labels
+        - ASSERT: smfc_bmc_info line carries product_name, firmware_version, manufacturer_name and
+          enforces_full_mode labels
         """
         out = render_prometheus(_sample_snapshot())
         assert 'smfc_up{version="6.0.0"} 1' in out
         assert "bmc_product" not in out
         expected = ('smfc_bmc_info{product_name="X11SCH-LN4F",firmware_version="1.74",'
-                    'manufacturer_name="Super Micro Computer Inc."} 1')
+                    'manufacturer_name="Super Micro Computer Inc.",enforces_full_mode="1"} 1')
         assert expected in out
+
+    def test_fan_control_held(self) -> None:
+        """Positive unit test for render_prometheus() function. It contains the following steps:
+        - build a sample snapshot dict via the _sample_snapshot() fixture helper, where control is held
+        - call render_prometheus() with the snapshot
+        - inspect the rendered Prometheus text output
+        - ASSERT: smfc_fan_control_held is 1 while smfc is in control of the fans
+        - ASSERT: smfc_bmc_info carries enforces_full_mode="1" on a platform controlled through FULL fan mode
+        - build a second snapshot of a platform that lost control and does not control the fans through FULL
+        - call render_prometheus() with the second snapshot
+        - ASSERT: smfc_fan_control_held is 0 after the loss
+        - ASSERT: smfc_bmc_info carries enforces_full_mode="0" on that platform
+        - ASSERT: the base fan mode is not exported, because it is the fallback curve and not the state held
+        """
+        out = render_prometheus(_sample_snapshot())
+        assert "smfc_fan_control_held 1" in out
+        assert 'enforces_full_mode="1"' in out
+        snapshot = _sample_snapshot()
+        snapshot["fan_mode"] = {"id": 0, "name": "STANDARD", "age_s": 1.5, "enforce_fan_mode": True,
+                                "enforces_full_mode": False, "control_held": False,
+                                "control_detail": "Manual fan mode was cleared in IPMI zone(s) [1]"}
+        out = render_prometheus(snapshot)
+        assert "smfc_fan_control_held 0" in out
+        assert 'enforces_full_mode="0"' in out
+        assert "STANDARD" not in out
+
 
     def test_start_time_and_enforcement_counter(self) -> None:
         """Positive unit test for render_prometheus() function. It contains the following steps:

@@ -924,7 +924,11 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
     fan_mode = snapshot.get("fan_mode", {}) or {}
     mode_id = fan_mode.get("id", -1)
     mode_name = fan_mode.get("name", "?")
-    mode_color = GREEN if mode_id == int(Ipmi.FULL_MODE) else RED
+    # The service already decided whether it holds the fans, and what that means differs per platform. The
+    # verdict is reported as it stands, instead of measuring the mode against FULL - which is the wrong
+    # question on X14/H14, where the mode names the curve the fans fall back to.
+    held = bool(fan_mode.get("control_held", True))
+    state_color = GREEN if held else RED
     age_s = float(fan_mode.get("age_s", 0.0) or 0.0)
     if fan_mode.get("enforce_fan_mode", True):
         enforced = int(snapshot.get("fan_mode_enforced_count", 0) or 0)
@@ -933,10 +937,14 @@ def _format_report_from_snapshot(snapshot: Dict[str, Any], config_path: str, use
         detail = _wrap(f"  (enforcement disabled, read {age_s:.1f}s ago)", DIM, use_color)
     if not fan_mode.get("enforces_full_mode", True):
         # See the standalone path: on these boards the mode value is the fallback curve, not the state
-        # smfc holds, so it is neither shown nor coloured against FULL.
-        lines.append(f"  Fan mode      : {FAN_MODE_MANUAL}{detail}")
+        # smfc holds, so it is not shown.
+        state = _wrap(FAN_MODE_MANUAL, state_color, use_color)
     else:
-        lines.append(f"  Fan mode      : {_wrap(str(mode_name), mode_color, use_color)} ({mode_id}){detail}")
+        state = f"{_wrap(str(mode_name), state_color, use_color)} ({mode_id})"
+    control_detail = str(fan_mode.get("control_detail", "") or "")
+    if not held and control_detail:
+        detail = f"{detail}{_wrap('  ! ' + control_detail, RED, use_color)}"
+    lines.append(f"  Fan mode      : {state}{detail}")
     lines.append("")
 
     # Controllers table.

@@ -187,7 +187,7 @@ def _make_npu_fc(zones=None, count=1, last_temp=55.0, last_level=60,
 def _make_service(controllers=None, applied_levels=None,
                   last_fan_mode=Ipmi.FULL_MODE, last_fan_mode_at=None,
                   start_time=1716902400.0, fan_mode_enforced_count=0,
-                  enforce_fan_mode=True) -> MagicMock:
+                  enforce_fan_mode=True, last_control_held=True, last_control_detail="") -> MagicMock:
     """Build a fake Service with attributes the snapshot reads."""
     service = MagicMock()
     service.ipmi = _make_ipmi(enforce_fan_mode=enforce_fan_mode)
@@ -197,11 +197,33 @@ def _make_service(controllers=None, applied_levels=None,
     service.last_fan_mode_at = last_fan_mode_at if last_fan_mode_at is not None else time.monotonic()
     service.start_time = start_time
     service.fan_mode_enforced_count = fan_mode_enforced_count
+    service.last_control_held = last_control_held
+    service.last_control_detail = last_control_detail
     return service
 
 
 class TestBuildSnapshot:
     """Unit tests for smfc.snapshot.build_snapshot()."""
+
+    def test_fan_mode_carries_the_control_verdict(self) -> None:
+        """Positive unit test for smfc.snapshot.build_snapshot() function. It contains the following steps:
+        - build a fake Service that holds fan control, via the _make_service() helper
+        - call build_snapshot() with it
+        - ASSERT: fan_mode.control_held is True while the service is in control of the fans
+        - ASSERT: fan_mode.control_detail is empty, because there is no loss to explain
+        - build a second fake Service that lost fan control, with the reason the platform gave
+        - call build_snapshot() with it
+        - ASSERT: fan_mode.control_held is False after the loss
+        - ASSERT: fan_mode.control_detail carries the reason verbatim, for smfc-client to print
+        """
+        snapshot = build_snapshot(_make_service())
+        assert snapshot["fan_mode"]["control_held"] is True
+        assert snapshot["fan_mode"]["control_detail"] == ""
+        detail = "Manual fan mode was cleared in IPMI zone(s) [1]"
+        service = _make_service(last_control_held=False, last_control_detail=detail)
+        snapshot = build_snapshot(service)
+        assert snapshot["fan_mode"]["control_held"] is False
+        assert snapshot["fan_mode"]["control_detail"] == detail
 
     def test_schema_and_version(self) -> None:
         """Positive unit test for build_snapshot() function. It contains the following steps:

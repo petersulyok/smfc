@@ -44,8 +44,10 @@ class Service:
     last_desired: List[Tuple[str, List[int], int, float]]      # Cache of last desired levels for change detection
     last_fan_mode: int                                         # Last observed BMC fan mode (from _check_fan_mode)
     last_fan_mode_at: float                                    # monotonic() timestamp of last_fan_mode
+    last_control_held: bool                                    # Whether smfc held the fans at the last check
+    last_control_detail: str                                   # Reason of the last loss, empty while control is held
     start_time: float                                          # Unix wall-clock start time of the service
-    fan_mode_enforced_count: int                               # Count of detected drift-from-FULL corrections
+    fan_mode_enforced_count: int                               # Count of fan control re-acquisitions
     exporter: Optional[Exporter]                               # HTTP exporter (None when disabled or bind failed)
 
     def _sigterm_handler(self, signum, frame) -> None:  # pylint: disable=unused-argument
@@ -265,8 +267,8 @@ class Service:
         return shared
 
     def _check_fan_mode(self) -> None:
-        """Ask the platform whether smfc is still in control of the fans, cache the observed BMC fan mode, and
-        react when control was lost.
+        """Ask the platform whether smfc is still in control of the fans, cache what was observed, and react
+        when control was lost.
 
         What "in control" means is platform-specific: FULL fan mode on most Supermicro boards, latched per-zone
         manual mode on X14. When `enforce_fan_mode` is enabled (default), a lost control state is re-acquired
@@ -282,6 +284,11 @@ class Service:
         if status.fan_mode != -1:
             self.last_fan_mode = status.fan_mode
             self.last_fan_mode_at = time.monotonic()
+        # The verdict is cached separately from the observed mode, because on X14/H14 the two are unrelated:
+        # the mode names the fallback curve there, while the verdict is about the per-zone manual latch. A
+        # reader of /snapshot or /metrics cannot derive one from the other, so both are published.
+        self.last_control_held = status.state == ControlState.OK
+        self.last_control_detail = status.detail
 
         if status.state == ControlState.OK:
             return
@@ -305,6 +312,8 @@ class Service:
                 time.sleep(self.config.ipmi.fan_mode_delay)
             for zone, level in self.applied_levels.items():
                 self.ipmi.set_fan_level(zone, level)
+            self.last_control_held = True
+            self.last_control_detail = ""
         except (RuntimeError, ValueError) as e:
             # Recovery itself failed transiently; the next loop iteration will try again.
             self.log.msg(Log.LOG_ERROR, f"Fan mode recovery failed: {e}")
@@ -382,6 +391,10 @@ class Service:
         # Record service start time and reset the fan-mode enforcement counter (exposed via /metrics).
         self.start_time = time.time()
         self.fan_mode_enforced_count = 0
+        # Control is not held until `Platform.start()` succeeds below. An exporter cannot be running yet, so
+        # nothing can observe this initial value, but it keeps the attribute defined on every exit path.
+        self.last_control_held = False
+        self.last_control_detail = "fan control has not been acquired yet"
 
         # Create a Log class instance (in theory, this cannot fail).
         try:
@@ -456,6 +469,10 @@ class Service:
                 self.last_fan_mode_at = time.monotonic()
                 self.log.msg(Log.LOG_DEBUG, f"Set IPMI fan mode = {self.ipmi.get_fan_mode_name(Ipmi.FULL_MODE)}")
                 time.sleep(self.config.ipmi.fan_mode_delay)
+            # `start()` returns only when control was acquired: it writes FULL where that is the controlled
+            # state, and on X14 it reads the manual flag back and raises if a zone did not latch.
+            self.last_control_held = True
+            self.last_control_detail = ""
         except (RuntimeError, ValueError) as e:
             self.log.msg(Log.LOG_ERROR, f"{e}.")
             sys.exit(8)

@@ -104,6 +104,8 @@ classDiagram
         +shared_zones
         +start_time
         +last_fan_mode
+        +last_control_held
+        +last_control_detail
         +fan_mode_enforced_count
         +run()
     }
@@ -395,6 +397,19 @@ are abstract. Three methods make up the control contract:
   not propagated: it becomes `ControlState.LOST` with `confirmed=False`, so `Service`
   re-acquires without counting it as observed drift.
 - `end(zones, level)` applies the exit level and restores the platform state.
+
+`Service` caches both halves of the returned `ControlStatus`: the observed base fan
+mode in `last_fan_mode`, and the verdict in `last_control_held` /
+`last_control_detail`. On X14/H14 the two are unrelated, because the mode names the
+curve the fans fall back to while the verdict is about the per-zone manual latch. A
+reader of `/snapshot` or `/metrics` cannot derive one from the other, so both are
+published, and `smfc-client` colours its fan mode line by the verdict.
+
+The names on the wire are older than this split. `enforce_fan_mode=` shipped as a
+configuration key and `smfc_fan_mode_enforced_total` shipped in 6.0.0, both before
+control became platform-defined. They keep their names, because renaming them would
+break configurations, dashboards and Prometheus history. Internally the same concept
+is called *control*. The asymmetry is deliberate, not an oversight.
 
 `start()` is called by `Service.run()` (after the pre-change state has been logged)
 and again by `_check_fan_mode()` on every recovery; `end()` is called once at
@@ -1062,7 +1077,7 @@ Top-level snapshot keys:
 | `start_time` | `float` | Unix timestamp when `Service.run()` started |
 | `fan_mode_enforced_count` | `int` | Times fan control was re-acquired after an observed loss (FULL mode drift, or a cleared X14 manual mode flag). A BMC that could not be read is re-acquired too, but not counted. |
 | `bmc` | `dict` | BMC identity (manufacturer, product, firmware, platform) |
-| `fan_mode` | `dict` | Last observed fan mode id, name, and age in seconds |
+| `fan_mode` | `dict` | The control verdict and the observed fan mode. `control_held` and `control_detail` come from the last `ControlStatus`; `id`, `name` and `age_s` describe the observed base fan mode; `enforce_fan_mode` and `enforces_full_mode` are static configuration |
 | `fan_controllers` | `list` | One entry per controller (see below) |
 | `zones` | `dict` | Zone → `{"applied_level_pct": N}` after arbitration |
 
@@ -1122,7 +1137,8 @@ header. Label values are escaped per the exposition format spec
 |---|---|---|
 | `smfc_up` | `version` | Liveness sentinel (value always 1) |
 | `smfc_start_time_seconds` | — | Unix start time (dashboards compute uptime) |
-| `smfc_bmc_info` | `product_name, firmware_version, manufacturer_name` | BMC identity (value always 1) |
+| `smfc_bmc_info` | `product_name, firmware_version, manufacturer_name, enforces_full_mode` | BMC identity (value always 1). `enforces_full_mode` is a platform constant, so it rides with the other static facts |
+| `smfc_fan_control_held` | — | 1 while `smfc` is in control of the fans, 0 after a loss |
 | `smfc_fan_mode_enforced_total` | — | Counter of fan control re-acquisitions after an observed loss |
 | `smfc_controller_zone` | `section, type, zone` | Controller-to-zone mapping (value always 1) |
 | `smfc_controller_temperature_celsius` | `section, type, zone` | Per-controller aggregated temperature |

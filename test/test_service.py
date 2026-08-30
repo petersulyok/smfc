@@ -1290,7 +1290,36 @@ class TestService:
         service.last_fan_mode = Ipmi.FULL_MODE
         service.last_fan_mode_at = time.monotonic()
         service.fan_mode_enforced_count = 0
+        service.last_control_held = True
+        service.last_control_detail = ""
         return service
+
+    def test_check_fan_mode_caches_the_control_verdict(self, mocker: MockerFixture):
+        """Positive unit test for Service._check_fan_mode() method. It contains the following steps:
+        - mock print(), Ipmi.set_fan_level(), and stub the platform to report a confirmed ControlState.LOST
+          on a platform that does not hold FULL fan mode, with Platform.start() raising on the re-acquire
+        - build a Service via _make_service_for_fan_mode_check() with enforce=True
+        - call Service._check_fan_mode()
+        - ASSERT: service.last_control_held is False, so /snapshot and /metrics can report the loss
+        - ASSERT: service.last_control_detail carries the reason the platform gave, verbatim
+        - stub the platform to report ControlState.OK on the next poll and call Service._check_fan_mode() again
+        - ASSERT: service.last_control_held is True again after control was regained
+        - ASSERT: service.last_control_detail is empty again, because there is no loss left to explain
+        """
+        f = "TestService.test_check_fan_mode_caches_the_control_verdict"
+        detail = "Manual fan mode was cleared in IPMI zone(s) [1]"
+        service = self._make_service_for_fan_mode_check(mocker, enforce=True)
+        service.ipmi.platform.check_fan_mode.return_value = ControlStatus(ControlState.LOST, detail, 0)
+        service.ipmi.platform.start.side_effect = RuntimeError("BMC is busy")
+        mocker.patch("smfc.Ipmi.set_fan_level", MagicMock())
+        service._check_fan_mode()  # pylint: disable=protected-access
+        assert service.last_control_held is False, f"{f}: a lost control state must be cached"
+        assert service.last_control_detail == detail, f"{f}: the reason must be cached verbatim"
+        service.ipmi.platform.start.side_effect = None
+        service.ipmi.platform.check_fan_mode.return_value = ControlStatus(ControlState.OK, "", 0)
+        service._check_fan_mode()  # pylint: disable=protected-access
+        assert service.last_control_held is True, f"{f}: regained control must be cached"
+        assert service.last_control_detail == "", f"{f}: no reason should remain after recovery"
 
     def test_check_fan_mode_no_drift(self, mocker: MockerFixture):
         """Positive unit test for Service._check_fan_mode() method. It contains the following steps:

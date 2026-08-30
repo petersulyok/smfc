@@ -1575,17 +1575,28 @@ class TestFormatReportFromSnapshot:
         assert " 50 %" in out
         assert "Status" not in out
 
-    def test_non_full_fan_mode_renders_red(self) -> None:
+    def test_lost_fan_control_renders_red(self) -> None:
         """Positive unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
-        - build a sample snapshot dict and override fan_mode to STANDARD (id=0)
+        - build a sample snapshot dict and override fan_mode to a lost control state on a drifted STANDARD mode
         - call _format_report_from_snapshot() with use_color=True
-        - ASSERT: RED escape sequence appears (non-FULL mode is emphasized in red)
+        - ASSERT: RED escape sequence appears, because the service reported that control was lost
+        - ASSERT: the reason the service gave is shown after the fan mode line
+        - build a second snapshot where the same STANDARD mode is reported with control held
+        - call _format_report_from_snapshot() with use_color=True
+        - ASSERT: no RED escape sequence appears, because the verdict decides the colour, not the mode value
         """
+        detail = "BMC fan mode drifted from FULL to STANDARD"
         snap = _sample_snapshot_dict()
-        snap["fan_mode"] = {"id": 0, "name": "STANDARD", "age_s": 0.5}
+        snap["fan_mode"] = {"id": 0, "name": "STANDARD", "age_s": 0.5, "control_held": False,
+                            "control_detail": detail}
         out = client._format_report_from_snapshot(snap, "x.conf", use_color=True)
-        # The label is wrapped in RED (not GREEN) when mode != FULL.
+        # The label is wrapped in RED (not GREEN) when the service is not in control of the fans.
         assert client.RED in out
+        assert detail in out
+        snap["fan_mode"] = {"id": 0, "name": "STANDARD", "age_s": 0.5, "control_held": True,
+                            "control_detail": ""}
+        out = client._format_report_from_snapshot(snap, "x.conf", use_color=True)
+        assert client.RED not in out
 
     def test_standby_states_shorter_than_devices_truncates(self) -> None:
         """Negative unit test for smfc.client._format_report_from_snapshot() function. It contains the following steps:
