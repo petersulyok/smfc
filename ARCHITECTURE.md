@@ -73,6 +73,7 @@ src/smfc/
 ├── nvmefc.py             NvmeFc — NVMe HWMON source
 ├── gpufc.py              GpuFc  — Nvidia/AMD GPU source via SMI tools
 ├── npufc.py              NpuFc  — Ascend NPU source via npu-smi
+├── pcifc.py              PciFc  — generic PCI device HWMON source (pyudev discovery)
 ├── constfc.py            ConstFc — constant-level controller (no temp source)
 ├── snapshot.py           build_snapshot() — serialize live service state to JSON
 ├── exporter.py           Exporter — HTTP server for /snapshot, /metrics, /healthz
@@ -117,6 +118,7 @@ classDiagram
         +NvmeConfig[] nvme
         +GpuConfig[] gpu
         +NpuConfig[] npu
+        +PciConfig[] pci
         +ConstConfig[] const
     }
     class ExporterConfig {
@@ -167,6 +169,7 @@ classDiagram
     class NvmeFc
     class GpuFc
     class NpuFc
+    class PciFc
     class ConstFc {
         +run()
     }
@@ -189,6 +192,7 @@ classDiagram
     FanController <|-- NvmeFc
     FanController <|-- GpuFc
     FanController <|-- NpuFc
+    FanController <|-- PciFc
 ```
 
 Key relationships:
@@ -213,7 +217,7 @@ want":
 
 1. Reads the INI file via `configparser.ConfigParser`.
 2. Builds an `IpmiConfig` dataclass from `[Ipmi]`.
-3. For each controller family (`CPU`, `HD`, `NVME`, `GPU`, `NPU`, `CONST`) it scans
+3. For each controller family (`CPU`, `HD`, `NVME`, `GPU`, `NPU`, `PCI`, `CONST`) it scans
    the configuration for the base section (e.g. `[CPU]`) **plus** all numbered
    variants (`[CPU:0]`, `[CPU:1]`, …). Each section yields its own dataclass
    instance — this is how *multiple fan curves per controller type* are
@@ -231,6 +235,7 @@ config.hd     : List[HdConfig]
 config.nvme   : List[NvmeConfig]
 config.gpu    : List[GpuConfig]
 config.npu    : List[NpuConfig]
+config.pci    : List[PciConfig]
 config.const  : List[ConstConfig]
 ```
 
@@ -963,7 +968,7 @@ This is the trickiest piece of the architecture and deserves its own section.
 
 ### 9.1 Why it exists
 
-The user can point any combination of CPU/HD/NVME/GPU/NPU/CONST controllers at
+The user can point any combination of CPU/HD/NVME/GPU/NPU/PCI/CONST controllers at
 any IPMI zone. If two *different* controller types end up writing to the
 same zone, they would fight each other on every poll. The arbiter solves
 this by enforcing one global rule per shared zone:
@@ -1328,8 +1333,8 @@ main()                                          (cmd.py)
     ├── Log(level, output)                      (log.py)
     ├── Config(path)                            (config.py)
     │   ├── _parse_ipmi
-    │   ├── _parse_*_sections (×6)
-    │   └── _validate_no_duplicate_zones (×6)
+    │   ├── _parse_*_sections (×7)
+    │   └── _validate_no_duplicate_zones (×7)
     ├── check_dependencies()
     ├── Ipmi(log, config.ipmi, sudo)            (ipmi.py)
     │   ├── _exec_ipmitool(["sdr"]) loop        — wait for BMC
@@ -1337,7 +1342,7 @@ main()                                          (cmd.py)
     │   ├── create_platform(...)                (platform_factory.py)
     ├── platform.start(zones)                   — acquire fan control (FULL mode, or X14 manual mode)
     ├── pyudev.Context()
-    ├── for cfg in config.cpu / hd / nvme / gpu / npu / const if cfg.enabled:
+    ├── for cfg in config.cpu / hd / nvme / gpu / npu / pci / const if cfg.enabled:
     │     instantiate fan controller (calls get_temp once)
     ├── _check_shared_zones()                   — mark deferred_apply
     ├── _start_exporter()                       — Exporter(bind_addr, port, snapshot_fn)
@@ -1533,8 +1538,8 @@ Non-obvious constraints:
 - `test/test_*.py` — unit tests structured per source file; the
   `MockDevices` / `factory_mockdevice` helpers in `test/test_mocks.py`
   illustrate how the udev path is exercised without real hardware.
-- `config/samples/*.conf` — ten canonical configurations covering the
+- `config/samples/*.conf` — eleven canonical configurations covering the
   common deployment shapes (CPU-only, HD-only, mixed, multi-curve, GPU,
-  NPU, CONST-only, X9, X10QBi, advanced control function).
+  NPU, PCI, CONST-only, X9, X10QBi, advanced control function).
 - `README.md` chapters 6 (IPMI thresholds), 10 (configuration), 11 (run).
 - `DEVELOPMENT.md` for the contributor workflow.

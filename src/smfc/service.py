@@ -18,6 +18,7 @@ from smfc.exporter import Exporter
 from smfc.fancontroller import FanController
 from smfc.gpufc import GpuFc
 from smfc.npufc import NpuFc
+from smfc.pcifc import PciFc
 from smfc.cpufc import CpuFc
 from smfc.hdfc import HdFc
 from smfc.nvmefc import NvmeFc
@@ -451,7 +452,7 @@ class Service:
                                         f"{self.ipmi.get_fan_mode_name(self.last_fan_mode)} ({self.last_fan_mode})")
             configured_zones: Set[int] = set()
             for cfg_list in (self.config.cpu, self.config.hd, self.config.nvme,
-                             self.config.gpu, self.config.npu, self.config.const):
+                             self.config.gpu, self.config.npu, self.config.pci, self.config.const):
                 for cfg in cfg_list:
                     if cfg.enabled:
                         configured_zones.update(cfg.ipmi_zone)
@@ -510,6 +511,10 @@ class Service:
             if cfg.enabled:
                 self.log.msg(Log.LOG_DEBUG, f"NPU fan controller [{cfg.section}] enabled")
                 self.controllers.append(NpuFc(self.log, self.ipmi, cfg))
+        for cfg in self.config.pci:
+            if cfg.enabled:
+                self.log.msg(Log.LOG_DEBUG, f"PCI fan controller [{cfg.section}] enabled")
+                self.controllers.append(PciFc(self.log, self.udevc, self.ipmi, cfg))
         for cfg in self.config.const:
             if cfg.enabled:
                 self.log.msg(Log.LOG_DEBUG, f"CONST fan controller [{cfg.section}] enabled")

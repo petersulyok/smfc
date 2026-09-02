@@ -7,7 +7,8 @@
 #   `Config.DV_*` constants, so a test can write e.g. `create_cpu_config(steps=4)` without touching a
 #   real config file. The module is intentionally stateless: no temp dirs, no fixtures, no lifecycle.
 #
-from smfc.config import (Config, IpmiConfig, CpuConfig, HdConfig, NvmeConfig, GpuConfig, NpuConfig, ConstConfig)
+from smfc.config import (Config, IpmiConfig, CpuConfig, HdConfig, NvmeConfig, GpuConfig, NpuConfig, PciConfig,
+                         ConstConfig)
 
 
 def create_ipmi_config(command=Config.DV_IPMI_COMMAND, fan_mode_delay=Config.DV_IPMI_FAN_MODE_DELAY,
@@ -148,6 +149,47 @@ def create_nvme_config(section="NVME", enabled=False, ipmi_zone=None, temp_calc=
                       error_tolerance=error_tolerance,
                       nvme_names=nvme_names if nvme_names is not None else [],
                       control_function=control_function if control_function is not None else [])
+
+
+def create_pci_config(section="PCI", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_MAX,
+                      steps=Config.DV_PCI_STEPS, sensitivity=Config.DV_PCI_SENSITIVITY,
+                      polling=Config.DV_PCI_POLLING, min_temp=Config.DV_PCI_MIN_TEMP,
+                      max_temp=Config.DV_PCI_MAX_TEMP, min_level=Config.DV_PCI_MIN_LEVEL,
+                      max_level=Config.DV_PCI_MAX_LEVEL, smoothing=Config.DV_PCI_SMOOTHING,
+                      error_tolerance=Config.DV_PCI_ERROR_TOLERANCE, pci_address=None, pci_id="",
+                      pci_driver="", temp_sensor=Config.DV_PCI_TEMP_SENSOR, control_function=None):
+    """Factory function to create PciConfig instances for testing without needing a config file.
+
+    Args:
+        section (str): section name (default: "PCI")
+        enabled (bool): fan controller enabled flag (default: False)
+        ipmi_zone (list): IPMI zones (default: [1])
+        temp_calc (int): temperature calculation method (default: 2 = max)
+        steps (int): discrete steps (default: 6)
+        sensitivity (float): temperature change sensitivity (default: 2.0)
+        polling (float): polling interval (default: 2.0)
+        min_temp (float): minimum temperature (default: 30.0)
+        max_temp (float): maximum temperature (default: 60.0)
+        min_level (int): minimum fan level (default: 35)
+        max_level (int): maximum fan level (default: 100)
+        smoothing (int): smoothing window size (default: 1)
+        error_tolerance (int): consecutive failed temperature reads tolerated per device (default: 3)
+        pci_address (list): PCI slot addresses (default: [])
+        pci_id (str): PCI vendor:device ID (default: "")
+        pci_driver (str): PCI driver name (default: "")
+        temp_sensor (int): HWMON sensor index (default: 1)
+
+    Returns:
+        PciConfig: configured PciConfig instance
+    """
+    zones = ipmi_zone if ipmi_zone is not None else [Config.HD_ZONE]
+    return PciConfig(section=section, enabled=enabled, ipmi_zone=zones,
+                     temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
+                     max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
+                     error_tolerance=error_tolerance,
+                     pci_address=pci_address if pci_address is not None else [],
+                     pci_id=pci_id, pci_driver=pci_driver, temp_sensor=temp_sensor,
+                     control_function=control_function if control_function is not None else [])
 
 
 def create_gpu_config(section="GPU", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,

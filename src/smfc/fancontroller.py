@@ -142,6 +142,33 @@ class FanController:
             hwmon_device = None
         return (os.path.join(hwmon_device.sys_path, "temp1_input") if hwmon_device is not None else "")
 
+    @staticmethod
+    def get_hwmon_paths(udevc: Context, parent_dev: Device, sensor: int = 1) -> List[str]:
+        """Collect the HWMON temperature file of every HWMON device in the subtree of a parent device. The
+        `parent=` filter of pyudev is recursive, so a HWMON device attached directly to the parent and one
+        attached to a child of it are both found (e.g. a network card exposes its own HWMON device, while an
+        NVMe drive exposes it below the `nvme` device).
+
+        Args:
+            udevc (Context): pyudev Context
+            parent_dev (Device): parent device
+            sensor (int): HWMON sensor index to read (1 = temp1_input)
+
+        Returns:
+            List[str]: temperature file paths, sorted by HWMON device path (empty list if none found)
+
+        Raises:
+            RuntimeError: a HWMON device in the subtree has no temperature file with the given index
+        """
+        result: List[str] = []
+        hwmon_devices = sorted(udevc.list_devices(subsystem="hwmon", parent=parent_dev), key=lambda d: d.sys_path)
+        for hwmon_device in hwmon_devices:
+            path = os.path.join(hwmon_device.sys_path, f"temp{sensor}_input")
+            if not os.path.exists(path):
+                raise RuntimeError(f"'{hwmon_device.sys_path}' has no temp{sensor}_input file")
+            result.append(path)
+        return result
+
     def _get_nth_temp(self, index: int) -> float:
         """Get the temperature of the nth element in the hwmon list. Can be overridden by child classes.
 

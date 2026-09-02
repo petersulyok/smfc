@@ -171,6 +171,7 @@ contain several test classes grouped by feature.
 | `log.py`                         | `test_log.py`                | Init (valid/invalid level+output combos), level/output/message-type mapping, message routing to stdout/stderr/syslog |
 | `nvmefc.py`                      | `test_nvmefc.py`             | NVMe name validation, smartctl-based temps |
 | `npufc.py`                       | `test_npufc.py`              | `exec_smi` (args, rc, timeout), `npu-smi` chip-temperature parsing (single/multi-chip, non-zero-based ids), per-card hottest-chip selection, `temp_calc` aggregation, error-tolerance budget, `control_function=` mapping |
+| `pcifc.py`                       | `test_pcifc.py`              | PCI device resolution (`pci_address=` / `pci_id=` / `pci_driver=`), same-model validation, hwmon expansion (one card with several hwmon devices), unique device labels, `temp_sensor=` index handling, and `FanController.get_hwmon_paths()` |
 | `platform.py`                    | *(no dedicated module)*      | Exercised indirectly through `test_platforms.py` |
 | `platform_factory.py`            | `test_platform_factory.py`   | `create_platform` dispatch per platform name + fallback |
 | `service.py`                     | `test_service.py`            | Lifecycle (`exit_func`), dependency checks (CPU/HD/GPU/NPU/NVMe, AMD, `npu-smi` via PATH, invalid type), `run()` exit-code matrix, fan-mode drift enforcement, exporter start/stop wiring, **shared-zone arbitration** (`collect_desired_levels`, `apply_fan_levels` across single/shared/multi-zone, const winner/loser, caching, oscillation) |
@@ -178,8 +179,8 @@ contain several test classes grouped by feature.
 
 Behind that table sit two cross-cutting topics worth knowing about:
 
-- **Fan-controller subclasses share a contract.** The five `FanController`
-  subclasses (`CpuFc`, `HdFc`, `NvmeFc`, `GpuFc`, `NpuFc`) implement the same base
+- **Fan-controller subclasses share a contract.** The six `FanController`
+  subclasses (`CpuFc`, `HdFc`, `NvmeFc`, `GpuFc`, `NpuFc`, `PciFc`) implement the same base
   contract but differ in how they discover devices. The shared base
   behaviours (construction, `set_fan_level`, deferred levels, the smoothing
   algorithm, read-error tolerance, LUT construction) are tested *once* in

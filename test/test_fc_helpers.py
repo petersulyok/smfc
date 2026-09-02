@@ -17,13 +17,13 @@ from typing import Any, Dict, List, Optional
 import pyudev
 from mock import MagicMock
 from pytest_mock import MockerFixture
-from smfc import Log, Ipmi, CpuFc, HdFc, NvmeFc, GpuFc, NpuFc
+from smfc import Log, Ipmi, CpuFc, HdFc, NvmeFc, GpuFc, NpuFc, PciFc
 from smfc.fancontroller import FanController
 from smfc.config import Config
 from .test_config_builders import (create_cpu_config, create_hd_config, create_nvme_config, create_gpu_config,
-                                   create_npu_config)
+                                   create_npu_config, create_pci_config)
 from .test_fixtures import TestData
-from .test_mocks import MockDevices, factory_mockdevice
+from .test_mocks import MockDevices, MockPciDevice, factory_mockdevice
 
 # Config fields set on every FanController subclass; checked by assert_fc_base_contract().
 BASE_CONFIG_FIELDS = ["ipmi_zone", "temp_calc", "steps", "sensitivity", "polling", "min_temp", "max_temp",
@@ -121,6 +121,55 @@ def build_nvme_fc(mocker: MockerFixture, td: TestData, *, count: int, temps: Opt
     udevc = pyudev.Context.__new__(pyudev.Context)
     fc = NvmeFc(log, udevc, ipmi, cfg)
     return FcHarness(fc=fc, td=td, cfg=cfg, log=log, ipmi=ipmi)
+
+
+def build_pci_fc(mocker: MockerFixture, td: TestData, *, count: int, temps: Optional[List[float]] = None,
+                 hwmon_per_card: int = 1, pci_ids: Optional[List[str]] = None, addressing: str = "driver",
+                 **cfg_kwargs) -> FcHarness:
+    """Build a fully-initialized PciFc with the udev/hwmon discovery layer mocked.
+
+    Args:
+        mocker (MockerFixture): pytest-mock fixture
+        td (TestData): test data instance owning the temporary hwmon tree
+        count (int): number of PCI cards to materialize
+        temps (Optional[List[float]]): optional fixed per-hwmon-device temperatures
+        hwmon_per_card (int): number of hwmon devices per card (>1 emulates e.g. a SATA controller)
+        pci_ids (Optional[List[str]]): per-card PCI_ID values (default: the same model for every card)
+        addressing (str): which addressing parameter to fill: "driver", "id" or "address"
+        **cfg_kwargs: forwarded to create_pci_config()
+    Returns:
+        FcHarness: the controller plus the references used to build it
+    """
+    td.create_pci_data(count, temps, hwmon_per_card)
+    ids = pci_ids if pci_ids is not None else ["1D6A:07B1"] * count
+    devices = [MockPciDevice(a, pci_id=i) for a, i in zip(td.pci_addresses, ids)]
+    mocker.patch("builtins.print", MagicMock())
+    mocker.patch("pyudev.Context.list_devices", MagicMock(return_value=devices))
+    mocker.patch("smfc.pcifc.Devices.from_name", MagicMock(side_effect=devices))
+    # One call per card, each returning that card's hwmon temperature files.
+    per_card = [td.pci_files[i * hwmon_per_card:(i + 1) * hwmon_per_card] for i in range(count)]
+    mocker.patch("smfc.FanController.get_hwmon_paths", MagicMock(side_effect=per_card))
+    if addressing == "address":
+        cfg_kwargs.setdefault("pci_address", list(td.pci_addresses))
+    elif addressing == "id":
+        cfg_kwargs.setdefault("pci_id", "1d6a:07b1")
+    else:
+        cfg_kwargs.setdefault("pci_driver", "atlantic")
+    cfg = create_pci_config(enabled=True, **cfg_kwargs)
+    log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+    ipmi = Ipmi.__new__(Ipmi)
+    udevc = pyudev.Context.__new__(pyudev.Context)
+    fc = PciFc(log, udevc, ipmi, cfg)
+    return FcHarness(fc=fc, td=td, cfg=cfg, log=log, ipmi=ipmi)
+
+
+def make_bare_pci_fc(td: TestData) -> PciFc:
+    """Build an uninitialized PciFc with only the attributes _get_nth_temp() needs (no udev/super().__init__)."""
+    fc = PciFc.__new__(PciFc)
+    fc.hwmon_path = td.pci_files
+    fc.pci_devices = list(td.pci_addresses)
+    fc.device_labels = list(td.pci_addresses)
+    return fc
 
 
 def build_hd_fc(mocker: MockerFixture, td: TestData, *, count: int, sudo: bool = False,

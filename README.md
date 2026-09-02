@@ -46,7 +46,7 @@ can be adjusted with IPMI raw commands (read [more details here](https://forums.
 
 Key features:
 
- - Six independent fan controllers (CPU, HD, NVME, GPU, NPU, CONST) that can be enabled/disabled and combined freely
+ - Seven independent fan controllers (CPU, HD, NVME, GPU, NPU, PCI, CONST) that can be enabled/disabled and combined freely
  - Linear user-defined control function mapping a temperature interval to a fan level interval with configurable discrete steps
  - Advanced multi-segment user-defined control function (via `control_function=`) for arbitrary piecewise-linear fan curves
  - Support for multiple IPMI zones with automatic shared zone arbitration (highest fan level wins)
@@ -59,6 +59,7 @@ Key features:
  - Support for SATA, SAS/SCSI, and NVMe disks with automatic HWMON/smartctl fallback
  - Nvidia or AMD GPU temperature monitoring via `nvidia-smi` or `rocm-smi`
  - Ascend NPU temperature monitoring via `npu-smi`
+ - Generic PCI device temperature monitoring via HWMON, with the cards named by slot address, model ID or driver
  - Platform abstraction for different Supermicro motherboard generations (X9, X10-X13/H10-H13, X14) and edge cases (X10QBi)
  - Remote IPMI access via `remote_parameters=` for VM setups (e.g. TrueNAS on Proxmox with PCI passthrough)
  - Distributed as a `systemd` service, Docker image, DEB/RPM/AUR package, or PyPI package
@@ -89,6 +90,7 @@ In `smfc`, the following fan controllers are implemented:
 | NVME           | NVMe SSDs               | NVMe device names must be specified in `[NVME] nvme_names=` parameter | 1 (Peripheral zone) |
 | GPU            | Nvidia/AMD GPUs         | GPU indices must be specified in `[GPU] gpu_device_ids=` parameter    | 1 (Peripheral zone) |
 | NPU            | Ascend NPUs             | NPU card IDs must be specified in `[NPU] npu_device_ids=` parameter   | 1 (Peripheral zone) |
+| PCI            | PCI device HWMON        | PCI device(s) must be specified in `[PCI] pci_address=`, `pci_id=` or `pci_driver=` | 1 (Peripheral zone) |
 | CONST          | None                    | Constant fan level can be specified in `[CONST] level=` parameter     | 1 (Peripheral zone) |
 
 These fan controllers can be enabled and disabled independently. They can be used in a free combination with one or more IPMI zones. Multiple fan controllers
@@ -104,10 +106,105 @@ In `smfc`, a temperature-driven fan controller implements the following control 
 
 <img src="https://github.com/petersulyok/smfc/raw/main/doc/smfc_overview.png" align="center" width="700">
 
-If the temperature source has multiple instances (e.g. multiple CPUs, HDDs, NVMEs, GPUs or NPU cards) then the user can configure a calculation method (i.e. minimum, average, maximum) for the calculation of the final temperature value (see `temp_calc=` parameter).
+If the temperature source has multiple instances (e.g. multiple CPUs, HDDs, NVMEs, GPUs, NPU cards or PCI devices) then the user can configure a calculation method (i.e. minimum, average, maximum) for the calculation of the final temperature value (see `temp_calc=` parameter).
 
 Please note that `smfc` will set all fans back to 100% speed at service termination to avoid overheating (see
 [chapter 1.6](https://github.com/petersulyok/smfc/blob/main/README.md#16-service-termination))!
+
+The chapters below describe each fan controller: which devices it drives, how it reads their temperature, and what you need to know before you enable it.
+
+Every temperature-driven fan controller shares the following parameters, so the chapters below list only the controller-specific ones:
+
+ - `enabled=` -- whether the fan controller runs at all
+ - `ipmi_zone=` -- the IPMI zone(s) the controller drives
+ - `temp_calc=` -- how the temperatures of several devices are reduced to one value (minimum, average, maximum)
+ - `steps=` -- the number of discrete steps in the temperature-to-level mapping
+ - `sensitivity=` -- the temperature change needed before the controller reacts
+ - `polling=` -- how often the temperature is read
+ - `min_temp=` / `max_temp=` -- the temperature interval the controller steers in
+ - `min_level=` / `max_level=` -- the fan level interval the temperature interval is mapped to
+ - `control_function=` -- an arbitrary piecewise-linear curve that replaces the four parameters above (see [chapter 2](https://github.com/petersulyok/smfc/blob/main/README.md#2-user-defined-control-function))
+ - `smoothing=` -- the moving average window size that damps temperature oscillation
+ - `error_tolerance=` -- how many failed temperature reads per device are tolerated
+
+The CONST fan controller reads no temperature, so it uses `enabled=`, `ipmi_zone=`, `polling=` and `level=` only.
+
+##### 1.2.1 CPU fan controller
+
+| | |
+|---|---|
+| **Target devices** | Intel and AMD CPUs. On a multi-socket board every socket is a separate device, labelled `cpu0`, `cpu1`, and so on. |
+| **Temperature source** | The Linux kernel HWMON interface, through the `coretemp` (Intel) or `k10temp` (AMD) kernel module. |
+| **Device identification** | Automatic. `smfc` finds the CPUs in the udev database, so there is no device parameter. |
+| **Other parameters** | None |
+| **Docker** | Supported in every image. The `coretemp` or `k10temp` kernel module must be loaded on the **host**. |
+| **Need to know** | • The matching kernel module must be loaded. `smfc` checks it at startup and stops with an error if neither `coretemp` nor `k10temp` is present.<br>• The default IPMI zone is 0, the CPU zone. Every other controller defaults to zone 1.<br>• CPU temperature moves fast, so the defaults are a wide window (`min_temp=30.0`, `max_temp=60.0`) with a fast poll (`polling=2`) and a coarse `sensitivity=3.0` that keeps the fans from chasing every spike. |
+
+##### 1.2.2 HD fan controller
+
+| | |
+|---|---|
+| **Target devices** | SATA and SAS/SCSI hard disks and SSDs. NVMe SSDs are **not** accepted here -- use the NVME fan controller for those. |
+| **Temperature source** | The `drivetemp` kernel module through HWMON for SATA disks, and the `smartctl` command for SAS/SCSI disks. `smfc` decides per disk and falls back to `smartctl` automatically when a disk has no HWMON device. |
+| **Device identification** | `hd_names=` -- use the stable `/dev/disk/by-id/...` names |
+| **Other parameters** | `smartctl_path=`, `standby_guard_enabled=`, `standby_hd_limit=` |
+| **Docker** | Supported in every image. All three ship `smartctl`, so SAS/SCSI disks work as they do on the host. SATA disks need the `drivetemp` kernel module loaded on the **host**; without it `smfc` falls back to `smartctl` for them too. |
+| **Need to know** | • HWMON is the faster path, and it can read the temperature while the disk sleeps. See [chapter 4](https://github.com/petersulyok/smfc/blob/main/README.md#4-hard-disk-compatibility) for the full compatibility table.<br>• Disk types can be mixed in `hd_names=`, but the *Standby guard* feature is then not supported. See [chapter 3](https://github.com/petersulyok/smfc/blob/main/README.md#3-standby-guard).<br>• `smartctl` usually needs root. Run the service as root, or start `smfc` with the `-s` command-line option to prefix the calls with `sudo`.<br>• This is the slowest controller. Its `polling=10` default exists because a `smartctl` call per disk is expensive, and startup time grows with the number of disks.<br>• Disks are the narrowest temperature window of all controllers (`min_temp=32.0`, `max_temp=46.0`), because a disk reaches its limit far below a CPU. |
+
+##### 1.2.3 NVME fan controller
+
+| | |
+|---|---|
+| **Target devices** | NVMe SSDs. |
+| **Temperature source** | The Linux kernel HWMON interface. It reads `temp1_input`, which the NVMe standard defines as the `Composite` temperature -- the value the drive itself uses for thermal protection. |
+| **Device identification** | `nvme_names=` -- use the stable `/dev/disk/by-id/nvme-...` names |
+| **Other parameters** | None |
+| **Docker** | Supported in every image. |
+| **Need to know** | • No kernel module has to be loaded. The kernel exposes the sensor as soon as the drive is present.<br>• A drive can expose more sensors than `Composite`, but this controller always reads `Composite`.<br>• NVMe drives run hotter than SATA disks, so the defaults are `min_temp=35.0` and `max_temp=70.0`. |
+
+##### 1.2.4 GPU fan controller
+
+| | |
+|---|---|
+| **Target devices** | Nvidia and AMD GPUs. |
+| **Temperature source** | The `nvidia-smi` or the `rocm-smi` command. No kernel module and no udev lookup are involved. |
+| **Device identification** | `gpu_type=` (`nvidia` or `amd`) and `gpu_device_ids=` -- the indices of the cards |
+| **Other parameters** | `nvidia_smi_path=`, `rocm_smi_path=`, `amd_temp_sensor=` (`0`-junction, `1`-edge, `2`-memory) |
+| **Docker** | The standard image does **not** support it. Use the `-nvidia` or the `-amd` image variant, which needs the NVIDIA Container Toolkit or the `amdgpu` driver on the host. See [DOCKER.md](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md). |
+| **Need to know** | • The matching command must be installed. `smfc` checks it at startup.<br>• One SMI call per polling window covers **every** index of the section, not one call per card. So a failed call affects all GPUs of the section at once, and their `error_tolerance` budgets advance in lockstep.<br>• `amd_temp_sensor=` applies to AMD cards only. Nvidia cards report one temperature. |
+
+##### 1.2.5 NPU fan controller
+
+| | |
+|---|---|
+| **Target devices** | Huawei Ascend NPU cards, e.g. the Atlas 300I Duo. |
+| **Temperature source** | The `npu-smi` command. |
+| **Device identification** | `npu_device_ids=` -- the `-i` card IDs reported by `npu-smi info -m` |
+| **Other parameters** | `npu_smi_path=`, `npu_smi_timeout=` |
+| **Docker** | **Not supported in any image.** `npu-smi` is part of the Ascend driver on the host and is not in the images, so an enabled `[NPU]` section stops the container at start-up. Run `smfc` as a `systemd` service on the host instead. See [DOCKER.md](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md). |
+| **Need to know** | • The card IDs may not start from 0. Read them with `npu-smi info -m` instead of assuming.<br>• The controlled unit is a **card**, not a chip. On a multi-chip card the hottest chip drives the card temperature, so a dual-chip card still counts as one unit.<br>• The card also reports an MCU temperature. `smfc` excludes it on purpose: the MCU is a board sensor that barely follows the workload, and counting it would keep the fans up at idle.<br>• `npu-smi` is slow, about 1.5 seconds per call, which is why `polling=5` is the default. `npu_smi_timeout=` bounds a hung call.<br>• Ascend cards tolerate high temperatures, so the default window is `min_temp=40.0` to `max_temp=85.0`. |
+
+##### 1.2.6 PCI fan controller
+
+| | |
+|---|---|
+| **Target devices** | Any PCI device that exposes a HWMON temperature and has no fan controller of its own, e.g. a 10 Gbit network card. |
+| **Temperature source** | The Linux kernel HWMON interface. The devices are discovered in the udev database, and `smfc` searches the whole subtree of each card, so a HWMON device attached below the card is found too. |
+| **Device identification** | Exactly **one** of `pci_address=` (a list of PCI slot addresses, e.g. `0000:05:00.0`), `pci_id=` (one `vendor:device` ID, e.g. `1d6a:07b1`) or `pci_driver=` (one driver name, e.g. `atlantic`) |
+| **Other parameters** | `temp_sensor=` |
+| **Docker** | Supported in every image. The driver of the card must be loaded on the **host**, like for the other HWMON-based controllers. |
+| **Need to know** | • The controlled unit is a **HWMON device**, not a card. A card that exposes several HWMON devices counts as several units, and `temp_calc=` aggregates across all of them. A SATA controller with three disks behind it is one card but three units.<br>• `pci_driver=` is the wildcard form: it selects every device the driver serves, so a second card of the same kind joins the section at the next `smfc` restart with no configuration change.<br>• All addresses of a `pci_address=` list must be the same model. `smfc` stops at startup otherwise.<br>• **One section covers one kind of PCI device**, because a section has one temperature window and one `temp_sensor=`. Two kinds, e.g. a network card and a storage controller, need two sections, and two sections of the same controller need two different IPMI zones (see [chapter 1.4](https://github.com/petersulyok/smfc/blob/main/README.md#14-multiple-fan-curves-per-ipmi-zone)).<br>• A card can expose several sensors, and `temp_sensor=` picks one by index. An Aquantia AQC107 reports the PHY temperature in `temp1_input` and the MAC temperature in `temp2_input`. List the labels of your machine with `cat /sys/class/hwmon/hwmon*/temp*_label`.<br>• Not every PCI device has a HWMON temperature. The proprietary Nvidia driver exposes none (use the GPU fan controller), and some Wi-Fi cards report through the `thermal` subsystem instead, which is outside the PCI tree. `smfc` stops at startup and names the device in that case.<br>• The default `temp_calc=2` (maximum) differs from every other controller, so the hottest card of the section drives the fans. |
+
+##### 1.2.7 CONST fan controller
+
+| | |
+|---|---|
+| **Target devices** | None. This controller has no temperature source. |
+| **Temperature source** | None. It applies a fixed fan level to its IPMI zone(s). |
+| **Device identification** | None. This controller drives no device. |
+| **Other parameters** | `level=` -- the constant fan level |
+| **Docker** | Supported in every image. It reads no sensor, but it drives the fans through `ipmitool` like every other controller, so the container still needs the `/dev` mount and admin privilege, or `[Ipmi] remote_parameters=`. |
+| **Need to know** | • Its level acts as a **guaranteed minimum** on a shared zone. With `[CONST] level=40` on zone 1, that zone never drops below 40%, even when every temperature-driven controller asks for less.<br>• It ignores the parameters of the temperature-driven controllers (`temp_calc=`, `steps=`, `min_temp=`, `control_function=` and the rest), because it never reads a temperature.<br>• It is the only way to drive a zone that has no sensor at all, e.g. fans cooling a passive backplane. |
 
 #### 1.3 Shared IPMI zone arbitration
 When multiple fan controllers are assigned to the same IPMI zone, `smfc` detects this at startup and automatically switches to a two-phase arbitration loop for those controllers. Controllers on non-shared zones are not affected -- they apply their fan levels directly.
@@ -328,7 +425,7 @@ Some motherboards require platform-specific IPMI raw commands for fan control. `
 
 | `platform_name=` parameter | Platform                                     | Notes                                                                                            |
 |----------------------------|----------------------------------------------|--------------------------------------------------------------------------------------------------|
-| `auto`                     | automatic discovery based on BMC information | Reads BMC product name; selects `generic_x14` if it starts with `X14` or `H14`, `X10QBi` if it starts with `X10QBi`, `generic_x9` if it starts with `X9`, otherwise falls back to `generic` |
+| `auto`                     | automatic discovery based on BMC information | Reads BMC product name; selects `generic_x14` if it starts with `X14` or `H14`, `X10QBi` if it starts with `X10QBi`, `generic_x9` if it starts with `X9`, otherwise falls back to `generic`. If the BMC reports no usable product name (e.g. `Unknown`), no prefix matches and the fallback is `generic` -- set `platform_name=` by hand then. |
 | `generic`                  | Generic X10-X13/H10-H13 Supermicro boards    | Uses standard Supermicro IPMI raw commands                                                       |
 | `generic_x9`               | Generic Supermicro X9 boards                 | 4 fan zones (0x10-0x13), duty cycle 0-255 scale                                                  |
 | `generic_x14`              | Supermicro X14 **and** H14 boards            | A platform *family* covering both 14th generation BMC firmware stacks; the stack is detected at startup, not guessed from the board name (see [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md)). Up to 5 fan zones (0-4) — `smfc` discovers how many the board really has — duty cycle 0-100%, and neither stack uses `FULL` fan mode — see the notes below. **Experimental**, see [issue #98](https://github.com/petersulyok/smfc/issues/98), [discussion #106](https://github.com/petersulyok/smfc/discussions/106) |
@@ -340,6 +437,7 @@ Some X9 motherboards are supported (since `smfc v5.2.0`) via the `generic_x9` pl
 
 X14/H14 motherboard support (`generic_x14`) was introduced in `smfc v6.0.0` and is currently **in testing phase**. The 14th generation ships two BMC firmware stacks, OpenBMC and ATEN; `smfc` detects the stack at startup and it cannot be forced from the configuration file. [doc/X14H14_MANUAL_FANCONTROL.md](doc/X14H14_MANUAL_FANCONTROL.md) covers both stacks, the board-to-stack table, and every raw command involved. What the split means for your configuration:
 
+- 🔴 **`platform_name=auto` fails if the BMC reports no product name.** Auto-detection matches the `X14`/`H14` prefix of the BMC product name. Some boards answer `ipmitool bmc info` with `Product Name : Unknown`, so no prefix matches, `smfc` falls back to `generic`, and it then drives the fans with commands these boards do not use -- it reports that it took control while the BMC keeps running its own curve. Check the product name with `ipmitool bmc info`; if it is `Unknown` or empty, set `platform_name=generic_x14` by hand.
 - **`FULL` fan mode is not used.** X14/H14 boards have their own manual fan control mode, and `smfc` holds that mode instead. `enforce_fan_mode=` therefore counts the drift of that manual mode, not of the fan mode.
 - 🔴 **`exit_level=` behaves differently on these boards.** See [chapter 1.6](https://github.com/petersulyok/smfc/blob/main/README.md#16-service-termination).
 
@@ -723,6 +821,7 @@ fan_level_delay=2
 # Supermicro platform (string, default='auto')
 # Valid platform values:
 #  auto         - automatic discovery based on BMC information
+#                 (an X14/H14 board reporting an unknown product name needs generic_x14 explicitly)
 #  generic      - Generic Supermicro X10-X13/H10-H13 platform
 #  generic_x9   - Generic Supermicro X9 platform
 #  generic_x14  - Supermicro X14/H14 platform family (the BMC firmware stack -
@@ -744,7 +843,7 @@ exit_level=100
 [CPU]
 # Fan controller enabled (bool, default=0/false)
 enabled=1
-# IPMI zone(s) (comma- or space-separated list of int, default=0))
+# IPMI zone(s) (comma- or space-separated list of int, default=0)
 ipmi_zone=0
 # Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
@@ -779,7 +878,7 @@ error_tolerance=3
 [HD]
 # Fan controller enabled (bool, default=0/false)
 enabled=1
-# IPMI zone(s) (comma- or space-separated list of int, default=1))
+# IPMI zone(s) (comma- or space-separated list of int, default=1)
 ipmi_zone=1
 # Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
@@ -826,7 +925,7 @@ standby_hd_limit=1
 [NVME]
 # Fan controller enabled (bool, default=0/false)
 enabled=0
-# IPMI zone(s) (comma- or space-separated list of int, default=1))
+# IPMI zone(s) (comma- or space-separated list of int, default=1)
 ipmi_zone=1
 # Calculation of NVMe temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
@@ -866,7 +965,7 @@ nvme_names=
 [GPU]
 # Fan controller enabled (bool, default=0/false)
 enabled=0
-# IPMI zone(s) (comma- or space-separated list of int, default=1))
+# IPMI zone(s) (comma- or space-separated list of int, default=1)
 ipmi_zone=1
 # GPU type (str, ['nvidia', 'amd'], default=nvidia)
 gpu_type=nvidia
@@ -913,7 +1012,7 @@ rocm_smi_path=/usr/bin/rocm-smi
 [NPU]
 # Fan controller enabled (bool, default=0/false)
 enabled=0
-# IPMI zone(s) (comma- or space-separated list of int, default=1))
+# IPMI zone(s) (comma- or space-separated list of int, default=1)
 ipmi_zone=1
 # Calculation of NPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
@@ -950,11 +1049,57 @@ npu_smi_path=npu-smi
 npu_smi_timeout=15.0
 
 
+# PCI fan controller: works based on the HWMON temperature of PCI device(s).
+[PCI]
+# Fan controller enabled (bool, default=0/false)
+enabled=0
+# IPMI zone(s) (comma- or space-separated list of int, default=1)
+ipmi_zone=1
+# Calculation of PCI temperatures (int, [0-minimum, 1-average, 2-maximum], default=2)
+temp_calc=2
+# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
+sensitivity=2.0
+# Polling interval for reading temperature (float, sec, default=2)
+polling=2
+# Discrete steps in mapping of temperatures to fan level (int, default=6)
+steps=6
+# Minimum PCI temperature (float, C, default=30.0)
+min_temp=30.0
+# Maximum PCI temperature (float, C, default=60.0)
+max_temp=60.0
+# Minimum PCI fan level (int, %, default=35)
+min_level=35
+# Maximum PCI fan level (int, %, default=100)
+max_level=100
+# User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
+# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified
+# then min_temp/max_temp/min_level/max_level parameters are skipped
+#control_function=45-40, 65-70, 80-100
+# Moving average window size for temperature smoothing (int, default=1, 1=disabled)
+smoothing=1
+# Consecutive failed temperature reads tolerated per device (int, default=3, 0=disabled)
+# Inside this budget the last known good temperature is reused, above it smfc stops
+error_tolerance=3
+# The PCI device(s) of this section. Specify exactly one of the three parameters below.
+# PCI slot address(es) (comma- or space-separated list of str, default=empty)
+# All of them must be the same model, and a card that is not present is an error.
+#pci_address=0000:05:00.0, 0000:06:00.0
+# PCI vendor:device ID (str, four hexadecimal digits on each side, default=empty)
+# Selects every card of that model.
+#pci_id=1d6a:07b1
+# PCI driver name (str, default=empty)
+# Selects every PCI device the driver serves.
+#pci_driver=atlantic
+# HWMON sensor index to read (int, default=1, reads temp1_input)
+# A card can expose several sensors. Read the labels with `cat /sys/class/hwmon/hwmon*/temp*_label`.
+temp_sensor=1
+
+
 # CONST fan controller: sets constant fan level (without any heat source) for IPMI zones(s).
 [CONST]
 # Fan controller enabled (bool, default=0/false)
 enabled=0
-# IPMI zone(s) (comma- or space-separated list of int, default=1))
+# IPMI zone(s) (comma- or space-separated list of int, default=1)
 ipmi_zone=1
 # Polling interval for checking/resetting level if needed (int, sec, default=30)
 polling=30

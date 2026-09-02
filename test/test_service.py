@@ -44,7 +44,7 @@ def create_exit_config(exit_level: int = Config.DV_IPMI_EXIT_LEVEL, zones: List[
     """
     config = MagicMock()
     config.ipmi = create_ipmi_config(exit_level=exit_level)
-    config.cpu = config.hd = config.nvme = config.gpu = config.npu = []
+    config.cpu = config.hd = config.nvme = config.gpu = config.npu = config.pci = []
     zones = [0, 1] if zones is None else zones
     config.const = [MagicMock(enabled=True, ipmi_zone=zones)] if zones else []
     return config
@@ -763,27 +763,29 @@ class TestService:
         assert cm.value.code == exit_code
 
     @pytest.mark.parametrize(
-        "cpufc, hdfc, nvmefc, gpufc, npufc, constfc, exit_code",
+        "cpufc, hdfc, nvmefc, gpufc, npufc, pcifc, constfc, exit_code",
         [
             # CPU and GPU enabled
-            pytest.param(True, False, False, True, False, False, 100, id="cpu-gpu"),
+            pytest.param(True, False, False, True, False, False, False, 100, id="cpu-gpu"),
             # HD and CONST enabled
-            pytest.param(False, True, False, False, False, True, 100, id="hd-const"),
+            pytest.param(False, True, False, False, False, False, True, 100, id="hd-const"),
             # CPU and GPU enabled (duplicate)
-            pytest.param(True, False, False, True, False, False, 100, id="cpu-gpu-alt"),
+            pytest.param(True, False, False, True, False, False, False, 100, id="cpu-gpu-alt"),
             # CPU and NVME enabled
-            pytest.param(True, False, True, False, False, False, 100, id="cpu-nvme"),
+            pytest.param(True, False, True, False, False, False, False, 100, id="cpu-nvme"),
             # CPU and NPU enabled
-            pytest.param(True, False, False, False, True, False, 100, id="cpu-npu"),
+            pytest.param(True, False, False, False, True, False, False, 100, id="cpu-npu"),
+            # CPU and PCI enabled
+            pytest.param(True, False, False, False, False, True, False, 100, id="cpu-pci"),
             # All controllers enabled
-            pytest.param(True, True, True, True, True, True, 100, id="all-controllers"),
+            pytest.param(True, True, True, True, True, True, True, 100, id="all-controllers"),
         ],
     )
     def test_run_happy_path(self, mocker: MockerFixture, td: TestData, cpufc: bool, hdfc: bool, nvmefc: bool,
-                            gpufc: bool, npufc: bool, constfc: bool, exit_code: int):
+                            gpufc: bool, npufc: bool, pcifc: bool, constfc: bool, exit_code: int):
         """Positive unit test for Service.run() method. It contains the following steps:
         - mock print(), time.sleep() (exits with code 100 after 10 iterations), smfc.service.Exporter
-        - mock pyudev.Context.__init__ via MockedContextGood and CpuFc/HdFc/NvmeFc/GpuFc/ConstFc.__init__
+        - mock pyudev.Context.__init__ via MockedContextGood and CpuFc/HdFc/NvmeFc/GpuFc/NpuFc/PciFc/ConstFc.__init__
         - build a full config via `td` (fake ipmitool, smartctl, nvidia-smi, cpu/hd/nvme hwmon data)
           enabling the parametrized combination of controllers
         - instantiate Service and call Service.run() inside pytest.raises(SystemExit)
@@ -830,6 +832,14 @@ class TestService:
             self.config = cfg
             FanController.__init__(self, log, ipmi, cfg.section, len(cfg.npu_device_ids))
 
+        def mocked_pcifc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
+            nonlocal td
+            self.pci_devices = list(td.pci_addresses)
+            self.device_labels = list(td.pci_addresses)
+            self.hwmon_path = td.pci_files
+            self.config = cfg
+            FanController.__init__(self, log, ipmi, cfg.section, len(td.pci_files))
+
         def mocked_nvmefc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
             nonlocal td
             self.nvme_device_names = td.nvme_name_list
@@ -871,6 +881,7 @@ class TestService:
         td.create_cpu_data(1)
         td.create_hd_data(8)
         td.create_nvme_data(2)
+        td.create_pci_data(2)
         my_config = ConfigParser()
         my_config[Config.CS_IPMI] = {
             Config.CV_IPMI_COMMAND: cmd_ipmi,
@@ -943,6 +954,19 @@ class TestService:
             Config.CV_NPU_IDS: "0",
             Config.CV_NPU_SMI_PATH: cmd_npu,
         }
+        my_config[Config.CS_PCI] = {
+            Config.CV_ENABLED: str(pcifc),
+            Config.CV_IPMI_ZONE: "4",
+            Config.CV_TEMP_CALC: "2",
+            Config.CV_STEPS: "6",
+            Config.CV_SENSITIVITY: "2",
+            Config.CV_POLLING: "0",
+            Config.CV_MIN_TEMP: "30",
+            Config.CV_MAX_TEMP: "60",
+            Config.CV_MIN_LEVEL: "35",
+            Config.CV_MAX_LEVEL: "100",
+            Config.CV_PCI_DRIVER: "atlantic",
+        }
         my_config[Config.CS_CONST] = {
             Config.CV_ENABLED: str(constfc),
             Config.CV_IPMI_ZONE: "2",
@@ -968,6 +992,7 @@ class TestService:
         mocker.patch("smfc.NvmeFc.__init__", mocked_nvmefc_init)
         mocker.patch("smfc.GpuFc.__init__", mocked_gpufc_init)
         mocker.patch("smfc.NpuFc.__init__", mocked_npufc_init)
+        mocker.patch("smfc.PciFc.__init__", mocked_pcifc_init)
         mocker.patch("smfc.ConstFc.__init__", mocked_constfc_init)
         # pylint: enable=R0801
         self.sleep_counter = 0

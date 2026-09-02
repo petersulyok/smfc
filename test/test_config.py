@@ -2138,6 +2138,185 @@ ipmi_zone = 2
         assert cfg.cpu[3].section == "CPU:2"
 
 
+class TestPciConfigParsing:
+    """Unit tests for [PCI] section parsing."""
+
+    @pytest.mark.parametrize(
+        "param, value",
+        [
+            pytest.param("temp_calc", "5", id="invalid-temp-calc"),
+            pytest.param("steps", "0", id="steps-zero"),
+            pytest.param("steps", "-1", id="steps-negative"),
+            # steps > max_level - min_level (default max_level=100, min_level=35 -> 65)
+            pytest.param("steps", "66", id="steps-over-range"),
+            pytest.param("sensitivity", "0", id="sensitivity-zero"),
+            pytest.param("sensitivity", "-1", id="sensitivity-negative"),
+            pytest.param("polling", "-1", id="polling-negative"),
+            pytest.param("smoothing", "0", id="smoothing-zero"),
+            pytest.param("error_tolerance", "-1", id="error-tolerance-negative"),
+            pytest.param("min_temp", "-1", id="min-temp-negative"),
+            pytest.param("max_temp", "201", id="max-temp-over-200"),
+            pytest.param("min_level", "-1", id="min-level-negative"),
+            pytest.param("max_level", "101", id="max-level-over-100"),
+            pytest.param("temp_sensor", "0", id="temp-sensor-zero"),
+            pytest.param("temp_sensor", "-1", id="temp-sensor-negative"),
+        ],
+    )
+    def test_pci_validation_errors(self, create_config_file, param: str, value: str):
+        """Negative unit test for the [PCI] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
+        - write [PCI] with a valid pci_driver and one invalid numeric parameter, then call Config(path)
+        - ASSERT: Config(path) raises ValueError
+        """
+        config_path = create_config_file(f"[Ipmi]\n[PCI]\nenabled = 1\npci_driver = atlantic\n{param} = {value}\n")
+        with pytest.raises(ValueError):
+            Config(config_path)
+
+    @pytest.mark.parametrize(
+        "params",
+        [
+            pytest.param("", id="none-specified"),
+            pytest.param("pci_address = 0000:05:00.0\npci_driver = atlantic\n", id="address-and-driver"),
+            pytest.param("pci_id = 1d6a:07b1\npci_driver = atlantic\n", id="id-and-driver"),
+            pytest.param("pci_address = 0000:05:00.0\npci_id = 1d6a:07b1\n", id="address-and-id"),
+            pytest.param("pci_address = 0000:05:00.0\npci_id = 1d6a:07b1\npci_driver = atlantic\n", id="all-three"),
+        ],
+    )
+    def test_pci_addressing_parameter_count_errors(self, create_config_file, params: str):
+        """Negative unit test for the [PCI] addressing parameters inside Config.__init__(). It contains the
+        following steps:
+        - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
+        - parametrize an enabled [PCI] section with zero, two or three of pci_address=, pci_id= and pci_driver=
+        - call Config(path) and expect it to fail
+        - ASSERT: Config(path) raises ValueError, because exactly one addressing parameter must be specified
+        """
+        config_path = create_config_file(f"[Ipmi]\n[PCI]\nenabled = 1\n{params}")
+        with pytest.raises(ValueError):
+            Config(config_path)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            pytest.param("05:00.0", id="no-domain"),
+            pytest.param("0000:05:00", id="no-function"),
+            pytest.param("0000:05:00.8", id="function-over-7"),
+            pytest.param("000:05:00.0", id="short-domain"),
+            pytest.param("zzzz:05:00.0", id="not-hexadecimal"),
+        ],
+    )
+    def test_pci_invalid_address_error(self, create_config_file, value: str):
+        """Negative unit test for the [PCI] pci_address= parameter inside Config.__init__(). It contains the
+        following steps:
+        - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
+        - parametrize malformed PCI slot addresses (missing domain, missing function, function above 7, short
+          domain, non-hexadecimal) and call Config(path)
+        - ASSERT: Config(path) raises ValueError
+        - ASSERT: the error message mentions "pci_address"
+        """
+        config_path = create_config_file(f"[Ipmi]\n[PCI]\nenabled = 1\npci_address = {value}\n")
+        with pytest.raises(ValueError) as exc_info:
+            Config(config_path)
+        assert "pci_address" in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            pytest.param("1d6a", id="vendor-only"),
+            pytest.param("1d6a:07b12", id="device-too-long"),
+            pytest.param("1d6:07b1", id="vendor-too-short"),
+            pytest.param("zzzz:07b1", id="not-hexadecimal"),
+        ],
+    )
+    def test_pci_invalid_id_error(self, create_config_file, value: str):
+        """Negative unit test for the [PCI] pci_id= parameter inside Config.__init__(). It contains the
+        following steps:
+        - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
+        - parametrize malformed vendor:device IDs (vendor only, too long, too short, non-hexadecimal) and call
+          Config(path)
+        - ASSERT: Config(path) raises ValueError
+        - ASSERT: the error message mentions "pci_id"
+        """
+        config_path = create_config_file(f"[Ipmi]\n[PCI]\nenabled = 1\npci_id = {value}\n")
+        with pytest.raises(ValueError) as exc_info:
+            Config(config_path)
+        assert "pci_id" in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            pytest.param("0000:05:00.0", ["0000:05:00.0"], id="single"),
+            pytest.param("0000:05:00.0, 0000:06:00.0", ["0000:05:00.0", "0000:06:00.0"], id="comma-separated"),
+            pytest.param("0000:05:00.0 0000:06:00.0", ["0000:05:00.0", "0000:06:00.0"], id="space-separated"),
+            pytest.param("0000:05:00.0, 0000:05:00.0", ["0000:05:00.0"], id="duplicates-removed"),
+        ],
+    )
+    def test_pci_address_parsing(self, create_config, value: str, expected):
+        """Positive unit test for the [PCI] pci_address= parameter inside Config.__init__(). It contains the
+        following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - parametrize a single address, a comma-separated list, a space-separated list and a list with a
+          repeated address, then instantiate Config
+        - ASSERT: cfg.pci[0].pci_address equals the expected list, with duplicates removed and order kept
+        """
+        cfg = create_config(f"[Ipmi]\n[PCI]\nenabled = 1\npci_address = {value}\n")
+        assert cfg.pci[0].pci_address == expected
+
+    def test_pci_defaults(self, create_config):
+        """Positive unit test for the [PCI] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [PCI] with enabled = 1 and pci_driver = atlantic only, then instantiate Config
+        - inspect the single PciConfig in cfg.pci
+        - ASSERT: exactly one PCI entry is parsed
+        - ASSERT: section "PCI", enabled is True, and the zone/sensor/temp keys match HD_ZONE, CALC_MAX and DV_PCI_*
+        """
+        cfg = create_config("[Ipmi]\n[PCI]\nenabled = 1\npci_driver = atlantic\n")
+        assert len(cfg.pci) == 1
+        pci = cfg.pci[0]
+        assert pci.section == "PCI"
+        assert pci.enabled is True
+        assert pci.ipmi_zone == [Config.HD_ZONE]
+        assert pci.temp_calc == Config.CALC_MAX
+        assert pci.temp_sensor == Config.DV_PCI_TEMP_SENSOR
+        assert pci.steps == Config.DV_PCI_STEPS
+        assert pci.sensitivity == Config.DV_PCI_SENSITIVITY
+        assert pci.polling == Config.DV_PCI_POLLING
+        assert pci.min_temp == Config.DV_PCI_MIN_TEMP
+        assert pci.max_temp == Config.DV_PCI_MAX_TEMP
+        assert pci.min_level == Config.DV_PCI_MIN_LEVEL
+        assert pci.max_level == Config.DV_PCI_MAX_LEVEL
+        assert pci.smoothing == Config.DV_PCI_SMOOTHING
+        assert pci.error_tolerance == Config.DV_PCI_ERROR_TOLERANCE
+        assert pci.pci_address == []
+        assert pci.pci_id == ""
+
+    def test_pci_disabled_section_needs_no_addressing(self, create_config):
+        """Positive unit test for the [PCI] addressing parameters inside Config.__init__(). It contains the
+        following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [PCI] with enabled = 0 and no addressing parameter, then instantiate Config
+        - ASSERT: exactly one PCI entry is parsed and it is disabled (the check applies to enabled sections only)
+        """
+        cfg = create_config("[Ipmi]\n[PCI]\nenabled = 0\n")
+        assert len(cfg.pci) == 1
+        assert cfg.pci[0].enabled is False
+
+    def test_pci_multiple_sections(self, create_config):
+        """Positive unit test for the [PCI] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [PCI] on zone 1 and [PCI:1] on zone 2 with different addressing parameters, then instantiate Config
+        - ASSERT: cfg.pci has length 2 with sections "PCI" and "PCI:1"
+        - ASSERT: the two entries keep their own addressing parameter and temp_sensor value
+        """
+        cfg = create_config("[Ipmi]\n[PCI]\nenabled = 1\nipmi_zone = 1\npci_driver = atlantic\ntemp_sensor = 2\n"
+                            "[PCI:1]\nenabled = 1\nipmi_zone = 2\npci_id = 1d6a:07b1\n")
+        assert len(cfg.pci) == 2
+        assert [p.section for p in cfg.pci] == ["PCI", "PCI:1"]
+        assert cfg.pci[0].pci_driver == "atlantic"
+        assert cfg.pci[0].temp_sensor == 2
+        assert cfg.pci[1].pci_id == "1d6a:07b1"
+        assert cfg.pci[1].temp_sensor == Config.DV_PCI_TEMP_SENSOR
+
+
 class TestDuplicateZoneValidation:
     """Unit tests for _validate_no_duplicate_zones() validation logic."""
 
@@ -2171,6 +2350,17 @@ class TestDuplicateZoneValidation:
         """
         cfg = create_config("[Ipmi]\n[CPU]\nenabled = 1\nipmi_zone = 0\n[CPU:1]\nenabled = 0\nipmi_zone = 0\n")
         assert len(cfg.cpu) == 2
+
+    def test_pci_duplicate_zone_raises(self, create_config):
+        """Negative unit test for Config._validate_no_duplicate_zones() (duplicate-zone detection). It contains the
+        following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write two enabled PCI instances [PCI] and [PCI:1] both with ipmi_zone = 1 and distinct drivers
+        - ASSERT: create_config raises ValueError whose message matches the [PCI:1] / [PCI] collision pattern
+        """
+        with pytest.raises(ValueError, match=r"\[PCI:1\] IPMI zone 1 is already used by \[PCI\]"):
+            create_config("[Ipmi]\n[PCI]\nenabled = 1\nipmi_zone = 1\npci_driver = atlantic\n"
+                          "[PCI:1]\nenabled = 1\nipmi_zone = 1\npci_driver = nvme\n")
 
     def test_different_zones_no_conflict(self, create_config):
         """Positive unit test for Config._validate_no_duplicate_zones() (duplicate-zone detection). It contains the

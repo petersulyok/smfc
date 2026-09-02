@@ -184,6 +184,33 @@ def _make_npu_fc(zones=None, count=1, last_temp=55.0, last_level=60,
     return fc
 
 
+def _make_pci_fc(zones=None, count=1, last_temp=58.0, last_level=70,
+                 per_device_temps=None, pci_devices=None) -> MagicMock:
+    """Build a fake PciFc-like controller (real spec so the snapshot's isinstance check finds it)."""
+    from smfc.pcifc import PciFc as _PciFc  # pylint: disable=import-outside-toplevel
+    zones = zones or [4]
+    pci_devices = pci_devices if pci_devices is not None else [f"0000:0{i}:00.0" for i in range(count)]
+    fc = MagicMock(spec=_PciFc)
+    fc.config = MagicMock()
+    fc.config.section = "PCI"
+    fc.config.enabled = True
+    fc.config.ipmi_zone = zones
+    fc.config.polling = 2.0
+    fc.config.min_temp = 30.0
+    fc.config.max_temp = 60.0
+    fc.config.min_level = 35
+    fc.config.max_level = 100
+    fc.pci_devices = pci_devices
+    fc.count = count
+    fc.last_temp = last_temp
+    fc.last_level = last_level
+    fc.deferred_apply = False
+    fc.last_per_device_temps = (per_device_temps if per_device_temps is not None
+                                else [last_temp + i * 1.5 for i in range(count)])
+    fc.device_names.return_value = list(pci_devices)
+    return fc
+
+
 def _make_service(controllers=None, applied_levels=None,
                   last_fan_mode=Ipmi.FULL_MODE, last_fan_mode_at=None,
                   start_time=1716902400.0, fan_mode_enforced_count=0,
@@ -526,6 +553,24 @@ class TestBuildSnapshot:
         assert entry["type"] == "gpu"
         assert entry["section"] == "GPU"
         assert entry["last_temp_c"] == pytest.approx(55.0)
+
+    def test_pci_controller_entry(self) -> None:
+        """Positive unit test for build_snapshot() function. It contains the following steps:
+        - mock a PciFc controller (via _make_pci_fc) and a Service (via _make_service)
+        - call build_snapshot() with the fake service
+        - ASSERT: entry.type equals "pci"
+        - ASSERT: entry.section equals "PCI"
+        - ASSERT: entry.last_temp_c matches the fixture temperature
+        - ASSERT: entry.devices carries the PCI slot address labels
+        """
+        pci = _make_pci_fc(zones=[4], count=2)
+        service = _make_service(controllers=[pci])
+        snap = build_snapshot(service)
+        entry = snap["fan_controllers"][0]
+        assert entry["type"] == "pci"
+        assert entry["section"] == "PCI"
+        assert entry["last_temp_c"] == pytest.approx(58.0)
+        assert [d["name"] for d in entry["devices"]] == ["0000:00:00.0", "0000:01:00.0"]
 
     def test_npu_controller_entry(self) -> None:
         """Positive unit test for build_snapshot() function. It contains the following steps:

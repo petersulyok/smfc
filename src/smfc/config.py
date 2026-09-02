@@ -141,6 +141,29 @@ class NpuConfig:
 
 
 @dataclass
+class PciConfig:
+    """Configuration for PCI fan controller."""
+    section: str                # Section name used for logging (e.g. "PCI", "PCI:1")
+    enabled: bool               # Fan controller enabled
+    ipmi_zone: List[int]        # IPMI zone(s) assigned to the controller
+    temp_calc: int              # Temperature calculation method (0-min, 1-avg, 2-max)
+    steps: int                  # Discrete steps in temperatures and fan levels
+    sensitivity: float          # Temperature change to activate fan controller (C)
+    polling: float              # Polling interval to read temperature (sec)
+    min_temp: float             # Minimum temperature value (C)
+    max_temp: float             # Maximum temperature value (C)
+    min_level: int              # Minimum fan level (0..100%)
+    max_level: int              # Maximum fan level (0..100%)
+    smoothing: int              # Moving average window size for temperature readings (1=disabled)
+    error_tolerance: int        # Consecutive failed temperature reads tolerated per device (0=disabled)
+    pci_address: List[str]      # PCI slot addresses of the cards (e.g. '0000:05:00.0')
+    pci_id: str                 # PCI vendor:device ID of the card model (e.g. '1d6a:07b1')
+    pci_driver: str             # PCI driver name serving the cards (e.g. 'atlantic')
+    temp_sensor: int            # HWMON sensor index to read (1 = temp1_input)
+    control_function: List[Tuple[int, int]] = field(default_factory=list)  # (T,L) breakpoints, empty = legacy
+
+
+@dataclass
 class ConstConfig:
     """Configuration for CONST fan controller."""
     section: str            # Section name used for logging (e.g. "CONST", "CONST:1")
@@ -168,6 +191,7 @@ class Config:
     CS_NVME: str = "NVME"       # [NVME] section name
     CS_GPU: str = "GPU"         # [GPU] section name
     CS_NPU: str = "NPU"         # [NPU] section name
+    CS_PCI: str = "PCI"         # [PCI] section name
     CS_CONST: str = "CONST"     # [CONST] section name
     CS_EXPORTER: str = "Exporter"   # [Exporter] section name
 
@@ -216,6 +240,12 @@ class Config:
     CV_NPU_IDS: str = "npu_device_ids"              # NPU card IDs (npu-smi -i arguments)
     CV_NPU_SMI_PATH: str = "npu_smi_path"           # Path to npu-smi command
     CV_NPU_SMI_TIMEOUT: str = "npu_smi_timeout"     # Timeout for a single npu-smi call (sec)
+
+    # [PCI] section variable names
+    CV_PCI_ADDRESS: str = "pci_address"         # PCI slot addresses of the cards
+    CV_PCI_ID: str = "pci_id"                   # PCI vendor:device ID of the card model
+    CV_PCI_DRIVER: str = "pci_driver"           # PCI driver name serving the cards
+    CV_PCI_TEMP_SENSOR: str = "temp_sensor"     # HWMON sensor index to read
 
     # AMD temperature sensor key names (for rocm-smi output parsing)
     CV_AMD_TEMP_JUNCTION: str = "Temperature (Sensor junction) (C)"
@@ -324,6 +354,18 @@ class Config:
     DV_NPU_SMI_PATH: str = "npu-smi"
     DV_NPU_SMI_TIMEOUT: float = 15.0
 
+    # Default values — [PCI] section
+    DV_PCI_STEPS: int = 6
+    DV_PCI_SENSITIVITY: float = 2.0
+    DV_PCI_POLLING: float = 2.0
+    DV_PCI_MIN_TEMP: float = 30.0
+    DV_PCI_MAX_TEMP: float = 60.0
+    DV_PCI_MIN_LEVEL: int = 35
+    DV_PCI_MAX_LEVEL: int = 100
+    DV_PCI_SMOOTHING: int = 1
+    DV_PCI_ERROR_TOLERANCE: int = 3
+    DV_PCI_TEMP_SENSOR: int = 1
+
     # Default values — [CONST] section
     DV_CONST_POLLING: float = 30.0
     DV_CONST_LEVEL: int = 50
@@ -340,6 +382,7 @@ class Config:
     nvme: List[NvmeConfig]      # List of NVME fan controller configurations
     gpu: List[GpuConfig]        # List of GPU fan controller configurations
     npu: List[NpuConfig]        # List of NPU fan controller configurations
+    pci: List[PciConfig]        # List of PCI fan controller configurations
     const: List[ConstConfig]    # List of CONST fan controller configurations
     exporter: ExporterConfig    # HTTP exporter configuration
 
@@ -365,6 +408,8 @@ class Config:
         self._validate_no_duplicate_zones(self.gpu)
         self.npu = self._parse_npu_sections(parser)
         self._validate_no_duplicate_zones(self.npu)
+        self.pci = self._parse_pci_sections(parser)
+        self._validate_no_duplicate_zones(self.pci)
         self.const = self._parse_const_sections(parser)
         self._validate_no_duplicate_zones(self.const)
         self.exporter = self._parse_exporter(parser)
@@ -800,6 +845,90 @@ class Config:
                 npu_device_ids=npu_device_ids,
                 npu_smi_path=npu_smi_path,
                 npu_smi_timeout=npu_smi_timeout,
+                control_function=self._read_control_function(parser, s, steps),
+            )
+            self._validate_fan_controller_config(cfg, s)
+            result.append(cfg)
+        return result
+
+    # PCI slot address syntax: domain:bus:device.function (e.g. "0000:05:00.0").
+    _PCI_ADDRESS_RE = re.compile(r"^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]$")
+    # PCI vendor:device ID syntax: four hexadecimal digits on each side (e.g. "1d6a:07b1").
+    _PCI_ID_RE = re.compile(r"^[0-9a-fA-F]{4}:[0-9a-fA-F]{4}$")
+
+    @classmethod
+    def parse_pci_addresses(cls, value: str) -> List[str]:
+        """Parse a comma- or space-separated string of PCI slot addresses. Duplicates are removed and the
+        original order is kept, because a repeated address would get double weight in temp_calc.
+        Args:
+            value (str): the raw pci_address= parameter value
+        Returns:
+            List[str]: list of unique PCI slot addresses
+        Raises:
+            ValueError: malformed PCI slot address
+        """
+        text = re.sub(" +", " ", value.strip())
+        items = [i.strip() for i in text.split("," if "," in text else " ") if i.strip()]
+        result: List[str] = []
+        for item in items:
+            if not cls._PCI_ADDRESS_RE.match(item):
+                raise ValueError(f"invalid value: {cls.CV_PCI_ADDRESS} ({item})")
+            if item not in result:
+                result.append(item)
+        return result
+
+    def _parse_pci_sections(self, parser: ConfigParser) -> List[PciConfig]:
+        """Parse [PCI], [PCI:0], [PCI:1] ... sections. Only the syntax and the ranges are checked here; the
+        devices themselves are resolved later in PciFc.__init__() through the udev database.
+        Args:
+            parser (ConfigParser): configuration parser
+        Returns:
+            List[PciConfig]: list of parsed PCI configurations
+        Raises:
+            ValueError: invalid configuration parameters
+        """
+        result = []
+        for s in self._get_sections(parser, self.CS_PCI):
+            enabled = parser[s].getboolean(self.CV_ENABLED, fallback=False)
+            address_str = parser[s].get(self.CV_PCI_ADDRESS, "").strip()
+            pci_address = self.parse_pci_addresses(address_str) if address_str else []
+            pci_id = parser[s].get(self.CV_PCI_ID, "").strip()
+            pci_driver = parser[s].get(self.CV_PCI_DRIVER, "").strip()
+            # Exactly one addressing parameter must be specified: each one selects a single kind of PCI
+            # device on its own, so a second one could only widen the section to another kind.
+            specified = [n for n, v in ((self.CV_PCI_ADDRESS, pci_address), (self.CV_PCI_ID, pci_id),
+                                        (self.CV_PCI_DRIVER, pci_driver)) if v]
+            if enabled:
+                if not specified:
+                    raise ValueError(f"[{s}] one of {self.CV_PCI_ADDRESS}, {self.CV_PCI_ID}, "
+                                     f"{self.CV_PCI_DRIVER} must be specified")
+                if len(specified) > 1:
+                    raise ValueError(f"[{s}] only one of {self.CV_PCI_ADDRESS}, {self.CV_PCI_ID}, "
+                                     f"{self.CV_PCI_DRIVER} can be specified ({', '.join(specified)})")
+            if pci_id and not self._PCI_ID_RE.match(pci_id):
+                raise ValueError(f"[{s}] invalid value: {self.CV_PCI_ID} ({pci_id})")
+            temp_sensor = parser[s].getint(self.CV_PCI_TEMP_SENSOR, fallback=self.DV_PCI_TEMP_SENSOR)
+            if temp_sensor < 1:
+                raise ValueError(f"[{s}] invalid value: {self.CV_PCI_TEMP_SENSOR} < 1")
+            steps = parser[s].getint(self.CV_STEPS, fallback=self.DV_PCI_STEPS)
+            cfg = PciConfig(
+                section=s,
+                enabled=enabled,
+                ipmi_zone=self.parse_ipmi_zones(parser[s].get(self.CV_IPMI_ZONE, str(self.HD_ZONE))),
+                temp_calc=parser[s].getint(self.CV_TEMP_CALC, fallback=self.CALC_MAX),
+                steps=steps,
+                sensitivity=parser[s].getfloat(self.CV_SENSITIVITY, fallback=self.DV_PCI_SENSITIVITY),
+                polling=parser[s].getfloat(self.CV_POLLING, fallback=self.DV_PCI_POLLING),
+                min_temp=parser[s].getfloat(self.CV_MIN_TEMP, fallback=self.DV_PCI_MIN_TEMP),
+                max_temp=parser[s].getfloat(self.CV_MAX_TEMP, fallback=self.DV_PCI_MAX_TEMP),
+                min_level=parser[s].getint(self.CV_MIN_LEVEL, fallback=self.DV_PCI_MIN_LEVEL),
+                max_level=parser[s].getint(self.CV_MAX_LEVEL, fallback=self.DV_PCI_MAX_LEVEL),
+                smoothing=parser[s].getint(self.CV_SMOOTHING, fallback=self.DV_PCI_SMOOTHING),
+                error_tolerance=parser[s].getint(self.CV_ERROR_TOLERANCE, fallback=self.DV_PCI_ERROR_TOLERANCE),
+                pci_address=pci_address,
+                pci_id=pci_id,
+                pci_driver=pci_driver,
+                temp_sensor=temp_sensor,
                 control_function=self._read_control_function(parser, s, steps),
             )
             self._validate_fan_controller_config(cfg, s)

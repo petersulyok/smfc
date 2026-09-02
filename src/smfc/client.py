@@ -22,6 +22,7 @@ from smfc.hdfc import HdFc
 from smfc.ipmi import Ipmi
 from smfc.log import Log
 from smfc.nvmefc import NvmeFc
+from smfc.pcifc import PciFc
 
 
 # Exit codes (aligned with the service: 6=config, 8=ipmi, 9=udev).
@@ -183,6 +184,15 @@ def _construct_controllers(log: Log, cfg: Config, ipmi: Ipmi, udevc: Optional[Co
         except Exception as e:  # pylint: disable=broad-except
             entries.append((npu_cfg.section, "npu", None, str(e)))
 
+    for pci_cfg in cfg.pci:
+        if not pci_cfg.enabled:
+            continue
+        try:
+            controller = PciFc(log, udevc, ipmi, pci_cfg)
+            entries.append((pci_cfg.section, "pci", controller, None))
+        except Exception as e:  # pylint: disable=broad-except
+            entries.append((pci_cfg.section, "pci", None, str(e)))
+
     for const_cfg in cfg.const:
         if not const_cfg.enabled:
             continue
@@ -241,7 +251,7 @@ def _display_device_name(name: str, type_label: str) -> str:
 
     Args:
         name (str): the raw device name (path or label)
-        type_label (str): controller type ("hd" / "nvme" / "cpu" / "gpu" / "npu" / "const")
+        type_label (str): controller type ("hd" / "nvme" / "cpu" / "gpu" / "npu" / "pci" / "const")
 
     Returns:
         str: display-friendly name
@@ -528,7 +538,7 @@ def _format_controller_block(section: str, type_label: str, zones: List[int], po
 
     Args:
         section (str): controller's section name (e.g. "CPU", "HD")
-        type_label (str): short type label ("cpu", "hd", "nvme", "gpu", "npu")
+        type_label (str): short type label ("cpu", "hd", "nvme", "gpu", "npu", "pci")
         zones (List[int]): IPMI zones the controller drives
         polling (float): configured polling interval in seconds
         deferred (bool): whether deferred_apply is set on the controller
@@ -1168,7 +1178,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                   file=sys.stderr, flush=True)
         return EXIT_IPMI_ERROR
 
-    # Initialize udev (required by CPU/HD/NVME controllers; GPU and CONST do not need it).
+    # Initialize udev (required by CPU/HD/NVME/PCI controllers; GPU, NPU and CONST do not need it).
     udevc: Optional[Context]
     try:
         udevc = Context()

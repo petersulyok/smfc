@@ -33,6 +33,9 @@ class TestData:
     nvme_name_list: List[str] = []  # NVMe names in a list
     nvme_files: List[str] = []  # NVMe hwmon files
 
+    pci_addresses: List[str] = []  # PCI slot addresses of the fake cards
+    pci_files: List[str] = []  # PCI hwmon files
+
     def __init__(self, td_dir):
         """Bind to a caller-supplied directory. The caller (pytest's `tmp_path` fixture, or
         an equivalent) owns the directory's lifecycle; TestData only fills it."""
@@ -124,6 +127,32 @@ class TestData:
                 v *= 1000
                 f.write(f"{v:.0f}")
             self.nvme_files.append(hwmon_path)
+
+    def create_pci_data(self, count: int, temp_list: List[float] = None, hwmon_per_card: int = 1,
+                        sensor: int = 1) -> None:
+        """Generic method to create temporary test data files for PCI devices (similarly to hwmon naming
+        convention and content). One card can own several hwmon devices, so `hwmon_per_card` cards out of
+        `count` files can be produced the way a SATA controller exposes one hwmon device per disk."""
+        hwmon_path: str
+
+        self.pci_addresses = []
+        self.pci_files = []
+        index = 0
+        for card in range(count):
+            self.pci_addresses.append(f"0000:0{card}:00.0")
+            for _ in range(hwmon_per_card):
+                hwmon_path = os.path.join(self.td_dir, "pci", str(card), "hwmon", f"hwmon{index}")
+                os.makedirs(hwmon_path, exist_ok=True)
+                hwmon_path = os.path.join(hwmon_path, f"temp{sensor}_input")
+                with open(hwmon_path, "w+t", encoding="UTF-8") as f:
+                    if temp_list:
+                        v = temp_list[index]
+                    else:
+                        v = random.uniform(40.0, 60.0)
+                    v *= 1000
+                    f.write(f"{v:.0f}")
+                self.pci_files.append(hwmon_path)
+                index += 1
 
     def create_config_file(self, my_config: configparser.ConfigParser) -> str:
         """Creates a config file from a ConfigParser object."""

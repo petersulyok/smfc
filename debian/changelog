@@ -1,3 +1,37 @@
+smfc (6.4.0) unstable; urgency=medium
+
+  * Added: new PCI fan controller (seventh controller type) that drives one or
+    more IPMI zones from the HWMON temperature of PCI devices that have no fan
+    controller of their own, e.g. a 10 Gbit network card. The cards are
+    discovered through the udev database and named with exactly one of three
+    parameters: pci_address= (a list of PCI slot addresses, all of the same
+    model), pci_id= (one vendor:device ID, matching every card of that model) or
+    pci_driver= (one driver name, matching every card the driver serves). The
+    controlled unit is a HWMON device rather than a card, so a card exposing
+    several HWMON devices counts as several units, and temp_calc= (default:
+    maximum) aggregates across them. temp_sensor= selects which sensor of a
+    HWMON device to read (default 1, i.e. temp1_input). New [PCI] / [PCI:1] /
+    ... sections; all the shared parameters of the other temperature-driven
+    controllers are supported. One section covers one kind of PCI device,
+    because it has a single temperature window and a single temp_sensor=. The
+    controller shows up in smfc-client and the HTTP exporter like the other fan
+    controllers. A sample configuration is included as
+    config/samples/smfc-sample11.conf.
+  * Changed: every fan controller has its own chapter in the README now. Chapter
+    1.2 gained a sub-chapter per fan controller (CPU, HD, NVME, GPU, NPU, PCI,
+    CONST), each a table naming the target devices, the temperature source, the
+    parameter that identifies the devices, the remaining controller-specific
+    parameters, whether the controller works in the docker images and what it
+    needs from the host, and the traps worth knowing before enabling it.
+  * Changed: documented that platform_name=auto cannot detect an X14/H14 board
+    whose BMC reports no product name. Auto-detection matches the X14/H14 prefix
+    of the BMC product name, so a board answering ipmitool bmc info with
+    Product Name : Unknown falls back to the generic platform and is then driven
+    with commands these boards do not use. The fix is to set
+    platform_name=generic_x14 by hand.
+
+ -- Peter Sulyok <peter@sulyok.net>  Wed, 02 Sep 2026 17:05:28 +0200
+
 smfc (6.3.0) unstable; urgency=medium
 
   * Added: new NPU fan controller (sixth controller type) that drives one or

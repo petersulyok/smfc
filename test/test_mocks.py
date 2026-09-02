@@ -37,6 +37,15 @@ def factory_mockdevice():
     return MockDevice()
 
 
+class MockPciDevice:
+    """Mock class for a pyudev PCI device: it only carries the `properties` dict PciFc reads."""
+
+    def __init__(self, address: str, pci_id: str = "1D6A:07B1", driver: str = "atlantic"):
+        self.properties = {"PCI_SLOT_NAME": address, "PCI_ID": pci_id, "DRIVER": driver}
+        self.sys_path = f"/sys/devices/pci0000:00/{address}"
+        self.driver = driver
+
+
 class MockContext:
     """Mock class for pyudev.Context() class."""
 
