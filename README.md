@@ -173,7 +173,7 @@ Three naming styles are supported and can be freely mixed:
 
 The suffix number after `:` is used only for ordering and logging — it has no relationship to the `ipmi_zone=` value inside the section. Each instance is a complete, independent fan controller with its own full set of parameters, sharing only the physical temperature source.
 
-Multiple instances on the same IPMI zone participate in the shared zone arbitration described in [chapter 1.3](https://github.com/petersulyok/smfc/blob/main/README.md#13-shared-ipmi-zone-arbitration).
+Two enabled instances of the same controller type must target different IPMI zones -- `smfc` rejects the configuration with an error otherwise. Instances of *different* controller types can share a zone, and those participate in the shared zone arbitration described in [chapter 1.3](https://github.com/petersulyok/smfc/blob/main/README.md#13-shared-ipmi-zone-arbitration).
 
 #### 1.5 Fan mode enforcement
 While `smfc` is running, an external event (BMC web UI, a manual `ipmitool` command, a firmware quirk) can silently flip the BMC out of FULL mode. When that happens, `smfc` keeps sending per-zone level commands but the BMC ignores them and applies its own profile — fans run at unintended speeds with no error in the log. `smfc` detects this by checking the fan mode on every loop iteration. The `[Ipmi] enforce_fan_mode=` parameter controls the reaction: with `1` (default) the drift is logged and FULL mode plus all zone levels are re-asserted; with `0` the service exits with code 11 (add `Restart=on-failure` to the systemd unit if you want it restarted automatically in this mode).

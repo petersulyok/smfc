@@ -1328,8 +1328,8 @@ main()                                          (cmd.py)
     ├── Log(level, output)                      (log.py)
     ├── Config(path)                            (config.py)
     │   ├── _parse_ipmi
-    │   ├── _parse_*_sections (×5)
-    │   └── _validate_no_duplicate_zones (×5)
+    │   ├── _parse_*_sections (×6)
+    │   └── _validate_no_duplicate_zones (×6)
     ├── check_dependencies()
     ├── Ipmi(log, config.ipmi, sudo)            (ipmi.py)
     │   ├── _exec_ipmitool(["sdr"]) loop        — wait for BMC
