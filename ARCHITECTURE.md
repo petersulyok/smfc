@@ -657,6 +657,7 @@ Each subclass only builds `self.hwmon_path[]` and (optionally) overrides
 | `NvmeFc` | Per-device HWMON (NVMe driver)                                | Empty hwmon path is treated as a hard error            |
 | `GpuFc`  | `nvidia-smi --query-gpu=temperature.gpu` or `rocm-smi -t`     | Caches result for `polling` seconds across N indices    |
 | `NpuFc`  | `npu-smi info -t temp -i <id>`, one call per card             | Hottest chip of each card; same per-`polling` caching   |
+| `PciFc`  | Per-HWMON-device file of a PCI card, via udev                 | One entry per HWMON device, not per card; `temp_sensor=` selects the sensor index |
 
 `HdFc` is the only subclass with a per-device fallback: SAS/SCSI disks have no
 `drivetemp` entry, so their udev-discovered HWMON path comes back as `""`.

@@ -18,13 +18,13 @@ https://github.com/petersulyok/smfc
 .SH FEATURES
 .TP
 .B Fan controllers
-Six independent controllers: CPU, HD (SATA/SAS), NVMe, GPU, NPU, and CONST (constant level).
+Seven independent controllers: CPU, HD (SATA/SAS), NVMe, GPU, NPU, PCI, and CONST (constant level).
 Each can be enabled/disabled and assigned to one or more IPMI zones freely.
 .TP
 .B Temperature sources
 Intel/AMD CPUs (coretemp/k10temp), SATA/SAS disks (drivetemp/smartctl),
 NVMe SSDs (hwmon), Nvidia GPUs (nvidia\-smi), AMD GPUs (rocm\-smi),
-Ascend NPUs (npu\-smi).
+Ascend NPUs (npu\-smi), and any other PCI device exposing a HWMON temperature.
 .TP
 .B Control logic
 Configurable temperature\-to\-fan\-level mapping with discrete steps, sensitivity threshold,

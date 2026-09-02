@@ -19,7 +19,7 @@ from pytest import fixture, UsageError
 from pyudev import Context
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi, FanController, Service
-from smfc.config import Config, CpuConfig, HdConfig, NvmeConfig, GpuConfig, NpuConfig
+from smfc.config import Config, CpuConfig, HdConfig, NvmeConfig, GpuConfig, NpuConfig, PciConfig
 from .test_fixtures import TestData
 from .test_mocks import MockedContextGood
 
@@ -28,10 +28,11 @@ from .test_mocks import MockedContextGood
 # The optional `fault` field selects a fault injector (see FAULT_INJECTORS); None = no fault.
 # `bmc_stack` and `aten_duty_path` pick which 14th generation BMC firmware the fake ipmitool emulates;
 # the defaults give the stack-agnostic behaviour every other scenario relies on. `npu` is the NPU card
-# count. All four are appended after `fault`, so the existing positional entries stay unchanged.
+# count and `pci` is the PCI card count. All five are appended after `fault`, so the existing positional
+# entries stay unchanged.
 Scenario = namedtuple("Scenario",
-                      ["cpu", "hd", "gpu", "nvme", "conf", "fault", "bmc_stack", "aten_duty_path", "npu"],
-                      defaults=(None, "", "pwm", 0))
+                      ["cpu", "hd", "gpu", "nvme", "conf", "fault", "bmc_stack", "aten_duty_path", "npu", "pci"],
+                      defaults=(None, "", "pwm", 0, 0))
 
 SCENARIOS = {
     "cpu_1":             Scenario(1, 1, 0, 0, "cpu_1.conf"),
@@ -46,6 +47,7 @@ SCENARIOS = {
     "gpu_8_nvidia":      Scenario(1, 0, 8, 0, "gpu_8_nvidia.conf"),
     "gpu_8_amd":         Scenario(1, 0, 8, 0, "gpu_8_amd.conf"),
     "npu_2":             Scenario(1, 0, 0, 0, "npu_2.conf", npu=2),
+    "pci_2":             Scenario(1, 0, 0, 0, "pci_2.conf", pci=2),
     "shared_zones":      Scenario(1, 0, 0, 2, "shared_zones.conf"),
     "shared_zones_cpu_split": Scenario(2, 2, 0, 0, "shared_zones_cpu_split.conf"),
     "control_function":  Scenario(2, 2, 0, 0, "control_function.conf"),
@@ -134,6 +136,22 @@ def _make_nvmefc_init(td: TestData):
         FanController.__init__(self, log, ipmi, cfg.section, len(td.nvme_files))
         if self.log.log_level >= Log.LOG_CONFIG:
             self.log.msg(Log.LOG_CONFIG, f"   nvme_names = {self.nvme_device_names}")
+    return _init
+
+
+def _make_pcifc_init(td: TestData):
+    """Build a PciFc.__init__ replacement that uses the fake PCI hwmon files."""
+    # pylint: disable=unused-argument
+    def _init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg: PciConfig) -> None:
+        self.config = cfg
+        self.pci_devices = list(td.pci_addresses)
+        self.device_labels = list(td.pci_addresses)
+        self.hwmon_path = td.pci_files
+        FanController.__init__(self, log, ipmi, cfg.section, len(td.pci_files))
+        if self.log.log_level >= Log.LOG_CONFIG:
+            self.log.msg(Log.LOG_CONFIG, f"   pci_driver = {self.config.pci_driver}")
+            self.log.msg(Log.LOG_CONFIG, f"   temp_sensor = {self.config.temp_sensor}")
+            self.log.msg(Log.LOG_CONFIG, f"   pci devices = {self.pci_devices}")
     return _init
 
 
@@ -255,6 +273,8 @@ class TestSmoke:
                     _update_hwmon_temperatures(my_td.hd_files, *temp_ranges["hd"])
                 if my_td.nvme_files and "nvme" in temp_ranges:
                     _update_hwmon_temperatures(my_td.nvme_files, *temp_ranges["nvme"])
+                if my_td.pci_files and "pci" in temp_ranges:
+                    _update_hwmon_temperatures(my_td.pci_files, *temp_ranges["pci"])
                 temp_updater_stop.wait(1.0)
 
         atexit.register(exit_func)
@@ -269,6 +289,8 @@ class TestSmoke:
             my_td.create_hd_data(scenario.hd)
         if scenario.nvme:
             my_td.create_nvme_data(scenario.nvme)
+        if scenario.pci:
+            my_td.create_pci_data(scenario.pci)
 
         # Load the scenario configuration file (resolved relative to this test module).
         my_config = ConfigParser()
@@ -318,6 +340,9 @@ class TestSmoke:
         if scenario.nvme:
             temp_ranges["nvme"] = _section_temp_range(my_config, Config.CS_NVME, Config.DV_NVME_MIN_TEMP,
                                                       Config.DV_NVME_MAX_TEMP)
+        if scenario.pci:
+            temp_ranges["pci"] = _section_temp_range(my_config, Config.CS_PCI, Config.DV_PCI_MIN_TEMP,
+                                                     Config.DV_PCI_MAX_TEMP)
 
         # Create a new config file and patch device discovery + controller construction.
         new_config_file = my_td.create_config_file(my_config)
@@ -327,6 +352,7 @@ class TestSmoke:
         mocker.patch("smfc.NvmeFc.__init__", _make_nvmefc_init(my_td))
         mocker.patch("smfc.GpuFc.__init__", _make_gpufc_init(cmd_nvidia, cmd_rocm, scenario.gpu))
         mocker.patch("smfc.NpuFc.__init__", _make_npufc_init(cmd_npu, scenario.npu))
+        mocker.patch("smfc.PciFc.__init__", _make_pcifc_init(my_td))
         sys.argv = ("smfc -o 0 -l 4 -nd -c " + new_config_file).split()
         service = Service()
 

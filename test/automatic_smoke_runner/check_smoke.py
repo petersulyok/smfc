@@ -36,10 +36,11 @@ from pathlib import Path
 # The optional `fault` field selects a fault injector (see FAULT_INJECTORS); None = no fault.
 # `bmc_stack` and `aten_duty_path` pick which 14th generation BMC firmware the fake ipmitool emulates;
 # the defaults give the stack-agnostic behaviour every other scenario relies on. `npu` is the NPU card
-# count. All four are appended after `fault`, so the existing positional entries stay unchanged.
+# count and `pci` is the PCI card count. All five are appended after `fault`, so the existing positional
+# entries stay unchanged.
 Scenario = namedtuple("Scenario",
-                      ["cpu", "hd", "gpu", "nvme", "conf", "fault", "bmc_stack", "aten_duty_path", "npu"],
-                      defaults=(None, "", "pwm", 0))
+                      ["cpu", "hd", "gpu", "nvme", "conf", "fault", "bmc_stack", "aten_duty_path", "npu", "pci"],
+                      defaults=(None, "", "pwm", 0, 0))
 SCENARIOS = {
     "cpu_1":               Scenario(1, 1, 0, 0, "cpu_1.conf"),
     "cpu_2":               Scenario(2, 0, 1, 0, "cpu_2.conf"),
@@ -53,6 +54,7 @@ SCENARIOS = {
     "gpu_8_nvidia":        Scenario(1, 0, 8, 0, "gpu_8_nvidia.conf"),
     "gpu_8_amd":           Scenario(1, 0, 8, 0, "gpu_8_amd.conf"),
     "npu_2":               Scenario(1, 0, 0, 0, "npu_2.conf", npu=2),
+    "pci_2":               Scenario(1, 0, 0, 0, "pci_2.conf", pci=2),
     "shared_zones":        Scenario(1, 0, 0, 2, "shared_zones.conf"),
     "shared_zones_cpu_split": Scenario(2, 2, 0, 0, "shared_zones_cpu_split.conf"),
     "control_function":    Scenario(2, 2, 0, 0, "control_function.conf"),
@@ -165,6 +167,7 @@ def check(name: str, scn: Scenario, duration: int) -> tuple:
         "nvme_init":    bool(re.search(r"\bNVME(?::\d+)? fan controller was initialized", log)),
         "gpu_init":     bool(re.search(r"\bGPU(?::\d+)? fan controller was initialized", log)),
         "npu_init":     bool(re.search(r"\bNPU(?::\d+)? fan controller was initialized", log)),
+        "pci_init":     bool(re.search(r"\bPCI(?::\d+)? fan controller was initialized", log)),
         "const_init":   bool(re.search(r"\bCONST(?::\d+)? fan controller was initialized", log)),
         # Temperature drift evidence: distinct per-device temperature observations.
         "temps_seen":   len(set(re.findall(r"new temperature > [\d.]+C|per-device temps=\[[^\]]+\]", log))),
@@ -196,10 +199,11 @@ def check(name: str, scn: Scenario, duration: int) -> tuple:
     if scn.nvme > 0 and not sig["nvme_init"]:                 problems.append("nvme-controller-missing")
     if scn.gpu  > 0 and not sig["gpu_init"]:                  problems.append("gpu-controller-missing")
     if scn.npu  > 0 and not sig["npu_init"]:                  problems.append("npu-controller-missing")
+    if scn.pci  > 0 and not sig["pci_init"]:                  problems.append("pci-controller-missing")
     if name == "const_level" and not sig["const_init"]:       problems.append("const-controller-missing")
 
     # Temperature drift evidence: hwmon-backed scenarios must show >1 distinct temp observation.
-    if (scn.cpu + scn.hd + scn.nvme) > 0 and sig["temps_seen"] < 2:
+    if (scn.cpu + scn.hd + scn.nvme + scn.pci) > 0 and sig["temps_seen"] < 2:
         problems.append("no-temp-drift")
 
     # ----- Platform-override scenarios: distinctive raw byte sequences must appear -----

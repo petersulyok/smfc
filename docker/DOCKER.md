@@ -8,9 +8,9 @@ There are three images created for `smfc`:
 
 | Image type          | Tags                            | Base image                   | Pros                                          | Cons                                                         |
 |---------------------|---------------------------------|------------------------------|-----------------------------------------------|--------------------------------------------------------------|
-| Standard            | `6.3.0` / `latest`              | Alpine Linux 3.24.1          | Small image size                              | GPU/NPU fan controllers not supported                        |
-| NVIDIA GPU-enabled  | `6.3.0-nvidia`/ `latest-nvidia` | Debian 13.6 (slim)           | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
-| AMD GPU-enabled     | `6.3.0-amd` / `latest-amd`      | Ubuntu 24.04.4 (ROCm 7.8.0)  | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
+| Standard            | `6.4.0` / `latest`              | Alpine Linux 3.24.1          | Small image size                              | GPU/NPU fan controllers not supported                        |
+| NVIDIA GPU-enabled  | `6.4.0-nvidia`/ `latest-nvidia` | Debian 13.6 (slim)           | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
+| AMD GPU-enabled     | `6.4.0-amd` / `latest-amd`      | Ubuntu 24.04.4 (ROCm 7.8.0)  | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
 
 > Docker image tags changed for GPU-enabled images with the newly implemented AMD GPU support in `smfc v5.4.0`!
 
@@ -22,7 +22,7 @@ There are three images created for `smfc`:
 Generic notes for the docker images:
   1. `smfc` is executed here as a simple foreground process (not as a `systemd` service).
   2. `ipmitool` and `smartctl` require read-only access to host's `/dev/` and `/run/udev` folders and admin privilege.
-  3. The `/sys` filesystem can be accessed in the container, but the proper kernel module (i.e. `coretemp`, `k10temp`, and `drivetemp`) needs to be loaded on host side.
+  3. The `/sys` filesystem can be accessed in the container, but the proper kernel module (i.e. `coretemp`, `k10temp`, and `drivetemp`) needs to be loaded on host side. The same applies to the `PCI` fan controller: the driver of the card (e.g. `atlantic`) must be loaded on the host, and the card's HWMON files are then visible in the container.
   4. The container can send log messages to the host's `journald` daemon (as it is configured in _Usage chapter_), but feel free to configure [other logging drivers](https://docs.docker.com/config/containers/logging/configure/).
   5. IPMI remote access can be used (see `[IPMI] remote_parameters=-U USERNAME -P PASSWORD -H HOST` parameter in the configuration file) if IPMI interface is not accessible from docker container.
   6. Networking is enabled again for IPMI remote access.
@@ -297,6 +297,7 @@ docker run --rm \
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
+  - **6.4.0** (2026.09.02): Updated to smfc 6.4.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0) - the new PCI fan controller is supported in every image
   - **6.3.0** (2026.08.30): Updated to smfc 6.3.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
   - **6.2.1** (2026.08.24): Updated to smfc 6.2.1 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
   - **6.2.0** (2026.08.14): Updated to smfc 6.2.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)

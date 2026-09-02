@@ -85,7 +85,7 @@ no_enforce_fan_mode    exit=1    set_level=4   distinct=2  temp_read=8   temps_s
   `<NAME> fan controller was initialized` banner.
 - `const_level` requires the `CONST` banner (it's the only `CONST`-only
   scenario).
-- Hwmon-backed scenarios (CPU + HD + NVMe count > 0) must show more than one
+- Hwmon-backed scenarios (CPU + HD + NVMe + PCI count > 0) must show more than one
   distinct temperature observation, proving the drift thread reaches the
   service.
 
@@ -154,3 +154,13 @@ assertions so a regression in that feature surfaces as a smoke failure.
   percentages or temperature readings) because those depend on the IPMI
   emulator's randomness. It asserts *that* the right log lines appeared,
   not their content.
+- **The checks are time-bounded, so the sweep needs an idle machine.** Every
+  scenario is given `DURATION` seconds (default 6 s) before the SIGINT, and the
+  pass conditions count what the service managed to log inside that window: at
+  least one fan-level write, at least one temperature read, and more than one
+  distinct temperature observation on hwmon-backed scenarios. A loaded machine
+  fits fewer polling cycles into those 6 seconds, so a scenario can miss a
+  threshold and report FAIL while nothing is actually broken. Do not run the
+  sweep next to a `pytest` run, a build, or a second sweep. If a scenario fails
+  once, re-run it on its own with `--only <name>` before believing it, and use
+  `--duration 10` on a slow or busy host.
