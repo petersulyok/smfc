@@ -2,8 +2,10 @@
 #
 # %systemd_post in the RPM package runs `systemctl preset smfc.service` on a
 # fresh install. That command reads this file and enables the service, so smfc
-# starts at the next boot. Without this file the distribution catch-all rule in
-# 90-default.preset (`disable *`) would match and leave the service disabled.
+# starts at the next boot. Without this file the catch-all rule of the
+# distribution would match - `disable *`, in 99-default-disable.preset on
+# Fedora and the RHEL family, and in 99-default.preset on openSUSE - and
+# leave the service disabled.
 #
 # The install does not start the service: review /etc/smfc/smfc.conf first, then
 # run `systemctl start smfc`.

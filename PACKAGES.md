@@ -58,7 +58,7 @@ The `.deb` file will be created in the parent directory (`../`).
 ### Build dependencies
 
 ```bash
-sudo dnf install rpm-build python3-devel python3-setuptools python3-pip python3-wheel python3-pyproject-rpm-macros systemd-rpm-macros
+sudo dnf install rpm-build python3-devel python3-setuptools python3-pip python3-wheel pyproject-rpm-macros systemd-rpm-macros
 ```
 
 ### Build commands
