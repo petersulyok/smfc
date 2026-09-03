@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        6.4.0
+Version:        6.4.1
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -98,6 +98,17 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Thu Sep 03 2026 Peter Sulyok <peter@sulyok.net> - 6.4.1-1
+- Fixed: an apt upgrade of the DEB package stopped the smfc service and never
+  started it again. debian/rules called dh_installsystemd with --no-start alone,
+  which switches off the default --restart-after-upgrade. The package then got a
+  stop snippet in preinst that ran on every upgrade, and no start or restart
+  snippet in postinst. Both flags are passed now, so the service is enabled but
+  not started on a fresh install, and it is try-restarted on upgrade - a running
+  service comes back, a stopped one stays stopped. This matches
+  %%systemd_postun_with_restart in the RPM package. Reported by @russmo
+  (issue #122)
+
 * Wed Sep 02 2026 Peter Sulyok <peter@sulyok.net> - 6.4.0-1
 - Added: new PCI fan controller (seventh controller type) that drives one or
   more IPMI zones from the HWMON temperature of PCI devices that have no fan

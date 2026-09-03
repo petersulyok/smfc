@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.4.1] - 2026.09.03
+
+### Fixed
+- **An `apt` upgrade of the DEB package stopped the `smfc` service and never started it again.** The service came back only after a manual `systemctl start smfc` or a reboot. `debian/rules` called `dh_installsystemd --no-start`, and that single flag switches off the default `--restart-after-upgrade`: the package then got a `stop` snippet in `preinst` that ran on every upgrade, and no `start` or `restart` snippet in `postinst`. Both flags are passed now, so a fresh install still enables the service without starting it - the configuration must be reviewed first - and an upgrade issues a `try-restart`, which brings a running service back and leaves a stopped one stopped. This matches `%systemd_postun_with_restart` in the RPM package. Reported by [@russmo](https://github.com/russmo) in [issue #122](https://github.com/petersulyok/smfc/issues/122).
+
 ## [6.4.0] - 2026.09.02
 
 ### Added

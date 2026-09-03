@@ -1,3 +1,17 @@
+smfc (6.4.1) unstable; urgency=medium
+
+  * Fixed: an apt upgrade of the DEB package stopped the smfc service and never
+    started it again. debian/rules called dh_installsystemd with --no-start
+    alone, which switches off the default --restart-after-upgrade. The package
+    then got a stop snippet in preinst that ran on every upgrade, and no start
+    or restart snippet in postinst. Both flags are passed now, so the service is
+    enabled but not started on a fresh install, and it is try-restarted on
+    upgrade - a running service comes back, a stopped one stays stopped. This
+    matches %systemd_postun_with_restart in the RPM package. Reported by
+    @russmo (issue #122).
+
+ -- Peter Sulyok <peter@sulyok.net>  Thu, 03 Sep 2026 08:00:00 +0200
+
 smfc (6.4.0) unstable; urgency=medium
 
   * Added: new PCI fan controller (seventh controller type) that drives one or
