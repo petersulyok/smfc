@@ -101,15 +101,6 @@ fi
 
 %changelog
 * Thu Sep 03 2026 Peter Sulyok <peter@sulyok.net> - 6.4.1-1
-- Fixed: an apt upgrade of the DEB package stopped the smfc service and never
-  started it again. debian/rules called dh_installsystemd with --no-start alone,
-  which switches off the default --restart-after-upgrade. The package then got a
-  stop snippet in preinst that ran on every upgrade, and no start or restart
-  snippet in postinst. Both flags are passed now, so the service is enabled but
-  not started on a fresh install, and it is try-restarted on upgrade - a running
-  service comes back, a stopped one stays stopped. This matches
-  %%systemd_postun_with_restart in the RPM package. Reported by @russmo
-  (issue #122)
 - Fixed: a fresh install of the RPM package did not enable the smfc service, so
   it did not start at the next boot. %%systemd_post runs systemctl preset, and
   with no preset file the distribution catch-all rule (disable *) matched. The
