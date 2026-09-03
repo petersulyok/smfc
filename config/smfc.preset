@@ -1,0 +1,15 @@
+# systemd preset for smfc.
+#
+# %systemd_post in the RPM package runs `systemctl preset smfc.service` on a
+# fresh install. That command reads this file and enables the service, so smfc
+# starts at the next boot. Without this file the distribution catch-all rule in
+# 90-default.preset (`disable *`) would match and leave the service disabled.
+#
+# The install does not start the service: review /etc/smfc/smfc.conf first, then
+# run `systemctl start smfc`.
+#
+# The rule applies at install time only. A later `systemctl disable smfc` is
+# permanent, and an upgrade does not undo it. To stop the install from enabling
+# the service, write `disable smfc.service` into
+# /etc/systemd/system-preset/00-smfc.preset before you install the package.
+enable smfc.service

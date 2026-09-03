@@ -33,6 +33,7 @@ IPMI fan function.
 install -Dm644 config/smfc.conf    %{buildroot}/etc/smfc/smfc.conf
 install -Dm644 config/smfc         %{buildroot}/etc/default/smfc
 install -Dm644 config/smfc.service %{buildroot}%{_unitdir}/smfc.service
+install -Dm644 config/smfc.preset  %{buildroot}%{_presetdir}/50-smfc.preset
 install -Dm644 doc/smfc.1          %{buildroot}%{_mandir}/man1/smfc.1
 install -Dm644 doc/smfc-client.1   %{buildroot}%{_mandir}/man1/smfc-client.1
 install -d %{buildroot}%{_docdir}/%{name}/examples
@@ -93,6 +94,7 @@ fi
 %config(noreplace) /etc/smfc/smfc.conf
 %config(noreplace) /etc/default/smfc
 %{_unitdir}/smfc.service
+%{_presetdir}/50-smfc.preset
 %{_mandir}/man1/smfc.1*
 %{_mandir}/man1/smfc-client.1*
 %{_docdir}/%{name}/examples/
@@ -108,6 +110,11 @@ fi
   service comes back, a stopped one stays stopped. This matches
   %%systemd_postun_with_restart in the RPM package. Reported by @russmo
   (issue #122)
+- Fixed: a fresh install of the RPM package did not enable the smfc service, so
+  it did not start at the next boot. %%systemd_post runs systemctl preset, and
+  with no preset file the distribution catch-all rule (disable *) matched. The
+  package ships /usr/lib/systemd/system-preset/50-smfc.preset with the line
+  "enable smfc.service" now. The install still does not start the service
 
 * Wed Sep 02 2026 Peter Sulyok <peter@sulyok.net> - 6.4.0-1
 - Added: new PCI fan controller (seventh controller type) that drives one or
