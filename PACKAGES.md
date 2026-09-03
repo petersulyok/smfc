@@ -39,7 +39,7 @@ The `.deb` file will be created in the parent directory (`../`).
   - `/usr/share/man/man1/smfc.1.gz` — man page
   - `/usr/share/doc/smfc/examples/` — sample configuration files
 - Configuration files under `/etc/` are marked as conffiles. On upgrade, `dpkg` will prompt the user if they have been modified locally.
-- The `smfc.service` systemd unit is automatically enabled (but not started) on install, so the configuration can be reviewed before the service first runs; it is stopped on removal.
+- The `smfc.service` systemd unit is automatically enabled (but not started) on install, so the configuration can be reviewed before the service first runs; it is stopped on removal. On upgrade a running service is restarted and a stopped one is left stopped, which is why `debian/rules` passes both `--no-start` and `--restart-after-upgrade` to `dh_installsystemd`.
 - Run `lintian ../smfc_*.deb` after building to check for packaging policy violations.
 
 ### Compatible distributions
@@ -80,10 +80,12 @@ The `.rpm` file will be created in `~/rpmbuild/RPMS/noarch/`.
   - `/etc/smfc/smfc.conf` — configuration file (preserved on upgrade)
   - `/etc/default/smfc` — systemd environment file (preserved on upgrade)
   - `/usr/lib/systemd/system/smfc.service` — systemd service unit
+  - `/usr/lib/systemd/system-preset/50-smfc.preset` — systemd preset (enables the unit on install)
   - `/usr/share/man/man1/smfc.1.gz` — man page
   - `/usr/share/doc/smfc/examples/` — sample configuration files
 - Configuration files are marked with `%config(noreplace)`. On upgrade, `rpm` will not overwrite locally modified files.
-- The `smfc.service` systemd unit is automatically enabled (but not started) on install, so the configuration can be reviewed before the service first runs; it is stopped on removal.
+- The `smfc.service` systemd unit is automatically enabled (but not started) on install, so the configuration can be reviewed before the service first runs; it is stopped on removal. On upgrade a running service is restarted and a stopped one is left stopped (`%systemd_postun_with_restart`).
+- `%systemd_post` runs `systemctl preset`, which enables the unit only if the systemd preset policy allows it. Fedora, RHEL and openSUSE ship a `disable *` catch-all rule, so the package ships `/usr/lib/systemd/system-preset/50-smfc.preset` with the line `enable smfc.service`; the `50` prefix puts it ahead of the catch-all.
 - The build commands above extract the version from `smfc.spec` automatically, so the tarball name always matches.
 - On RHEL, CentOS Stream, Rocky Linux, and AlmaLinux the [EPEL](https://docs.fedoraproject.org/en-US/epel/) repository is required for the `python3-pyudev` dependency.
 
