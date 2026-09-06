@@ -1437,6 +1437,7 @@ Further readings:
 
 #### Hardware datasheets
  - [Nuvoton NCT7904D datasheet (Rev. 1.7)](https://www.nuvoton.com.cn/export/resource-files/en-us--Nuvoton_NCT7904D_Datasheet_V17.pdf) — hardware monitor and fan controller chip used on the Supermicro X10QBi motherboard
+ - [Ascend Accelerator Cards](https://www.hiascend.com/en/document)
 
 #### Forums and blogs
  - [\[STH forums\] Reference Material: Supermicro X9/X10/X11 Fan Speed Control](https://forums.servethehome.com/index.php?resources/supermicro-x9-x10-x11-fan-speed-control.20/)
@@ -1451,7 +1452,7 @@ Further readings:
  - [smartmontools](https://www.smartmontools.org/) — S.M.A.R.T. monitoring tools for hard disks (`smartctl`)
  - [nvidia-smi](https://developer.nvidia.com/system-management-interface) — NVIDIA System Management Interface for GPU monitoring
  - [rocm-smi](https://github.com/ROCm/rocm_smi_lib) — AMD ROCm System Management Interface for GPU monitoring
- - [npu-smi](https://www.hiascend.com/document) — Huawei Ascend System Management Interface for NPU monitoring
+ - [npu-smi](https://support.huawei.com/enterprise/en/doc/EDOC1100079295/c8f5b2f7/introduction-to-the-npu-smi-command-for-version-1011-1015)
  - [hwmon subsystem](https://www.kernel.org/doc/html/latest/hwmon/index.html) — hardware monitoring framework used for temperature readings
  - [coretemp](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html) — Intel CPU temperature monitoring
  - [k10temp](https://docs.kernel.org/hwmon/k10temp.html) — AMD CPU temperature monitoring
