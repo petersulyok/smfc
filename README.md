@@ -1452,7 +1452,7 @@ Further readings:
  - [smartmontools](https://www.smartmontools.org/) — S.M.A.R.T. monitoring tools for hard disks (`smartctl`)
  - [nvidia-smi](https://developer.nvidia.com/system-management-interface) — NVIDIA System Management Interface for GPU monitoring
  - [rocm-smi](https://github.com/ROCm/rocm_smi_lib) — AMD ROCm System Management Interface for GPU monitoring
- - [npu-smi](https://support.huawei.com/enterprise/en/doc/EDOC1100079295/c8f5b2f7/introduction-to-the-npu-smi-command-for-version-1011-1015)
+ - [npu-smi](https://support.huawei.com/enterprise/en/doc/EDOC1100079295/c8f5b2f7/introduction-to-the-npu-smi-command-for-version-1011-1015) — Introduction to the npu-smi command
  - [hwmon subsystem](https://www.kernel.org/doc/html/latest/hwmon/index.html) — hardware monitoring framework used for temperature readings
  - [coretemp](https://www.kernel.org/doc/html/latest/hwmon/coretemp.html) — Intel CPU temperature monitoring
  - [k10temp](https://docs.kernel.org/hwmon/k10temp.html) — AMD CPU temperature monitoring
