@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        6.4.1
+Version:        6.4.2
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -100,6 +100,12 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Mon Sep 07 2026 Peter Sulyok <peter@sulyok.net> - 6.4.2-1
+- Fixed: the X14/H14 firmware stack probe accepted only completion code 0xC1
+  as the ATEN signal, so a board rejecting the probe with any other code
+  (e.g. 0xC7 on H14DSG-O-CPU) failed to start. Any completion code now
+  selects ATEN; a missing completion code still stays fatal.
+
 * Thu Sep 03 2026 Peter Sulyok <peter@sulyok.net> - 6.4.1-1
 - Fixed: a fresh install of the RPM package did not enable the smfc service, so
   it did not start at the next boot. %%systemd_post runs systemctl preset, and

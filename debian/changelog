@@ -1,3 +1,12 @@
+smfc (6.4.2) unstable; urgency=medium
+
+  * Fixed: the X14/H14 firmware stack probe accepted only completion code
+    0xC1 as the ATEN signal, so a board rejecting the probe with any other
+    code (e.g. 0xC7 on H14DSG-O-CPU) failed to start. Any completion code
+    now selects ATEN; a missing completion code still stays fatal.
+
+ -- Peter Sulyok <peter@sulyok.net>  Mon, 07 Sep 2026 16:31:54 +0200
+
 smfc (6.4.1) unstable; urgency=medium
 
   * Fixed: an apt upgrade of the DEB package stopped the smfc service and never
