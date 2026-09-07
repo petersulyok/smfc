@@ -1077,11 +1077,12 @@ class TestService:
         following steps:
         - mock print(), smfc.service.Exporter, pyudev.Context.__init__ via MockedContextGood, and
           CpuFc.__init__ to skip real hwmon discovery
-        - mock time.sleep() so it exits with code 100 on its 3rd call, bounding the main loop
+        - mock time.sleep() so it exits with code 100 once CpuFc.run has been polled 3 times, bounding the
+          main loop by the poll count rather than by the sleep count, which startup spends as well
         - mock smfc.CpuFc.run with a side_effect raising IpmiError on every call, as an unreachable BMC or an
           `ipmitool_timeout` expiry on a wedged /dev/ipmi0 would
         - build a minimal CPU-only config via `td` and invoke Service.run()
-        - ASSERT: sys.exit() code is 100, i.e. the loop reached its 3rd sleep - the IPMI failure did not
+        - ASSERT: sys.exit() code is 100, i.e. the loop reached its 3rd poll - the IPMI failure did not
           terminate the daemon. Exiting would leave the fans wherever they happen to be with nothing
           regulating them, which is strictly worse than staying up and retrying
         - ASSERT: smfc.CpuFc.run was called once per iteration, so each poll retried rather than the failure
@@ -1090,12 +1091,15 @@ class TestService:
         """
         f = "TestService.test_run_survives_ipmi_error_in_the_control_loop"
         self.sleep_counter = 0
+        mock_run = MagicMock(side_effect=IpmiError("ipmitool timed out after 10 seconds: raw 0x30 0x70 0x66."))
 
         # pylint: disable=unused-argument
         def mocked_sleep(*args):
-            """Mocked time.sleep() function. Exits at the 3rd call."""
+            """Mocked time.sleep() function. Exits once the control loop has polled 3 times."""
             self.sleep_counter += 1
-            if self.sleep_counter >= 3:
+            # Startup sleeps as well, so bounding the loop by the sleep count ends it before the 3rd poll
+            # whenever startup spends one sleep more. The sleep cap only keeps a broken loop from hanging.
+            if mock_run.call_count >= 3 or self.sleep_counter >= 100:
                 sys.exit(100)
 
         def mocked_cpufc_init(self, log: Log, udevc: Context, ipmi: Ipmi, cfg) -> None:
@@ -1141,7 +1145,6 @@ class TestService:
         mocker.patch("smfc.service.Exporter", MagicMock())
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
         mocker.patch("smfc.CpuFc.__init__", mocked_cpufc_init)
-        mock_run = MagicMock(side_effect=IpmiError("ipmitool timed out after 10 seconds: raw 0x30 0x70 0x66."))
         mocker.patch("smfc.CpuFc.run", mock_run)
         mock_log_msg = MagicMock()
         mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
