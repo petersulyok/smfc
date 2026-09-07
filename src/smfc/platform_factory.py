@@ -18,7 +18,6 @@ from smfc.x10qbi import X10QBi
 # It is taken from the OpenBMC command table rather than spelled out again: the probe asks whether that
 # command set exists, so the bytes it sends must be the bytes the platform would send.
 X14_STACK_PROBE: List[str] = X14OpenBmcCmd.read_manual(0)
-CC_INVALID_COMMAND: int = 0xC1      # The OEM manual-mode command does not exist -> ATEN firmware
 STACK_PROBE_DOC: str = "doc/X14H14_MANUAL_FANCONTROL.md, Part 1"
 
 
@@ -34,8 +33,10 @@ def _create_x14_platform(platform_name: str,
     There is deliberately no "try one, fall back to the other" branch. Part 1.3: the two stacks share the
     `0x30 0x70 0x66` layout - selector 0x00 reads a duty, 0x01 writes one - but selector 0x02 means per-zone
     manual mode on OpenBMC and a global bypass flag on ATEN. A fallback would therefore be accepted by the
-    board and apply the wrong lever, taking over every zone where only one was meant, or none at all. Only
-    completion code 0xC1 means ATEN; every other failure is fatal.
+    board and apply the wrong lever, taking over every zone where only one was meant, or none at all.
+    Part 1: ATEN rejects the probe, but which completion code it uses varies by firmware build - 0xC1 and
+    0xC7 have both been seen live. Any rejection of this probe means ATEN; only a clean reply is checked
+    further, against the exact `cf c2 00 <flag>` shape OpenBMC always answers with.
     Args:
         platform_name (str): the platform name (configuration value or BMC product name)
         exec_ipmitool (Callable): function that executes ipmitool commands
@@ -48,7 +49,11 @@ def _create_x14_platform(platform_name: str,
     try:
         r = exec_ipmitool(X14_STACK_PROBE)
     except IpmiError as e:
-        if e.completion_code == CC_INVALID_COMMAND:
+        # Any completion code the BMC returns for this probe is ATEN (Part 1) - OpenBMC never rejects it,
+        # it always replies with the 4-byte `cf c2 00 <flag>` pattern checked below. A completion code of
+        # None means the BMC was never reached (unreachable, wedged, a sudo problem), which is not
+        # evidence of either stack and stays fatal.
+        if e.completion_code is not None:
             return X14AtenPlatform(platform_name, exec_ipmitool)
         raise RuntimeError(f"Cannot determine the BMC fan control stack (see {STACK_PROBE_DOC}): {e}") from e
     # The reply echoes the IANA ID of the OEM command back before the payload (`cf c2 00 <flag>`), so the

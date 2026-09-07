@@ -21,9 +21,9 @@ def openbmc_exec(flag: str = " 01") -> MagicMock:
     return MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=flag, stderr=""))
 
 
-def aten_exec() -> MagicMock:
-    """An exec callback whose BMC answers the Part 1.1 stack probe with completion code 0xC1 (ATEN)."""
-    return MagicMock(side_effect=IpmiError("ipmitool error (1): rsp=0xc1.", 0xC1))
+def aten_exec(completion_code: int = 0xC1) -> MagicMock:
+    """An exec callback whose BMC answers the Part 1.1 stack probe with a rejection (ATEN)."""
+    return MagicMock(side_effect=IpmiError(f"ipmitool error (1): rsp=0x{completion_code:x}.", completion_code))
 
 
 class TestCreatePlatform:
@@ -61,24 +61,25 @@ class TestCreatePlatform:
         assert isinstance(platform, X14OpenBmcPlatform), f"{f}: should be X14OpenBmcPlatform"
         assert platform.name == PlatformName.GENERIC_X14, f"{f}: platform name"
 
-    def test_create_genericx14_aten(self) -> None:
+    @pytest.mark.parametrize("completion_code", [0xC1, 0xC7], ids=["invalid-command", "invalid-data-length"])
+    def test_create_genericx14_aten(self, completion_code: int) -> None:
         """Positive unit test for create_platform() function. It contains the following steps:
-        - mock Exec dependency with a BMC answering the Part 1.1 stack probe with completion code 0xC1
+        - mock Exec dependency with a BMC answering the Part 1.1 stack probe with a rejection, either
+          completion code 0xC1 or 0xC7 - firmware builds vary in which one they use (Part 1.1)
         - call `create_platform(name=PlatformName.GENERIC_X14, exec=mock_exec)`
         - ASSERT: returned platform is an instance of X14AtenPlatform
-        - ASSERT: returned platform is not an X14OpenBmcPlatform: 0xC1 identifies the other stack, and
-          the two command sets must never be mixed (Part 1.3)
+        - ASSERT: returned platform is not an X14OpenBmcPlatform: any rejection identifies the other
+          stack, and the two command sets must never be mixed (Part 1.3)
         - ASSERT: returned platform's name equals PlatformName.GENERIC_X14
         """
         f = "TestCreatePlatform.test_create_genericx14_aten"
-        platform = create_platform(PlatformName.GENERIC_X14, aten_exec())
+        platform = create_platform(PlatformName.GENERIC_X14, aten_exec(completion_code))
         assert isinstance(platform, X14AtenPlatform), f"{f}: should be X14AtenPlatform"
         assert not isinstance(platform, X14OpenBmcPlatform), f"{f}: must not be X14OpenBmcPlatform"
         assert platform.name == PlatformName.GENERIC_X14, f"{f}: platform name"
 
     @pytest.mark.parametrize("exec_fn", [
         MagicMock(side_effect=IpmiError("ipmitool error (1): Unable to establish IPMI v2 session.", None)),
-        MagicMock(side_effect=IpmiError("ipmitool error (1): rsp=0xd4.", 0xD4)),
         MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")),
         MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=" zz", stderr="")),
         MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=" 7f", stderr="")),
@@ -86,11 +87,11 @@ class TestCreatePlatform:
     ])
     def test_create_genericx14_undetermined(self, exec_fn: MagicMock) -> None:
         """Negative unit test for create_platform() function. It contains the following steps:
-        - mock Exec dependency with a BMC that neither returns a valid manual mode flag nor 0xC1:
-          an unreachable BMC, a different completion code, an empty reply, an unparsable reply, and a flag
-          byte that is neither 0x00 nor 0x01 in both the bare and the IANA-prefixed reply form
+        - mock Exec dependency with a BMC that neither rejects the probe nor returns a valid manual mode
+          flag: an unreachable BMC (no completion code at all), an empty reply, an unparsable reply, and
+          a flag byte that is neither 0x00 nor 0x01 in both the bare and the IANA-prefixed reply form
         - call `create_platform(name=PlatformName.GENERIC_X14, exec=exec_fn)`
-        - ASSERT: RuntimeError is raised in all six cases - there is deliberately no fallback branch,
+        - ASSERT: RuntimeError is raised in all five cases - there is deliberately no fallback branch,
           because a guessed stack applies the wrong lever to the fans (Part 1.3)
         - ASSERT: the error message names the guide and its Part 1
         """

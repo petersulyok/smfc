@@ -39,6 +39,33 @@ All commands below assume:
 BMC="-H <bmc-ip> -U <user> -P <password>"     # omit -H/-U/-P entirely for local in-band use
 ```
 
+**Already know your stack, and just want the commands?** Skip to the
+[Quick reference](#quick-reference) at the end of this document.
+
+## Contents
+
+- [Part 1 — Which BMC do you have](#part-1--which-bmc-do-you-have)
+- [Part 2 — Terms and conventions](#part-2--terms-and-conventions)
+- [Part 3 — OpenBMC boards](#part-3--openbmc-boards)
+  ([facts](#31-facts-that-shape-every-procedure-here) ·
+  [commands](#32-the-commands) ·
+  [zone numbering trap](#33--the-same-zone-is-addressed-by-a-different-number-in-each-command) ·
+  [mode values](#34-base-fan-mode-values) ·
+  [step-by-step](#35-procedure) ·
+  [watchdog](#36-holding-a-duty-unattended) ·
+  [release](#37-releasing-and-the-emergency-exit) ·
+  [troubleshooting](#38-troubleshooting))
+- [Part 4 — ATEN boards](#part-4--aten-boards)
+  ([facts](#41-facts-that-shape-every-procedure-here) ·
+  [commands](#42-the-commands) ·
+  [step-by-step](#43-procedure) ·
+  [reading duty back](#44-reading-duty-back-and-checking-the-bypass) ·
+  [watchdog](#45-holding-a-duty-unattended) ·
+  [troubleshooting](#46-troubleshooting))
+- [Part 5 — Board reference](#part-5--board-reference)
+  ([OpenBMC boards](#51-openbmc-boards) · [ATEN boards](#52-aten-boards))
+- [Quick reference](#quick-reference)
+
 ---
 
 # Part 1 — Which BMC do you have
@@ -54,7 +81,14 @@ ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01
 | Result | Stack | How you take the fans over | Go to |
 | --- | --- | --- | --- |
 | `cf c2 00 01` or `cf c2 00 00` | **OpenBMC** | **Per-zone manual mode** — a switch for each zone that tells the BMC to stop driving that zone, leaving your duty in place. Other zones keep running automatically. The switch is readable, so you can check at any time whether you still hold the fans. | **Part 3** |
-| `0xC1` *Invalid command* | **ATEN** | **A global bypass flag** — one switch that suspends automatic fan control for every zone at once, leaving your duty in place. There is no per-zone equivalent, and the switch cannot be read back, so its state has to be inferred from the fan duty. | **Part 4** |
+| Any rejection — any completion code (`0xC1` *Invalid command*, `0xC7` *Request data length invalid*, or another) | **ATEN** | **A global bypass flag** — one switch that suspends automatic fan control for every zone at once, leaving your duty in place. There is no per-zone equivalent, and the switch cannot be read back, so its state has to be inferred from the fan duty. | **Part 4** |
+
+⚠️ **Judge this by the reply, not by one specific error code.** OpenBMC always answers
+this exact probe with 4 bytes, `cf c2 00 <flag>` — nothing else. ATEN never produces
+that reply; it rejects the command, but which completion code it uses to reject it
+varies by firmware build. `0xC1` and `0xC7` have both been seen live on ATEN boards for
+this identical command. Do not treat `0xC1` as the only valid ATEN signal — any board
+that does not answer with the 4-byte `cf c2 00 <flag>` pattern is ATEN.
 
 ### Where the two names come from
 
@@ -240,8 +274,8 @@ overwritten within about a second.
 | --- | --- | --- |
 | `0x30 0x45 0x00` | 1 byte, the mode | — |
 | `0x30 0x45 0x01 <mode>` | no data | `0xC1` if `<mode>` is above `0x0B`; no mode is changed |
-| `0x2e 0x04 … 0x00 <zone>` | 4 bytes `cf c2 00 <flag>` | `0xC1` if the command is short (both op and zone must be present) or the op is above `0x02`; another code if that zone does not exist |
-| `0x2e 0x04 … 0x02 <zone>` | 4 bytes `cf c2 00 <flag>` | as above |
+| `0x2e 0x04 … 0x00 <zone>` | 1 byte `01`/`00` | `0xC1` if the command is short (both op and zone must be present) or the op is above `0x02`; another code if that zone does not exist |
+| `0x2e 0x04 … 0x02 <zone>` | 1 byte `01`/`00` | as above |
 | `0x2e 0x04 … 0x01 <zone> <0\|1>` | no data | as above |
 | `0x30 0x70 0x66 0x00 <zone>` | 1 byte: that zone's duty | `0xCC` if `<zone>` is above `0x04`; `0xC7` if the payload after `0x66` is not 2 or 3 bytes |
 | `0x30 0x70 0x66 0x01 <zone> <duty%>` | no data (completion code) | `0xCC` if `<zone>` is above `0x04`; `0xC7` if the payload after `0x66` is not 2 or 3 bytes |
@@ -302,32 +336,29 @@ ipmitool $BMC raw 0x30 0x45 0x00                # -> 1 byte, the current mode
 ```
 
 The board is always in some mode, so you can leave it alone and go straight to step 2.
-There are two reasons to change it anyway.
+There are two reasons to change it anyway:
 
-**A different fallback curve.** The base mode is what the fans revert to whenever manual
-mode is lost — a BMC reboot, a firmware update, someone changing the fan mode from the web
-UI. If the board is sitting in Silent, that fallback is minimum cooling, which is a poor
-place to land unattended. Standard or Optimal are sane; Full Speed is 100 %, loud but safe.
+- **A different fallback curve.** The base mode is what the fans revert to whenever manual
+  mode is lost — a BMC reboot, a firmware update, someone changing the fan mode from the
+  web UI. Silent falls back to minimum cooling, a poor place to land unattended. Standard
+  or Optimal are sane; Full Speed is 100 %, loud but safe.
+- **A different zone layout.** Selecting a base mode loads a **fan table**, and that table
+  defines the zones — how many there are, and which fans belong to each. A zone is a group
+  of fans driven by one PWM output, so changing the mode can change how many zones you have
+  to address.
 
-**A different zone layout.** Selecting a base mode makes the BMC load a **fan table**, and
-that table is what defines the zones: how many there are, and which fans belong to each. A
-zone is simply a group of fans driven by one PWM output, so "set duty on zone 2" moves
-exactly the fans that table puts in zone 2. Change the mode and you load a different table,
-which can change both numbers.
+**Why the zone count can change:** on most boards the everyday modes — Standard, Optimal,
+Heavy IO, Full Speed — all load a table with **one zone containing every fan**, so a duty
+write moves the whole chassis. Two things break that:
 
-In practice, on most boards the everyday modes — Standard, Optimal, Heavy IO, Full Speed —
-all load a table with **one zone containing every fan**, so a duty write moves the whole
-chassis and there is nothing to address separately. Two things change that:
-
-- **Some modes carry a multi-zone table.** On boards that offer them, Performance and
-  Silent load a three-zone table where the numbered and lettered fans are driven
-  separately.
+- **Some modes carry a multi-zone table.** Where offered, Performance and Silent load a
+  three-zone table that drives the numbered and lettered fans separately.
 - **Some boards override the common modes.** On those, Optimal, Heavy IO and Full Speed
   load a board-specific two-zone table instead of the generic single-zone one.
 
-So if your board answers only zone 1 and you want the front and rear fans on different
-duties, changing the mode is the lever that gives you the extra zones — and conversely, a
-zone map that worked yesterday can collapse to one zone if someone changed the mode.
+So if you want the front and rear fans on different duties but your board only answers
+zone 1, changing the mode is the lever that gives you the extra zones — and a zone map that
+worked yesterday can collapse to one zone if someone changed the mode since.
 
 ⚠️ **Re-probe the zones after any mode change**, and do not infer the layout from the mode
 name. On some boards a mode is accepted and reads back correctly while a different table is
@@ -469,7 +500,7 @@ On a multi-zone board extend the loop over each zone pair (`ZONE_M` = 1, 2, … 
 
 ```bash
 ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 0x01 0x00   # manual OFF, zone 1
-ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01        # confirm -> expect cf c2 00 00
+ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01        # confirm -> expect 00
 ```
 
 Repeat for every zone you enabled, or release all at once with
@@ -905,7 +936,7 @@ ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x01 0x01 0x00   # manual OFF, zone 1
 **ATEN**
 
 ```bash
-ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01        # is this stack? -> 0xC1
+ipmitool $BMC raw 0x2e 0x04 0xcf 0xc2 0x00 0x00 0x01        # is this stack? -> any rejection (e.g. 0xC1, 0xC7)
 ipmitool $BMC raw 0x30 0x70 0x66 0x02 0x01                  # bypass ON (all zones)
 ipmitool $BMC raw 0x30 0x70 0x66 0x01 0x00 0x32             # duty 50%, zone 0
 ipmitool $BMC raw 0x30 0x70 0x66 0x00 0x00                  # read duty, zone 0
