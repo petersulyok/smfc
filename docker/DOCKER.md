@@ -28,7 +28,7 @@ Generic notes for the docker images:
   6. Networking is enabled again for IPMI remote access.
 
 # Standard image
-This image contains the following components: 
+This image contains the following components:
 - `Alpine Linux` 3.24.1
 - `Python` 3.14.7-r1
 - `ipmitool` 1.8.19-r1
@@ -36,7 +36,7 @@ This image contains the following components:
 
 ## Usage #1: docker CLI
 The service can be started:
-```
+```shell
 docker run \
     -d \
     --rm \
@@ -51,15 +51,15 @@ docker run \
     -e SMFC_ARGS="-l 3" \
     petersulyok/smfc:latest
 ```
-(sample script can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-start.sh)), 
+(sample script can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-start.sh)),
 and can be terminated:
-```commandline
-docker stop smfc  
+```shell
+docker stop smfc
 ```
 
 ## Usage #2: docker-compose (recommended)
 `docker-compose` requires this file:
-```
+```yaml
 services:
   smfc:
     image: petersulyok/smfc:latest
@@ -77,25 +77,25 @@ services:
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
 ```
-(sample yaml file can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-compose.yaml)), 
+(sample yaml file can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-compose.yaml)),
 and docker image can be started/stopped this way:
-```commandline
+```shell
 docker compose up -d
 docker compose down
 ```
 
 # NVIDIA GPU-enabled image
-This image contains the following components: 
+This image contains the following components:
 - `Debian Linux` 13.6 (slim)
 - `Python` 3.13.5
 - `ipmitool` 1.8.19-9
 - `smartmontools` 7.4-3
 
 ## How to enable NVIDIA GPU in the docker image?
-Install the NVIDIA driver and the NVIDIA Container Toolkit on your host as it is [described here](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html). 
+Install the NVIDIA driver and the NVIDIA Container Toolkit on your host as it is [described here](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
 After a successful installation, execute the following commands:
 
-```commandline
+```shell
 nvidia-ctk runtime configure --runtime=docker
 systemctl restart docker
 ```
@@ -104,7 +104,7 @@ Restart is needed because NVIDIA Container Toolkit modified the `/etc/docker/dae
 
 ## Usage #1: docker CLI
 The service can be started:
-```
+```shell
 docker run \
     -d \
     --rm \
@@ -121,15 +121,15 @@ docker run \
     -e SMFC_ARGS="-l 3" \
     petersulyok/smfc:latest-nvidia
 ```
-(sample script can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-start-nvidia.sh)), 
+(sample script can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-start-nvidia.sh)),
 and can be terminated:
-```
-docker stop smfc  
+```shell
+docker stop smfc
 ```
 
 ## Usage #2: docker-compose (recommended)
 `docker-compose` requires this file:
-```
+```yaml
 services:
   smfc:
     image: petersulyok/smfc:latest-nvidia
@@ -156,9 +156,9 @@ services:
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
 ```
-(sample yaml file can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-compose-nvidia.yaml)), 
+(sample yaml file can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-compose-nvidia.yaml)),
 and docker image can be started/stopped this way:
-```commandline
+```shell
 docker compose -f docker-compose-nvidia.yaml up -d
 docker compose -f docker-compose-nvidia.yaml down
 ```
@@ -182,13 +182,13 @@ This image contains the following components:
 `rocm-smi` is installed **inside the Docker image** — it does not need to be installed on the host.
 The host only needs the `amdgpu` kernel driver loaded, which exposes `/dev/kfd` and `/dev/dri`. This driver has been part of the Linux kernel since 4.5, so it is already present on most modern systems. You can verify it is loaded with:
 
-```commandline
+```shell
 lsmod | grep amdgpu
 ```
 
 ## Usage #1: docker CLI
 The service can be started:
-```
+```shell
 docker run \
     -d \
     --rm \
@@ -208,15 +208,15 @@ docker run \
     -e SMFC_ARGS="-l 3" \
     petersulyok/smfc:latest-amd
 ```
-(sample script can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-start-amd.sh)), 
+(sample script can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-start-amd.sh)),
 and can be terminated:
-```
-docker stop smfc  
+```shell
+docker stop smfc
 ```
 
 ## Usage #2: docker-compose (recommended)
 `docker-compose` requires this file:
-```
+```yaml
 services:
   smfc:
     image: petersulyok/smfc:latest-amd
@@ -242,9 +242,9 @@ services:
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
 ```
-(sample yaml file can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-compose-amd.yaml)), 
+(sample yaml file can be found [here](https://github.com/petersulyok/smfc/blob/main/docker/docker-compose-amd.yaml)),
 and docker image can be started/stopped this way:
-```commandline
+```shell
 docker compose -f docker-compose-amd.yaml up -d
 docker compose -f docker-compose-amd.yaml down
 ```
@@ -268,7 +268,7 @@ All three images contain the `smfc-client` command (see [README chapter 14.](htt
 which displays a read-only snapshot of the fan controllers, fan levels, IPMI zones and standby state. The easiest way
 to use it is executing the command in the *running* container:
 
-```commandline
+```shell
 docker exec smfc smfc-client
 docker exec smfc smfc-client --verbose
 ```
@@ -286,13 +286,13 @@ Notes:
      In case of remote IPMI access (`[Ipmi] remote_parameters=`) the `--privileged` parameter and the `/dev` volume
      can be omitted, because `ipmitool` uses the network instead of the local `/dev/ipmi0` device:
 
-```commandline
-docker run --rm \
-    -v /run/udev:/run/udev:ro \
-    -v /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro \
-    --entrypoint smfc-client \
-    petersulyok/smfc:latest
-```
+     ```shell
+     docker run --rm \
+         -v /run/udev:/run/udev:ro \
+         -v /etc/smfc/smfc.conf:/etc/smfc/smfc.conf:ro \
+         --entrypoint smfc-client \
+         petersulyok/smfc:latest
+     ```
 
 
 # Versions
@@ -310,13 +310,13 @@ See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) f
   - **5.2.0** (2026.03.30): Updated to smfc 5.2.0 (Alpine 3.23.3/Debian 13 slim)
   - **5.1.2** (2026.03.28): Updated to smfc 5.1.2 (Alpine 3.23.3/Debian 13 slim)
   - **5.0.0** (2026.03.04): Updated to smfc 5.0.0 (Alpine 3.23.3/Debian 12 slim)
-  - **4.2.1** (2025.10.26): Updated to smfc 4.2.1 (Alpine 3.22.2/Debian 12 slim) 
+  - **4.2.1** (2025.10.26): Updated to smfc 4.2.1 (Alpine 3.22.2/Debian 12 slim)
   - **4.1.0** (2025.08.28): Updated to smfc 4.1.0 (Alpine 3.22.1/Debian 12 slim)
   - **4.0.0** (2025.07.08): Updated to smfc 4.0.0 (Alpine 3.22/Debian 12 slim) - beta releases deleted
   - **3.8.0** (2025.03.15): Updated to smfc 3.8.0 and (Alpine 3.20.6)
-  - **3.7.0** (2025.01.27): Updated to smfc 3.7.0 and (Alpine 3.20.5) 
+  - **3.7.0** (2025.01.27): Updated to smfc 3.7.0 and (Alpine 3.20.5)
   - **3.6.0** (2024.12.12): Updated to smfc 3.6.0 and (Alpine 3.20.3)
   - **3.5.1** (2024.08.23): Updated to smfc 3.5.1 and (Alpine 3.20)
   - **3.5.0** (2024.03.21): Updated to smfc 3.5.0 and (Alpine 3.19)
-  - **3.4.0** (2023.11.28): Documentation updated 
+  - **3.4.0** (2023.11.28): Documentation updated
   - **3.3.0** (2023.11.19): Initial release
