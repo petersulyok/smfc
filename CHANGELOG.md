@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.4.2] - 2026.09.07
+
+### Fixed
+- **The X14/H14 firmware stack probe accepted only completion code `0xC1` as the ATEN signal**, so a board rejecting the probe with any other code (e.g. `0xC7` on `H14DSG-O-CPU`) failed to start. Any completion code now selects ATEN; a missing completion code still stays fatal.
+
 ## [6.4.1] - 2026.09.03
 
 ### Fixed
