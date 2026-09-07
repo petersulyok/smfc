@@ -18,6 +18,7 @@ function print_usage() {
   echo "    doc/smfc-client.1    - smfc-client man page version"
   echo "    smfc.spec            - RPM Version field and new changelog entry"
   echo "    debian/changelog     - new DEB changelog entry"
+  echo "    docker/DOCKER.md     - new entry in the # Versions chapter"
   exit 1
 }
 
@@ -97,7 +98,22 @@ else
   echo "Updated ${FILE}"
 fi
 
-# 5. Run uv sync to update uv.lock
+# 5. Update docker/DOCKER.md (insert a new entry in the # Versions chapter)
+FILE="${PROJECT_ROOT}/docker/DOCKER.md"
+if [ ! -f "${FILE}" ]; then
+  echo "Error: ${FILE} not found."
+  exit 1
+fi
+if grep -q "\*\*${VERSION}\*\*" "${FILE}"; then
+  echo "Updated ${FILE} (Versions entry for ${VERSION} already exists)"
+else
+  DOC_DATE=$(date "+%Y.%m.%d")
+  NEW_LINE="  - **${VERSION}** (${DOC_DATE}): UPDATE WITH RELEASE NOTES"
+  sed -i "s#^See \[CHANGELOG.md\].*#&\n${NEW_LINE}#" "${FILE}"
+  echo "Updated ${FILE}"
+fi
+
+# 6. Run uv sync to update uv.lock
 if command -v uv &> /dev/null; then
   cd "${PROJECT_ROOT}"
   uv sync
@@ -111,3 +127,4 @@ echo "Version updated to ${VERSION} in all files."
 echo "Please update the changelog entries marked with 'UPDATE WITH RELEASE NOTES' in:"
 echo "  - smfc.spec"
 echo "  - debian/changelog"
+echo "  - docker/DOCKER.md"
