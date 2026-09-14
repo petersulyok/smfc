@@ -719,7 +719,7 @@ So the documented command is `sudo smfc-config`. The program must not require it
 |---|---|---|
 | browse sections, fields and help | no | works fully |
 | save | yes | read-only mode |
-| hardware checks on `F5` | yes | pass `-s`, or they report a permission error |
+| hardware checks on `F5` | yes | they report a permission error |
 | restart the service | yes | the command is printed |
 
 **Read-only mode is announced at start, not at save time.** The tool tests `os.access(path, W_OK)`
@@ -735,9 +735,12 @@ re-run as: sudo smfc-config
 **Never re-exec under `sudo`.** A full-screen program that relaunches itself loses the terminal state
 and surprises the user. Print the command and let them run it.
 
-**The `-s, --sudo` flag is the one `smfc-client` already has**, with the same letter and the same
-help text: "use sudo for ipmitool/smartctl (if not run as root)". Pass it to `Ipmi` and `HdFc` exactly
-as `client.py` does. Two sibling commands must not differ on a flag that means the same thing.
+**There is no `-s, --sudo` flag.** `smfc` and `smfc-client` have one, and copying it here was a
+mistake: it reads as a substitute for `sudo` and it is not one. A user who passes it to edit
+`/etc/smfc/smfc.conf` still gets read-only mode, because the flag never touched the file. The
+probes run as the user who started the editor, and the documented command stays `sudo smfc-config`.
+The editor cannot call `sudo` itself either: `sudo` asks for the password on the terminal the
+full-screen editor owns, so the prompt would be invisible.
 
 ### 9.3 When the config file is missing
 

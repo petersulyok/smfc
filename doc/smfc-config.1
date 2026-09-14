@@ -76,16 +76,6 @@ Show a help message and exit.
 Configuration file to edit (default:
 .IR /etc/smfc/smfc.conf ).
 .TP
-.B \-s, \-\-sudo
-Run
-.BR ipmitool (1)
-and
-.BR smartctl (8)
-under
-.BR sudo (8)
-during the hardware check. Required when the invoking user lacks direct BMC or
-disk access.
-.TP
 .B \-nc, \-\-no\-color
 Plain output, no colors.
 .TP
@@ -132,6 +122,13 @@ Quit.
 The checks run when you press
 .BR F5 ,
 not while you type, because some of them talk to the hardware and take seconds.
+They run as the user who started the editor.
+.BR ipmitool (1)
+and
+.BR smartctl (8)
+usually need root, so run the editor with
+.BR sudo (8)
+if a check reports a permission error.
 Reading a sleeping disk with
 .BR smartctl (8)
 wakes it, so the editor never does that on its own.

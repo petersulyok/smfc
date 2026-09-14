@@ -178,18 +178,17 @@ def check_npu(configs: Sequence[NpuConfig]) -> List[CheckResult]:
     return results
 
 
-def run_probe(command: Sequence[str], sudo: bool = False) -> Tuple[int, str]:
+def run_probe(command: Sequence[str]) -> Tuple[int, str]:
     """Run one external command and report how it went.
+    The command is run as the user who started the editor. A probe that needs root is answered by
+    running the editor as root, which is the documented `sudo smfc-config`; the editor never calls
+    sudo itself, because sudo would ask for a password on the terminal the editor owns.
     Args:
         command (Sequence[str]): the command and its arguments
-        sudo (bool): True to run it under sudo, for a user without direct access
     Returns:
         Tuple[int, str]: the exit code and the output, or -1 and the reason it could not run
     """
-    # -n keeps sudo from asking for a password. The caller is a full-screen editor that owns the
-    # terminal, so the prompt would be invisible and the probe would sit there until it timed out.
-    # Without a password sudo fails at once, and the finding can say what to do about it.
-    arguments = (["sudo", "-n"] + list(command)) if sudo else list(command)
+    arguments = list(command)
     try:
         result = subprocess.run(arguments, check=False, capture_output=True, text=True,
                                 timeout=PROBE_TIMEOUT)
@@ -199,22 +198,18 @@ def run_probe(command: Sequence[str], sudo: bool = False) -> Tuple[int, str]:
         return -1, f"{arguments[0]} did not answer within {PROBE_TIMEOUT:.0f} seconds"
     except OSError as error:
         return -1, str(error)
-    output = (result.stdout or result.stderr).strip()
-    if sudo and result.returncode != 0 and "password is required" in output:
-        output = "sudo needs a password, which cannot be typed here; run: sudo smfc-config"
-    return result.returncode, output
+    return result.returncode, (result.stdout or result.stderr).strip()
 
 
-def probe_ipmi(cfg: IpmiConfig, sudo: bool = False) -> List[CheckResult]:
+def probe_ipmi(cfg: IpmiConfig) -> List[CheckResult]:
     """Ask the BMC who it is.
     Args:
         cfg (IpmiConfig): parsed [Ipmi] configuration
-        sudo (bool): True to run ipmitool under sudo
     Returns:
         List[CheckResult]: the findings, empty if the BMC answered
     """
     command = [cfg.command] + (cfg.remote_parameters.split() if cfg.remote_parameters else [])
-    code, output = run_probe(command + ["bmc", "info"], sudo)
+    code, output = run_probe(command + ["bmc", "info"])
     if code == 0:
         product = next((line.split(":", 1)[1].strip() for line in output.splitlines()
                         if line.lower().startswith("product name")), "")
@@ -224,13 +219,12 @@ def probe_ipmi(cfg: IpmiConfig, sudo: bool = False) -> List[CheckResult]:
                         "check /dev/ipmi0 and the rights of this user, or run smfc-config with -s")]
 
 
-def probe_hd(configs: Sequence[HdConfig], sudo: bool = False) -> List[CheckResult]:
+def probe_hd(configs: Sequence[HdConfig]) -> List[CheckResult]:
     """Read the temperature of every disk of every enabled HD section.
     `smartctl -n standby` reports a sleeping disk instead of waking it, so a whole array can be
     checked without spinning it up.
     Args:
         configs (Sequence[HdConfig]): parsed HD configurations
-        sudo (bool): True to run smartctl under sudo
     Returns:
         List[CheckResult]: one finding per section
     """
@@ -247,7 +241,7 @@ def probe_hd(configs: Sequence[HdConfig], sudo: bool = False) -> List[CheckResul
         standby = 0
         failed: List[str] = []
         for name in present:
-            code, _ = run_probe([cfg.smartctl_path, "-n", "standby", "-A", name], sudo)
+            code, _ = run_probe([cfg.smartctl_path, "-n", "standby", "-A", name])
             if code == -1 or code & ~SMARTCTL_STANDBY not in (0, SMARTCTL_STANDBY):
                 failed.append(name)
             elif code & SMARTCTL_STANDBY:
@@ -262,11 +256,10 @@ def probe_hd(configs: Sequence[HdConfig], sudo: bool = False) -> List[CheckResul
     return results
 
 
-def probe_gpu(configs: Sequence[GpuConfig], sudo: bool = False) -> List[CheckResult]:
+def probe_gpu(configs: Sequence[GpuConfig]) -> List[CheckResult]:
     """Ask the vendor tool how many GPUs it sees.
     Args:
         configs (Sequence[GpuConfig]): parsed GPU configurations
-        sudo (bool): True to run the tool under sudo
     Returns:
         List[CheckResult]: one finding per enabled section
     """
@@ -277,7 +270,7 @@ def probe_gpu(configs: Sequence[GpuConfig], sudo: bool = False) -> List[CheckRes
         nvidia = cfg.gpu_type == "nvidia"
         command = ([cfg.nvidia_smi_path, "-L"] if nvidia
                    else [cfg.rocm_smi_path, "--showtemp"])
-        code, output = run_probe(command, sudo)
+        code, output = run_probe(command)
         if code != 0:
             results.append(CheckResult(Level.ERROR, cfg.section,
                                        f"{command[0]} did not answer: {output}"))
@@ -291,11 +284,10 @@ def probe_gpu(configs: Sequence[GpuConfig], sudo: bool = False) -> List[CheckRes
     return results
 
 
-def probe_npu(configs: Sequence[NpuConfig], sudo: bool = False) -> List[CheckResult]:
+def probe_npu(configs: Sequence[NpuConfig]) -> List[CheckResult]:
     """Ask npu-smi which cards it sees.
     Args:
         configs (Sequence[NpuConfig]): parsed NPU configurations
-        sudo (bool): True to run the tool under sudo
     Returns:
         List[CheckResult]: one finding per enabled section
     """
@@ -303,7 +295,7 @@ def probe_npu(configs: Sequence[NpuConfig], sudo: bool = False) -> List[CheckRes
     for cfg in configs:
         if not cfg.enabled:
             continue
-        code, output = run_probe([cfg.npu_smi_path, "info", "-m"], sudo)
+        code, output = run_probe([cfg.npu_smi_path, "info", "-m"])
         if code != 0:
             results.append(CheckResult(Level.ERROR, cfg.section,
                                        f"{cfg.npu_smi_path} did not answer: {output}"))
@@ -335,22 +327,21 @@ def probe_nvme(configs: Sequence[NvmeConfig]) -> List[CheckResult]:
     return results
 
 
-def probe_all(config: Config, sudo: bool = False) -> List[CheckResult]:
+def probe_all(config: Config) -> List[CheckResult]:
     """Run every check that talks to the hardware.
     These cost seconds rather than microseconds, so they run only when the user asks for them. A
     sleeping disk is read with `smartctl -n standby`, which reports it without waking it.
     Args:
         config (Config): parsed configuration
-        sudo (bool): True to run the external commands under sudo
     Returns:
         List[CheckResult]: the findings of every section
     """
     results: List[CheckResult] = []
-    results.extend(probe_ipmi(config.ipmi, sudo))
-    results.extend(probe_hd(config.hd, sudo))
+    results.extend(probe_ipmi(config.ipmi))
+    results.extend(probe_hd(config.hd))
     results.extend(probe_nvme(config.nvme))
-    results.extend(probe_gpu(config.gpu, sudo))
-    results.extend(probe_npu(config.npu, sudo))
+    results.extend(probe_gpu(config.gpu))
+    results.extend(probe_npu(config.npu))
     return results
 
 

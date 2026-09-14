@@ -75,7 +75,6 @@ class EditorModel:
     rows: List[Row] = dataclass_field(default_factory=list)     # The section list
     findings: Dict[str, List[CheckResult]] = dataclass_field(default_factory=dict)   # Findings per row
     checked: bool = False                                       # True once the checks have run
-    sudo: bool = False                                          # Run the hardware probes under sudo
 
     @classmethod
     def load(cls, path: str) -> "EditorModel":
@@ -282,7 +281,7 @@ class EditorModel:
         for result in check_all(config, modules if modules is not None else loaded_modules()):
             add(result)
         if hardware:
-            for result in probe_all(config, self.sudo):
+            for result in probe_all(config):
                 add(result)
         self.findings = findings
         self.checked = True

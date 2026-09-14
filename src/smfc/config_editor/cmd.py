@@ -38,8 +38,6 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("-c", "--config", action="store", dest="config_file",
                         default=DEFAULT_CONFIG_PATH, metavar="FILE",
                         help=f"configuration file to edit (default: {DEFAULT_CONFIG_PATH})")
-    parser.add_argument("-s", "--sudo", action="store_true", default=False,
-                        help="use sudo for ipmitool/smartctl (if not run as root)")
     parser.add_argument("-nc", "--no-color", action="store_true", default=False, dest="no_color",
                         help="plain output, no colors")
     parser.add_argument("-v", "--version", action="version", version="%(prog)s " + version("smfc"))
@@ -110,8 +108,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     except OSError as error:
         print(f"ERROR: cannot read {path}: {error}", file=sys.stderr)
         return EXIT_CONFIG_ERROR
-    # The hardware probes of F5 run ipmitool and smartctl, which need root or sudo.
-    model.sudo = args.sudo
     # Import the terminal layer only here, so the checks above can run on a machine without a terminal.
     from smfc.config_editor.app import run  # pylint: disable=import-outside-toplevel
     return run(model, no_color=args.no_color)

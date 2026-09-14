@@ -337,34 +337,6 @@ class TestChecks:
         assert code == -1
         assert "did not answer" in output
 
-    def test_a_probe_runs_under_sudo_when_asked(self, tmp_path: Path, monkeypatch) -> None:
-        """Positive unit test for run_probe(). It contains the following steps:
-        - run a command with the sudo flag, with sudo replaced by a script that prints its arguments,
-          one per line, because `echo` of the shell would eat the -n flag instead of printing it
-        - ASSERT: sudo is the command, and the real one follows it
-        - ASSERT: -n is passed, so sudo never asks for a password the full-screen editor cannot show
-        A user without direct access to the BMC needs this, which is what -s is for.
-        """
-        self._script(tmp_path, "sudo", 'printf "%s\\n" "$@"')
-        monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
-        code, output = run_probe(["ipmitool", "bmc", "info"], sudo=True)
-        assert code == 0
-        assert output.splitlines() == ["-n", "ipmitool", "bmc", "info"]
-
-    def test_a_sudo_that_wants_a_password_says_what_to_do(self, tmp_path: Path, monkeypatch) -> None:
-        """Negative unit test for run_probe(). It contains the following steps:
-        - replace sudo with a script that refuses the way sudo -n refuses a user with no cached credentials
-        - run a command with the sudo flag
-        - ASSERT: the exit code of sudo is reported
-        - ASSERT: the message names the command to run instead, because a password cannot be typed
-          into a full-screen editor
-        """
-        self._script(tmp_path, "sudo", 'echo "sudo: a password is required" >&2\nexit 1')
-        monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
-        code, output = run_probe(["ipmitool", "bmc", "info"], sudo=True)
-        assert code == 1
-        assert output == "sudo needs a password, which cannot be typed here; run: sudo smfc-config"
-
     def test_the_bmc_answers(self, tmp_path: Path) -> None:
         """Positive unit test for probe_ipmi(). It contains the following steps:
         - answer the probe with the output of a real board

@@ -30,6 +30,10 @@ COLOURS: tuple = (
     (panes.PAIR_SELECT_DIM, curses.COLOR_BLUE, curses.COLOR_WHITE),
 )
 
+# The standing status line already says the file is read-only. A blocked key has to say something
+# else, or the screen does not change and the key looks dead. It names the way out instead.
+READ_ONLY_MESSAGE = "this file belongs to root; quit with F10 and run: sudo smfc-config"
+
 # Which pane the cursor is in.
 PANE_SECTIONS: int = 0
 PANE_FIELDS: int = 1
@@ -144,7 +148,7 @@ class EditorApp:
         if view is None:
             return
         if self.model.read_only:
-            self.message = "read-only: re-run as sudo smfc-config"
+            self.message = READ_ONLY_MESSAGE
             return
         if view.field is None:
             self.message = "smfc does not know this parameter; it is kept as it is"
@@ -215,7 +219,7 @@ class EditorApp:
     def toggle(self) -> None:
         """Switch the selected family on or off."""
         if self.model.read_only:
-            self.message = "read-only: re-run as sudo smfc-config"
+            self.message = READ_ONLY_MESSAGE
             return
         if self.model.toggle(self.row):
             self.message = f"[{self.row.name}] {'enabled' if self.row.enabled else 'disabled'}"
@@ -364,7 +368,7 @@ class EditorApp:
     def add_instance(self) -> None:
         """Open the dialog that adds one more fan curve to a family."""
         if self.model.read_only:
-            self.message = "read-only: re-run as sudo smfc-config"
+            self.message = READ_ONLY_MESSAGE
             return
         families = [name for name, section in SECTIONS.items() if section.repeatable]
         self.popup = popups.InstancePopup(
@@ -375,7 +379,7 @@ class EditorApp:
     def remove_instance(self) -> None:
         """Ask before removing the selected instance."""
         if self.model.read_only:
-            self.message = "read-only: re-run as sudo smfc-config"
+            self.message = READ_ONLY_MESSAGE
             return
         if self.row.kind is not RowKind.INSTANCE or ":" not in self.row.name:
             self.message = "only a numbered instance can be removed"
