@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from smfc.checks import CheckResult, Level, check_all, loaded_modules
 from smfc.config import Config
 from smfc.config_editor.confwriter import ConfWriter, is_writable
-from smfc.config_editor.schema import SECTIONS, Field, Section, family_of, section_of
+from smfc.config_editor.schema import SECTIONS, Field, Section, family_of, section_of, validate
 
 # Name of the row that carries the findings belonging to no section.
 OVERVIEW: str = "Overview"
@@ -27,6 +27,7 @@ class RowKind(str, Enum):
 class FieldState(str, Enum):
     """State of one parameter in the right pane."""
     NORMAL = "normal"           # editable
+    INVALID = "invalid"         # the value in the file is not one the parser would accept
     INACTIVE = "inactive"       # a control_function= value overrides it
     UNKNOWN = "unknown"         # the file holds it and the schema does not; read-only, never deleted
 
@@ -127,13 +128,19 @@ class EditorModel:
         result: List[FieldView] = []
         for f in section.fields:
             raw = self._raw(row, f.key)
+            value = raw if raw is not None else _default_text(f)
             state = FieldState.NORMAL
             reason = ""
             if has_curve and f.overridden_by_curve:
                 state = FieldState.INACTIVE
                 reason = "ignored: control_function is set"
-            result.append(FieldView(key=f.key, value=raw if raw is not None else _default_text(f),
-                                    state=state, field=f, reason=reason))
+            elif raw is not None:
+                # Only a value the file actually holds can be wrong. A default never is.
+                problem = validate(f, raw)
+                if problem:
+                    state = FieldState.INVALID
+                    reason = problem
+            result.append(FieldView(key=f.key, value=value, state=state, field=f, reason=reason))
         for key in present:
             if section.field(key) is None:
                 result.append(FieldView(key=key, value=self._raw(row, key) or "",
@@ -166,6 +173,19 @@ class EditorModel:
         self.dirty = True
         if key == "enabled":
             row.enabled = value.strip() in ("1", "true", "yes", "on")
+
+    def set_device_list(self, row: Row, key: str, devices: List[str]) -> None:
+        """Write a device list in the form the parser needs.
+        The first device sits on the key line, because a value that starts with a newline parses into
+        an empty first element. `confwriter` holds that rule.
+        Args:
+            row (Row): the selected row
+            key (str): parameter name
+            devices (List[str]): device paths
+        """
+        self._ensure_section(row)
+        self.writer.set_device_list(row.name, key, devices)
+        self.dirty = True
 
     def toggle(self, row: Row) -> bool:
         """Switch a family on or off.

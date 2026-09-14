@@ -260,7 +260,10 @@ def render_help(model: EditorModel, row: Row, view: Optional[FieldView], layout:
     if view is not None and view.field is not None:
         head = f"{view.key}   {view.field.summary}"
         detail = view.field.detail
-        last = view.reason or view.field.range_text()
+        last = view.field.range_text()
+        if view.reason:
+            # An invalid value or an overridden one explains itself, in place of the range line.
+            last = f"error: {view.reason}" if view.state is FieldState.INVALID else view.reason
     elif view is not None:
         head = f"{view.key}   a parameter smfc does not know"
         detail = "It is kept as it is and never deleted. smfc ignores it."

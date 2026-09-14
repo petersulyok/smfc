@@ -7,10 +7,11 @@ import curses
 import sys
 from typing import List, Optional
 
-from smfc.config_editor import panes
-from smfc.config_editor.model import EditorModel, FieldState, FieldView, Row
+from smfc.config_editor import panes, popups
+from smfc.config_editor.model import EditorModel, FieldState, FieldView, Row, RowKind
 from smfc.config_editor.panes import Layout
-from smfc.config_editor.schema import Widget
+from smfc.config_editor.schema import SECTIONS, FieldKind, Widget, validate
+from smfc.discover import discover_hds, discover_nvmes
 
 # The colour scheme, taken from the Debian installer: a painted banner and key bar, light panes and a
 # strong selection bar. Colour carries orientation here. The glyphs say the same thing without it, so
@@ -51,6 +52,8 @@ class EditorApp:
     message: str                    # One line of feedback, shown until the next key
     running: bool                   # False once the user has quit
     colour: bool                    # True when the terminal paints the scheme
+    popup: Optional[popups.Popup]   # The window over the panes, None when there is none
+    pending: Optional[popups.Popup] # The selector waiting under an add-by-path field
 
     def __init__(self, model: EditorModel, colour: bool = True) -> None:
         """Build the screen state of one configuration file.
@@ -60,6 +63,8 @@ class EditorApp:
         """
         self.model = model
         self.colour = colour
+        self.popup = None
+        self.pending = None
         self.pane = PANE_SECTIONS
         self.row_index = 0
         self.row_top = 0
@@ -144,10 +149,44 @@ class EditorApp:
         if view.field is None:
             self.message = "smfc does not know this parameter; it is kept as it is"
             return
-        if view.field.widget is not Widget.INLINE:
-            self.message = f"{view.key} is edited in a popup, which arrives with phase 6"
+        if view.field.widget is Widget.INLINE:
+            self.editing = view.value
             return
-        self.editing = view.value
+        if view.field.widget is Widget.SELECT:
+            self.popup = popups.ChoicePopup(
+                title=view.key, width=54, summary=view.field.summary,
+                choices=[str(c) for c in view.field.choices],
+                labels=[str(label) for label in view.field.labels],
+                index=_choice_index(view))
+            return
+        if view.field.widget is Widget.DEVICES and view.field.kind is FieldKind.DEVICE_LIST:
+            self.popup = self._device_popup(view)
+            return
+        self.popup = popups.TextPopup(
+            title=view.key, width=72, text=view.value.replace("\n", " ").replace("\t", " ").strip(),
+            summary=view.field.summary, detail=view.field.range_text(),
+            validator=lambda text, f=view.field: validate(f, text))
+
+    def _device_popup(self, view: FieldView) -> popups.DevicePopup:
+        """Build the device selector of one list parameter.
+        The devices of the machine come from smfc.discover, the same two functions the installer uses.
+        An entry the file lists and the machine does not have is kept and marked, because that is what
+        explains a warning about a missing disk.
+        Args:
+            view (FieldView): the parameter being edited
+        Returns:
+            popups.DevicePopup: the selector
+        """
+        listed = [line.strip() for line in view.value.splitlines() if line.strip()]
+        found = discover_hds() if view.key == "hd_names" else discover_nvmes()
+        entries = [popups.DeviceEntry(path=path, label=_device_label(path), ticked=path in listed)
+                   for path in found]
+        for path in listed:
+            if path not in found:
+                entries.append(popups.DeviceEntry(path=path, label=f"(missing)  {path.split('/')[-1]}",
+                                                  ticked=True, present=False))
+        return popups.DevicePopup(title=view.key, width=72, entries=entries,
+                                  note="p adds a device this machine does not have yet")
 
     def finish_edit(self, accept: bool) -> None:
         """Close the editor of one parameter.
@@ -198,6 +237,9 @@ class EditorApp:
         Args:
             key (int): the key, as curses reports it
         """
+        if self.popup is not None:
+            self._handle_popup_key(key)
+            return
         if self.editing is not None:
             self._handle_edit_key(key)
             return
@@ -225,6 +267,10 @@ class EditorApp:
             self.check()
         elif key == curses.KEY_F2:
             self.save()
+        elif key in (curses.KEY_F6, ord("+")):
+            self.add_instance()
+        elif key in (curses.KEY_F8, ord("-")):
+            self.remove_instance()
 
     def _move(self, step: int) -> None:
         """Move the cursor of whichever pane it is in.
@@ -235,6 +281,85 @@ class EditorApp:
             self.move_row(step)
         else:
             self.move_field(step)
+
+    def _handle_popup_key(self, key: int) -> None:
+        """Give one key to the popup, and apply its answer when it closes.
+        Args:
+            key (int): the key, as curses reports it
+        """
+        popup = self.popup
+        if isinstance(popup, popups.DevicePopup) and key == ord("p"):
+            self.popup = popups.TextPopup(
+                title="add a device by path", width=72, text="/dev/disk/by-id/",
+                summary="A device this machine does not have yet is kept and marked missing.",
+                detail="the /dev/disk/by-id/ form, which survives a reboot",
+                validator=_validate_device_path)
+            self.pending = popup
+            return
+        popup.handle_key(key)
+        if not popup.done:
+            return
+        self.popup = None
+        if isinstance(popup, popups.TextPopup) and self.pending is not None:
+            selector, self.pending = self.pending, None
+            if popup.accepted:
+                selector.add_path(popup.value())
+            self.popup = selector
+            return
+        if popup.accepted:
+            self._apply_popup(popup)
+
+    def _apply_popup(self, popup: popups.Popup) -> None:
+        """Write what a popup answered.
+        Args:
+            popup (popups.Popup): the popup that has just closed
+        """
+        if isinstance(popup, popups.InstancePopup):
+            family, zone = popup.value()
+            name = self.model.add_instance(family, {"enabled": "1", "ipmi_zone": str(zone)})
+            self.row_index = [i for i, r in enumerate(self.model.rows) if r.name == name][0]
+            self.message = f"[{name}] added on zone {zone}"
+            return
+        if isinstance(popup, popups.ConfirmPopup):
+            name = self.row.name
+            self.model.remove_instance(self.row)
+            self.row_index = min(self.row_index, len(self.model.rows) - 1)
+            self.message = f"[{name}] removed"
+            return
+        view = self.view()
+        if view is None:
+            return
+        if isinstance(popup, popups.DevicePopup):
+            self.model.set_device_list(self.row, view.key, popup.value())
+            self.message = f"{view.key}: {len(popup.value())} devices"
+            self.model.run_checks()
+            return
+        self.model.set_value(self.row, view.key, popup.value())
+        self.message = f"{view.key} = {popup.value()}"
+
+    def add_instance(self) -> None:
+        """Open the dialog that adds one more fan curve to a family."""
+        if self.model.read_only:
+            self.message = "read-only: re-run as sudo smfc-config"
+            return
+        families = [name for name, section in SECTIONS.items() if section.repeatable]
+        self.popup = popups.InstancePopup(
+            title="add an instance", width=54, families=families,
+            zones=self.model.free_zones(families[0]),
+            on_family=self.model.free_zones)
+
+    def remove_instance(self) -> None:
+        """Ask before removing the selected instance."""
+        if self.model.read_only:
+            self.message = "read-only: re-run as sudo smfc-config"
+            return
+        if self.row.kind is not RowKind.INSTANCE or ":" not in self.row.name:
+            self.message = "only a numbered instance can be removed"
+            return
+        self.popup = popups.ConfirmPopup(
+            title="remove an instance", width=54,
+            question=f"Remove [{self.row.name}] from the file?",
+            detail="Its own values are lost. The other instances are untouched.")
 
     def _handle_edit_key(self, key: int) -> None:
         """Act on one key press while a value is open for editing.
@@ -281,6 +406,8 @@ class EditorApp:
         self._draw_banner(screen, layout)
         self._draw_panes(screen, layout, views)
         self._draw_footer(screen, layout)
+        if self.popup is not None:
+            self._draw_popup(screen, layout)
         screen.noutrefresh()
         curses.doupdate()
 
@@ -402,6 +529,8 @@ class EditorApp:
                 attr = self.attr(panes.PAIR_SELECT, bold=True)
             elif cursor:
                 attr = self.attr(panes.PAIR_SELECT_DIM, bold=True)
+            elif field_index < len(views) and views[field_index].state is FieldState.INVALID:
+                attr = self.attr(panes.PAIR_ERROR, bold=True)
             elif field_index < len(views) and views[field_index].state is not FieldState.NORMAL:
                 attr = self.attr(panes.PAIR_DIM)
             else:
@@ -422,6 +551,33 @@ class EditorApp:
         keys = panes.render_keys(self.model, self.editing is not None)
         self._put(screen, min(layout.height - 1, keys_row), 0, keys.ljust(layout.width),
                   layout.width, self.attr(panes.PAIR_KEYS, bold=True))
+
+    def _draw_popup(self, screen: "curses.window", layout: Layout) -> None:
+        """Draw the window that is open over the panes.
+        Args:
+            screen (curses.window): the curses screen
+            layout (Layout): the sizes to draw with
+        """
+        popup = self.popup
+        body = popup.lines()
+        width = min(popup.width, layout.width - 2)
+        height = min(len(body) + 4, layout.height - 2)
+        top = max((layout.height - height) // 2, 0)
+        left = max((layout.width - width) // 2, 0)
+        window = screen.derwin(height, width, top, left)
+        window.bkgd(" ", self.attr(panes.PAIR_POPUP))
+        window.box()
+        title = f" {popup.title} "
+        self._put(window, 0, 2, title, len(title), self.attr(panes.PAIR_POPUP, bold=True))
+        for index, text in enumerate(body[:height - 4]):
+            selected = index == popup.cursor()
+            attr = self.attr(panes.PAIR_SELECT, bold=True) if selected else \
+                self.attr(panes.PAIR_ERROR if text.startswith("!") else panes.PAIR_POPUP)
+            self._put(window, index + 1, 2, text.ljust(width - 4), width - 4, attr)
+        if popup.error and not any(line.startswith("!") for line in body):
+            self._put(window, height - 3, 2, f"! {popup.error}", width - 4,
+                      self.attr(panes.PAIR_ERROR))
+        self._put(window, height - 2, 2, popup.keys(), width - 4, self.attr(panes.PAIR_POPUP))
 
     def _put(self, window: "curses.window", row: int, column: int, text: str, width: int,
              attr: int = curses.A_NORMAL) -> None:
@@ -444,6 +600,47 @@ class EditorApp:
             window.addnstr(row, column, text, room, attr)
         except curses.error:
             pass
+
+
+def _choice_index(view: FieldView) -> int:
+    """Index of the value a parameter currently holds, among the values it accepts.
+    Args:
+        view (FieldView): the parameter being edited
+    Returns:
+        int: the index, 0 when the value is not one of the choices
+    """
+    choices = [str(choice) for choice in view.field.choices]
+    return choices.index(view.value.strip()) if view.value.strip() in choices else 0
+
+
+def _device_label(path: str) -> str:
+    """Build the line of one device in the selector.
+    The serial leads, because a machine can hold eight disks of one model and the serial is the only
+    part that tells them apart. The model follows it, to separate two makes of drive.
+    Args:
+        path (str): the /dev/disk/by-id/... path
+    Returns:
+        str: the line
+    """
+    name = path.split("/")[-1]
+    body = name.split("-", 1)[1] if "-" in name else name
+    serial = body.rsplit("_", 1)[-1] if "_" in body else body
+    model = body[:-(len(serial) + 1)] if body.endswith(serial) and len(body) > len(serial) else ""
+    return f"{serial:<14} {model.replace('_', ' ')}"
+
+
+def _validate_device_path(text: str) -> str:
+    """Check a device path typed by hand.
+    Args:
+        text (str): the path
+    Returns:
+        str: what is wrong with it, or an empty string
+    """
+    if not text.startswith("/dev/disk/by-id/"):
+        return "the path must start with /dev/disk/by-id/"
+    if len(text) <= len("/dev/disk/by-id/"):
+        return "name the device after the prefix"
+    return ""
 
 
 def _clamp_top(top: int, index: int, rows: int, total: int) -> int:

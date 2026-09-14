@@ -118,12 +118,15 @@ class ConfWriter:
         if bounds is None:
             raise KeyError(f"[{section}] is not in {self.path}")
         found = self._find_key(section, key)
-        new_line = f"{key}={value}\n"
+        # A value may carry continuation lines. It has to enter the list as one entry per line, or a
+        # later lookup cannot see the key: the pattern that finds a parameter matches a single line.
+        new_lines = f"{key}={value}\n".splitlines(keepends=True)
         if found is not None:
             start, end = found
-            self.lines[start:end] = [new_line]
+            self.lines[start:end] = new_lines
             return
-        self.lines.insert(self._insert_point(bounds), new_line)
+        point = self._insert_point(bounds)
+        self.lines[point:point] = new_lines
 
     def set_device_list(self, section: str, key: str, devices: Sequence[str]) -> None:
         """Write a device list parameter in the form the parser needs.
@@ -152,7 +155,7 @@ class ConfWriter:
             self.lines.append("\n")
         self.lines.append(f"[{section}]\n")
         for key, value in (values or {}).items():
-            self.lines.append(f"{key}={value}\n")
+            self.lines.extend(f"{key}={value}\n".splitlines(keepends=True))
 
     def remove_section(self, section: str) -> None:
         """Remove a section and every parameter in it.

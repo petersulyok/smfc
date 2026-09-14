@@ -189,6 +189,24 @@ class TestConfWriter:
         assert target.read_text(encoding="utf-8").splitlines()[3].endswith("ata-A")
         assert Config(str(target)).hd[0].hd_names == devices
 
+    def test_a_value_written_over_several_lines_can_be_read_back(self, tmp_path: Path) -> None:
+        """Positive unit test for ConfWriter.set(). It contains the following steps:
+        - write a device list, which carries continuation lines, into an empty key
+        - read the parameter back from the same writer, without saving and loading again
+        - ASSERT: the key is still found, and the value comes back
+        - ASSERT: the section still lists the parameter
+        A multi-line value has to enter the line list as one entry per line. Held as a single entry it
+        still saves correctly, and every later lookup in the same session misses the key.
+        """
+        target = _write(tmp_path, "[Ipmi]\n[HD]\nenabled=1\nhd_names=\n")
+        writer = ConfWriter(str(target))
+        writer.set_device_list("HD", "hd_names", ["/dev/disk/by-id/ata-A", "/dev/disk/by-id/ata-B"])
+        assert writer.keys("HD") == ["enabled", "hd_names"]
+        assert writer.get("HD", "hd_names").startswith("/dev/disk/by-id/ata-A")
+        writer.save()
+        assert Config(str(target)).hd[0].hd_names == ["/dev/disk/by-id/ata-A",
+                                                      "/dev/disk/by-id/ata-B"]
+
     def test_get_of_an_absent_parameter(self, tmp_path: Path) -> None:
         """Negative unit test for ConfWriter.get(). It contains the following steps:
         - ask for a parameter the section does not hold, and for one in an absent section

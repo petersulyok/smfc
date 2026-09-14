@@ -529,6 +529,90 @@ SECTIONS: Dict[str, Section] = {
 }
 
 
+def validate(f: Field, value: str) -> str:
+    """Check one value the way the parser would, and say what is wrong with it.
+
+    Every rule here comes from `Config`: the same functions the daemon uses at load time are called on
+    the same text. So a value the editor accepts is a value the daemon accepts, and the editor cannot
+    drift away from the parser as the format grows.
+    Args:
+        f (Field): schema metadata of the parameter
+        value (str): the value as it would be written into the file
+    Returns:
+        str: what is wrong with the value, or an empty string when it is acceptable
+    """
+    text = value.strip()
+    problem = ""
+    try:
+        if f.kind is FieldKind.BOOL:
+            if text.lower() not in ("0", "1", "true", "false", "yes", "no", "on", "off"):
+                problem = "use 0 or 1"
+        elif f.kind in (FieldKind.INT, FieldKind.FLOAT):
+            problem = _validate_number(f, text)
+        elif f.kind is FieldKind.ENUM:
+            if text not in [str(choice) for choice in f.choices]:
+                problem = "one of " + ", ".join(str(choice) for choice in f.choices)
+        elif f.kind is FieldKind.INT_LIST:
+            problem = _validate_int_list(f, text)
+        elif f.kind is FieldKind.STR_LIST and text:
+            Config.parse_pci_addresses(text)
+        elif f.kind is FieldKind.CURVE and text:
+            Config.parse_control_function(text)
+        elif f.kind is FieldKind.DEVICE_LIST:
+            wrong = [n for n in Config.parse_device_names(value) if not n.startswith("/dev/")]
+            problem = f"not a device path: {wrong[0]}" if wrong else ""
+    except (ValueError, IndexError) as error:
+        problem = str(error)
+    return problem
+
+
+def _validate_number(f: Field, text: str) -> str:
+    """Check a number against the type and the range of its parameter.
+    Args:
+        f (Field): schema metadata of the parameter
+        text (str): the value
+    Returns:
+        str: what is wrong with the value, or an empty string
+    """
+    if not text:
+        return "a number is needed"
+    try:
+        number = int(text) if f.kind is FieldKind.INT else float(text)
+    except ValueError:
+        return "a whole number is needed" if f.kind is FieldKind.INT else "a number is needed"
+    if f.minimum is not None and number < f.minimum:
+        return f"{f.minimum} or more"
+    if f.maximum is not None and number > f.maximum:
+        return f"{f.maximum} or less"
+    return ""
+
+
+def _validate_int_list(f: Field, text: str) -> str:
+    """Check a list of integers with the parser function that reads it.
+    Args:
+        f (Field): schema metadata of the parameter
+        text (str): the value
+    Returns:
+        str: what is wrong with the value, or an empty string
+    """
+    if not text:
+        return "at least one number is needed"
+    try:
+        if f.key == Config.CV_IPMI_ZONE:
+            Config.parse_ipmi_zones(text)
+        elif f.key == Config.CV_GPU_IDS:
+            Config.parse_gpu_ids(text)
+        elif f.key == Config.CV_NPU_IDS:
+            Config.parse_npu_ids(text)
+    except ValueError as error:
+        # The parser raises the message of int() for a value that is not a number. It names the
+        # Python function rather than the mistake, so it is rephrased here.
+        if "invalid literal" in str(error):
+            return "numbers only, separated by a comma or a space"
+        raise
+    return ""
+
+
 def family_of(section_name: str) -> str:
     """Return the family name of a section name.
     Args:

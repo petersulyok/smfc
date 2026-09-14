@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 import pytest
 from smfc.checks import Level
-from smfc.config_editor import panes
+from smfc.config_editor import panes, popups
 from smfc.config_editor.app import EditorApp, PANE_FIELDS, PANE_SECTIONS
 from smfc.config_editor.cmd import EXIT_CONFIG_ERROR, main
 from smfc.config_editor.model import EditorModel, FieldState, RowKind
@@ -480,10 +480,11 @@ class TestEditorApp:
         assert app.editing is None
         assert "sudo smfc-config" in app.message
 
-    def test_a_popup_parameter_says_where_it_is_edited(self, tmp_path: Path) -> None:
-        """Negative unit test for EditorApp.start_edit(). It contains the following steps:
-        - try to edit a path in place, which belongs in a popup
-        - ASSERT: the edit does not open, and the message says so
+    def test_a_path_opens_the_wide_input_popup(self, tmp_path: Path) -> None:
+        """Positive unit test for EditorApp.start_edit(). It contains the following steps:
+        - open a path parameter, which is too long for the value cell
+        - ASSERT: no in-place edit starts
+        - ASSERT: a text popup opens, holding the current value
         """
         app = EditorApp(_model(tmp_path))
         app.row_index = [i for i, r in enumerate(app.model.rows) if r.name == "Ipmi"][0]
@@ -491,7 +492,8 @@ class TestEditorApp:
         app.field_index = [i for i, v in enumerate(app.views()) if v.key == "command"][0]
         app.start_edit()
         assert app.editing is None
-        assert "popup" in app.message
+        assert isinstance(app.popup, popups.TextPopup)
+        assert app.popup.text == "/usr/bin/ipmitool"
 
     def test_escape_does_not_quit_the_editor(self, tmp_path: Path) -> None:
         """Negative unit test for EditorApp.handle_key(). It contains the following steps:
@@ -505,6 +507,154 @@ class TestEditorApp:
         app.handle_key(27)
         assert app.running is True
         assert app.pane is PANE_SECTIONS
+
+    def test_an_invalid_value_is_marked_and_explained(self, tmp_path: Path) -> None:
+        """Positive unit test for the per-field validation. It contains the following steps:
+        - load a file whose min_temp is not a number and whose steps is below its minimum
+        - ASSERT: both are marked invalid, so the pane paints them red
+        - ASSERT: each carries the reason, which the help pane shows in place of the range line
+        - ASSERT: a parameter that is absent is never invalid, because its default is used
+        """
+        model = _model(tmp_path, "[Ipmi]\n[CPU]\nenabled=1\nmin_temp=abc\nsteps=0\n")
+        views = {v.key: v for v in model.fields_of(_row(model, "CPU"))}
+        assert views["min_temp"].state is FieldState.INVALID
+        assert views["min_temp"].reason == "a number is needed"
+        assert views["steps"].state is FieldState.INVALID
+        assert views["max_temp"].state is FieldState.NORMAL
+
+    def test_an_enum_opens_the_choice_popup_and_writes_the_choice(self, tmp_path: Path) -> None:
+        """Positive unit test for the choice popup. It contains the following steps:
+        - open temp_calc, which accepts three values
+        - move to another value and accept it
+        - ASSERT: the popup closes and the value is written into the file
+        """
+        app = EditorApp(_model(tmp_path))
+        app.row_index = [i for i, r in enumerate(app.model.rows) if r.name == "CPU"][0]
+        app.pane = PANE_FIELDS
+        app.field_index = [i for i, v in enumerate(app.views()) if v.key == "temp_calc"][0]
+        app.start_edit()
+        assert isinstance(app.popup, popups.ChoicePopup)
+        app.handle_key(curses.KEY_DOWN)
+        app.handle_key(10)
+        assert app.popup is None
+        assert app.model.writer.get("CPU", "temp_calc") == "2"
+
+    def test_a_refused_value_leaves_the_file_alone(self, tmp_path: Path) -> None:
+        """Negative unit test for the text popup. It contains the following steps:
+        - open the curve of a section and type a value with only one point in it
+        - press Enter
+        - ASSERT: the popup stays open, because the parser would reject that value
+        - ASSERT: nothing was written
+        """
+        app = EditorApp(_model(tmp_path))
+        app.row_index = [i for i, r in enumerate(app.model.rows) if r.name == "CPU"][0]
+        app.pane = PANE_FIELDS
+        app.field_index = [i for i, v in enumerate(app.views()) if v.key == "control_function"][0]
+        app.start_edit()
+        for char in "30-35":
+            app.handle_key(ord(char))
+        app.handle_key(10)
+        assert app.popup is not None and app.popup.error
+        assert app.model.writer.get("CPU", "control_function") is None
+
+    def test_a_value_accepted_in_a_popup_reaches_the_file(self, tmp_path: Path) -> None:
+        """Positive unit test for the text popup. It contains the following steps:
+        - open the curve of a section, type a value the parser accepts, and press Enter
+        - ASSERT: the popup closes
+        - ASSERT: the value is written into the file and parses back as two points
+        - ASSERT: the four parameters the curve overrides become inactive
+        """
+        app = EditorApp(_model(tmp_path))
+        app.row_index = [i for i, r in enumerate(app.model.rows) if r.name == "CPU"][0]
+        app.pane = PANE_FIELDS
+        app.field_index = [i for i, v in enumerate(app.views()) if v.key == "control_function"][0]
+        app.start_edit()
+        for char in "30-35, 60-100":
+            app.handle_key(ord(char))
+        app.handle_key(10)
+        assert app.popup is None
+        assert app.model.writer.get("CPU", "control_function") == "30-35, 60-100"
+        views = {v.key: v for v in app.views()}
+        assert views["min_temp"].state is FieldState.INACTIVE
+
+    def test_adding_an_instance_through_the_dialog(self, tmp_path: Path) -> None:
+        """Positive unit test for the instance dialog. It contains the following steps:
+        - open the add dialog, accept the first family and the first free zone
+        - ASSERT: a numbered instance is written, enabled, on a zone no other instance claims
+        - ASSERT: the cursor moves to the new row
+        """
+        app = EditorApp(_model(tmp_path))
+        app.add_instance()
+        assert isinstance(app.popup, popups.InstancePopup)
+        app.handle_key(10)
+        assert app.popup is None
+        assert app.model.writer.get("CPU:1", "ipmi_zone") == "1"
+        assert app.row.name == "CPU:1"
+
+    def test_removing_an_instance_asks_first(self, tmp_path: Path) -> None:
+        """Positive unit test for the remove dialog. It contains the following steps:
+        - add an instance, put the cursor on it and ask to remove it
+        - answer no, then ask again and answer yes
+        - ASSERT: no leaves the instance in the file
+        - ASSERT: yes removes it
+        - ASSERT: the base section cannot be removed this way
+        """
+        app = EditorApp(_model(tmp_path))
+        app.model.add_instance("CPU")
+        app.row_index = [i for i, r in enumerate(app.model.rows) if r.name == "CPU:1"][0]
+        app.remove_instance()
+        app.handle_key(ord("n"))
+        assert app.model.writer.has_section("CPU:1") is True
+        app.remove_instance()
+        app.handle_key(ord("y"))
+        assert app.model.writer.has_section("CPU:1") is False
+        app.row_index = [i for i, r in enumerate(app.model.rows) if r.name == "CPU"][0]
+        app.remove_instance()
+        assert app.popup is None
+        assert "numbered instance" in app.message
+
+    def test_a_device_typed_by_hand_reaches_the_file(self, tmp_path: Path) -> None:
+        """Positive unit test for the add-by-path key. It contains the following steps:
+        - open the device selector of hd_names and press p
+        - type a by-id path and accept it
+        - ASSERT: the selector comes back with the device ticked
+        - accept the selector
+        - ASSERT: the path is written into the file and parses back
+        """
+        app = EditorApp(_model(tmp_path, "[Ipmi]\n[HD]\nenabled=1\nhd_names=\n"))
+        app.row_index = [i for i, r in enumerate(app.model.rows) if r.name == "HD"][0]
+        app.pane = PANE_FIELDS
+        app.field_index = [i for i, v in enumerate(app.views()) if v.key == "hd_names"][0]
+        app.start_edit()
+        assert isinstance(app.popup, popups.DevicePopup)
+        app.handle_key(ord("p"))
+        assert isinstance(app.popup, popups.TextPopup)
+        for char in "ata-TYPED":
+            app.handle_key(ord(char))
+        app.handle_key(10)
+        assert isinstance(app.popup, popups.DevicePopup)
+        app.handle_key(10)
+        assert app.popup is None
+        assert app.model.writer.get("HD", "hd_names") == "/dev/disk/by-id/ata-TYPED"
+
+    def test_a_typed_path_must_be_a_by_id_path(self, tmp_path: Path) -> None:
+        """Negative unit test for the add-by-path key. It contains the following steps:
+        - open the selector, press p, and clear the prefix it offers
+        - type a kernel name and press Enter
+        - ASSERT: the popup refuses it, because a kernel name changes across boots
+        """
+        app = EditorApp(_model(tmp_path, "[Ipmi]\n[HD]\nenabled=1\nhd_names=\n"))
+        app.row_index = [i for i, r in enumerate(app.model.rows) if r.name == "HD"][0]
+        app.pane = PANE_FIELDS
+        app.field_index = [i for i, v in enumerate(app.views()) if v.key == "hd_names"][0]
+        app.start_edit()
+        app.handle_key(ord("p"))
+        for _ in range(20):
+            app.handle_key(curses.KEY_BACKSPACE)
+        for char in "/dev/sda":
+            app.handle_key(ord(char))
+        app.handle_key(10)
+        assert app.popup.error
 
     def test_f5_runs_the_checks_and_f10_quits(self, tmp_path: Path) -> None:
         """Positive unit test for EditorApp.handle_key(). It contains the following steps:
@@ -530,6 +680,134 @@ class TestEditorApp:
         assert app.model.dirty is False
         assert "will not start" in app.message
         assert "running service" in app.message
+
+
+class TestPopups:
+    """Unit test class for the smfc.config_editor.popups module."""
+
+    def test_a_value_the_parser_refuses_keeps_the_popup_open(self) -> None:
+        """Negative unit test for TextPopup. It contains the following steps:
+        - open a text popup whose validator refuses a value
+        - type the bad value and press Enter
+        - ASSERT: the popup stays open, so the user can correct it
+        - ASSERT: it says what is wrong
+        - ASSERT: Esc closes it anyway, so nobody is trapped
+        """
+        popup = popups.TextPopup(title="min_temp", text="", validator=lambda t: "a number is needed")
+        for char in "abc":
+            popup.handle_key(ord(char))
+        popup.handle_key(10)
+        assert popup.done is False
+        assert popup.error == "a number is needed"
+        popup.handle_key(27)
+        assert popup.done is True and popup.accepted is False and popup.value() is None
+
+    def test_a_good_value_closes_the_popup(self) -> None:
+        """Positive unit test for TextPopup. It contains the following steps:
+        - type a value the validator accepts and press Enter
+        - ASSERT: the popup closes and hands the value back, stripped
+        """
+        popup = popups.TextPopup(title="command", text="", validator=lambda t: "")
+        for char in " /usr/bin/ipmitool ":
+            popup.handle_key(ord(char))
+        popup.handle_key(10)
+        assert popup.accepted is True
+        assert popup.value() == "/usr/bin/ipmitool"
+
+    def test_backspace_clears_the_error(self) -> None:
+        """Positive unit test for TextPopup. It contains the following steps:
+        - refuse a value, then press backspace
+        - ASSERT: the message goes away, because the value is being corrected
+        """
+        popup = popups.TextPopup(title="x", text="ab", validator=lambda t: "no")
+        popup.handle_key(10)
+        assert popup.error
+        popup.handle_key(curses.KEY_BACKSPACE)
+        assert popup.error == ""
+
+    def test_the_choice_popup_starts_on_the_current_value(self) -> None:
+        """Positive unit test for ChoicePopup. It contains the following steps:
+        - open a choice popup on the second of three values
+        - move down and accept
+        - ASSERT: the value it returns is the one the cursor is on
+        """
+        popup = popups.ChoicePopup(title="temp_calc", choices=["0", "1", "2"],
+                                   labels=["minimum", "average", "maximum"], index=1)
+        popup.handle_key(curses.KEY_DOWN)
+        popup.handle_key(10)
+        assert popup.value() == "2"
+
+    def test_the_device_popup_ticks_and_returns_sorted_paths(self) -> None:
+        """Positive unit test for DevicePopup. It contains the following steps:
+        - open the selector with three devices, one of them already listed
+        - tick a second one and accept
+        - ASSERT: both ticked devices are returned, sorted as the file holds them
+        """
+        entries = [popups.DeviceEntry(path="/dev/disk/by-id/ata-C", label="C"),
+                   popups.DeviceEntry(path="/dev/disk/by-id/ata-A", label="A", ticked=True),
+                   popups.DeviceEntry(path="/dev/disk/by-id/ata-B", label="B")]
+        popup = popups.DevicePopup(title="hd_names", entries=entries)
+        popup.handle_key(ord(" "))
+        popup.handle_key(10)
+        assert popup.value() == ["/dev/disk/by-id/ata-A", "/dev/disk/by-id/ata-C"]
+
+    def test_all_and_none_keys(self) -> None:
+        """Positive unit test for DevicePopup. It contains the following steps:
+        - press a, then n
+        - ASSERT: a ticks every device and n unticks every one
+        """
+        entries = [popups.DeviceEntry(path="/dev/a", label="a"),
+                   popups.DeviceEntry(path="/dev/b", label="b")]
+        popup = popups.DevicePopup(title="hd_names", entries=entries)
+        popup.handle_key(ord("a"))
+        assert all(e.ticked for e in entries)
+        popup.handle_key(ord("n"))
+        assert not any(e.ticked for e in entries)
+
+    def test_a_device_typed_by_hand_is_kept_and_marked(self) -> None:
+        """Positive unit test for DevicePopup.add_path(). It contains the following steps:
+        - add a device the machine does not have
+        - ASSERT: it is listed, ticked, and marked missing
+        - ASSERT: adding it twice does not list it twice
+        """
+        popup = popups.DevicePopup(title="hd_names", entries=[])
+        popup.add_path("/dev/disk/by-id/ata-NEW")
+        popup.add_path("/dev/disk/by-id/ata-NEW")
+        assert len(popup.entries) == 1
+        assert popup.entries[0].ticked is True
+        assert popup.entries[0].present is False
+        assert "(missing)" in popup.entries[0].label
+
+    def test_the_confirm_popup_answers_yes_or_no(self) -> None:
+        """Positive unit test for ConfirmPopup. It contains the following steps:
+        - answer the question with n, then with y on a second popup
+        - ASSERT: n and Esc both mean no, and y means yes
+        """
+        popup = popups.ConfirmPopup(title="remove", question="Remove [CPU:1]?")
+        popup.handle_key(ord("n"))
+        assert popup.done is True and popup.value() is False
+        popup = popups.ConfirmPopup(title="remove", question="Remove [CPU:1]?")
+        popup.handle_key(ord("y"))
+        assert popup.value() is True
+
+    def test_the_instance_popup_offers_only_free_zones(self) -> None:
+        """Positive unit test for InstancePopup. It contains the following steps:
+        - open the dialog with two families, where the second one has no free zone
+        - move to that family and press Enter
+        - ASSERT: it refuses and says why, instead of writing a section the parser would reject
+        - ASSERT: the first family, which has a free zone, is accepted
+        """
+        free = {"CPU": [2, 3], "HD": []}
+        popup = popups.InstancePopup(title="add", families=["CPU", "HD"], zones=free["CPU"],
+                                     on_family=free.get)
+        popup.handle_key(curses.KEY_DOWN)
+        popup.handle_key(10)
+        assert popup.done is False
+        assert "zone" in popup.error
+        popup.handle_key(curses.KEY_UP)
+        popup.handle_key(curses.KEY_RIGHT)
+        popup.handle_key(10)
+        assert popup.value() == ("CPU", 3)
 
 
 class TestCommand:
