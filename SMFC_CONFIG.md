@@ -392,7 +392,24 @@ So the rule follows the value, not the preference:
 Most keys are numbers, so most edits stay in place. This also removes the need for a field that
 scrolls sideways, which is the fiddly part of `curses` text entry.
 
-### 5.5 A boolean is yes or no
+### 5.5 Units are written in full
+
+A unit is a word in the editor: `Celsius`, `seconds`, `percent`. Not `C`, `s` or `%`. A reader who is
+not a programmer should not have to know that `s` means seconds, and the help pane has room for the
+word.
+
+```
+float, Celsius, default 30.0, 0.0 to 200.0
+int, percent, default 35, 0 to 100
+float, seconds, default 2.0, 0.0 or more
+```
+
+A test holds the rule: a field that names a unit must name one of those three words.
+
+The shipped comments still use the short forms, for example `(int, sec, default=2)`. They are part of
+the same documentation pass as the boolean wording in 5.6.
+
+### 5.6 A boolean is yes or no
 
 The value `1` tells a user nothing. The editor shows every boolean as `yes` or `no`, in the value
 cell, in the range line of the help pane and in the message after a change. `Enter` on a boolean
@@ -772,7 +789,7 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 | 4 | `confwriter.py` | **done**; all 11 samples and the shipped file round-trip byte for byte; add and remove an instance; atomic save; `is_writable()` |
 | 5 | the editor | the curses master-detail screen |
 | 6 | the popups | needs phases 3 and 5 |
-| 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries; the boolean wording of the shipped comments, see 5.5 |
+| 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries; the boolean wording and the unit wording of the shipped comments, see 5.5 and 5.6 |
 | 8 | the venv installer | `install.sh`, `uninstall.sh`, the three Dockerfiles, README 9.5; see 12.1 |
 
 Phase 7 note: `debian/changelog` is DEB-only and `smfc.spec` `%changelog` is RPM-only. Keep the

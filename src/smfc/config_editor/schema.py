@@ -84,7 +84,7 @@ class Field:
     default: Any                            # Default value applied when the key is missing
     summary: str                            # One-line summary (help pane, line 1)
     detail: str                             # Longer explanation (help pane, lines 2 and 3)
-    unit: str = ""                          # Unit of the value ("C", "%", "s"), empty if it has none
+    unit: str = ""                          # Unit, written in full ("Celsius", "seconds", "percent")
     minimum: Optional[float] = None         # Smallest accepted value, None if unbounded
     maximum: Optional[float] = None         # Largest accepted value, None if unbounded
     choices: Tuple[Any, ...] = ()           # Accepted values of an ENUM field
@@ -116,7 +116,7 @@ class Field:
     def range_text(self) -> str:
         """Render the type, the unit, the default and the valid range for line 4 of the help pane.
         Returns:
-            str: for example "float, C, default 30.0, 0.0 or more"
+            str: for example "float, Celsius, default 30.0, 0.0 or more"
         """
         if self.kind is FieldKind.BOOL:
             return f"yes or no, default {bool_text(bool_value(bool(self.default)))}"
@@ -198,13 +198,13 @@ def _common_fields(source: str, default_zone: int, temp_calc: int, sensitivity: 
         source (str): temperature source of the family, for the help text
         default_zone (int): default IPMI zone
         temp_calc (int): default temperature calculation method
-        sensitivity (float): default sensitivity (C)
-        polling (float): default polling interval (sec)
+        sensitivity (float): default sensitivity (Celsius)
+        polling (float): default polling interval (seconds)
         steps (int): default number of discrete steps
-        min_temp (float): default minimum temperature (C)
-        max_temp (float): default maximum temperature (C)
-        min_level (int): default minimum fan level (%)
-        max_level (int): default maximum fan level (%)
+        min_temp (float): default minimum temperature (Celsius)
+        max_temp (float): default maximum temperature (Celsius)
+        min_level (int): default minimum fan level (percent)
+        max_level (int): default maximum fan level (percent)
     Returns:
         List[Field]: the shared fields, in the order the shipped configuration file uses
     """
@@ -219,12 +219,12 @@ def _common_fields(source: str, default_zone: int, temp_calc: int, sensitivity: 
             detail="It has no effect while the section covers a single device. Maximum protects the hottest "
                    "device, average keeps the fans quieter."),
         Field(
-            key=Config.CV_SENSITIVITY, kind=FieldKind.FLOAT, default=sensitivity, unit="C", minimum=0.1,
+            key=Config.CV_SENSITIVITY, kind=FieldKind.FLOAT, default=sensitivity, unit="Celsius", minimum=0.1,
             summary="Temperature change that triggers a new fan level",
             detail="Below this change smfc leaves the fans alone. Raise it if the fans keep chasing small "
                    "temperature swings."),
         Field(
-            key=Config.CV_POLLING, kind=FieldKind.FLOAT, default=polling, unit="s", minimum=0.0,
+            key=Config.CV_POLLING, kind=FieldKind.FLOAT, default=polling, unit="seconds", minimum=0.0,
             summary=f"Seconds between two {source} temperature readings",
             detail="A short interval reacts faster and costs more reads. A source that is slow to read needs "
                    "a longer interval."),
@@ -234,22 +234,22 @@ def _common_fields(source: str, default_zone: int, temp_calc: int, sensitivity: 
             detail="More steps give a smoother curve and more level changes. It must not exceed "
                    "max_level minus min_level."),
         Field(
-            key=Config.CV_MIN_TEMP, kind=FieldKind.FLOAT, default=min_temp, unit="C", minimum=0.0, maximum=200.0,
+            key=Config.CV_MIN_TEMP, kind=FieldKind.FLOAT, default=min_temp, unit="Celsius", minimum=0.0, maximum=200.0,
             summary="Lowest temperature of the fan curve",
             detail="Below this temperature the fans stay at min_level. Raise it if the fans spin up too "
                    "early. It must stay below max_temp."),
         Field(
-            key=Config.CV_MAX_TEMP, kind=FieldKind.FLOAT, default=max_temp, unit="C", minimum=0.0, maximum=200.0,
+            key=Config.CV_MAX_TEMP, kind=FieldKind.FLOAT, default=max_temp, unit="Celsius", minimum=0.0, maximum=200.0,
             summary="Highest temperature of the fan curve",
             detail="At this temperature the fans reach max_level. Lower it to reach full speed sooner. It "
                    "must stay above min_temp."),
         Field(
-            key=Config.CV_MIN_LEVEL, kind=FieldKind.INT, default=min_level, unit="%", minimum=0, maximum=100,
+            key=Config.CV_MIN_LEVEL, kind=FieldKind.INT, default=min_level, unit="percent", minimum=0, maximum=100,
             summary="Fan level at and below min_temp",
-            detail="On an X14 or H14 board a value below 5 is raised to 5%, because smfc suspends the BMC "
+            detail="On an X14 or H14 board a value below 5 percent is raised to 5, because smfc suspends the BMC "
                    "thermal loop and the duty it writes has no floor of its own."),
         Field(
-            key=Config.CV_MAX_LEVEL, kind=FieldKind.INT, default=max_level, unit="%", minimum=0, maximum=100,
+            key=Config.CV_MAX_LEVEL, kind=FieldKind.INT, default=max_level, unit="percent", minimum=0, maximum=100,
             summary="Fan level at and above max_temp",
             detail="Lower it to cap the noise. The fans then never reach full speed, whatever the "
                    "temperature."),
@@ -285,13 +285,13 @@ IPMI_SECTION: Section = Section(
                    "smfc-config and smfc-client."),
         Field(
             key=Config.CV_IPMI_FAN_MODE_DELAY, kind=FieldKind.INT, default=Config.DV_IPMI_FAN_MODE_DELAY,
-            unit="s", minimum=0,
+            unit="seconds", minimum=0,
             summary="Wait after the fan mode is changed",
             detail="A BMC needs time to apply a new fan mode. Raise it if the first level after a mode "
                    "change is ignored."),
         Field(
             key=Config.CV_IPMI_FAN_LEVEL_DELAY, kind=FieldKind.INT, default=Config.DV_IPMI_FAN_LEVEL_DELAY,
-            unit="s", minimum=0,
+            unit="seconds", minimum=0,
             summary="Wait after a fan level is written",
             detail="A BMC needs time to apply a new level. Raise it if a level read back straight after a "
                    "write returns the old value."),
@@ -314,14 +314,14 @@ IPMI_SECTION: Section = Section(
             detail="On means smfc re-asserts the mode and every zone level. Off means smfc exits with code "
                    "11 instead, so a service unit can decide what happens."),
         Field(
-            key=Config.CV_IPMI_EXIT_LEVEL, kind=FieldKind.INT, default=Config.DV_IPMI_EXIT_LEVEL, unit="%",
+            key=Config.CV_IPMI_EXIT_LEVEL, kind=FieldKind.INT, default=Config.DV_IPMI_EXIT_LEVEL, unit="percent",
             minimum=Config.EXIT_LEVEL_NONE, maximum=100,
             summary="Fan level written to every zone when smfc stops",
             detail="-1 leaves the levels untouched. On an X14 or H14 board this level is only a transition, "
                    "because the BMC takes fan control back and rewrites the levels."),
         Field(
             key=Config.CV_IPMI_IPMITOOL_TIMEOUT, kind=FieldKind.INT, default=Config.DV_IPMI_IPMITOOL_TIMEOUT,
-            unit="s", minimum=0,
+            unit="seconds", minimum=0,
             summary="Time one ipmitool call may take",
             detail="It stops a wedged /dev/ipmi0 from parking the control loop, and a call that times out "
                    "counts as an IPMI error. 0 waits for ever."),
@@ -462,7 +462,7 @@ NPU_SECTION: Section = Section(
             detail="A bare name is looked up on PATH. The Ascend toolkit also installs it under a full path "
                    "of its own."),
         Field(
-            key=Config.CV_NPU_SMI_TIMEOUT, kind=FieldKind.FLOAT, default=Config.DV_NPU_SMI_TIMEOUT, unit="s",
+            key=Config.CV_NPU_SMI_TIMEOUT, kind=FieldKind.FLOAT, default=Config.DV_NPU_SMI_TIMEOUT, unit="seconds",
             minimum=0.1,
             summary="Time one npu-smi call may take",
             detail="One call needs about 1.5 seconds on a healthy card. Raise it only if the readings time "
@@ -514,12 +514,12 @@ CONST_SECTION: Section = Section(
         _enabled_field("constant"),
         _zone_field(Config.HD_ZONE),
         Field(
-            key=Config.CV_POLLING, kind=FieldKind.FLOAT, default=Config.DV_CONST_POLLING, unit="s", minimum=0.0,
+            key=Config.CV_POLLING, kind=FieldKind.FLOAT, default=Config.DV_CONST_POLLING, unit="seconds", minimum=0.0,
             summary="Seconds between two level checks",
             detail="This controller reads no temperature. It only re-applies its level when something else "
                    "has changed it."),
         Field(
-            key=Config.CV_CONST_LEVEL, kind=FieldKind.INT, default=Config.DV_CONST_LEVEL, unit="%",
+            key=Config.CV_CONST_LEVEL, kind=FieldKind.INT, default=Config.DV_CONST_LEVEL, unit="percent",
             minimum=1, maximum=100,
             summary="Level held on the zones above",
             detail="It is the only way to drive a zone that has no sensor, for example fans cooling a "

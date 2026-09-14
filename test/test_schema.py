@@ -233,7 +233,8 @@ class TestSchema:
     @pytest.mark.parametrize(
         "section_name, key, expected",
         [
-            pytest.param("CPU", "min_temp", "float, C, default 30.0, 0.0 to 200.0", id="range-both-ends"),
+            pytest.param("CPU", "min_temp", "float, Celsius, default 30.0, 0.0 to 200.0",
+                         id="range-both-ends"),
             pytest.param("CPU", "steps", "int, default 6, 1 or more", id="range-lower-end"),
             pytest.param("CPU", "temp_calc", "enum, default 1, one of 0, 1, 2", id="choices"),
             pytest.param("Ipmi", "remote_parameters", "str, default empty", id="empty-default"),
@@ -251,6 +252,18 @@ class TestSchema:
         f = field_of(section_name, key)
         assert f is not None
         assert f.range_text() == expected
+
+    def test_a_unit_is_written_in_full(self) -> None:
+        """Positive unit test for the unit of every field. It contains the following steps:
+        - walk every field of every section that names a unit
+        - ASSERT: the unit is a word, not a symbol or an abbreviation
+        A reader who is not a programmer should not have to know that C means Celsius or s seconds.
+        """
+        allowed = {"Celsius", "seconds", "percent"}
+        for name, section in SECTIONS.items():
+            for f in section.fields:
+                if f.unit:
+                    assert f.unit in allowed, f"[{name}] {f.key} uses {f.unit!r}"
 
     def test_enum_fields_label_every_choice(self) -> None:
         """Positive unit test for the choices of an enum field. It contains the following steps:
