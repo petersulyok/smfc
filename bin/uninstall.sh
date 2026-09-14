@@ -92,6 +92,11 @@ if [ -z "${KEEP_CONFIG}" ]; then
   remove_file /etc/smfc/smfc.conf
   remove_file /etc/default/smfc
   verbose_echo "smfc configuration files removed."
+  # The folder goes only when it is empty. A backup written by an earlier installation is the file of
+  # the user, so it stays, and it holds the folder with it.
+  if rmdir /etc/smfc 2>/dev/null; then
+    verbose_echo "smfc configuration folder removed (/etc/smfc)."
+  fi
 else
   verbose_echo "smfc configuration files preserved (/etc/smfc/smfc.conf, /etc/default/smfc)."
 fi
