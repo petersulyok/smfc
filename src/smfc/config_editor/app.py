@@ -149,6 +149,13 @@ class EditorApp:
         if view.field is None:
             self.message = "smfc does not know this parameter; it is kept as it is"
             return
+        self._open_widget(view)
+
+    def _open_widget(self, view: FieldView) -> None:
+        """Open the widget one parameter is edited with.
+        Args:
+            view (FieldView): the parameter under the cursor
+        """
         if view.field.kind is FieldKind.BOOL:
             # A boolean has two values, so it is switched rather than typed, the same way a section is.
             new_value = bool_value(bool_text(view.value) == "no")
