@@ -92,10 +92,18 @@ verbose_echo "Root privilege granted."
 # and %systemd_postun_with_restart touches a running unit only. A service the user stopped on purpose
 # stays stopped.
 SMFC_WAS_RUNNING=""
+# A fresh installation is one systemd knows nothing about yet. On an existing one the enable state
+# belongs to the user: an upgrade never enables a service that was disabled on purpose. This is what
+# `deb-systemd-helper was-enabled` decides for the DEB, and what `$1 -eq 1` decides for the RPM.
+SMFC_FRESH_INSTALL=""
 if command -v systemctl > /dev/null 2>&1; then
   if systemctl is-active --quiet smfc.service 2>/dev/null; then
     SMFC_WAS_RUNNING="yes"
     verbose_echo "smfc.service is running, it will be restarted at the end."
+  fi
+  SMFC_ENABLE_STATE=$(systemctl is-enabled smfc.service 2>/dev/null || true)
+  if [ -z "$SMFC_ENABLE_STATE" ] || [ "$SMFC_ENABLE_STATE" = "not-found" ]; then
+    SMFC_FRESH_INSTALL="yes"
   fi
 fi
 
@@ -269,6 +277,14 @@ fi
 if command -v systemctl > /dev/null 2>&1; then
   systemctl daemon-reload || true
   verbose_echo "systemd configuration reloaded."
+  # The service is enabled but not started, exactly as the packages leave it. The configuration file
+  # holds the disk names of this machine and nothing else that fits it, so the user reads it first.
+  if [ -n "$SMFC_FRESH_INSTALL" ]; then
+    systemctl enable smfc.service > /dev/null 2>&1 || \
+      echo "smfc: the service could not be enabled, run 'systemctl enable smfc.service'" >&2
+    verbose_echo "smfc.service enabled, it starts at the next boot."
+    verbose_echo "Review /etc/smfc/smfc.conf, then run 'systemctl start smfc.service'."
+  fi
   if [ -n "$SMFC_WAS_RUNNING" ]; then
     systemctl restart smfc.service || \
       echo "smfc: the service did not restart, check 'systemctl status smfc.service'" >&2
