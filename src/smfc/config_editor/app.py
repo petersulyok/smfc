@@ -594,6 +594,10 @@ class EditorApp:
         left = max((layout.width - width) // 2, 0)
         window = screen.derwin(height, width, top, left)
         window.bkgd(" ", self.attr(panes.PAIR_POPUP))
+        # A derived window shares the memory of the screen, and bkgd() only sets the background
+        # attribute. Without the erase every cell the popup does not write keeps what the panes drew
+        # underneath, and the window fills with pieces of the section list and the parameter list.
+        window.erase()
         window.box()
         title = f" {popup.title} "
         self._put(window, 0, 2, title, len(title), self.attr(panes.PAIR_POPUP, bold=True))

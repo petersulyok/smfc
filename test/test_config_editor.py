@@ -386,6 +386,29 @@ class TestPanes:
         assert any("3 devices..." in line for line in lines)
 
 
+class _FakeWindow:
+    """A curses window that records what it is asked to do, for the drawing tests."""
+
+    def __init__(self, height: int = 24, width: int = 80) -> None:
+        self.height = height
+        self.width = width
+        self.calls: list = []
+        self.children: list = []
+
+    def getmaxyx(self):
+        return self.height, self.width
+
+    def derwin(self, height, width, top, left):
+        child = _FakeWindow(height, width)
+        self.children.append(child)
+        self.calls.append(("derwin", height, width, top, left))
+        return child
+
+    def __getattr__(self, name):
+        def record(*args, **kwargs):
+            self.calls.append((name,) + args)
+        return record
+
 class TestEditorApp:
     """Unit test class for the key dispatch of the smfc.config_editor.app module."""
 
@@ -736,6 +759,26 @@ class TestEditorApp:
         assert app.model.checked is True
         app.handle_key(curses.KEY_F10)
         assert app.running is False
+
+    def test_a_popup_erases_the_panes_under_it(self, tmp_path: Path) -> None:
+        """Positive unit test for EditorApp._draw_popup(). It contains the following steps:
+        - open the popup of a parameter and draw it on a window that records every call
+        - ASSERT: the window of the popup is erased before anything is drawn in it
+        A window made with derwin() shares the memory of the screen, and bkgd() only sets the
+        background attribute. Without the erase the popup fills with pieces of the panes behind it.
+        """
+        app = EditorApp(_model(tmp_path), colour=False)
+        app.row_index = next(i for i, r in enumerate(app.model.rows) if r.name == "CPU")
+        app.pane = PANE_FIELDS
+        app.field_index = next(i for i, v in enumerate(app.views()) if v.key == "control_function")
+        app.start_edit()
+        assert app.popup is not None
+        screen = _FakeWindow()
+        app._draw_popup(screen, panes.layout_for(80, 24))        # pylint: disable=protected-access
+        window = screen.children[0]
+        names = [call[0] for call in window.calls]
+        assert "erase" in names
+        assert names.index("erase") < names.index("box")
 
     def test_f5_runs_the_hardware_probes(self, tmp_path: Path, mocker) -> None:
         """Positive unit test for EditorApp.check(). It contains the following steps:
