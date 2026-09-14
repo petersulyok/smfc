@@ -726,9 +726,9 @@ is no 6.5.0. A major release is the right place for both, because one of them as
 | 1 | `smfc-config`, phases 1 to 7 of chapter 10 | no, it is a new command |
 | 2 | the install layout, see 12.1 | yes, for a manual installation only |
 | 3 | remove the `-ne` command line option | yes, for anyone still passing it |
-| 4 | remove the `genericx9` platform name | yes, silently until now, see 12.2 |
+| 4 | remove the `genericx9` platform name | yes, silently until now, see 12.3 |
 | 5 | replace the `Ipmi.*_MODE` constants with `FanMode` | no, they are internal |
-| 6 | warn about an unknown section name, see 12.3 | no, it is a new warning |
+| 6 | warn about an unknown section name, see 12.4 | no, it is a new warning |
 | 7 | docs: the README install chapter, `DOCKER.md`, the man pages, the changelogs | no |
 
 Order of work: finish the `smfc-config` phases first, because they are additive and independent.
@@ -758,7 +758,8 @@ ln -sf /opt/smfc/bin/smfc-config /usr/local/bin/smfc-config
 ```
 
 The unit file stays in `/etc/systemd/system/`, which is the correct place for a locally installed
-unit, and `ExecStart=/opt/smfc/bin/smfc` names the binary explicitly so nothing can shadow it.
+unit, and **`ExecStart=smfc` stays as it is**. Naming `/opt/smfc/bin/smfc` explicitly would be
+safer against shadowing and wrong for this release: see 12.2.
 
 **The migration must fail safe.** An existing manual installation keeps working until the user runs
 the script again, and the old copy in `/usr/local/lib/python3*/dist-packages/smfc` must not be left
@@ -781,7 +782,42 @@ scratch. Create the venv with `--without-pip`, install into it with the pip that
 in the same layer, and symlink `/usr/bin/smfc`. Drop the distro `python3-pyudev` and `py3-udev`
 packages: the venv gets `pyudev` from PyPI, which is pure Python and needs no compiler.
 
-### 12.2 The two removals that break a working configuration
+### 12.2 Upgrading a manual installation from 6.4.2
+
+Two paths reach 7.0.0, and both must work.
+
+**The user fetches the new `install.sh`.** It migrates: build `/opt/smfc`, verify it, remove the old
+copy, replace the symlinks. That is 12.1.
+
+**The user runs the `install.sh` they already have.** The 6.4.2 script reads the latest version from
+PyPI, so it installs 7.0.0 into the system Python in the old layout. It then downloads the rest from
+the matching tag:
+
+```bash
+SMFC_VERSION=$(pip index versions smfc ...)        # 7.0.0
+pip install --break-system-packages smfc==7.0.0    # old layout, /usr/local/...
+curl -o /etc/systemd/system/smfc.service \
+     .../refs/tags/v7.0.0/config/smfc.service      # the 7.0.0 unit file
+```
+
+An old script therefore installs a new unit file beside an old layout. **That is why the unit file
+must not name the binary by path.** `ExecStart=smfc` resolves through systemd's default `PATH` in
+every layout:
+
+| Layout | Binary | Resolved |
+|---|---|---|
+| DEB, RPM | `/usr/bin/smfc` | yes |
+| manual, before 7.0.0 | `/usr/local/bin/smfc` | yes |
+| manual, 7.0.0 | `/usr/local/bin/smfc` symlinked into `/opt/smfc` | yes |
+
+So the second path leaves a working service in the old layout, and the next run of the new script
+migrates it. The release notes name this case, so a user is not puzzled when the documented paths
+differ from their machine.
+
+Nothing else fetched from the tag can mismatch: the configuration format, the defaults file and the
+man pages are the same for both layouts.
+
+### 12.3 The two removals that break a working configuration
 
 `-ne` has logged a deprecation warning since 6.2.0, so its removal is expected.
 
@@ -797,7 +833,7 @@ Use generic_x9. Valid values: auto, generic, generic_x9, generic_x14, X10QBi.
 Today the message names the bad value and stops there. That is not enough for a value that worked
 in the previous release.
 
-### 12.3 An unknown section name is silent today
+### 12.4 An unknown section name is silent today
 
 The section names lost their zone tags in 5.0.0: `[CPU zone]` became `[CPU]`. The parser has no
 alias for the old form, and a missing section means disabled, so a file that still uses the old
