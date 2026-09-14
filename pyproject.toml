@@ -55,7 +55,7 @@ smfc-client = "smfc.client:main"
 default-groups = ["dev", "lint"]
 
 [tool.setuptools]
-packages = ["smfc"]
+packages = ["smfc", "smfc.config_editor"]
 package-dir = {"" = "src"}
 
 # pytest options

@@ -102,40 +102,53 @@ as broken. The check must compare the owning process. `0.0.0.0` is correct there
 
 Three modules are shared by the daemon and the editor. Only the screens belong to the editor.
 
+Two modules have two consumers each, so they stay flat beside the daemon:
+
 | Module | Consumers | Path |
 |---|---|---|
-| `schema.py` — field metadata, section help, provider functions | validation, the right pane, the help pane | `src/smfc/schema.py` |
 | `checks.py` — per-section checks | `service.py` at startup, and the editor | `src/smfc/checks.py` |
 | `discover.py` — the by-id filters | `install.sh`, both package scripts, the editor | `src/smfc/discover.py` |
-| `confwriter.py` — the comment-preserving writer | the editor and the first-run flow | `src/smfc/confwriter.py` |
-| `config_cmd.py` — the `smfc-config` entry point | the command | `src/smfc/config_cmd.py` |
-| the curses screens | the editor only | `src/smfc/config_ui/` |
 
-`checks.py` must not live inside the UI package. The daemon imports it, and a daemon must never
-import from a UI package.
+Everything the editor alone uses lives in one subpackage:
 
-`src/smfc/` is flat today, with 23 modules. Create `config_ui/` only when the UI needs four or more
-modules. Below that, one flat `config_ui.py` matches the existing style.
+```
+src/smfc/config_editor/
+├── __init__.py
+├── schema.py        field metadata, section help, provider names
+├── confwriter.py    the comment-preserving writer
+├── cmd.py           the smfc-config entry point
+├── app.py           main loop and key dispatch
+├── panes.py         section list, field list, help pane
+└── popups.py        device selector, wide input field
+```
+
+Six modules justify a package; the plan's own threshold was four. The name carries the word of the
+command, `smfc-config`, without colliding with `config.py`.
+
+**The dependency direction is one way.** `config_editor` imports `config`, `checks` and `discover`.
+None of them may import `config_editor`. `src/smfc/__init__.py` imports the whole daemon, so an
+import in the other direction would be circular and would fail at start. A grep for `config_editor`
+in `src/smfc/__init__.py` must find nothing.
 
 **Packaging trap.** `[tool.setuptools] packages = ["smfc"]` in `pyproject.toml` is an explicit list.
 It does not recurse. A subpackage must be added by hand:
 
 ```toml
 [tool.setuptools]
-packages = ["smfc", "smfc.config_ui"]
+packages = ["smfc", "smfc.config_editor"]
 package-dir = {"" = "src"}
 ```
 
 This passes every local test and fails only in the built wheel. Verify the artifact:
 
 ```bash
-uv build && python3 -m zipfile -l dist/smfc-*.whl | grep config_ui
+uv build && python3 -m zipfile -l dist/smfc-*.whl | grep config_editor
 ```
 
 `pyproject.toml` gains one line in `[project.scripts]`:
 
 ```toml
-smfc-config = "smfc.config_cmd:main"
+smfc-config = "smfc.config_editor.cmd:main"
 ```
 
 No optional dependency. No extras. No second binary package.
@@ -422,7 +435,7 @@ are slow. `npu_smi_timeout` is the existing precedent for a per-tool timeout.
 | GPU | nvidia needs `nvidia_smi_path`; amd needs `rocm_smi_path`; IDs within the detected count; `amd_temp_sensor` is meaningless for nvidia |
 | NPU | `npu_smi_path` — an absolute path exists, or a bare name resolves through `shutil.which` |
 | PCI | exactly one of `pci_address`, `pci_id`, `pci_driver`; the `temp_sensor` path reads a number |
-| CONST | `level` in 0..100 |
+| CONST | `level` in 1..100 |
 | Exporter | `port` in 1..65535; the port is free **or held by smfc itself**; `bind_address` is `0.0.0.0` or an address this host holds, IPv4 only |
 | Overview | no section enabled at all; detected hardware that no section covers; config file not writable, with the `sudo` hint; the zone map (see below) |
 
@@ -711,7 +724,7 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 | # | Deliverable | Notes |
 |---|---|---|
 | 0 | the `^usb-` and `_[0-9]+$` filter fixes | **done**, commits `a43a79c` and `4fc6452` |
-| 1 | `schema.py` | field metadata and help text for all 9 sections, plus the section help; it tells you how big the UI really is |
+| 1 | `schema.py` | **done**; field metadata and help text for all 9 sections, plus the section help |
 | 2 | `checks.py` | refactor `Service.check_dependencies()`; the daemon uses it too |
 | 3 | `discover.py` | lift the filters; point the three scripts at it |
 | 4 | `confwriter.py` | round-trip every sample file unchanged; add and remove an instance; read-only mode; the missing-file path of 9.2 |
@@ -725,7 +738,7 @@ scopes separate.
 ## 11. Testing
 
 New test files follow the existing names in `test/`: `test_schema.py`, `test_checks.py`,
-`test_discover.py`, `test_confwriter.py`, `test_config_ui.py`.
+`test_discover.py`, `test_confwriter.py`, `test_config_editor.py`.
 
 **The acceptance test already exists.** `config/samples/*.conf` is eleven configurations. They cover
 CPU-only, HD-only, mixed, multi-curve, GPU, NPU, PCI, CONST-only, X9, X10QBi and an advanced control
@@ -748,6 +761,7 @@ terminal. Keep the drawing code thin and the state code testable.
 | `smartctl` wakes sleeping disks | tier 3 only, and the key label says so |
 | a false error on the exporter port | compare the owning process, not only the port |
 | a subpackage missing from the wheel | check the built artifact, not the source tree |
+| the daemon importing the editor | grep `src/smfc/__init__.py`; the import would be circular |
 | a comment lost on save | round-trip test over all eleven samples plus the `nas` file |
 | an ambiguous-width glyph breaks the frame | `curses` line constants, and ASCII status glyphs |
 | the terminal is too narrow | fall back to one pane below 64 columns or 14 rows |
