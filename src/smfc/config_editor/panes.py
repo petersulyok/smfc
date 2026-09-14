@@ -20,9 +20,11 @@ MAX_WIDTH: int = 100
 # Width of the section list. The longest label is "Overview" plus the two glyph columns.
 LEFT_WIDTH: int = 20
 
-# Height of the help pane, and the rows the frame and the key line always take.
+# Height of the help pane, and the rows the frame and the two lines below it always take:
+# the banner, the top border, the rule that carries the Help title, the bottom border, the status
+# line and the key bar.
 HELP_ROWS: int = 4
-FIXED_ROWS: int = HELP_ROWS + 4     # top border, divider, bottom border, key line
+FIXED_ROWS: int = 6
 
 # Glyphs of the two columns. A check mark and a ballot X are narrow on every terminal; every other
 # status glyph stays ASCII, because an ambiguous-width character shifts the rest of the line.
@@ -76,7 +78,7 @@ def layout_for(width: int, height: int) -> Layout:
     frame_width = min(max(width, 1), MAX_WIDTH)
     two_pane = width >= MIN_WIDTH and height >= MIN_ROWS
     help_rows = HELP_ROWS if height >= 12 else 2
-    pane_rows = max(height - (help_rows + 4), 1)
+    pane_rows = max(height - help_rows - FIXED_ROWS, 1)
     left = LEFT_WIDTH if two_pane else frame_width - 4
     right = frame_width - left - 5 if two_pane else frame_width - 4
     return Layout(width=frame_width, height=height, two_pane=two_pane, left_width=left,

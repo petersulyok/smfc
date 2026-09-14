@@ -279,7 +279,7 @@ class EditorApp:
         views = self.views()
         self._draw_banner(screen, layout)
         self._draw_panes(screen, layout, views)
-        self._draw_help(screen, layout, views)
+        self._draw_footer(screen, layout)
         screen.noutrefresh()
         curses.doupdate()
 
@@ -296,34 +296,48 @@ class EditorApp:
                   self.attr(panes.PAIR_BANNER))
 
     def _draw_panes(self, screen: "curses.window", layout: Layout, views: List[FieldView]) -> None:
-        """Draw the frame, the section list and the parameter list.
+        """Draw the frame, the section list, the parameter list and the help pane.
+        The whole thing is one box. The rule between the panes and the help carries the Help title, so
+        the two boxes share one line instead of standing on two.
         Args:
             screen (curses.window): the curses screen
             layout (Layout): the sizes to draw with
             views (List[FieldView]): the parameters of the selected section
         """
-        box = screen.derwin(layout.pane_rows + 2, layout.width, 1, 0)
+        rule = layout.pane_rows + 1
+        box = screen.derwin(rule + layout.help_rows + 2, layout.width, 1, 0)
         box.bkgd(" ", self.attr(panes.PAIR_PANE))
         box.box()
+        box.hline(rule, 1, curses.ACS_HLINE, layout.width - 2)
+        box.addch(rule, 0, curses.ACS_LTEE)
+        box.addch(rule, layout.width - 1, curses.ACS_RTEE)
+        self._put(box, rule, 2, " Help ", 6, self.attr(panes.PAIR_TITLE, bold=True))
+
         left = panes.render_sections(self.model, self.row_index, self.row_top, layout)
         right = panes.render_fields(views, self.field_index, self.field_top, layout, self.editing)
         if layout.two_pane:
             divider = layout.left_width + 1
             box.vline(1, divider, curses.ACS_VLINE, layout.pane_rows)
             box.addch(0, divider, curses.ACS_TTEE)
-            box.addch(layout.pane_rows + 1, divider, curses.ACS_BTEE)
+            box.addch(rule, divider, curses.ACS_BTEE)
             self._put(box, 0, 2, " Sections ", 10, self.attr(panes.PAIR_TITLE, bold=True))
             title = f" [{self.row.name}] "
             self._put(box, 0, divider + 2, title, len(title), self.attr(panes.PAIR_TITLE, bold=True))
             self._draw_section_lines(box, layout, left, 1)
             self._draw_field_lines(box, layout, right, divider + 1)
-            return
-        title = " Sections " if self.pane is PANE_SECTIONS else f" [{self.row.name}] "
-        self._put(box, 0, 2, title, len(title), self.attr(panes.PAIR_TITLE, bold=True))
-        if self.pane is PANE_SECTIONS:
-            self._draw_section_lines(box, layout, left, 1)
         else:
-            self._draw_field_lines(box, layout, right, 1)
+            title = " Sections " if self.pane is PANE_SECTIONS else f" [{self.row.name}] "
+            self._put(box, 0, 2, title, len(title), self.attr(panes.PAIR_TITLE, bold=True))
+            if self.pane is PANE_SECTIONS:
+                self._draw_section_lines(box, layout, left, 1)
+            else:
+                self._draw_field_lines(box, layout, right, 1)
+
+        view = self.view() if views else None
+        for index, text in enumerate(panes.render_help(self.model, self.row, view, layout)):
+            error = text.startswith(("error", "warn"))
+            attr = self.attr(panes.PAIR_ERROR if error else panes.PAIR_PANE, bold=index == 0)
+            self._put(box, rule + 1 + index, 2, text, layout.width - 4, attr)
 
     def _draw_section_lines(self, box: "curses.window", layout: Layout, lines: List[str],
                             column: int) -> None:
@@ -375,26 +389,20 @@ class EditorApp:
                 attr = self.attr(panes.PAIR_PANE)
             self._put(box, index + 1, column + 1, text.ljust(width), width, attr)
 
-    def _draw_help(self, screen: "curses.window", layout: Layout, views: List[FieldView]) -> None:
-        """Draw the help pane, the status line and the key bar.
+    def _draw_footer(self, screen: "curses.window", layout: Layout) -> None:
+        """Draw the status line and the key bar, below the box.
         Args:
             screen (curses.window): the curses screen
             layout (Layout): the sizes to draw with
-            views (List[FieldView]): the parameters of the selected section
         """
-        top = layout.pane_rows + 3
-        view = self.view() if views else None
-        for index, text in enumerate(panes.render_help(self.model, self.row, view, layout)):
-            error = text.startswith(("error", "warn"))
-            attr = self.attr(panes.PAIR_ERROR if error else panes.PAIR_PANE, bold=index == 0)
-            self._put(screen, top + index, 1, text, layout.width - 2, attr)
+        below = layout.pane_rows + layout.help_rows + 3
         status = self.message or panes.render_status(self.model)
         if status:
-            self._put(screen, top + layout.help_rows, 1, status, layout.width - 2,
+            self._put(screen, below, 1, status, layout.width - 2,
                       self.attr(panes.PAIR_PANE, bold=True))
         keys = panes.render_keys(self.model, self.editing is not None)
-        self._put(screen, min(layout.height - 1, top + layout.help_rows + 1), 0,
-                  keys.ljust(layout.width), layout.width, self.attr(panes.PAIR_KEYS, bold=True))
+        self._put(screen, min(layout.height - 1, below + 1), 0, keys.ljust(layout.width),
+                  layout.width, self.attr(panes.PAIR_KEYS, bold=True))
 
     def _put(self, window: "curses.window", row: int, column: int, text: str, width: int,
              attr: int = curses.A_NORMAL) -> None:

@@ -291,7 +291,7 @@ class TestPanes:
         layout = panes.layout_for(200, 60)
         assert layout.width == panes.MAX_WIDTH
         assert layout.help_rows == panes.HELP_ROWS
-        assert layout.pane_rows == 60 - panes.HELP_ROWS - 4
+        assert layout.pane_rows == 60 - panes.HELP_ROWS - panes.FIXED_ROWS
 
     def test_a_long_line_is_cut_in_the_middle(self) -> None:
         """Positive unit test for fit(). It contains the following steps:
