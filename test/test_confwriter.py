@@ -28,7 +28,7 @@ COMMENTED: str = (
     "[CPU]\n"
     "# Fan controller enabled (bool, default=0/false)\n"
     "enabled=1\n"
-    "# Minimum CPU temperature (float, C, default=30.0)\n"
+    "# Minimum CPU temperature (float, Celsius, default=30.0)\n"
     "min_temp=30.0\n"
 )
 
@@ -117,7 +117,7 @@ class TestConfWriter:
         writer.save()
         after = target.read_text(encoding="utf-8")
         assert "min_temp=40.0" in after
-        assert "# Minimum CPU temperature (float, C, default=30.0)" in after
+        assert "# Minimum CPU temperature (float, Celsius, default=30.0)" in after
         assert len(after.splitlines()) == len(before.splitlines())
 
     def test_a_changed_value_parses_back(self, tmp_path: Path) -> None:

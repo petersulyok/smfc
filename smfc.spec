@@ -36,6 +36,7 @@ install -Dm644 config/smfc.service %{buildroot}%{_unitdir}/smfc.service
 install -Dm644 config/smfc.preset  %{buildroot}%{_presetdir}/50-smfc.preset
 install -Dm644 doc/smfc.1          %{buildroot}%{_mandir}/man1/smfc.1
 install -Dm644 doc/smfc-client.1   %{buildroot}%{_mandir}/man1/smfc-client.1
+install -Dm644 doc/smfc-config.1   %{buildroot}%{_mandir}/man1/smfc-config.1
 install -d %{buildroot}%{_docdir}/%{name}/examples
 install -m644 config/samples/*.conf %{buildroot}%{_docdir}/%{name}/examples/
 
@@ -62,6 +63,7 @@ fi
 %doc README.md CHANGELOG.md
 %{_bindir}/smfc
 %{_bindir}/smfc-client
+%{_bindir}/smfc-config
 %{python3_sitelib}/smfc/
 %{python3_sitelib}/smfc-%{version}.dist-info/
 %config(noreplace) /etc/smfc/smfc.conf
@@ -70,9 +72,23 @@ fi
 %{_presetdir}/50-smfc.preset
 %{_mandir}/man1/smfc.1*
 %{_mandir}/man1/smfc-client.1*
+%{_mandir}/man1/smfc-config.1*
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Sun Sep 14 2026 Peter Sulyok <peter@sulyok.net> - 7.0.0-1
+- Added: smfc-config, a full-screen editor for /etc/smfc/smfc.conf. It
+  switches fan controllers on and off, edits every parameter, checks the
+  hardware each controller needs, and offers the disks of the machine. It
+  keeps the comments of the file. The package installs the smfc-config
+  command and its manual page.
+- Added: the disk detection of the %%post scriptlet calls smfc.discover, so
+  the installer, this package and the DEB package share one implementation of
+  the filters instead of three copies.
+- Fixed: a USB disk could be collected into hd_names= at install time.
+- Fixed: a duplicate by-id name ending _2 or higher reached the device lists,
+  so a disk with a third alias was listed twice.
+
 * Mon Sep 07 2026 Peter Sulyok <peter@sulyok.net> - 6.4.2-1
 - Fixed: the X14/H14 firmware stack probe accepted only completion code 0xC1
   as the ATEN signal, so a board rejecting the probe with any other code

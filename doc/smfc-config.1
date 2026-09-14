@@ -1,0 +1,191 @@
+.TH SMFC\-CONFIG 1 smfc\-6.4.2
+.SH NAME
+.B smfc\-config
+\- create and edit the configuration file of smfc.
+.SH SYNOPSIS
+.B smfc\-config
+[options]
+.SH DESCRIPTION
+.B smfc-config
+is a full\-screen editor for
+.IR /etc/smfc/smfc.conf ,
+the configuration file of
+.BR smfc (1).
+It switches fan controllers on and off, edits every parameter, checks whether
+the hardware each controller needs is reachable, and picks disks from a list
+instead of asking you to type a
+.I /dev/disk/by\-id/
+path by hand.
+.PP
+It keeps the comments of your file. Only the value you change is rewritten;
+every other byte stays where it was, so the documentation in the file survives
+an edit.
+.PP
+The screen has four parts:
+.IP \(bu 2
+.B Sections
+\(em the fan controller families on the left, with their state and the result
+of the last check.
+.IP \(bu 2
+.B Parameters
+\(em the parameters of the selected section on the right, with the value the
+file holds or the default the daemon would apply.
+.IP \(bu 2
+.B Help
+\(em what the selected parameter does, when to change it, and what it accepts.
+.IP \(bu 2
+.B Status and keys
+\(em the state of the file and the keys that are available.
+.PP
+The section list always shows the same nine families, whether or not the file
+holds them. A section that is missing and a section with
+.B enabled=no
+mean the same thing to
+.BR smfc (1),
+so the editor does not show a difference the daemon cannot see. Switching a
+family on writes the section; switching it off writes
+.B enabled=0
+and keeps every value you typed.
+.PP
+A family may hold several instances, for example
+.B [CPU]
+and
+.BR [CPU:1] ,
+each driving a different IPMI zone with a different fan curve. Each instance is
+a row of its own.
+.PP
+.B smfc-config
+opens a file the daemon rejects. That is the case it exists for: the shipped
+configuration file is invalid until the installer fills the disks in, and a
+machine where that detection failed has a file
+.BR smfc (1)
+will not start. The parse error is shown on the section it belongs to, and you
+can edit your way out of it.
+.PP
+Nothing blocks a save. You may leave a file half finished and come back to it.
+The status line then says that
+.BR smfc (1)
+will not start with the file, that the running service keeps its current
+settings, and that the next boot is where the fault shows.
+.SH OPTIONS
+.TP
+.B \-h, \-\-help
+Show a help message and exit.
+.TP
+.BI \-c " FILE" ", \-\-config " FILE
+Configuration file to edit (default:
+.IR /etc/smfc/smfc.conf ).
+.TP
+.B \-s, \-\-sudo
+Run
+.BR ipmitool (1)
+and
+.BR smartctl (8)
+under
+.BR sudo (8)
+during the hardware check. Required when the invoking user lacks direct BMC or
+disk access.
+.TP
+.B \-nc, \-\-no\-color
+Plain output, no colors.
+.TP
+.B \-v, \-\-version
+Show the program version and exit.
+.SH KEYS
+.TP
+.B Tab
+Move between the section list and the parameter list.
+.TP
+.B Up, Down
+Move the cursor. The letters
+.B k
+and
+.B j
+do the same.
+.TP
+.B Enter
+In the section list, move to the parameters. In the parameter list, edit the
+value: a number is typed in place, a value with two states is switched, and a
+path, a fan curve or a device list opens a window.
+.TP
+.B Space
+Switch the selected family on or off.
+.TP
+.B F5
+Run the checks, including the ones that talk to the hardware.
+.TP
+.B F2
+Save the file.
+.TP
+.B +, F6
+Add an instance to a family, on an IPMI zone no enabled instance claims.
+.TP
+.B \-, F8
+Remove the selected instance, after a confirmation.
+.TP
+.B Esc
+Leave the parameter list, or cancel what is being typed.
+.TP
+.B F10, q
+Quit.
+.SH CHECKS
+The checks run when you press
+.BR F5 ,
+not while you type, because some of them talk to the hardware and take seconds.
+Reading a sleeping disk with
+.BR smartctl (8)
+wakes it, so the editor never does that on its own.
+.PP
+A finding is one of three kinds.
+.BR smfc (1)
+will not start on an
+.BR error ;
+it will start on a
+.BR warning ,
+and the result is probably not what you meant; an
+.B information
+line is an observation.
+.PP
+A value already in the file that the daemon would reject is marked red and
+explained, even before you press
+.BR F5 .
+The editor checks a value with the same functions the daemon uses, so a value
+it accepts is a value the daemon accepts.
+.SH FILES
+.TP
+.I /etc/smfc/smfc.conf
+The configuration file.
+.TP
+.I /etc/smfc/smfc.conf.YYYYMMDD_HHMMSS
+A backup written by the installation script. The editor offers it when the
+configuration file is missing.
+.SH EXIT STATUS
+.TP
+.B 0
+Successful exit.
+.TP
+.B 6
+The configuration file could not be opened.
+.SH NOTES
+Writing
+.I /etc/smfc/smfc.conf
+needs root rights, so run the editor with
+.BR sudo (8).
+Without them it opens read\-only: you can read every section and every help
+text, and the status line says so at the start rather than at the first save.
+.PP
+The editor never restarts the service on its own. After a save it offers a
+restart when the file is valid, the service is running, and it has the rights
+to do it. Otherwise it prints the command for you to run.
+.PP
+The editor needs 64 columns and 16 rows for its two panes. Below that it falls
+back to a single pane rather than refusing to start.
+.SH SEE ALSO
+.BR smfc (1),
+.BR smfc\-client (1),
+.BR ipmitool (1),
+.BR smartctl (8),
+.BR systemctl (1)
+.SH COPYRIGHT
+.B smfc\-config
+is Copyright (C) 2026 by Peter Sulyok

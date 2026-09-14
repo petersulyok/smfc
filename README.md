@@ -31,7 +31,7 @@ This is a `systemd service` running on Linux that can control fans with the help
  2. Optional: enable advanced power management features for your CPU and SATA hard disks for lower power consumption, heat generation and fan noise. 
  3. Load kernel modules (`coretemp/k10temp` and `drivetemp`)
  4. Install `smfc` service or run it in docker (see [chapter 9.](https://github.com/petersulyok/smfc/blob/main/README.md#9-installation-and-uninstallation) for more details)
- 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration) for more details).
+ 5. Edit the configuration file `/etc/smfc/smfc.conf` and command line options in `/etc/default/smfc` (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration) for more details). Run `sudo smfc-config` for a full-screen editor that checks your hardware while you edit (see [chapter 15.](https://github.com/petersulyok/smfc/blob/main/README.md#15-smfc-config)).
  6. Start `smfc` service (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc) for more details)
  7. Check results in system log
  8. Leave feedback in [discussion #55](https://github.com/petersulyok/smfc/discussions/55)
@@ -796,6 +796,8 @@ You have to think over and answer the following questions:
 4. Which IPMI zone(s) will be connected to these fan controllers/temperature sources)? Check how many IPMI zones you have, how the fans are connected on your motherboard, and how they are cooling the selected temperature source(s). Multiple controllers can share the same zone -- the highest requested level will be applied automatically.
 5. What is the stable level interval for fans in the selected IPMI zone(s)? Probably this part requires the most patience! You have assumptions here that need to be verified. If you experience IPMI assertions and your fans are spinning up then you have to refine the level interval or threshold configuration and try again. You will have several cycles here, this is normal. 
 
+`sudo smfc-config` walks you through the same questions on screen: it lists the fan controller families, says what each parameter does, offers the disks this machine has, and checks whether the hardware a controller needs is reachable. See [chapter 15.](https://github.com/petersulyok/smfc/blob/main/README.md#15-smfc-config).
+
 #### 10.2 Sample configuration file
 The configuration file contains sections. The first one for IPMI configuration, the rest for fan controllers.
 Edit `/etc/smfc/smfc.conf` and specify your configuration parameters here:
@@ -828,9 +830,9 @@ fan_level_delay=2
 #                 OpenBMC or ATEN - is detected at startup, see README chapter 5)
 #  X10QBi       - Supermicro X10QBi platform
 platform_name=auto
-# Re-assert FULL fan mode (bool, default=1/true)
+# Re-assert FULL fan mode (yes or no, default=yes)
 enforce_fan_mode=1
-# Fan level applied to all configured zones at service termination (int, [-1..100]%, default=100)
+# Fan level applied to all configured zones at service termination (int, percent, [-1..100], default=100)
 # Use -1 to leave the fan levels untouched. On X14/H14 boards this level is only a transition: at exit
 # the BMC takes back fan control and rewrites fan levels.
 exit_level=100
@@ -841,30 +843,30 @@ exit_level=100
 
 # CPU fan controller: works based on CPU(s) temperature.
 [CPU]
-# Fan controller enabled (bool, default=0/false)
+# Fan controller enabled (yes or no, default=no)
 enabled=1
 # IPMI zone(s) (comma- or space-separated list of int, default=0)
 ipmi_zone=0
 # Calculation method for CPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
-# Threshold in temperature change before the fan controller reacts (float, C, default=3.0)
+# Threshold in temperature change before the fan controller reacts (float, Celsius, default=3.0)
 sensitivity=3.0
-# Polling time interval for reading temperature (int, sec, default=2)
+# Polling time interval for reading temperature (int, seconds, default=2)
 polling=2
 # Discrete steps in mapping of temperatures to fan level (int, default=6)
 steps=6
-# Minimum CPU temperature (float, C, default=30.0)
+# Minimum CPU temperature (float, Celsius, default=30.0)
 min_temp=30.0
-# Maximum CPU temperature (float, C, default=60.0)
+# Maximum CPU temperature (float, Celsius, default=60.0)
 max_temp=60.0
-# Minimum CPU fan level (int, %, default=35)
-# On X14/H14 boards a value below 5 is silently raised to 5%: the duty smfc writes there has no floor
+# Minimum CPU fan level (int, percent, default=35)
+# On X14/H14 boards a value below 5 percent is silently raised to 5: the duty smfc writes there has no floor
 # of its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
-# Maximum CPU fan level (int, %, default=100)
+# Maximum CPU fan level (int, percent, default=100)
 max_level=100
 # User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
-# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified 
+# Temperature in Celsius, level in percent; at least 2 pairs, temps strictly ascending. If this parameter specified 
 # then min_temp/max_temp/min_level/max_level parameters are skipped
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
@@ -876,30 +878,30 @@ error_tolerance=3
 
 # HD fan controller: works based on SATA or SAS HDDs/SSDs temperature.
 [HD]
-# Fan controller enabled (bool, default=0/false)
+# Fan controller enabled (yes or no, default=no)
 enabled=1
 # IPMI zone(s) (comma- or space-separated list of int, default=1)
 ipmi_zone=1
 # Calculation of HD temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
-# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
+# Threshold in temperature change before the fan controller reacts (float, Celsius, default=2.0)
 sensitivity=2.0
-# Polling interval for reading temperature (int, sec, default=10)
+# Polling interval for reading temperature (int, seconds, default=10)
 polling=10
 # Discrete steps in mapping of temperatures to fan level (int, default=4)
 steps=4
-# Minimum HD temperature (float, C, default=32.0)
+# Minimum HD temperature (float, Celsius, default=32.0)
 min_temp=32.0
-# Maximum HD temperature (float, C, default=46.0)
+# Maximum HD temperature (float, Celsius, default=46.0)
 max_temp=46.0
-# Minimum HD fan level (int, %, default=35)
-# On X14/H14 boards a value below 5 is silently raised to 5%: the duty smfc writes there has no floor
+# Minimum HD fan level (int, percent, default=35)
+# On X14/H14 boards a value below 5 percent is silently raised to 5: the duty smfc writes there has no floor
 # of its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
-# Maximum HD fan level (int, %, default=100)
+# Maximum HD fan level (int, percent, default=100)
 max_level=100
 # User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
-# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified 
+# Temperature in Celsius, level in percent; at least 2 pairs, temps strictly ascending. If this parameter specified 
 # then min_temp/max_temp/min_level/max_level parameters are skipped
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
@@ -915,7 +917,7 @@ error_tolerance=3
 hd_names=
 # Path for 'smartctl' command (str, default=/usr/sbin/smartctl).
 smartctl_path=/usr/sbin/smartctl
-# Standby guard feature for RAID arrays (bool, default=0/false)
+# Standby guard feature for RAID arrays (yes or no, default=no)
 standby_guard_enabled=0
 # Number of HDs already in STANDBY state before the full RAID array will be forced to it (int, default=1)
 standby_hd_limit=1
@@ -923,30 +925,30 @@ standby_hd_limit=1
 
 # NVME fan controller: works based on NVMe SSD(s) temperature.
 [NVME]
-# Fan controller enabled (bool, default=0/false)
+# Fan controller enabled (yes or no, default=no)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1)
 ipmi_zone=1
 # Calculation of NVMe temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
-# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
+# Threshold in temperature change before the fan controller reacts (float, Celsius, default=2.0)
 sensitivity=2.0
-# Polling interval for reading temperature (int, sec, default=2)
+# Polling interval for reading temperature (int, seconds, default=2)
 polling=2
 # Discrete steps in mapping of temperatures to fan level (int, default=4)
 steps=4
-# Minimum NVMe temperature (float, C, default=35.0)
+# Minimum NVMe temperature (float, Celsius, default=35.0)
 min_temp=35.0
-# Maximum NVMe temperature (float, C, default=70.0)
+# Maximum NVMe temperature (float, Celsius, default=70.0)
 max_temp=70.0
-# Minimum NVMe fan level (int, %, default=35)
-# On X14/H14 boards a value below 5 is silently raised to 5%: the duty smfc writes there has no floor
+# Minimum NVMe fan level (int, percent, default=35)
+# On X14/H14 boards a value below 5 percent is silently raised to 5: the duty smfc writes there has no floor
 # of its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
-# Maximum NVMe fan level (int, %, default=100)
+# Maximum NVMe fan level (int, percent, default=100)
 max_level=100
 # User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
-# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified 
+# Temperature in Celsius, level in percent; at least 2 pairs, temps strictly ascending. If this parameter specified 
 # then min_temp/max_temp/min_level/max_level parameters are skipped
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
@@ -963,7 +965,7 @@ nvme_names=
 
 # GPU fan controller: works based on Nvidia or AMD GPU(s) temperature.
 [GPU]
-# Fan controller enabled (bool, default=0/false)
+# Fan controller enabled (yes or no, default=no)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1)
 ipmi_zone=1
@@ -973,24 +975,24 @@ gpu_type=nvidia
 amd_temp_sensor=0
 # Calculation of GPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
-# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
+# Threshold in temperature change before the fan controller reacts (float, Celsius, default=2.0)
 sensitivity=2.0
-# Polling interval for reading temperature (int, sec, default=2)
+# Polling interval for reading temperature (int, seconds, default=2)
 polling=2
 # Discrete steps in mapping of temperatures to fan level (int, default=5)
 steps=5
-# Minimum GPU temperature (float, C, default=40.0)
+# Minimum GPU temperature (float, Celsius, default=40.0)
 min_temp=40.0
-# Maximum GPU temperature (float, C, default=70.0)
+# Maximum GPU temperature (float, Celsius, default=70.0)
 max_temp=70.0
-# Minimum GPU fan level (int, %, default=35)
-# On X14/H14 boards a value below 5 is silently raised to 5%: the duty smfc writes there has no floor
+# Minimum GPU fan level (int, percent, default=35)
+# On X14/H14 boards a value below 5 percent is silently raised to 5: the duty smfc writes there has no floor
 # of its own, and smfc suspends the BMC's own thermal loop while it drives the fans.
 min_level=35
-# Maximum GPU fan level (int, %, default=100)
+# Maximum GPU fan level (int, percent, default=100)
 max_level=100
 # User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
-# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified 
+# Temperature in Celsius, level in percent; at least 2 pairs, temps strictly ascending. If this parameter specified 
 # then min_temp/max_temp/min_level/max_level parameters are skipped
 #control_function=30-35, 50-55, 60-90, 65-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
@@ -1010,28 +1012,28 @@ rocm_smi_path=/usr/bin/rocm-smi
 # NPU fan controller: works based on Ascend NPU(s) temperature (npu-smi), e.g. Atlas 300I Duo.
 # A device is an NPU card (npu-smi -i id); for multi-chip cards the hottest chip is used.
 [NPU]
-# Fan controller enabled (bool, default=0/false)
+# Fan controller enabled (yes or no, default=no)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1)
 ipmi_zone=1
 # Calculation of NPU temperatures (int, [0-minimum, 1-average, 2-maximum], default=1)
 temp_calc=1
-# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
+# Threshold in temperature change before the fan controller reacts (float, Celsius, default=2.0)
 sensitivity=2.0
-# Polling interval for reading temperature (float, sec, default=5; npu-smi is slow, ~1.5s/call)
+# Polling interval for reading temperature (float, seconds, default=5; npu-smi is slow, ~1.5s/call)
 polling=5
 # Discrete steps in mapping of temperatures to fan level (int, default=5)
 steps=5
-# Minimum NPU temperature (float, C, default=40.0)
+# Minimum NPU temperature (float, Celsius, default=40.0)
 min_temp=40.0
-# Maximum NPU temperature (float, C, default=85.0)
+# Maximum NPU temperature (float, Celsius, default=85.0)
 max_temp=85.0
-# Minimum NPU fan level (int, %, default=35)
+# Minimum NPU fan level (int, percent, default=35)
 min_level=35
-# Maximum NPU fan level (int, %, default=100)
+# Maximum NPU fan level (int, percent, default=100)
 max_level=100
 # User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
-# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified
+# Temperature in Celsius, level in percent; at least 2 pairs, temps strictly ascending. If this parameter specified
 # then min_temp/max_temp/min_level/max_level parameters are skipped
 #control_function=50-40, 70-70, 85-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
@@ -1045,34 +1047,34 @@ npu_device_ids=0
 # Path for 'npu-smi' command (str, default=npu-smi). May be a bare command name (resolved via PATH)
 # or a full path (e.g. /usr/local/Ascend/ascend-toolkit/latest/bin/npu-smi).
 npu_smi_path=npu-smi
-# Timeout for a single npu-smi call (float, sec, default=15.0)
+# Timeout for a single npu-smi call (float, seconds, default=15.0)
 npu_smi_timeout=15.0
 
 
 # PCI fan controller: works based on the HWMON temperature of PCI device(s).
 [PCI]
-# Fan controller enabled (bool, default=0/false)
+# Fan controller enabled (yes or no, default=no)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1)
 ipmi_zone=1
 # Calculation of PCI temperatures (int, [0-minimum, 1-average, 2-maximum], default=2)
 temp_calc=2
-# Threshold in temperature change before the fan controller reacts (float, C, default=2.0)
+# Threshold in temperature change before the fan controller reacts (float, Celsius, default=2.0)
 sensitivity=2.0
-# Polling interval for reading temperature (float, sec, default=2)
+# Polling interval for reading temperature (float, seconds, default=2)
 polling=2
 # Discrete steps in mapping of temperatures to fan level (int, default=6)
 steps=6
-# Minimum PCI temperature (float, C, default=30.0)
+# Minimum PCI temperature (float, Celsius, default=30.0)
 min_temp=30.0
-# Maximum PCI temperature (float, C, default=60.0)
+# Maximum PCI temperature (float, Celsius, default=60.0)
 max_temp=60.0
-# Minimum PCI fan level (int, %, default=35)
+# Minimum PCI fan level (int, percent, default=35)
 min_level=35
-# Maximum PCI fan level (int, %, default=100)
+# Maximum PCI fan level (int, percent, default=100)
 max_level=100
 # User-defined control function (comma- or space-separated list of temp-level value pairs, default=empty)
-# Temp in °C, level in %; at least 2 pairs, temps strictly ascending. If this parameter specified
+# Temperature in Celsius, level in percent; at least 2 pairs, temps strictly ascending. If this parameter specified
 # then min_temp/max_temp/min_level/max_level parameters are skipped
 #control_function=45-40, 65-70, 80-100
 # Moving average window size for temperature smoothing (int, default=1, 1=disabled)
@@ -1097,19 +1099,19 @@ temp_sensor=1
 
 # CONST fan controller: sets constant fan level (without any heat source) for IPMI zones(s).
 [CONST]
-# Fan controller enabled (bool, default=0/false)
+# Fan controller enabled (yes or no, default=no)
 enabled=0
 # IPMI zone(s) (comma- or space-separated list of int, default=1)
 ipmi_zone=1
-# Polling interval for checking/resetting level if needed (int, sec, default=30)
+# Polling interval for checking/resetting level if needed (int, seconds, default=30)
 polling=30
-# Constant fan level (int, %, default=50)
+# Constant fan level (int, percent, default=50)
 level=50
 
 
 # HTTP exporter: serves /snapshot (JSON for smfc-client) and /metrics (Prometheus text format).
 [Exporter]
-# Enable the HTTP exporter (bool, default=0/false)
+# Enable the HTTP exporter (yes or no, default=no)
 enabled=0
 # IP to bind on (str, default=127.0.0.1)
 # Use 127.0.0.1 for local-only access; use 0.0.0.0 or a specific LAN IP for remote Prometheus.
@@ -1388,7 +1390,85 @@ A few things to notice in the verbose block:
 
 Each fan controller is constructed independently, so a single failing controller (e.g. a missing GPU tool or a non-existent disk) shows an `ERROR` row in the Fan controllers table while the rest of the report still renders.
 
-### 15. FAQ
+### 15. smfc-config
+`smfc-config` is a full-screen editor for `/etc/smfc/smfc.conf`. It switches fan controllers on and off, edits every parameter, checks whether the hardware each controller needs is reachable, and lets you pick disks from a list instead of typing a `/dev/disk/by-id/...` path by hand.
+
+> `smfc-config` is shipped with `smfc v7.0.0` and later
+
+```
+sudo smfc-config
+```
+
+It needs root rights, because it writes `/etc/smfc/smfc.conf`. Without them it opens read-only: you can read every section and every help text, and it says so at the start rather than at the first save.
+
+**It keeps the comments of your file.** Only the value you change is rewritten. Every other byte stays where it was, so the documentation inside the file survives an edit. The shipped file is 315 lines of which 190 are comments, and a user who changes one number should not lose the explanation of the other 98 parameters.
+
+The screen has four parts:
+
+```
+ smfc-config                                      /etc/smfc/smfc.conf
++--------------------+---------------------------------------------+
+| Sections           | [HD]                                        |
+|  Ipmi              |  enabled               yes                  |
+|  CPU          v    |  ipmi_zone             1                    |
+|> HD           v  X |  temp_calc             1  average           |
+|  NVME         x    |  sensitivity           2.0                  |
+|  ...               |  ...                                        |
++- Help -------------+---------------------------------------------+
+| min_temp   Lowest temperature of the fan curve                    |
+| Below this temperature the fans stay at min_level. Raise it if the |
+| fans spin up too early. It must stay below max_temp.               |
+| error: [HD] hd_names is not specified                              |
++--------------------------------------------------------------------+
+ unsaved changes
+  Tab pane   Enter edit   Space toggle   F5 test hardware   F2 save   F10 quit
+```
+
+- **Sections** — the nine fan controller families, with their state and the result of the last check.
+- **Parameters** — the parameters of the selected section, with the value your file holds or the default `smfc` would apply.
+- **Help** — what the selected parameter does, when to change it, and what it accepts.
+- **Status and keys** — the state of the file, and the keys that are available.
+
+#### 15.1 What the section list shows
+The list always holds the same nine families, whether or not your file does. A missing section and `enabled=0` mean the same thing to `smfc`, so the editor does not show you a difference the daemon cannot see. Switching a family on writes the section; switching it off writes `enabled=0` and keeps every value you typed, so a controller turned off for a week still has its disk list when you turn it back on.
+
+A family can hold several instances — `[CPU]` and `[CPU:1]`, each driving a different zone with a different curve (see [chapter 1.4](https://github.com/petersulyok/smfc/blob/main/README.md#14-multiple-fan-curves-per-ipmi-zone)). Each instance is a row of its own. `+` adds one on a zone no enabled instance of that family claims, and `-` removes one after a confirmation.
+
+#### 15.2 Keys
+
+| Key | Action |
+|---|---|
+| `Tab` | move between the section list and the parameters |
+| `Up` `Down`, or `k` `j` | move the cursor |
+| `Enter` | in the section list, go to the parameters; in the parameters, edit the value |
+| `Space` | switch the selected family on or off |
+| `F5` | run the checks, including the ones that talk to the hardware |
+| `F2` | save |
+| `+` or `F6` | add an instance |
+| `-` or `F8` | remove an instance |
+| `Esc` | leave the parameters, or cancel what is being typed |
+| `F10` or `q` | quit |
+
+A number is typed in place. A value with two states is switched with `Enter`. A path, a fan curve or a device list opens a window, because those values are longer than the value cell.
+
+#### 15.3 Picking disks
+`hd_names=` and `nvme_names=` open a list of the disks this machine has, found with the same filters `install.sh` and the DEB and RPM packages use. Every line leads with the serial number, because a machine can hold eight disks of one model and the serial is the only part that tells them apart.
+
+A disk your file lists and the machine does not have is kept and marked `(missing)`, because that is what explains a warning about a missing disk. `p` adds a `/dev/disk/by-id/...` path by hand, for a disk that is not plugged in yet.
+
+#### 15.4 Checks
+The checks run when you press `F5`, not while you type, because some of them talk to the hardware and take seconds. Reading a sleeping disk with `smartctl` wakes it, so the editor never does that on its own.
+
+A finding is one of three kinds: `smfc` will not start on an **error**; it will start on a **warning** and the result is probably not what you meant; an **information** line is an observation.
+
+A value already in your file that `smfc` would reject is marked red and explained straight away, without `F5`. The editor checks a value with the same functions the daemon uses, so a value it accepts is a value the daemon accepts.
+
+#### 15.5 It opens a file that does not work
+That is the case it exists for. The shipped configuration file is invalid until the installer fills the disks in, so a machine where that detection failed has a file `smfc` will not start. The editor opens it anyway, shows the parse error on the section it belongs to, and lets you edit your way out of it.
+
+**Nothing blocks a save.** You may leave a file half finished and come back to it tomorrow. The status line then tells you what it costs: `smfc` will not start with the file, the running service keeps its current settings, and the next boot is where the fault shows. The editor offers a restart only when the file is valid, the service is running, and it has the rights to do it. Otherwise it prints the command for you.
+
+### 16. FAQ
 
 ### Q: My fans are spinning up and loud. What's wrong?
 Most probably, there was an assertion (i.e., the rotational speed of a fan went above or below an IPMI threshold) and IPMI switched back that zone to full rotational speed.
@@ -1425,7 +1505,7 @@ The configuration is the following:
  - 4 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm)  fans (FAN1, FAN2, FAN3, FAN4) in IPMI CPU zone
  - 2 x [Noctua NF-F12 PWM](https://noctua.at/en/products/fan/nf-f12-pwm) on an Y-adapter + [Noctua NF-A14 PWM](https://noctua.at/en/products/fan/nf-a14-pwm) fans (FANA, FANB) in IPMI HD zone
 
-### 16. References
+### 17. References
 Further readings:
 
 #### Supermicro

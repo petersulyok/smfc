@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.0] - unreleased
+
+### Added
+- **`smfc-config`, a full-screen editor for the configuration file.** It switches fan controllers on and off, edits every parameter, checks whether the hardware each controller needs is reachable, and offers the disks of the machine instead of asking for a `/dev/disk/by-id/...` path. It keeps the comments of the file: only the value that changes is rewritten. It opens a file the daemon rejects, which is the case it exists for, and never blocks a save, so a half-finished file can be saved and finished later. Run it with `sudo smfc-config`; see [chapter 15](https://github.com/petersulyok/smfc/blob/main/README.md#15-smfc-config).
+- **A new `smfc.checks` module, so a start-up failure reports every fault at once.** `Service.check_dependencies()` returned on the first error, so a user missing two commands learned about one, fixed it, started the service and met the next. Every section is checked now and every error is logged.
+- **A new `smfc.discover` module, one implementation of the disk filters.** The filters that fill `hd_names=` and `nvme_names=` existed three times, in `bin/install.sh`, `debian/smfc.postinst` and `smfc.spec`, and had drifted apart. The three scripts call the module now and hold no regular expression and no `sed` of their own.
+
+### Changed
+- **A boolean parameter is described as `yes or no`.** The comments of `config/smfc.conf` said `(bool, default=0/false)`, which names three things a reader does not need. Units are written in full for the same reason: `Celsius`, `seconds` and `percent` rather than `C`, `sec` and `%`. The file still holds `0` and `1`.
+
+### Fixed
+- **A USB disk could be collected into `hd_names=`.** A flash drive plugged in at install time was named `/dev/disk/by-id/usb-...`, survived every exclusion, and became a monitored disk. All three collectors exclude it now.
+- **A duplicate by-id name ending `_2` or higher reached the device lists.** udev numbers duplicates `_1`, `_2`, `_3`, and the exclusion matched `_1` and `_11` but never `_2`, so a disk with a third alias was listed twice and read twice.
+
 ## [6.4.2] - 2026.09.07
 
 ### Fixed

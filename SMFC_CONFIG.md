@@ -789,7 +789,7 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 | 4 | `confwriter.py` | **done**; all 11 samples and the shipped file round-trip byte for byte; add and remove an instance; atomic save; `is_writable()` |
 | 5 | the editor | the curses master-detail screen |
 | 6 | the popups | needs phases 3 and 5 |
-| 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries; the boolean wording and the unit wording of the shipped comments, see 5.5 and 5.6 |
+| 7 | packaging and docs | **done**; README chapter 15, `doc/smfc-config.1`, the three changelogs, and the boolean and unit wording of every shipped `.conf` |
 | 8 | the venv installer | `install.sh`, `uninstall.sh`, the three Dockerfiles, README 9.5; see 12.1 |
 
 Phase 7 note: `debian/changelog` is DEB-only and `smfc.spec` `%changelog` is RPM-only. Keep the

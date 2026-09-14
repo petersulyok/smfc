@@ -1,3 +1,19 @@
+smfc (7.0.0) unstable; urgency=medium
+
+  * Added: smfc-config, a full-screen editor for /etc/smfc/smfc.conf. It
+    switches fan controllers on and off, edits every parameter, checks the
+    hardware each controller needs, and offers the disks of the machine. It
+    keeps the comments of the file. The package installs the smfc-config
+    command and its manual page.
+  * Added: the disk detection of the postinst script calls smfc.discover, so
+    the installer, this package and the RPM package share one implementation
+    of the filters instead of three copies.
+  * Fixed: a USB disk could be collected into hd_names= at install time.
+  * Fixed: a duplicate by-id name ending _2 or higher reached the device
+    lists, so a disk with a third alias was listed twice.
+
+ -- Peter Sulyok <peter@sulyok.net>  Sun, 14 Sep 2026 18:00:00 +0200
+
 smfc (6.4.2) unstable; urgency=medium
 
   * Fixed: the X14/H14 firmware stack probe accepted only completion code

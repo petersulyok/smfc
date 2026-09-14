@@ -68,6 +68,8 @@ remove_file /usr/share/man/man1/smfc.1.gz
 remove_file /usr/local/share/man/man1/smfc.1.gz
 remove_file /usr/share/man/man1/smfc-client.1.gz
 remove_file /usr/local/share/man/man1/smfc-client.1.gz
+remove_file /usr/share/man/man1/smfc-config.1.gz
+remove_file /usr/local/share/man/man1/smfc-config.1.gz
 verbose_echo "smfc files removed."
 
 # Remove configuration files.
