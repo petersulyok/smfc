@@ -198,7 +198,7 @@ class EditorApp:
             return
         self.popup = popups.TextPopup(
             title=view.key, width=72, text=view.value.replace("\n", " ").replace("\t", " ").strip(),
-            default=view.field.default_text(),
+            hint=view.field.hint_text(),
             validator=lambda text, f=view.field: validate(f, text))
 
     def _device_popup(self, view: FieldView) -> popups.DevicePopup:
@@ -722,11 +722,11 @@ class EditorApp:
             text, caret = popup.line.view(field_width)
             row = popup.INPUT_ROW + 1
             self._put(window, row, 2, text, field_width, self.attr(panes.PAIR_INPUT))
-            if not popup.line.text and popup.default:
-                # An empty field shows what smfc applies when the parameter is not set. It is drawn
-                # in its own colour, so it reads as a note rather than as the value of the field.
-                hint = f"default: {popup.default}"
-                self._put(window, row, 2, hint[:field_width], field_width, self.attr(panes.PAIR_HINT))
+            if not popup.line.text and popup.hint:
+                # An empty field offers the default smfc applies, or an example where the parameter
+                # has none. It is drawn in its own colour, so it reads as a note rather than a value.
+                self._put(window, row, 2, popup.hint[:field_width], field_width,
+                          self.attr(panes.PAIR_HINT))
             self.cursor_at = (top + row, left + 2 + caret)
 
     def _put(self, window: "curses.window", row: int, column: int, text: str, width: int,

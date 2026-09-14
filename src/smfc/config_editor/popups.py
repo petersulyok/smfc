@@ -82,10 +82,10 @@ class TextPopup(Popup):
     """A wide input field for a value the right pane is too narrow to hold.
 
     A path can be 51 characters and a curve 27, while the value cell holds about 21. An empty field
-    shows the default instead, so the user sees what smfc would apply.
+    offers the default, or an example where the parameter has no default.
     """
     text: str = ""                              # The value being typed
-    default: str = ""                           # What smfc applies when the parameter is not set
+    hint: str = ""                              # What an empty field offers: a default or an example
     validator: Optional[Callable[[str], str]] = None    # Returns why the value is wrong, or ""
     line: Optional[LineEdit] = None             # The caret and the insert flag of the input field
 

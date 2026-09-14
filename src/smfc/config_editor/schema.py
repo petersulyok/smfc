@@ -90,6 +90,7 @@ class Field:
     choices: Tuple[Any, ...] = ()           # Accepted values of an ENUM field
     labels: Tuple[str, ...] = ()            # Human-readable label of each choice, in the same order
     provider: str = ""                      # Name of the function listing the candidates of a list field
+    example: str = ""                       # A value that works, for a parameter that has no default
 
     @property
     def widget(self) -> Widget:
@@ -112,6 +113,18 @@ class Field:
             bool: True for min_temp, max_temp, min_level and max_level
         """
         return self.key in CURVE_OVERRIDES
+
+    def hint_text(self) -> str:
+        """What an empty field offers: the default, or an example where there is no default.
+        A parameter with no default leaves a user staring at an empty field, and the syntax is the
+        hard part of a fan curve or of a PCI address, so a value that works is shown instead.
+        Returns:
+            str: the line to draw in an empty field, empty when there is nothing to say
+        """
+        default = self.default_text()
+        if default:
+            return f"default: {default}"
+        return f"example: {self.example}" if self.example else ""
 
     def default_text(self) -> str:
         """Render the default value the way the configuration file would hold it.
@@ -267,7 +280,7 @@ def _common_fields(source: str, default_zone: int, temp_calc: int, sensitivity: 
             detail="Lower it to cap the noise. The fans then never reach full speed, whatever the "
                    "temperature."),
         Field(
-            key=Config.CV_CONTROL_FUNCTION, kind=FieldKind.CURVE, default=[],
+            key=Config.CV_CONTROL_FUNCTION, example="30-35, 50-55, 65-100", kind=FieldKind.CURVE, default=[],
             summary="Fan curve written as temperature-level pairs",
             detail="At least two pairs, with rising temperatures, for example 30-35, 50-55, 65-100. While it "
                    "carries a value, min_temp, max_temp, min_level and max_level are ignored."),
@@ -309,7 +322,7 @@ IPMI_SECTION: Section = Section(
             detail="A BMC needs time to apply a new level. Raise it if a level read back straight after a "
                    "write returns the old value."),
         Field(
-            key=Config.CV_IPMI_REMOTE_PARAMETERS, kind=FieldKind.STR, default=Config.DV_IPMI_REMOTE_PARAMETERS,
+            key=Config.CV_IPMI_REMOTE_PARAMETERS, example="-U ADMIN -P ADMIN -H 10.0.0.5", kind=FieldKind.STR, default=Config.DV_IPMI_REMOTE_PARAMETERS,
             summary="Extra ipmitool arguments for a remote BMC",
             detail="Empty means the local BMC through /dev/ipmi0. A remote board needs the user, the "
                    "password and the host, for example -U ADMIN -P ADMIN -H 10.0.0.5."),
@@ -495,17 +508,17 @@ PCI_SECTION: Section = Section(
         min_temp=Config.DV_PCI_MIN_TEMP, max_temp=Config.DV_PCI_MAX_TEMP,
         min_level=Config.DV_PCI_MIN_LEVEL, max_level=Config.DV_PCI_MAX_LEVEL) + [
         Field(
-            key=Config.CV_PCI_ADDRESS, kind=FieldKind.STR_LIST, default=[],
+            key=Config.CV_PCI_ADDRESS, example="0000:05:00.0", kind=FieldKind.STR_LIST, default=[],
             summary="Slot addresses of the cards",
             detail="For example 0000:05:00.0. Every listed card must be present, and they must all be the "
                    "same model. Use only one of the three addressing keys."),
         Field(
-            key=Config.CV_PCI_ID, kind=FieldKind.STR, default="",
+            key=Config.CV_PCI_ID, example="1d6a:07b1", kind=FieldKind.STR, default="",
             summary="Vendor and device ID of one card model",
             detail="Four hexadecimal digits on each side, for example 1d6a:07b1. It selects every card of "
                    "that model. Use only one of the three addressing keys."),
         Field(
-            key=Config.CV_PCI_DRIVER, kind=FieldKind.STR, default="",
+            key=Config.CV_PCI_DRIVER, example="atlantic", kind=FieldKind.STR, default="",
             summary="Driver that serves the cards",
             detail="For example atlantic. It selects every PCI device that driver owns. Use only one of the "
                    "three addressing keys."),

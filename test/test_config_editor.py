@@ -16,7 +16,7 @@ from smfc.config_editor.app import (CURSOR_INSERT, CURSOR_OVERWRITE, EditorApp, 
 from smfc.config_editor.cmd import EXIT_CONFIG_ERROR, main
 from smfc.config_editor.lineedit import LineEdit
 from smfc.config_editor.model import EditorModel, FieldState, RowKind
-from smfc.config_editor.schema import SECTIONS
+from smfc.config_editor.schema import SECTIONS, field_of, validate
 
 
 # Repository paths used by the tests.
@@ -933,12 +933,29 @@ class TestPopups:
         - refuse a value
         - ASSERT: the reason is the only line added
         """
-        popup = popups.TextPopup(title="command", text="", default="/usr/bin/ipmitool",
+        popup = popups.TextPopup(title="command", text="", hint="default: /usr/bin/ipmitool",
                                  validator=lambda value: "not a path")
         assert popup.lines() == ["", ""]
         assert popup.INPUT_ROW == 1
         popup.handle_key(10)
         assert popup.lines() == ["", "", "! not a path"]
+
+    def test_a_parameter_with_no_default_offers_an_example(self) -> None:
+        """Positive unit test for Field.hint_text(). It contains the following steps:
+        - read the hint of a parameter that has a default
+        - ASSERT: it names the default
+        - read the hint of a parameter that has none
+        - ASSERT: it names an example, because an empty field with no default says nothing at all
+        - ASSERT: the example is a value the parser of that parameter accepts
+        """
+        command = field_of("Ipmi", "command")
+        assert command.hint_text() == "default: /usr/bin/ipmitool"
+        curve = field_of("CPU", "control_function")
+        assert curve.hint_text() == "example: 30-35, 50-55, 65-100"
+        assert validate(curve, curve.example) == ""
+        for section, key in (("Ipmi", "remote_parameters"), ("PCI", "pci_address"),
+                             ("PCI", "pci_id"), ("PCI", "pci_driver")):
+            assert field_of(section, key).hint_text().startswith("example: ")
 
     def test_an_empty_field_offers_the_default(self, tmp_path: Path) -> None:
         """Positive unit test for EditorApp._draw_popup(). It contains the following steps:
