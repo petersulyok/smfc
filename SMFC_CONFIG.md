@@ -413,9 +413,33 @@ Three tiers by cost:
 
 | Tier | Cost | When it runs |
 |---|---|---|
+| parse — `Config(path)` raises | microseconds | on load and on save |
 | value — `min_temp < max_temp`, port range, level 0..100 | microseconds | on leaving a field |
 | system — file exists, module loaded, device node present | microseconds | on leaving a section |
 | hardware — `ipmitool`, `smartctl`, `nvidia-smi`, `npu-smi` | seconds | on `F5` only |
+
+**The parse tier exists because the editor must open a file the daemon rejects.** The shipped
+`config/smfc.conf` is such a file: `[HD]` is `enabled=1` with an empty `hd_names=`, so
+`Config('config/smfc.conf')` raises `[HD] hd_names is not specified`. It becomes valid only when the
+installer fills the disks in, and a machine where that detection failed is left with a
+configuration the daemon will not start. That is exactly the case `smfc-config` exists for, so it
+must survive it.
+
+So `ConfWriter` is the source of truth and `Config` is only the validator:
+
+```python
+try:
+    Config(path)
+except ValueError as e:      # "[HD] hd_names is not specified"
+    ...                      # -> an ERROR finding on the [HD] row
+```
+
+The parser's messages start with the section name in brackets, so the finding lands on the right
+row of the left pane. A message without one goes to the `Overview` row.
+
+One limit: `Config` raises on the **first** error, unlike `checks.py`, which reports them all. So the
+editor shows one parse error at a time and the next appears when that one is fixed. Making the
+parser collect every error is a larger change and is not in this release.
 
 Start with `F5` only, as agreed. Add the value tier later if editing feels blind.
 
@@ -456,7 +480,8 @@ The editor writes no zone rule of its own. `Config._validate_no_duplicate_zones(
 the one wrong case, two enabled instances of the same family on one zone, and it names both
 sections in the message.
 
-Severity rules: an `error` blocks saving. A `warn` asks for confirmation. An `info` is a suggestion.
+Severity rules: nothing blocks saving, see 9.1. An `error` means the daemon will not start, a `warn`
+means it will start and probably not as the user meant, an `info` is an observation.
 
 ## 7. The device popup
 
@@ -613,7 +638,39 @@ already writes them.
 
 Also make `Config.parse_device_names()` drop empty lines. Fix both ends of that trap.
 
-### 9.1 Privileges
+### 9.1 Saving is never blocked
+
+A user who opens a file with errors in it must be able to save partial progress and come back later.
+Enabling `[NVME]` before picking the drives, and stopping for the evening, is a normal way to work,
+not an accident. So an error never blocks a save.
+
+**The save says what it costs, and does not ask.** A confirmation on every save would be friction,
+because this state is entered on purpose:
+
+```
+Saved /etc/smfc/smfc.conf
+
+[HD] hd_names is not specified
+smfc will not start with this file.
+
+The running service keeps its current settings.
+At the next boot it will not start.
+```
+
+The last two lines carry the part a user cannot see. smfc reads the configuration once, at start, so
+a bad save changes nothing right now. The exposure is the next boot, where the service fails and the
+fans fall back to the BMC curve.
+
+**A file with an error is never offered a restart.** The restart offer of 12.1 appears only for a
+file that parses. Otherwise a restart would stop the working service and leave the machine with no
+fan control at all:
+
+```
+smfc.service is running with the previous configuration.
+Do not restart until the errors above are fixed.
+```
+
+### 9.2 Privileges
 
 `/etc/smfc/smfc.conf` is `root:root` and mode `0644`. Anyone may read it; only root may write it.
 The service itself runs as root: `config/smfc.service` sets no `User=`.
@@ -644,7 +701,7 @@ and surprises the user. Print the command and let them run it.
 help text: "use sudo for ipmitool/smartctl (if not run as root)". Pass it to `Ipmi` and `HdFc` exactly
 as `client.py` does. Two sibling commands must not differ on a flag that means the same thing.
 
-### 9.2 When the config file is missing
+### 9.3 When the config file is missing
 
 This is rare. Every install path leaves `/etc/smfc/smfc.conf` in place. A missing file means the
 user deleted it.
@@ -660,8 +717,10 @@ The tool must not create one silently. It offers, in this order:
    and try once.
 3. Say that neither worked, and name both paths. Never invent a file without telling the user.
 
-After a successful save, verify by loading the file through `Config(path)`. Then offer the restart,
-but only when the process can perform it and the service is active:
+After a save, load the file through `Config(path)` and report what it says, as 9.1 describes. Offer
+the restart only when three things hold: the file parses, the service is active, and this process may
+restart it. A restart with an unparseable file would stop a working service and leave the machine
+with no fan control at all.
 
 ```
 Saved /etc/smfc/smfc.conf
@@ -689,7 +748,7 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 | 1 | `schema.py` | **done**; field metadata and help text for all 9 sections, plus the section help |
 | 2 | `checks.py` | **done**; `Service.check_dependencies()` now reports every fault, not the first |
 | 3 | `discover.py` | **done**; the three scripts call it and hold no regex of their own |
-| 4 | `confwriter.py` | round-trip every sample file unchanged; add and remove an instance; read-only mode; the missing-file path of 9.2 |
+| 4 | `confwriter.py` | **done**; all 11 samples and the shipped file round-trip byte for byte; add and remove an instance; atomic save; `is_writable()` |
 | 5 | the editor | the curses master-detail screen |
 | 6 | the popups | needs phases 3 and 5 |
 | 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries |
