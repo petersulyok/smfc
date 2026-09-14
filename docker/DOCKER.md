@@ -297,6 +297,7 @@ Notes:
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
+  - **7.0.0** (2026.09.14): Updated to smfc 7.0.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
   - **6.4.2** (2026.09.07): Updated to smfc 6.4.2 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
   - **6.4.0** (2026.09.02): Updated to smfc 6.4.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
   - **6.3.0** (2026.08.30): Updated to smfc 6.3.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)

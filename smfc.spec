@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        6.4.2
+Version:        7.0.0
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -85,6 +85,12 @@ fi
 - Added: the disk detection of the %%post scriptlet calls smfc.discover, so
   the installer, this package and the DEB package share one implementation of
   the filters instead of three copies.
+- Removed: the -ne command line option, deprecated since 6.2.0. Use [Ipmi]
+  exit_level=-1 instead. Edit /etc/default/smfc before the upgrade if it still
+  passes -ne, otherwise the service stops with a parse error.
+- Removed: the platform_name=genericx9 value. Use generic_x9. The parser
+  mapped the old spelling silently until now, so check /etc/smfc/smfc.conf.
+  The error message names the replacement and lists every valid value.
 - Fixed: a USB disk could be collected into hd_names= at install time.
 - Fixed: a duplicate by-id name ending _2 or higher reached the device lists,
   so a disk with a third alias was listed twice.
