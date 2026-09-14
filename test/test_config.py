@@ -85,6 +85,8 @@ class TestConfigStaticMethods:
                          id="newline-separated-multi"),
             pytest.param("/dev/disk/by-id/wwn-0x5000 /dev/disk/by-id/wwn-0x5001",
                          ["/dev/disk/by-id/wwn-0x5000", "/dev/disk/by-id/wwn-0x5001"], id="by-id-paths"),
+            pytest.param("\n/dev/sda\n/dev/sdb", ["/dev/sda", "/dev/sdb"], id="leading-empty-line"),
+            pytest.param("/dev/sda\n\n/dev/sdb\n", ["/dev/sda", "/dev/sdb"], id="blank-lines-inside"),
         ],
     )
     def test_parse_device_names_valid(self, input_str: str, expected: List[str]):

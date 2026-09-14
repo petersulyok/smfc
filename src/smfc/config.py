@@ -475,7 +475,9 @@ class Config:
             List[str]: list of device names
         """
         if "\n" in names_str:
-            return names_str.splitlines()
+            # A blank line is not a device. It appears when the first entry was written under the key
+            # instead of on the key line, which would otherwise yield an empty first element.
+            return [name for name in names_str.splitlines() if name.strip()]
         return names_str.split()
 
     @classmethod
