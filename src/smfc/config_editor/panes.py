@@ -98,6 +98,29 @@ def glyph_columns(layout: Layout) -> tuple:
     return name_width + 3, name_width + 6
 
 
+def box_rows(layout: Layout) -> int:
+    """Height of the box that holds the two panes and the help.
+    Args:
+        layout (Layout): the sizes to draw with
+    Returns:
+        int: rows, the two borders and the rule included
+    """
+    return layout.pane_rows + layout.help_rows + 3
+
+
+def footer_rows(layout: Layout) -> tuple:
+    """Screen rows of the status line and of the key bar.
+    They sit below the box, and the box starts one row below the banner. This is the only place that
+    knows that, so a change of the frame cannot leave the status line drawn on a border.
+    Args:
+        layout (Layout): the sizes to draw with
+    Returns:
+        tuple: the status row and the key bar row
+    """
+    below = 1 + box_rows(layout)
+    return below, below + 1
+
+
 def fit(text: str, width: int) -> str:
     """Cut a line to the width of its pane, keeping the end of the text.
     The tail of a device name is its serial number, which is the only part that tells two identical

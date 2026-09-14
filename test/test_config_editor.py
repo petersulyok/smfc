@@ -293,6 +293,18 @@ class TestPanes:
         assert layout.help_rows == panes.HELP_ROWS
         assert layout.pane_rows == 60 - panes.HELP_ROWS - panes.FIXED_ROWS
 
+    @pytest.mark.parametrize("height", [16, 20, 24, 30, 60])
+    def test_the_footer_sits_below_the_box(self, height: int) -> None:
+        """Positive unit test for footer_rows(). It contains the following steps:
+        - compute the layout and the footer rows for several terminal heights
+        - ASSERT: the status line sits on the first row below the box, not on its bottom border
+        - ASSERT: the key bar sits on the last row of the terminal, with nothing under it
+        """
+        layout = panes.layout_for(80, height)
+        status_row, keys_row = panes.footer_rows(layout)
+        assert status_row == 1 + panes.box_rows(layout)
+        assert keys_row == height - 1
+
     def test_a_long_line_is_cut_in_the_middle(self) -> None:
         """Positive unit test for fit(). It contains the following steps:
         - cut a device name that is longer than the pane

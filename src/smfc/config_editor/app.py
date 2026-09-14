@@ -305,7 +305,7 @@ class EditorApp:
             views (List[FieldView]): the parameters of the selected section
         """
         rule = layout.pane_rows + 1
-        box = screen.derwin(rule + layout.help_rows + 2, layout.width, 1, 0)
+        box = screen.derwin(panes.box_rows(layout), layout.width, 1, 0)
         box.bkgd(" ", self.attr(panes.PAIR_PANE))
         box.box()
         box.hline(rule, 1, curses.ACS_HLINE, layout.width - 2)
@@ -395,13 +395,13 @@ class EditorApp:
             screen (curses.window): the curses screen
             layout (Layout): the sizes to draw with
         """
-        below = layout.pane_rows + layout.help_rows + 3
+        status_row, keys_row = panes.footer_rows(layout)
         status = self.message or panes.render_status(self.model)
         if status:
-            self._put(screen, below, 1, status, layout.width - 2,
+            self._put(screen, status_row, 1, status, layout.width - 2,
                       self.attr(panes.PAIR_PANE, bold=True))
         keys = panes.render_keys(self.model, self.editing is not None)
-        self._put(screen, min(layout.height - 1, below + 1), 0, keys.ljust(layout.width),
+        self._put(screen, min(layout.height - 1, keys_row), 0, keys.ljust(layout.width),
                   layout.width, self.attr(panes.PAIR_KEYS, bold=True))
 
     def _put(self, window: "curses.window", row: int, column: int, text: str, width: int,
