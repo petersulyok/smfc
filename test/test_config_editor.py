@@ -8,6 +8,7 @@ import os
 import shutil
 from pathlib import Path
 import pytest
+from unittest.mock import patch
 from smfc.checks import Level
 from smfc.config_editor import panes, popups
 from smfc.config_editor.app import (CURSOR_INSERT, CURSOR_OVERWRITE, EditorApp, PANE_FIELDS,
@@ -843,6 +844,17 @@ class TestEditorApp:
         assert app.cursor_style == CURSOR_INSERT
         app.set_cursor_style(None)
         assert app.cursor_style is None
+
+        # The terminal is told only when the shape changes, and the editor records what it told it.
+        written: list = []
+        app.cursor_style = CURSOR_OVERWRITE
+        with patch("os.write", lambda fd, data: written.append(data)), \
+             patch("curses.tigetstr", lambda cap: b"\x1b[%p1%d q" if cap == "Ss" else b"\x1b[2 q"), \
+             patch("curses.tparm", lambda cap, style: f"\x1b[{style} q".encode()):
+            app.flush_cursor_style()
+            app.flush_cursor_style()
+        assert written == [b"\x1b[1 q"]
+        assert app.cursor_written == CURSOR_OVERWRITE
 
     def test_f5_runs_the_hardware_probes(self, tmp_path: Path, mocker) -> None:
         """Positive unit test for EditorApp.check(). It contains the following steps:

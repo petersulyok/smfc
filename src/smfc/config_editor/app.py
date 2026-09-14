@@ -4,6 +4,7 @@
 #   smfc.config_editor.app: the curses loop of smfc-config.
 #
 import curses
+import os
 import sys
 from typing import List, Optional
 
@@ -68,7 +69,8 @@ class EditorApp:
     popup: Optional[popups.Popup]   # The window over the panes, None when there is none
     pending: Optional[popups.Popup] # The selector waiting under an add-by-path field
     cursor_at: Optional[tuple]      # Where the terminal cursor goes while typing, None when idle
-    cursor_style: Optional[int]     # The shape asked of the terminal, None when it is the default
+    cursor_style: Optional[int]     # The shape the field wants, None when it is the shape of the terminal
+    cursor_written: Optional[int]   # The shape the terminal was last told, so it is told only on a change
 
     def __init__(self, model: EditorModel, colour: bool = True) -> None:
         """Build the screen state of one configuration file.
@@ -90,6 +92,7 @@ class EditorApp:
         self.running = True
         self.cursor_at = None
         self.cursor_style = None
+        self.cursor_written = None
 
     # -- state -------------------------------------------------------------------------------------
 
@@ -451,6 +454,7 @@ class EditorApp:
         self._place_cursor(screen, height, width)
         screen.noutrefresh()
         curses.doupdate()
+        self.flush_cursor_style()
 
     def _place_cursor(self, screen: "curses.window", height: int, width: int) -> None:
         """Show the terminal cursor where the next character will land, and hide it otherwise.
@@ -477,22 +481,33 @@ class EditorApp:
             pass
 
     def set_cursor_style(self, style: Optional[int]) -> None:
-        """Ask the terminal for a cursor shape, or give it its own back.
-        The sequence is written only when the shape changes, and only on a terminal whose terminfo
-        entry carries the capability. Everywhere else the cursor keeps one shape.
+        """Say which cursor shape the field wants. The terminal is told by flush_cursor_style().
         Args:
             style (Optional[int]): a DECSCUSR style number, None for the shape of the terminal
         """
-        if style == self.cursor_style:
-            return
         self.cursor_style = style
+
+    def flush_cursor_style(self) -> None:
+        """Tell the terminal the cursor shape, when it has changed.
+        The bytes go straight to the terminal rather than through putp(), which writes into a buffer
+        of the C library that curses never flushes: the sequences then reached the terminal only when
+        the program ended, and the shape never changed while the editor ran. This runs after the
+        screen update, so curses cannot write over it.
+        Only a terminal whose terminfo entry carries the capability is told anything; everywhere else
+        the cursor keeps one shape.
+        """
+        if self.cursor_style == self.cursor_written:
+            return
+        style = self.cursor_style
         try:
             capability = curses.tigetstr("Ss") if style is not None else curses.tigetstr("Se")
             if not capability:
                 return
-            curses.putp(curses.tparm(capability, style) if style is not None else capability)
-        except (curses.error, TypeError):
-            pass
+            sequence = curses.tparm(capability, style) if style is not None else capability
+            os.write(sys.stdout.fileno(), sequence)
+        except (curses.error, TypeError, OSError, ValueError):
+            return
+        self.cursor_written = style
 
     def _insert_mode(self) -> bool:
         """Whether the field being typed into is in insert mode.
@@ -838,6 +853,7 @@ def run(model: EditorModel, no_color: bool = False) -> int:
         finally:
             # The cursor shape is not part of the state curses restores, so it is given back by hand.
             app.set_cursor_style(None)
+            app.flush_cursor_style()
 
     curses.wrapper(loop)
     return 0
