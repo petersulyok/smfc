@@ -37,7 +37,7 @@ COLOURS: tuple = (
 # levels, cnorm and cvvis, differ only in whether the cursor blinks, so both look the same size. The
 # shape lives in the Ss capability of terminfo, which xterm and tmux carry and the Linux console does
 # not; where it is missing the cursor stays one shape and only curs_set() applies.
-CURSOR_INSERT: int = 3      # blinking underline: the text is pushed along
+CURSOR_INSERT: int = 5      # blinking bar: the text is pushed along
 CURSOR_OVERWRITE: int = 1   # blinking block: the text is typed over
 
 # The standing status line already says the file is read-only. A blocked key has to say something
