@@ -692,9 +692,10 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 | 4 | `confwriter.py` | round-trip every sample file unchanged; add and remove an instance; read-only mode; the missing-file path of 9.2 |
 | 5 | the editor | the curses master-detail screen |
 | 6 | the popups | needs phases 3 and 5 |
-| 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries; see chapter 12 for the rest of the release |
+| 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries |
+| 8 | the venv installer | `install.sh`, `uninstall.sh`, the three Dockerfiles, README 9.5; see 12.1 |
 
-Phase 8 note: `debian/changelog` is DEB-only and `smfc.spec` `%changelog` is RPM-only. Keep the
+Phase 7 note: `debian/changelog` is DEB-only and `smfc.spec` `%changelog` is RPM-only. Keep the
 scopes separate.
 
 ## 11. Testing
@@ -724,7 +725,7 @@ is no 6.5.0. A major release is the right place for both, because one of them as
 | # | Item | Breaks anything? |
 |---|---|---|
 | 1 | `smfc-config`, phases 1 to 7 of chapter 10 | no, it is a new command |
-| 2 | the install layout, see 12.1 | yes, for a manual installation only |
+| 2 | the venv installer, phase 8, see 12.1 | yes, for a manual installation only |
 | 3 | remove the `-ne` command line option | yes, for anyone still passing it |
 | 4 | remove the `genericx9` platform name | yes, silently until now, see 12.4 |
 | 5 | replace the `Ipmi.*_MODE` constants with `FanMode` | no, they are internal |
@@ -735,14 +736,21 @@ Order of work: finish the `smfc-config` phases first, because they are additive 
 The install layout comes after, because it needs testing on a Debian and a Fedora machine and it
 touches the same documents as the release notes.
 
-### 12.1 Where a manually installed smfc lives
+### 12.1 A virtual environment for the manual and the Docker installation
 
 `bin/install.sh` installs into the system Python with `pip --break-system-packages`, and the three
 Docker images do the same with `pip install --prefix=/usr`. Both write into directories the
-distribution owns, which is what PEP 668 exists to prevent. It works today and the escape hatch
+distribution owns, which is what PEP 668 exists to prevent. It works today, and the escape hatch
 keeps narrowing.
 
-The rule becomes two lines:
+It is also not predictable. `pip` decides where the files land, from the install scheme of the
+interpreter, and the distributions patch that scheme differently. That is why README chapter 9.5
+lists two possible folders for the commands and two for the package, over five tested
+distributions. The script never chooses and never knows.
+
+A virtual environment answers both. Inside it the scheme is the venv, on every distribution.
+
+**The rule is two lines:**
 
 | Installer | Location | Owner |
 |---|---|---|
@@ -750,37 +758,86 @@ The rule becomes two lines:
 | the manual script, the Docker images | `/opt/smfc` | smfc itself |
 
 ```bash
-python3 -m venv /opt/smfc
-/opt/smfc/bin/pip install -q smfc==$VERSION
-ln -sf /opt/smfc/bin/smfc        /usr/local/bin/smfc
-ln -sf /opt/smfc/bin/smfc-client /usr/local/bin/smfc-client
-ln -sf /opt/smfc/bin/smfc-config /usr/local/bin/smfc-config
+python3 -m venv --system-site-packages /opt/smfc/venv
+/opt/smfc/venv/bin/pip install -q smfc==$VERSION
+ln -sf /opt/smfc/venv/bin/smfc        /usr/local/bin/smfc
+ln -sf /opt/smfc/venv/bin/smfc-client /usr/local/bin/smfc-client
+ln -sf /opt/smfc/venv/bin/smfc-config /usr/local/bin/smfc-config
 ```
 
-The unit file stays in `/etc/systemd/system/`, which is the correct place for a locally installed
-unit, and **`ExecStart=smfc` stays as it is**. Naming `/opt/smfc/bin/smfc` explicitly would be
-safer against shadowing and wrong for this release: see 12.3.
+`/opt/smfc` is the directory smfc owns and `venv` is one thing inside it, so a state file or a
+configuration backup has a home later that is not mixed into the environment.
+
+**`--system-site-packages`, because `pyudev` needs a shared library.** The Debian package is
+`Architecture: all` and `Depends: python3:any, libudev1`: the binding is pure Python and reaches
+`libudev.so.1` through `ctypes` at run time. `pip install pyudev` from PyPI declares nothing about
+that library, so an isolated venv would build fine and fail at the first `Context()` call. With
+`--system-site-packages` the venv uses the distro package, which brings the library under the
+package manager's guarantee:
+
+```
+Requirement already satisfied: pyudev in /usr/lib/python3/dist-packages (0.24.3)
+Would install smfc-6.4.2
+```
+
+On a server the library is present anyway, because smfc needs `udev` to read `/dev/disk/by-id`, and
+the `udev` package depends on `libudev1`. In a container there is no `udev`, so the images must keep
+naming a package that provides it. They already do, through `python3-pyudev` and `py3-udev`.
+
+**Verify rather than assume**, at the end of the install and of every image build:
+
+```bash
+/opt/smfc/venv/bin/python -c "import pyudev; pyudev.Context()"
+```
+
+It fails at build time instead of at the user's first boot.
+
+**The unit file stays layout-agnostic.** It lives in `/etc/systemd/system/`, and `ExecStart=smfc`
+stays as it is. Naming `/opt/smfc/venv/bin/smfc` explicitly would be safer against shadowing and
+wrong for this release: see 12.3.
 
 **The migration must fail safe.** An existing manual installation keeps working until the user runs
-the script again, and the old copy in `/usr/local/lib/python3*/dist-packages/smfc` must not be left
-behind. So the order is fixed:
+the script again, and the old copy must not be left behind. So the order is fixed:
 
 1. Test that `python3 -m venv` works at all. Debian and Ubuntu ship it as a separate package, so say
    `apt install python3-venv` and stop, before touching anything.
-2. Remove any previous `/opt/smfc` and build it again. A venv is cheap, and a rebuild makes a first
+2. Test that `pyudev` imports. If it does not, name the distro package and stop, rather than let
+   `pip` fall back to PyPI and leave the library question open.
+3. Remove any previous `/opt/smfc` and build it again. A venv is cheap, and a rebuild makes a first
    install and a fifth install end the same way.
-3. Verify that `/opt/smfc/bin/smfc --version` runs.
-4. Only then remove the old copy: `python3 -m pip uninstall -y smfc`. It is safe on a DEB or RPM
-   machine, where pip simply reports that smfc is not installed.
-5. Only then replace the symlinks, reload systemd, and restart the service if it was running.
+4. Verify `/opt/smfc/venv/bin/smfc --version` and the `pyudev.Context()` line.
+5. Only then remove the old copy, as 12.2 describes.
+6. Only then replace the symlinks, reload systemd, and restart the service if it was running.
 
-If anything before step 4 fails, the old installation is intact and the machine still has fan
-control. `bin/uninstall.sh` must then handle both layouts.
+If anything before step 5 fails, the old installation is intact and the machine still has fan
+control. `bin/uninstall.sh` gains `rm -rf /opt/smfc` and the symlinks, and keeps the `pip uninstall`
+for anyone still in the old layout.
 
-**The Docker images need the same change and no migration**, because an image is rebuilt from
-scratch. Create the venv with `--without-pip`, install into it with the pip that is already deleted
-in the same layer, and symlink `/usr/bin/smfc`. Drop the distro `python3-pyudev` and `py3-udev`
-packages: the venv gets `pyudev` from PyPI, which is pure Python and needs no compiler.
+**The three Docker images take the same layout and need no migration**, because an image is rebuilt
+from scratch. They keep their distro `pyudev` package, which is what provides `libudev` there. The
+"install pip, use it, delete it in one layer" pattern stays; only the target changes:
+
+```dockerfile
+RUN apk add --no-cache --virtual .depends py3-pip && \
+    python3 -m venv --system-site-packages /opt/smfc/venv && \
+    /opt/smfc/venv/bin/pip install --no-cache-dir smfc==${VER} && \
+    /opt/smfc/venv/bin/python -c "import pyudev; pyudev.Context()" && \
+    ln -s /opt/smfc/venv/bin/smfc /usr/bin/smfc && \
+    apk del .depends
+```
+
+`docker/entrypoint.sh` calls `smfc`, so the symlink keeps it working unchanged.
+
+**What this work covers**
+
+| # | Item |
+|---|---|
+| a | `bin/install.sh`: the venv, the pre-flight tests, the migration order of 12.2 |
+| b | `bin/uninstall.sh`: both layouts |
+| c | the three Dockerfiles: the venv and the verification line |
+| d | README chapter 9.5: one folder table instead of two possibilities, and the note that `pip`, not the distribution, chose them before |
+| e | `DOCKER.md`, if it names a path inside the image |
+| f | a Debian and a Fedora test: fresh install, upgrade from 6.4.2, uninstall |
 
 ### 12.2 What the installer may delete
 
