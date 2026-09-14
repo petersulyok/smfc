@@ -785,33 +785,30 @@ packages: the venv gets `pyudev` from PyPI, which is pure Python and needs no co
 ### 12.2 What the installer may delete
 
 Today's `install.sh` only overwrites files. It never deletes. The new one has to remove the previous
-installation, or a manual upgrade leaves an orphan copy of the package behind and two versions of
-smfc exist on one machine.
+installation, or a manual upgrade leaves an orphan copy of the package behind and one machine
+carries two versions of smfc.
 
-Deleting needs a rule, and the obvious one does not work. README chapter 9.5 already records why:
+**The old copy is not in a fixed place.** README chapter 9.5 records it:
 
 > Different Linux distros install the Python package to different folders (tested on Ubuntu 24.04,
 > Debian 13, SUSE Leap 15, Proxmox 9, and Arch Linux)
 
-On some of them `pip` installs into `/usr/local`, on others into `/usr`. So the path cannot tell the
-script whether a distribution package owns those files.
-
-**Ask the package manager instead.**
+The table there lists two possibilities for each: `/usr/local/bin` or `/usr/bin` for the commands,
+`/usr/local/lib/python3.xx` or `/usr/lib/python3.xx` for the package. So the script cannot delete by
+path. It must ask where the package actually is:
 
 ```bash
-owner_of() {                      # prints the owning package, or nothing
-  command -v dpkg   >/dev/null && dpkg -S   "$1" 2>/dev/null && return
-  command -v rpm    >/dev/null && rpm -qf   "$1" 2>/dev/null && return
-  command -v pacman >/dev/null && pacman -Qo "$1" 2>/dev/null && return
-}
+python3 -c 'import smfc, pathlib; print(pathlib.Path(smfc.__file__).parent)'
+python3 -m pip uninstall -y smfc          # pip knows what it installed and where
 ```
 
-| Answer | What the script does |
-|---|---|
-| a package owns it | stop, and say to remove smfc with `apt`, `dnf` or `pacman` first |
-| nothing owns it | a manual installation; `pip uninstall -y smfc` is safe wherever it sits |
+`pip uninstall` is the right tool precisely because it is location-agnostic: it removes what its own
+record file lists, on whichever distribution.
 
-Three further rules:
+**One guard.** If smfc came from `apt` or `dnf` rather than from this script, the installer must stop
+and say so instead of building a second copy beside it.
+
+**Three limits on deletion:**
 
 1. **Never delete configuration.** `/etc/smfc/smfc.conf` and `/etc/default/smfc` keep the backup
    behaviour they have today.
@@ -820,9 +817,10 @@ Three further rules:
 3. **Only the unit file, the man pages and the defaults file are still overwritten**, exactly as
    today. Nothing else the script did not create is touched.
 
-**The new layout also ends the variation.** After 7.0.0 a manual installation is `/opt/smfc` on every
-distribution, so the README table collapses from "this folder or that one" to a single row. That is a
-second reason for the virtual environment, independent of PEP 668.
+**The new layout ends the variation.** After 7.0.0 a manual installation is `/opt/smfc` on every
+distribution, so the README table collapses from "this folder or that one" to a single row, and the
+next upgrade knows exactly what to remove. That is a second reason for the virtual environment,
+independent of PEP 668.
 
 ### 12.3 Upgrading a manual installation from 6.4.2
 
@@ -902,4 +900,4 @@ been true since 5.0.0 and is corrected in this release.
 | the terminal is too narrow | fall back to one pane below 64 columns or 14 rows |
 | the config file is not writable | test at start, and say what to do |
 | the install migration leaves an orphan copy | uninstall the old package before the symlinks, see 12.2 |
-| the installer deletes a file a package manager owns | ask `dpkg`, `rpm` or `pacman` who owns it, see 12.2 |
+| the old copy is in a different folder per distro | let `pip uninstall` find it, see 12.2 |
