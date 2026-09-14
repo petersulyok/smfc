@@ -928,17 +928,17 @@ class TestPopups:
     def test_a_text_popup_holds_only_the_field(self) -> None:
         """Positive unit test for TextPopup.lines(). It contains the following steps:
         - open a text popup on a parameter that has a default
-        - ASSERT: the body is the input line alone, because the help pane below already carries the
-          help text and stays visible while the popup is open
+        - ASSERT: the body is the input line and the blank line above it, because the help pane below
+          already carries the help text and stays visible while the popup is open
         - refuse a value
         - ASSERT: the reason is the only line added
         """
         popup = popups.TextPopup(title="command", text="", default="/usr/bin/ipmitool",
                                  validator=lambda value: "not a path")
-        assert popup.lines() == [""]
-        assert popup.INPUT_ROW == 0
+        assert popup.lines() == ["", ""]
+        assert popup.INPUT_ROW == 1
         popup.handle_key(10)
-        assert popup.lines() == ["", "! not a path"]
+        assert popup.lines() == ["", "", "! not a path"]
 
     def test_an_empty_field_offers_the_default(self, tmp_path: Path) -> None:
         """Positive unit test for EditorApp._draw_popup(). It contains the following steps:

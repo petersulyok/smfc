@@ -90,7 +90,7 @@ class TextPopup(Popup):
     line: Optional[LineEdit] = None             # The caret and the insert flag of the input field
 
     # Index of the input field in the body, so the caller knows which line to paint as a field.
-    INPUT_ROW: int = 0
+    INPUT_ROW: int = 1
 
     def __post_init__(self) -> None:
         """Open the value for editing, with the caret at its end."""
@@ -105,7 +105,8 @@ class TextPopup(Popup):
         Returns:
             List[str]: one entry per line
         """
-        body = [""]
+        # A blank line above the field keeps it off the border, where the title sits.
+        body = ["", ""]
         if self.error:
             body.append(f"! {self.error}")
         return [fit(line, self.width - 4) for line in body]
