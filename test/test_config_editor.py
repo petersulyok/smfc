@@ -707,6 +707,23 @@ class TestEditorApp:
         app.handle_key(10)
         assert app.popup.error
 
+    def test_a_terminal_that_goes_away_stops_the_editor(self, tmp_path: Path) -> None:
+        """Negative unit test for EditorApp.handle_key(). It contains the following steps:
+        - deliver the value curses returns when there is no input to read
+        - ASSERT: the editor stops
+        - ASSERT: it stops even while a popup is open, because the terminal is gone either way
+        A terminal that closes makes getch() answer at once instead of waiting. Ignoring that answer
+        spins on one core for as long as the process lives, which is what happened during testing:
+        an editor left behind by a closed pseudo-terminal ran for five hours at 25 percent of a CPU.
+        """
+        app = EditorApp(_model(tmp_path))
+        app.handle_key(-1)
+        assert app.running is False
+        app = EditorApp(_model(tmp_path))
+        app.popup = popups.ConfirmPopup(title="x", question="y?")
+        app.handle_key(-1)
+        assert app.running is False
+
     def test_f5_runs_the_checks_and_f10_quits(self, tmp_path: Path) -> None:
         """Positive unit test for EditorApp.handle_key(). It contains the following steps:
         - press F5, then F10

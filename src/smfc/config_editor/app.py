@@ -256,8 +256,13 @@ class EditorApp:
         Args:
             key (int): the key, as curses reports it
         """
-        if self.popup is not None:
+        if self.popup is not None and key != -1:
             self._handle_popup_key(key)
+            return
+        if key == -1:
+            # The terminal has gone away: getch() answers at once instead of waiting, so carrying on
+            # would spin on one core for as long as the process lives.
+            self.running = False
             return
         if self.editing is not None:
             self._handle_edit_key(key)
