@@ -6,8 +6,10 @@ CONF_FILE="/etc/smfc/smfc.conf"
 # smfc.discover owns the device filters and the write format, so the installer, this script and the
 # RPM script share one implementation. It fills a key only while that key is still empty.
 smfc_detect_device_names() {
-    python3 -m smfc.discover hd --fill "$CONF_FILE" || true
-    python3 -m smfc.discover nvme --fill "$CONF_FILE" || true
+    python3 -m smfc.discover hd --fill "$CONF_FILE" || \
+        echo "smfc: disk auto-detection skipped (smfc.discover could not run)" >&2
+    python3 -m smfc.discover nvme --fill "$CONF_FILE" || \
+        echo "smfc: disk auto-detection skipped (smfc.discover could not run)" >&2
 }
 
 case "$1" in

@@ -165,8 +165,10 @@ verbose_echo "smfc files have been installed."
 # smfc.discover owns the filters and the write format, and it fills a key only while that key is
 # still empty. The DEB and the RPM scripts call the same module.
 if [ -z "${KEEP_CONFIG}" ]; then
-  python3 -m smfc.discover hd --fill /etc/smfc/smfc.conf || true
-  python3 -m smfc.discover nvme --fill /etc/smfc/smfc.conf || true
+  python3 -m smfc.discover hd --fill /etc/smfc/smfc.conf || \
+    echo "smfc: disk auto-detection skipped (smfc.discover could not run)" >&2
+  python3 -m smfc.discover nvme --fill /etc/smfc/smfc.conf || \
+    echo "smfc: disk auto-detection skipped (smfc.discover could not run)" >&2
   verbose_echo "Disk names are listed in the new configuration file (please edit!)."
 fi
 

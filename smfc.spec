@@ -45,8 +45,10 @@ install -m644 config/samples/*.conf %{buildroot}%{_docdir}/%{name}/examples/
 # format, so the installer, the DEB script and this one share one implementation. It fills a key
 # only while that key is still empty.
 if [ $1 -eq 1 ]; then
-    python3 -m smfc.discover hd --fill /etc/smfc/smfc.conf || true
-    python3 -m smfc.discover nvme --fill /etc/smfc/smfc.conf || true
+    python3 -m smfc.discover hd --fill /etc/smfc/smfc.conf || \
+        echo "smfc: disk auto-detection skipped (smfc.discover could not run)" >&2
+    python3 -m smfc.discover nvme --fill /etc/smfc/smfc.conf || \
+        echo "smfc: disk auto-detection skipped (smfc.discover could not run)" >&2
 fi
 
 %preun
