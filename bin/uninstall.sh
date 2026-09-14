@@ -62,6 +62,21 @@ if [[ $EUID -ne 0 ]]; then
 fi
 verbose_echo "Root privilege granted."
 
+# The service has to stop before its files go, and its enable link has to go with it. This is what
+# the packages do: the prerm of the DEB stops smfc.service, and %systemd_preun of the RPM disables
+# and stops it in one step. An enable link left behind points at a unit file that is no longer there.
+if command -v systemctl > /dev/null 2>&1; then
+  if systemctl is-active --quiet smfc.service 2>/dev/null; then
+    systemctl stop smfc.service || \
+      echo "$(basename $0): Warning - smfc.service did not stop, the fans keep their current level." >&2
+    verbose_echo "smfc.service stopped."
+  fi
+  if systemctl is-enabled --quiet smfc.service 2>/dev/null; then
+    systemctl disable smfc.service > /dev/null 2>&1 || true
+    verbose_echo "smfc.service disabled."
+  fi
+fi
+
 # Remove smfc files.
 remove_file /etc/systemd/system/smfc.service
 remove_file /usr/share/man/man1/smfc.1.gz
@@ -99,5 +114,11 @@ rmdir /opt/smfc 2>/dev/null || true
 PIP_PARAM="-y -q --root-user-action=ignore --break-system-packages"
 pip uninstall $PIP_PARAM smfc > /dev/null 2>&1 || true
 verbose_echo "Previous pip installation removed, if there was one."
+
+# systemd still holds the unit that has just been deleted, so it is told to forget it.
+if command -v systemctl > /dev/null 2>&1; then
+  systemctl daemon-reload || true
+  verbose_echo "systemd configuration reloaded."
+fi
 
 verbose_echo "smfc uninstalled successfully."
