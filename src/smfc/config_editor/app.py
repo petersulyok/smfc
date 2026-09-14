@@ -58,6 +58,7 @@ class EditorApp:
     colour: bool                    # True when the terminal paints the scheme
     popup: Optional[popups.Popup]   # The window over the panes, None when there is none
     pending: Optional[popups.Popup] # The selector waiting under an add-by-path field
+    cursor_at: Optional[tuple]      # Where the terminal cursor goes while typing, None when idle
 
     def __init__(self, model: EditorModel, colour: bool = True) -> None:
         """Build the screen state of one configuration file.
@@ -77,6 +78,7 @@ class EditorApp:
         self.editing = None
         self.message = ""
         self.running = True
+        self.cursor_at = None
 
     # -- state -------------------------------------------------------------------------------------
 
@@ -430,14 +432,36 @@ class EditorApp:
         self.scroll(layout)
         screen.erase()
         screen.bkgd(" ", self.attr(panes.PAIR_PANE))
+        self.cursor_at = None
         views = self.views()
         self._draw_banner(screen, layout)
         self._draw_panes(screen, layout, views)
         self._draw_footer(screen, layout)
         if self.popup is not None:
             self._draw_popup(screen, layout)
+        self._place_cursor(screen, height, width)
         screen.noutrefresh()
         curses.doupdate()
+
+    def _place_cursor(self, screen: "curses.window", height: int, width: int) -> None:
+        """Show the terminal cursor where the next character will land, and hide it otherwise.
+        A user typing needs to see where the text goes. The cursor is the only mark that says it, so
+        it appears while a value is open and disappears as soon as the value is closed.
+        Args:
+            screen (curses.window): the curses screen
+            height (int): rows of the screen
+            width (int): columns of the screen
+        """
+        try:
+            if self.cursor_at is None:
+                curses.curs_set(0)
+                return
+            row, column = self.cursor_at
+            curses.curs_set(1)
+            screen.move(min(row, height - 1), min(column, width - 1))
+        except curses.error:
+            # A terminal that cannot show or hide the cursor is not a reason to stop drawing.
+            pass
 
     def _draw_banner(self, screen: "curses.window", layout: Layout) -> None:
         """Draw the title line, which names the program and the file being edited.
@@ -564,6 +588,11 @@ class EditorApp:
             else:
                 attr = self.attr(panes.PAIR_PANE)
             self._put(box, index + 1, column + 1, text.ljust(width), width, attr)
+            if cursor and self.editing is not None and self.pane is PANE_FIELDS:
+                # The line reads "<mark><key padded> [<typed text>]", and box sits one row down the
+                # screen, so the caret lands right after the text and before the closing bracket.
+                offset = 1 + panes.label_column(views, layout) + 2 + len(self.editing)
+                self.cursor_at = (index + 2, column + 1 + offset)
 
     def _draw_footer(self, screen: "curses.window", layout: Layout) -> None:
         """Draw the status line and the key bar, below the box.
@@ -610,6 +639,9 @@ class EditorApp:
             self._put(window, height - 3, 2, f"! {popup.error}", width - 4,
                       self.attr(panes.PAIR_ERROR))
         self._put(window, height - 2, 2, popup.keys(), width - 4, self.attr(panes.PAIR_POPUP))
+        if isinstance(popup, popups.TextPopup):
+            # The input is the fourth body line, drawn as "[<typed text>]" at column 2 of the window.
+            self.cursor_at = (top + 4, min(left + 3 + len(popup.text), left + width - 2))
 
     def _put(self, window: "curses.window", row: int, column: int, text: str, width: int,
              attr: int = curses.A_NORMAL) -> None:

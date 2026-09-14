@@ -780,6 +780,41 @@ class TestEditorApp:
         assert "erase" in names
         assert names.index("erase") < names.index("box")
 
+    def test_the_cursor_follows_the_text_being_typed(self, tmp_path: Path) -> None:
+        """Positive unit test for EditorApp drawing. It contains the following steps:
+        - type into a value edited in the parameter pane and draw that pane
+        - ASSERT: a cursor position is recorded, so the terminal cursor is shown while typing
+        - open a value edited in a popup and draw the popup
+        - ASSERT: a cursor position is recorded there too
+        - close the popup and draw again
+        - ASSERT: no position is recorded, so the cursor is hidden when nothing is being typed
+        A user typing needs to see where the next character lands; the cursor is the only mark of it.
+        """
+        app = EditorApp(_model(tmp_path), colour=False)
+        app.row_index = next(i for i, r in enumerate(app.model.rows) if r.name == "CPU")
+        app.pane = PANE_FIELDS
+        layout = panes.layout_for(80, 24)
+        views = app.views()
+
+        app.field_index = next(i for i, v in enumerate(views) if v.key == "polling")
+        app.start_edit()
+        app.handle_key(ord("9"))
+        lines = panes.render_fields(views, app.field_index, app.field_top, layout, app.editing)
+        app._draw_field_lines(_FakeWindow(), layout, lines, 1)   # pylint: disable=protected-access
+        assert app.cursor_at is not None
+        app.finish_edit(False)
+
+        app.field_index = next(i for i, v in enumerate(views) if v.key == "control_function")
+        app.start_edit()
+        app.cursor_at = None
+        app._draw_popup(_FakeWindow(), layout)                   # pylint: disable=protected-access
+        assert app.cursor_at is not None
+
+        app.popup = None
+        app.cursor_at = None
+        app._draw_field_lines(_FakeWindow(), layout, lines, 1)   # pylint: disable=protected-access
+        assert app.cursor_at is None
+
     def test_f5_runs_the_hardware_probes(self, tmp_path: Path, mocker) -> None:
         """Positive unit test for EditorApp.check(). It contains the following steps:
         - press F5 with the probes mocked
