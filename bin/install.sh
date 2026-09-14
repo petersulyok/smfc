@@ -87,6 +87,18 @@ if [[ $EUID -ne 0 ]]; then
 fi
 verbose_echo "Root privilege granted."
 
+# A restart is owed only to a service that is already running, and the state has to be read before
+# anything is changed. This is the rule of the packages: dh_installsystemd restarts after an upgrade,
+# and %systemd_postun_with_restart touches a running unit only. A service the user stopped on purpose
+# stays stopped.
+SMFC_WAS_RUNNING=""
+if command -v systemctl > /dev/null 2>&1; then
+  if systemctl is-active --quiet smfc.service 2>/dev/null; then
+    SMFC_WAS_RUNNING="yes"
+    verbose_echo "smfc.service is running, it will be restarted at the end."
+  fi
+fi
+
 # Create the configuration target folder if it does not exist.
 if [ ! -d /etc/smfc ]; then
   mkdir -p /etc/smfc
@@ -249,6 +261,19 @@ if [ -z "${KEEP_CONFIG}" ]; then
   "$SMFC_VENV/bin/python" -m smfc.discover nvme --fill /etc/smfc/smfc.conf || \
     echo "smfc: disk auto-detection skipped (smfc.discover could not run)" >&2
   verbose_echo "Disk names are listed in the new configuration file (please edit!)."
+fi
+
+# systemd has to read the unit file again, because this script has just written it. Without the
+# reload a changed service definition is ignored until the next boot. The restart comes last, so the
+# service starts with the configuration file and the disk names this run produced.
+if command -v systemctl > /dev/null 2>&1; then
+  systemctl daemon-reload || true
+  verbose_echo "systemd configuration reloaded."
+  if [ -n "$SMFC_WAS_RUNNING" ]; then
+    systemctl restart smfc.service || \
+      echo "smfc: the service did not restart, check 'systemctl status smfc.service'" >&2
+    verbose_echo "smfc.service restarted with the new version."
+  fi
 fi
 
 verbose_echo "smfc installation finished successfully."

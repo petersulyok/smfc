@@ -1135,7 +1135,7 @@ Important notes:
 
 
 ### 11. How to run `smfc`?
-After manual installation, `smfc` can be started and stopped as a standard `systemd` service. Remember to reload `systemd` configuration after a new installation or if you changed the service definition file:
+After manual installation, `smfc` can be started and stopped as a standard `systemd` service. `install.sh` reloads the `systemd` configuration itself, and it restarts `smfc.service` when the service was already running. Reload by hand only if you edited the service definition file:
 
 ```
 systemctl daemon-reload
