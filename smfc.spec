@@ -45,7 +45,7 @@ install -m644 config/samples/*.conf %{buildroot}%{_docdir}/%{name}/examples/
 if [ $1 -eq 1 ]; then
     CONF_FILE="/etc/smfc/smfc.conf"
     if [ -d /dev/disk/by-id ] && grep -q '^hd_names=$' "$CONF_FILE"; then
-        hd_disks=$(ls /dev/disk/by-id/ | grep -v -E '\-part|^wwn-|\-eui|nvme|^dm-|^lvm-|^md-|^zd-|_1+$' || true)
+        hd_disks=$(ls /dev/disk/by-id/ | grep -v -E '\-part|^wwn-|\-eui|nvme|^usb-|^dm-|^lvm-|^md-|^zd-|_1+$' || true)
         if [ -n "$hd_disks" ]; then
             replacement=""
             first=1

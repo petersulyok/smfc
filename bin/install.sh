@@ -163,7 +163,7 @@ verbose_echo "smfc files have been installed."
 
 # Collect all disk names for `hd_names=` parameter in 'smfc.conf' file.
 if [ -z "${KEEP_CONFIG}" ]; then
-  hd_list=$(ls /dev/disk/by-id/|grep -v -E '\-part|^wwn-|\-eui|nvme|^dm-|^lvm-|^md-|^zd-|_1+$' || true)
+  hd_list=$(ls /dev/disk/by-id/|grep -v -E '\-part|^wwn-|\-eui|nvme|^usb-|^dm-|^lvm-|^md-|^zd-|_1+$' || true)
   if [ -n "$hd_list" ]; then
     hd_names=""
     for hl in $hd_list; do
