@@ -713,22 +713,25 @@ usage: install.sh [-h|--help] [-k|--keep-config] [-l|--local] [-v|--verbose]
            -v, --verbose      verbose output
 ```
 
-The default location of the installed files: 
+The default location of the installed files:
 
-| Files              | Installation folder                                        | Description                     |
-|--------------------|------------------------------------------------------------|---------------------------------|
-| `smfc.service`     | `/etc/systemd/system`                                      | systemd service definition file |
-| `smfc`             | `/etc/default`                                             | service command line options    |
-| `smfc.conf`        |   `/etc/smfc`                                              | service configuration file      |
-| `smfc.1.gz`        | `/usr/local/share/man/man1`                                | smfc manual page                |
-| `smfc-client.1.gz` | `/usr/local/share/man/man1`                                | smfc-client manual page         |
-| `smfc`             | `/usr/local/bin` or </br> `/usr/bin`                       | smfc command                    |
-| `smfc-client`      | `/usr/local/bin` or </br> `/usr/bin`                       | smfc-client command             |
-| `smfc service`     | `/usr/local/lib/python3.xx` or </br> `/usr/lib/python3.xx` | smfc python package             |
+| Files                | Installation folder         | Description                     |
+|----------------------|-----------------------------|---------------------------------|
+| `smfc.service`       | `/etc/systemd/system`       | systemd service definition file |
+| `smfc`               | `/etc/default`              | service command line options    |
+| `smfc.conf`          | `/etc/smfc`                 | service configuration file      |
+| `smfc.1.gz`          | `/usr/local/share/man/man1` | smfc manual page                |
+| `smfc-client.1.gz`   | `/usr/local/share/man/man1` | smfc-client manual page         |
+| `smfc-config.1.gz`   | `/usr/local/share/man/man1` | smfc-config manual page         |
+| `smfc`               | `/usr/local/bin`            | smfc command (a link)           |
+| `smfc-client`        | `/usr/local/bin`            | smfc-client command (a link)    |
+| `smfc-config`        | `/usr/local/bin`            | smfc-config command (a link)    |
+| the Python package   | `/opt/smfc/venv`            | smfc and its dependencies       |
+
+> From `smfc v7.0.0` the script installs the Python package into a virtual environment of its own, at `/opt/smfc/venv`, and links the three commands into `/usr/local/bin`. Earlier versions installed it into the Python of the distribution with `pip --break-system-packages`, which writes into directories the package manager owns and which the distributions block on purpose. The three commands are at the same path as before, the service file and the configuration are untouched, and the script removes the previous installation for you. The DEB, RPM and AUR packages are not affected: a distribution package belongs in `/usr`.
 
 Notes for the script:
-- Different Linux distros install the Python package to different folders (tested on Ubuntu 24.04, Debian 13,
-SUSE Leap 15, Proxmox 9, and Arch Linux)
+- It needs `python3 -m venv` and the `pyudev` module of your distribution. It says which package to install if either is missing, and stops before changing anything.
 - The installation process stops on any error
 - Remote installation is the default method
 - The `--local` parameter installs from the current folder (the GitHub repository must be cloned first)

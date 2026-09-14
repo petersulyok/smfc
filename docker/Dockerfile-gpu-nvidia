@@ -7,11 +7,20 @@ LABEL org.opencontainers.image.desciption="Supermicro fan control for Linux (hom
 LABEL org.opencontainers.image.url="https://github.com/petersulyok/smfc"
 RUN echo 'APT::Keep-Downloaded-Packages "false";' > /etc/apt/apt.conf.d/01disable-cache
 RUN apt update
-RUN apt install -y ipmitool python3 python3-pyudev smartmontools
-# python3-pip is installed, used and removed in one layer, otherwise it stays in the image.
-RUN apt install -y python3-pip && \
-    pip install --prefix=/usr --no-cache-dir smfc==${BUILD_IMAGE_VERSION%%-nvidia} && \
-    apt autoremove --purge -y python3-pip && \
+RUN apt install -y ipmitool python3 libudev1 smartmontools
+# smfc lives in its own environment, so nothing is written into the Python of the image. pip brings
+# pyudev with it; libudev1 above provides the library that binding reaches through ctypes, and the
+# Context() call below proves it before the image is finished. python3-pip is installed, used and
+# removed in one layer, otherwise it stays in the image.
+RUN apt install -y python3-pip python3-venv && \
+    python3 -m venv --without-pip /opt/smfc/venv && \
+    python3 -m pip --python /opt/smfc/venv/bin/python install \
+        --no-cache-dir smfc==${BUILD_IMAGE_VERSION%%-nvidia} && \
+    /opt/smfc/venv/bin/python -c "import pyudev; pyudev.Context()" && \
+    for cmd in smfc smfc-client smfc-config; do \
+        if [ -e /opt/smfc/venv/bin/$cmd ]; then ln -s /opt/smfc/venv/bin/$cmd /usr/bin/$cmd; fi; \
+    done && \
+    apt autoremove --purge -y python3-pip python3-venv && \
     rm -rf /var/lib/apt/lists/*
 ADD --chmod=755 docker/entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

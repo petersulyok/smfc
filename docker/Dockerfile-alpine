@@ -5,11 +5,19 @@ LABEL org.opencontainers.image.title="smfc"
 LABEL org.opencontainers.image.authors="petersulyok"
 LABEL org.opencontainers.image.desciption="Supermicro fan control for Linux (home) servers."
 LABEL org.opencontainers.image.url="https://github.com/petersulyok/smfc"
-RUN apk add --no-cache ipmitool python3 py3-udev smartmontools
+RUN apk add --no-cache ipmitool python3 eudev-libs smartmontools
 RUN ln -s /usr/sbin/ipmitool /usr/bin/ipmitool
-# py3-pip is installed, used and removed in one layer, otherwise it stays in the image.
+# smfc lives in its own environment, so nothing is written into the Python of the image. pip brings
+# pyudev with it; eudev-libs above provides the libudev library that binding reaches through ctypes,
+# and the Context() call below proves it before the image is finished. py3-pip is installed, used and
+# removed in one layer, otherwise it stays in the image.
 RUN apk add --no-cache --virtual .depends py3-pip && \
-    pip install --prefix=/usr --no-cache-dir smfc==${BUILD_IMAGE_VERSION} && \
+    python3 -m venv --without-pip /opt/smfc/venv && \
+    pip --python /opt/smfc/venv/bin/python install --no-cache-dir smfc==${BUILD_IMAGE_VERSION} && \
+    /opt/smfc/venv/bin/python -c "import pyudev; pyudev.Context()" && \
+    for cmd in smfc smfc-client smfc-config; do \
+        if [ -e /opt/smfc/venv/bin/$cmd ]; then ln -s /opt/smfc/venv/bin/$cmd /usr/bin/$cmd; fi; \
+    done && \
     apk del .depends
 ADD --chmod=755 docker/entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

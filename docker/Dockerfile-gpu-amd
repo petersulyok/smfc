@@ -14,13 +14,22 @@ RUN mkdir -p /etc/apt/keyrings && \
     echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/7.2.4 noble main" \
       > /etc/apt/sources.list.d/rocm.list
 RUN apt update
-RUN apt install -y --no-install-recommends rocm-smi-lib ipmitool python3 python3-pyudev smartmontools
+RUN apt install -y --no-install-recommends rocm-smi-lib ipmitool python3 libudev1 smartmontools
 # `rocm-smi` is installed in /opt/rocm/bin, smfc looks for it in /usr/bin (see [GPU] rocm_smi_path=).
 RUN ln -s /opt/rocm/bin/rocm-smi /usr/bin/rocm-smi
-# python3-pip is installed, used and removed in one layer, otherwise it stays in the image.
-RUN apt install -y python3-pip && \
-    pip install --prefix=/usr --no-cache-dir smfc==${BUILD_IMAGE_VERSION%%-amd} && \
-    apt autoremove --purge -y python3-pip curl gnupg && \
+# smfc lives in its own environment, so nothing is written into the Python of the image. pip brings
+# pyudev with it; libudev1 above provides the library that binding reaches through ctypes, and the
+# Context() call below proves it before the image is finished. python3-pip is installed, used and
+# removed in one layer, otherwise it stays in the image.
+RUN apt install -y python3-pip python3-venv && \
+    python3 -m venv --without-pip /opt/smfc/venv && \
+    python3 -m pip --python /opt/smfc/venv/bin/python install \
+        --no-cache-dir smfc==${BUILD_IMAGE_VERSION%%-amd} && \
+    /opt/smfc/venv/bin/python -c "import pyudev; pyudev.Context()" && \
+    for cmd in smfc smfc-client smfc-config; do \
+        if [ -e /opt/smfc/venv/bin/$cmd ]; then ln -s /opt/smfc/venv/bin/$cmd /usr/bin/$cmd; fi; \
+    done && \
+    apt autoremove --purge -y python3-pip python3-venv curl gnupg && \
     rm -rf /var/lib/apt/lists/*
 ENV ROCM_PATH=/opt/rocm
 ENV PATH="/opt/rocm/bin:${PATH}"

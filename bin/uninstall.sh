@@ -23,8 +23,8 @@ function verbose_echo() {
 
 
 function remove_file() {
-  # Remove existing files only.
-  if [ -f $1 ]; then
+  # Remove an existing file, and a symbolic link even when its target is already gone.
+  if [ -f $1 ] || [ -L $1 ]; then
     rm $1
   fi
 }
@@ -81,9 +81,23 @@ else
   verbose_echo "smfc configuration files preserved (/etc/smfc/smfc.conf, /etc/default/smfc)."
 fi
 
-# Remove smfc package with pip.
+# Remove the commands and the environment of the current layout.
+remove_file /usr/local/bin/smfc
+remove_file /usr/local/bin/smfc-client
+remove_file /usr/local/bin/smfc-config
+# Only the environment this script created is removed. /opt/smfc itself goes only when nothing else
+# is left in it, because a machine may hold other things under that name.
+if [ -d /opt/smfc/venv ]; then
+  rm -rf /opt/smfc/venv
+  verbose_echo "smfc environment removed (/opt/smfc/venv)."
+fi
+rmdir /opt/smfc 2>/dev/null || true
+
+# Remove an installation of the previous layout, which pip made in the Python of the distribution.
+# Where that landed differs between distributions, so pip is asked rather than a path guessed. It
+# reports "not installed" on a machine that does not have one.
 PIP_PARAM="-y -q --root-user-action=ignore --break-system-packages"
-pip uninstall $PIP_PARAM smfc
-verbose_echo "pip removed smfc package."
+pip uninstall $PIP_PARAM smfc > /dev/null 2>&1 || true
+verbose_echo "Previous pip installation removed, if there was one."
 
 verbose_echo "smfc uninstalled successfully."
