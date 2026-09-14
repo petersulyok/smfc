@@ -10,9 +10,13 @@ RUN echo 'APT::Keep-Downloaded-Packages "false";' > /etc/apt/apt.conf.d/01disabl
 # every install needs a fresh one; kept in a layer of its own it would be cached and go stale, and a
 # rebuild would then ask the mirror for a point release it has already replaced. The list is 51 MB,
 # so it is removed in the same layer that wrote it, where the removal still counts.
+# Documentation, manual pages, the IANA vendor table of ipmitool and the test suite of the Python
+# standard library are dead weight in a service image, together 7 MB. Every install layer clears its
+# own: a file deleted in a later layer is only hidden, its bytes still travel with the image.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ipmitool python3 libudev1 smartmontools && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man /usr/share/info \
+           /usr/share/misc/enterprise-numbers.txt /usr/lib/python3.*/test
 # smfc lives in its own environment, so nothing is written into the Python of the image. pip brings
 # pyudev with it; libudev1 above provides the library that binding reaches through ctypes, and the
 # Context() call below proves it before the image is finished. python3-pip is installed, used and
@@ -27,6 +31,7 @@ RUN apt-get update && \
         if [ -e /opt/smfc/venv/bin/$cmd ]; then ln -s /opt/smfc/venv/bin/$cmd /usr/bin/$cmd; fi; \
     done && \
     apt-get autoremove --purge -y python3-pip python3-venv && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man /usr/share/info \
+           /usr/share/misc/enterprise-numbers.txt /usr/lib/python3.*/test
 ADD --chmod=755 docker/entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
