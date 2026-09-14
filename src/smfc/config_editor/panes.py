@@ -50,6 +50,7 @@ PAIR_ERROR: int = 8         # an error finding
 PAIR_DIM: int = 9           # an inactive or unknown parameter
 PAIR_POPUP: int = 10        # a popup window
 PAIR_SELECT_DIM: int = 11   # the selected row of the pane that does not have the keyboard
+PAIR_INPUT: int = 12        # the field a value is typed into: white on blue
 
 # Rows the frame always takes: the banner, the two pane borders and the key bar.
 FRAME_ROWS: int = 4
@@ -204,14 +205,14 @@ def render_sections(model: EditorModel, selected: int, top: int, layout: Layout)
 
 
 def render_fields(views: List[FieldView], selected: int, top: int, layout: Layout,
-                  editing: Optional[str] = None) -> List[str]:
+                  editing: bool = False) -> List[str]:
     """Render the parameter list of the selected section.
     Args:
         views (List[FieldView]): the parameters to show
         selected (int): index of the selected parameter
         top (int): index of the first parameter shown
         layout (Layout): the sizes to draw with
-        editing (Optional[str]): the text being typed, when a value is open for editing
+        editing (bool): True while the selected value is open for editing
     Returns:
         List[str]: one line per visible parameter
     """
@@ -220,8 +221,9 @@ def render_fields(views: List[FieldView], selected: int, top: int, layout: Layou
     for index in range(top, min(top + layout.pane_rows, len(views))):
         view = views[index]
         value_width = layout.right_width - label_width - 2
-        if editing is not None and index == selected:
-            value = fit(f"[{editing}]", value_width)
+        if editing and index == selected:
+            # The field is painted over this line, so the value it holds is written only once.
+            value = " " * value_width
         else:
             value = fit(_display_value(view), value_width)
         mark = " " if view.state is FieldState.NORMAL else "~"
@@ -288,7 +290,7 @@ def render_keys(model: EditorModel, editing: bool) -> str:
         str: the key list
     """
     if editing:
-        return "  Enter accept   Esc cancel"
+        return "  Enter accept   Esc cancel   Ins insert/overwrite"
     save = "F2 save" if not model.read_only else "read-only"
     return f"  Tab pane   Enter edit   Space toggle   F5 test hardware   {save}   F10 quit"
 

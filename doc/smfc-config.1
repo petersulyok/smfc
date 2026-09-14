@@ -17,6 +17,10 @@ instead of asking you to type a
 .I /dev/disk/by\-id/
 path by hand.
 .PP
+A value being typed sits in a field of its own colour, with the cursor where
+the next character lands. A value longer than its field scrolls with the
+cursor.
+.PP
 It keeps the comments of your file. Only the value you change is rewritten;
 every other byte stays where it was, so the documentation in the file survives
 an edit.
@@ -112,6 +116,16 @@ Add an instance to a family, on an IPMI zone no enabled instance claims.
 .TP
 .B \-, F8
 Remove the selected instance, after a confirmation.
+.TP
+.B Left, Right, Home, End
+Move inside the value being typed.
+.TP
+.B Backspace, Delete
+Remove the character before the cursor, or the one under it.
+.TP
+.B Insert
+Switch the field between insert and overwrite. A thin cursor inserts and pushes
+the rest of the value along, a block cursor types over it.
 .TP
 .B Esc
 Leave the parameter list, or cancel what is being typed.

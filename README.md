@@ -1486,6 +1486,20 @@ A family can hold several instances — `[CPU]` and `[CPU:1]`, each driving a di
 
 A number is typed in place. A value with two states is switched with `Enter`. A path, a fan curve or a device list opens a window, because those values are longer than the value cell.
 
+While a value is open, the field it is typed into is painted in its own colour, and the cursor sits where the next character lands. These keys work in it:
+
+| Key | Action |
+|---|---|
+| `Left` `Right` | move the cursor inside the value |
+| `Home` `End` | jump to the start or the end of the value |
+| `Backspace` | remove the character before the cursor |
+| `Delete` | remove the character under the cursor |
+| `Insert` | switch between insert and overwrite |
+| `Enter` | accept the value |
+| `Esc` | cancel and keep the old value |
+
+The shape of the cursor says which mode the field is in: a thin cursor inserts and pushes the rest of the value along, a block cursor types over it. A value longer than its field scrolls, so what you type is always visible.
+
 #### 15.3 Picking disks
 `hd_names=` and `nvme_names=` open a list of the disks this machine has, found with the same filters `install.sh` and the DEB and RPM packages use. Every line leads with the serial number, because a machine can hold eight disks of one model and the serial is the only part that tells them apart.
 

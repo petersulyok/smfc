@@ -7,6 +7,7 @@ import curses
 from dataclasses import dataclass, field as dataclass_field
 from typing import Callable, List, Optional, Sequence, Tuple
 
+from smfc.config_editor.lineedit import LineEdit
 from smfc.config_editor.panes import fit
 
 # Keys every popup answers to. The letters of the device selector are on top of these.
@@ -87,13 +88,23 @@ class TextPopup(Popup):
     summary: str = ""                           # One line about the parameter
     detail: str = ""                            # The range or the syntax
     validator: Optional[Callable[[str], str]] = None    # Returns why the value is wrong, or ""
+    line: Optional[LineEdit] = None             # The caret and the insert flag of the input field
+
+    # Index of the input field in the body, so the caller knows which line to paint as a field.
+    INPUT_ROW: int = 3
+
+    def __post_init__(self) -> None:
+        """Open the value for editing, with the caret at its end."""
+        self.line = LineEdit.of(self.text)
 
     def lines(self) -> List[str]:
         """The body: the help, the input field, and the reason a value was refused.
+        The input line is left empty here. The caller paints it as a field of its own, because a
+        coloured field says where the value is typed better than any character can.
         Returns:
             List[str]: one entry per line
         """
-        body = [self.summary, self.detail, "", f"[{self.text}]"]
+        body = [self.summary, self.detail, "", ""]
         if self.error:
             body.append(f"! {self.error}")
         return [fit(line, self.width - 4) for line in body]
@@ -112,11 +123,8 @@ class TextPopup(Popup):
             if not self.error:
                 self.done = True
                 self.accepted = True
-        elif key in KEY_BACKSPACE:
-            self.text = self.text[:-1]
-            self.error = ""
-        elif 32 <= key < 127:
-            self.text += chr(key)
+        elif self.line.handle_key(key):
+            self.text = self.line.text
             self.error = ""
 
     def value(self) -> Optional[str]:

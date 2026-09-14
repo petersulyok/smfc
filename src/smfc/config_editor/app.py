@@ -8,6 +8,7 @@ import sys
 from typing import List, Optional
 
 from smfc.config_editor import panes, popups
+from smfc.config_editor.lineedit import LineEdit
 from smfc.config_editor.model import EditorModel, FieldState, FieldView, Row, RowKind
 from smfc.config_editor.panes import Layout
 from smfc.config_editor.schema import SECTIONS, FieldKind, Widget, bool_text, bool_value, validate
@@ -28,6 +29,7 @@ COLOURS: tuple = (
     (panes.PAIR_DIM, curses.COLOR_BLUE, curses.COLOR_WHITE),
     (panes.PAIR_POPUP, curses.COLOR_BLACK, curses.COLOR_CYAN),
     (panes.PAIR_SELECT_DIM, curses.COLOR_BLUE, curses.COLOR_WHITE),
+    (panes.PAIR_INPUT, curses.COLOR_WHITE, curses.COLOR_BLUE),
 )
 
 # The standing status line already says the file is read-only. A blocked key has to say something
@@ -52,7 +54,7 @@ class EditorApp:
     row_top: int                    # First row shown in the section list
     field_index: int                # Selected parameter of the right pane
     field_top: int                  # First parameter shown in the right pane
-    editing: Optional[str]          # The text being typed, None when not editing
+    editing: Optional[LineEdit]     # The value being typed, None when not editing
     message: str                    # One line of feedback, shown until the next key
     running: bool                   # False once the user has quit
     colour: bool                    # True when the terminal paints the scheme
@@ -169,7 +171,7 @@ class EditorApp:
             self.message = f"{view.key} = {bool_text(new_value)}"
             return
         if view.field.widget is Widget.INLINE:
-            self.editing = view.value
+            self.editing = LineEdit.of(view.value)
             return
         if view.field.widget is Widget.SELECT:
             self.popup = popups.ChoicePopup(
@@ -214,8 +216,8 @@ class EditorApp:
         """
         view = self.view()
         if accept and view is not None and self.editing is not None:
-            self.model.set_value(self.row, view.key, self.editing.strip())
-            self.message = f"{view.key} = {self.editing.strip()}"
+            self.model.set_value(self.row, view.key, self.editing.text.strip())
+            self.message = f"{view.key} = {self.editing.text.strip()}"
         self.editing = None
 
     def toggle(self) -> None:
@@ -400,16 +402,14 @@ class EditorApp:
             self.finish_edit(True)
         elif key == 27:
             self.finish_edit(False)
-        elif key in (curses.KEY_BACKSPACE, 127, 8):
-            self.editing = (self.editing or "")[:-1]
-        elif 32 <= key < 127:
-            self.editing = (self.editing or "") + chr(key)
+        elif self.editing is not None:
+            self.editing.handle_key(key)
 
     # -- drawing -----------------------------------------------------------------------------------
 
     def attr(self, pair: int, bold: bool = False) -> int:
         """Build the attribute of one colour role.
-        Without colour the selection falls back to reverse video, so the cursor is still visible.
+        Without colour the selection and the input field fall back to reverse video, so both stay visible.
         Args:
             pair (int): the colour pair number
             bold (bool): True to add bold
@@ -418,7 +418,7 @@ class EditorApp:
         """
         if not self.colour:
             base = curses.A_REVERSE if pair in (panes.PAIR_SELECT, panes.PAIR_BANNER,
-                                                panes.PAIR_KEYS) else curses.A_NORMAL
+                                                panes.PAIR_KEYS, panes.PAIR_INPUT) else curses.A_NORMAL
             return base | (curses.A_BOLD if bold else 0)
         return curses.color_pair(pair) | (curses.A_BOLD if bold else 0)
 
@@ -457,11 +457,22 @@ class EditorApp:
                 curses.curs_set(0)
                 return
             row, column = self.cursor_at
-            curses.curs_set(1)
+            # A thin caret inserts, a block caret types over. This is what a terminal editor does, so
+            # the shape alone says which mode the field is in.
+            curses.curs_set(1 if self._insert_mode() else 2)
             screen.move(min(row, height - 1), min(column, width - 1))
         except curses.error:
             # A terminal that cannot show or hide the cursor is not a reason to stop drawing.
             pass
+
+    def _insert_mode(self) -> bool:
+        """Whether the field being typed into is in insert mode.
+        Returns:
+            bool: True to push the text along, False to type over it
+        """
+        if isinstance(self.popup, popups.TextPopup):
+            return self.popup.line.insert
+        return self.editing is None or self.editing.insert
 
     def _draw_banner(self, screen: "curses.window", layout: Layout) -> None:
         """Draw the title line, which names the program and the file being edited.
@@ -494,7 +505,8 @@ class EditorApp:
         self._put(box, rule, 2, " Help ", 6, self.attr(panes.PAIR_TITLE, bold=True))
 
         left = panes.render_sections(self.model, self.row_index, self.row_top, layout)
-        right = panes.render_fields(views, self.field_index, self.field_top, layout, self.editing)
+        right = panes.render_fields(views, self.field_index, self.field_top, layout,
+                                    self.editing is not None)
         if layout.two_pane:
             divider = layout.left_width + 1
             box.vline(1, divider, curses.ACS_VLINE, layout.pane_rows)
@@ -577,7 +589,11 @@ class EditorApp:
         for index, text in enumerate(lines):
             field_index = index + self.field_top
             cursor = field_index == self.field_index
-            if cursor and self.pane is PANE_FIELDS:
+            if cursor and self.editing is not None and self.pane is PANE_FIELDS:
+                # The field below carries the highlight while a value is typed, so the row around it
+                # stays plain and the field is the only painted part of the line.
+                attr = self.attr(panes.PAIR_PANE)
+            elif cursor and self.pane is PANE_FIELDS:
                 attr = self.attr(panes.PAIR_SELECT, bold=True)
             elif cursor:
                 attr = self.attr(panes.PAIR_SELECT_DIM, bold=True)
@@ -589,10 +605,27 @@ class EditorApp:
                 attr = self.attr(panes.PAIR_PANE)
             self._put(box, index + 1, column + 1, text.ljust(width), width, attr)
             if cursor and self.editing is not None and self.pane is PANE_FIELDS:
-                # The line reads "<mark><key padded> [<typed text>]", and box sits one row down the
-                # screen, so the caret lands right after the text and before the closing bracket.
-                offset = 1 + panes.label_column(views, layout) + 2 + len(self.editing)
-                self.cursor_at = (index + 2, column + 1 + offset)
+                self._draw_input(box, layout, index + 1, column + 1, width)
+
+    def _draw_input(self, box: "curses.window", layout: Layout, row: int, column: int,
+                    width: int) -> None:
+        """Paint the field a value is typed into, and note where the caret goes.
+        The field is a block of its own colour rather than a value in brackets: a user reading the
+        screen sees the extent of the field without decoding a character.
+        Args:
+            box (curses.window): the framed window
+            layout (Layout): the sizes to draw with
+            row (int): row of the parameter inside the box
+            column (int): column the parameter pane starts at
+            width (int): width of one line of that pane
+        """
+        label_width = panes.label_column(self.views(), layout)
+        start = column + label_width + 2
+        field_width = max(width - label_width - 2, 1)
+        text, caret = self.editing.view(field_width)
+        self._put(box, row, start, text, field_width, self.attr(panes.PAIR_INPUT))
+        # The box sits one row below the banner, so a row inside it is one row further down the screen.
+        self.cursor_at = (row + 1, start + caret)
 
     def _draw_footer(self, screen: "curses.window", layout: Layout) -> None:
         """Draw the status line and the key bar, below the box.
@@ -640,8 +673,11 @@ class EditorApp:
                       self.attr(panes.PAIR_ERROR))
         self._put(window, height - 2, 2, popup.keys(), width - 4, self.attr(panes.PAIR_POPUP))
         if isinstance(popup, popups.TextPopup):
-            # The input is the fourth body line, drawn as "[<typed text>]" at column 2 of the window.
-            self.cursor_at = (top + 4, min(left + 3 + len(popup.text), left + width - 2))
+            field_width = width - 4
+            text, caret = popup.line.view(field_width)
+            row = popup.INPUT_ROW + 1
+            self._put(window, row, 2, text, field_width, self.attr(panes.PAIR_INPUT))
+            self.cursor_at = (top + row, left + 2 + caret)
 
     def _put(self, window: "curses.window", row: int, column: int, text: str, width: int,
              attr: int = curses.A_NORMAL) -> None:

@@ -12,6 +12,7 @@ from smfc.checks import Level
 from smfc.config_editor import panes, popups
 from smfc.config_editor.app import EditorApp, PANE_FIELDS, PANE_SECTIONS
 from smfc.config_editor.cmd import EXIT_CONFIG_ERROR, main
+from smfc.config_editor.lineedit import LineEdit
 from smfc.config_editor.model import EditorModel, FieldState, RowKind
 from smfc.config_editor.schema import SECTIONS
 
@@ -450,7 +451,7 @@ class TestEditorApp:
         app.pane = PANE_FIELDS
         app.field_index = [i for i, v in enumerate(app.views()) if v.key == "min_temp"][0]
         app.handle_key(curses.KEY_ENTER)
-        assert app.editing == "30.0"
+        assert app.editing.text == "30.0"
         for _ in range(4):
             app.handle_key(curses.KEY_BACKSPACE)
         for char in "42.5":
@@ -997,6 +998,114 @@ class TestCommand:
         err = capsys.readouterr().err
         assert "smfc.conf.20260914_120000" in err
         assert "refs/tags/v" not in err
+
+class TestLineEdit:
+    """Unit test class for the smfc.config_editor.lineedit module."""
+
+    def test_a_value_opens_with_the_caret_at_its_end(self) -> None:
+        """Positive unit test for LineEdit.of(). It contains the following steps:
+        - open a value that the file holds
+        - ASSERT: the text is the value, unchanged
+        - ASSERT: the caret is at its end, so typing continues the value instead of replacing it
+        - ASSERT: the field starts in insert mode, which is what a terminal editor does
+        """
+        line = LineEdit.of("30.0")
+        assert line.text == "30.0"
+        assert line.caret == 4
+        assert line.insert is True
+
+    def test_insert_pushes_the_text_along(self) -> None:
+        """Positive unit test for LineEdit.handle_key(). It contains the following steps:
+        - move the caret to the start of a value and type a character
+        - ASSERT: the character is inserted and nothing is lost
+        - ASSERT: the caret moved past what was typed
+        """
+        line = LineEdit.of("45")
+        line.handle_key(curses.KEY_HOME)
+        line.handle_key(ord("1"))
+        assert line.text == "145"
+        assert line.caret == 1
+
+    def test_overwrite_types_over_the_text(self) -> None:
+        """Positive unit test for LineEdit.handle_key(). It contains the following steps:
+        - switch the field to overwrite with the Insert key and type at the start
+        - ASSERT: the character under the caret is replaced, so the value does not grow
+        - ASSERT: typing at the end still appends, because there is nothing there to replace
+        """
+        line = LineEdit.of("45")
+        line.handle_key(curses.KEY_HOME)
+        line.handle_key(curses.KEY_IC)
+        assert line.insert is False
+        line.handle_key(ord("9"))
+        assert line.text == "95"
+        line.handle_key(curses.KEY_END)
+        line.handle_key(ord("7"))
+        assert line.text == "957"
+
+    def test_the_caret_keys_move_without_changing_the_text(self) -> None:
+        """Positive unit test for LineEdit.handle_key(). It contains the following steps:
+        - move left, right, home and end over a value
+        - ASSERT: the caret never leaves the text
+        - ASSERT: the text is untouched
+        """
+        line = LineEdit.of("abc")
+        for _ in range(5):
+            line.handle_key(curses.KEY_LEFT)
+        assert line.caret == 0
+        for _ in range(5):
+            line.handle_key(curses.KEY_RIGHT)
+        assert line.caret == 3
+        line.handle_key(curses.KEY_HOME)
+        assert line.caret == 0
+        line.handle_key(curses.KEY_END)
+        assert line.caret == 3
+        assert line.text == "abc"
+
+    def test_backspace_and_delete_take_the_right_character(self) -> None:
+        """Positive unit test for LineEdit.handle_key(). It contains the following steps:
+        - put the caret in the middle of a value, then press backspace and delete
+        - ASSERT: backspace removes the character before the caret and moves it back
+        - ASSERT: delete removes the character under the caret and leaves it where it was
+        - ASSERT: backspace at the start of the value does nothing
+        """
+        line = LineEdit(text="abcd", caret=2)
+        line.handle_key(curses.KEY_BACKSPACE)
+        assert line.text == "acd" and line.caret == 1
+        line.handle_key(curses.KEY_DC)
+        assert line.text == "ad" and line.caret == 1
+        line.handle_key(curses.KEY_HOME)
+        line.handle_key(curses.KEY_BACKSPACE)
+        assert line.text == "ad" and line.caret == 0
+
+    def test_a_key_it_does_not_know_is_handed_back(self) -> None:
+        """Negative unit test for LineEdit.handle_key(). It contains the following steps:
+        - press a key the field has no use for
+        - ASSERT: it reports the key as unused, so the caller can act on it
+        """
+        line = LineEdit.of("x")
+        assert line.handle_key(curses.KEY_F5) is False
+        assert line.handle_key(ord("y")) is True
+
+    def test_a_value_longer_than_its_field_follows_the_caret(self) -> None:
+        """Positive unit test for LineEdit.view(). It contains the following steps:
+        - open a value longer than the field it is drawn in
+        - ASSERT: the end of the value is shown, because that is where the caret is
+        - ASSERT: the caret stays inside the field
+        - move to the start of the value
+        - ASSERT: the beginning is shown instead
+        - ASSERT: a value shorter than the field is padded to it, so the field keeps its width
+        """
+        line = LineEdit.of("30-35, 50-55, 65-100")
+        text, caret = line.view(10)
+        assert text == "5, 65-100 "
+        assert caret == 9
+        line.handle_key(curses.KEY_HOME)
+        text, caret = line.view(10)
+        assert text == "30-35, 50-"
+        assert caret == 0
+        short, caret = LineEdit.of("ab").view(10)
+        assert short == "ab" + " " * 8
+        assert caret == 2
 
 
 # End.
