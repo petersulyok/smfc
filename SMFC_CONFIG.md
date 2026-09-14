@@ -726,9 +726,9 @@ is no 6.5.0. A major release is the right place for both, because one of them as
 | 1 | `smfc-config`, phases 1 to 7 of chapter 10 | no, it is a new command |
 | 2 | the install layout, see 12.1 | yes, for a manual installation only |
 | 3 | remove the `-ne` command line option | yes, for anyone still passing it |
-| 4 | remove the `genericx9` platform name | yes, silently until now, see 12.3 |
+| 4 | remove the `genericx9` platform name | yes, silently until now, see 12.4 |
 | 5 | replace the `Ipmi.*_MODE` constants with `FanMode` | no, they are internal |
-| 6 | warn about an unknown section name, see 12.4 | no, it is a new warning |
+| 6 | warn about an unknown section name, see 12.5 | no, it is a new warning |
 | 7 | docs: the README install chapter, `DOCKER.md`, the man pages, the changelogs | no |
 
 Order of work: finish the `smfc-config` phases first, because they are additive and independent.
@@ -759,7 +759,7 @@ ln -sf /opt/smfc/bin/smfc-config /usr/local/bin/smfc-config
 
 The unit file stays in `/etc/systemd/system/`, which is the correct place for a locally installed
 unit, and **`ExecStart=smfc` stays as it is**. Naming `/opt/smfc/bin/smfc` explicitly would be
-safer against shadowing and wrong for this release: see 12.2.
+safer against shadowing and wrong for this release: see 12.3.
 
 **The migration must fail safe.** An existing manual installation keeps working until the user runs
 the script again, and the old copy in `/usr/local/lib/python3*/dist-packages/smfc` must not be left
@@ -782,7 +782,49 @@ scratch. Create the venv with `--without-pip`, install into it with the pip that
 in the same layer, and symlink `/usr/bin/smfc`. Drop the distro `python3-pyudev` and `py3-udev`
 packages: the venv gets `pyudev` from PyPI, which is pure Python and needs no compiler.
 
-### 12.2 Upgrading a manual installation from 6.4.2
+### 12.2 What the installer may delete
+
+Today's `install.sh` only overwrites files. It never deletes. The new one has to remove the previous
+installation, or a manual upgrade leaves an orphan copy of the package behind and two versions of
+smfc exist on one machine.
+
+Deleting needs a rule, and the obvious one does not work. README chapter 9.5 already records why:
+
+> Different Linux distros install the Python package to different folders (tested on Ubuntu 24.04,
+> Debian 13, SUSE Leap 15, Proxmox 9, and Arch Linux)
+
+On some of them `pip` installs into `/usr/local`, on others into `/usr`. So the path cannot tell the
+script whether a distribution package owns those files.
+
+**Ask the package manager instead.**
+
+```bash
+owner_of() {                      # prints the owning package, or nothing
+  command -v dpkg   >/dev/null && dpkg -S   "$1" 2>/dev/null && return
+  command -v rpm    >/dev/null && rpm -qf   "$1" 2>/dev/null && return
+  command -v pacman >/dev/null && pacman -Qo "$1" 2>/dev/null && return
+}
+```
+
+| Answer | What the script does |
+|---|---|
+| a package owns it | stop, and say to remove smfc with `apt`, `dnf` or `pacman` first |
+| nothing owns it | a manual installation; `pip uninstall -y smfc` is safe wherever it sits |
+
+Three further rules:
+
+1. **Never delete configuration.** `/etc/smfc/smfc.conf` and `/etc/default/smfc` keep the backup
+   behaviour they have today.
+2. **Delete only after the new installation is proven.** Build `/opt/smfc`, run `--version`, and only
+   then remove the old copy. A failure before that leaves a working machine.
+3. **Only the unit file, the man pages and the defaults file are still overwritten**, exactly as
+   today. Nothing else the script did not create is touched.
+
+**The new layout also ends the variation.** After 7.0.0 a manual installation is `/opt/smfc` on every
+distribution, so the README table collapses from "this folder or that one" to a single row. That is a
+second reason for the virtual environment, independent of PEP 668.
+
+### 12.3 Upgrading a manual installation from 6.4.2
 
 Two paths reach 7.0.0, and both must work.
 
@@ -817,7 +859,7 @@ differ from their machine.
 Nothing else fetched from the tag can mismatch: the configuration format, the defaults file and the
 man pages are the same for both layouts.
 
-### 12.3 The two removals that break a working configuration
+### 12.4 The two removals that break a working configuration
 
 `-ne` has logged a deprecation warning since 6.2.0, so its removal is expected.
 
@@ -833,7 +875,7 @@ Use generic_x9. Valid values: auto, generic, generic_x9, generic_x14, X10QBi.
 Today the message names the bad value and stops there. That is not enough for a value that worked
 in the previous release.
 
-### 12.4 An unknown section name is silent today
+### 12.5 An unknown section name is silent today
 
 The section names lost their zone tags in 5.0.0: `[CPU zone]` became `[CPU]`. The parser has no
 alias for the old form, and a missing section means disabled, so a file that still uses the old
@@ -859,4 +901,5 @@ been true since 5.0.0 and is corrected in this release.
 | an ambiguous-width glyph breaks the frame | `curses` line constants, and ASCII status glyphs |
 | the terminal is too narrow | fall back to one pane below 64 columns or 14 rows |
 | the config file is not writable | test at start, and say what to do |
-| the install migration leaves an orphan copy | uninstall the old package before the symlinks, see 12.1 |
+| the install migration leaves an orphan copy | uninstall the old package before the symlinks, see 12.2 |
+| the installer deletes a file a package manager owns | ask `dpkg`, `rpm` or `pacman` who owns it, see 12.2 |
