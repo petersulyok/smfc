@@ -37,11 +37,12 @@ These six were never settled in discussion. I state my choice and the reason. Ov
 | # | Choice | Reason |
 |---|---|---|
 | A | **Save by surgical line edit.** Change only the text after `=` on the matching line. | `config/smfc.conf` is mostly comments, and the live file on `nas` carries them too. `ConfigParser.write()` deletes every comment. |
-| B | **Edit numbers, booleans and enums in place. Use a popup for text, paths, lists and `control_function`.** | The value cell holds about 21 columns. Four kinds of real value are longer, up to 51. See 5.3. |
-| C | **The first-run flow writes the full commented template**, then sets the answered keys. | The user keeps the documentation in their own file. It matches what `install.sh` already does. |
+| B | **Edit numbers, booleans and enums in place. Use a popup for text, paths, lists and `control_function`.** | The value cell holds about 21 columns. Four kinds of real value are longer, up to 51. See 5.4. |
+| C | **Write a section header plus only the keys the user sets.** A missing section means disabled. | Verified with the parser: a 3-key `[PCI]` section fills every other key from its default. No template text is needed at run time. |
 | D | **Offer a service restart after save. Never restart alone.** | The tool must stay safe to run on a live server. |
 | E | **Fix `_1+$` to `_[0-9]+$`** in all three filter copies. | udev numbers duplicates `_1`, `_2`, `_3`. The current pattern matches `_1` and `_11`, never `_2`. |
 | F | **Lift the filters into `src/smfc/discover.py`.** The shell scripts call it. | The regex exists in three copies today. The `^usb-` fix had to be made three times. |
+| G | **A missing config file is an error, not a start state.** Offer to download the template from the release tag; name the local backups when that fails. | Every install path leaves `/etc/smfc/smfc.conf` in place, and `install.sh` backs the old one up. |
 
 Minimum terminal size: 64 columns and 14 rows. Eight rows are fixed — 2 frame lines, 1 divider, the
 4-line help pane and the key line — which leaves 6 section rows, and the list scrolls. 16 rows is
@@ -56,9 +57,21 @@ Every item below was observed on a live system, not assumed. Each one breaks a n
 `[CPU:0]`, `[CPU:1]` and so on. See `Config._get_sections()` in `src/smfc/config.py:418`.
 `config/samples/smfc-sample8.conf` uses that form. The left pane is not nine fixed rows.
 
+**A missing section means disabled, and every key has a default.** `config/samples/smfc-sample1.conf`
+holds only `[Ipmi]` and `[CPU]`; the parser returns an empty list for every other family and no
+error. A three-key `[PCI]` section parses and fills `steps`, `sensitivity`, `min_temp`, `max_temp`,
+`min_level`, `max_level` and `temp_sensor` from the defaults. So the editor never needs template
+text: it writes the header plus the keys the user sets.
+
 **A file can miss a section.** The live config on `nas` holds 8 sections and no `[PCI]`. It predates
-that feature. The editor must offer an absent family as addable. Otherwise an upgrading user can
-never reach a new feature through the tool.
+that feature. The left pane still shows `PCI`, as disabled, so an upgrading user can reach a new
+feature through the tool. See 5.1.
+
+**The config file is always there after an installation.** `install.sh` copies the template and
+saves the old file as `smfc.conf.<tag>`. On DEB it is a conffile and on RPM `%config(noreplace)`, so
+an upgrade never replaces an edited file. A fresh install leaves all 9 sections, `[CPU]` and `[HD]`
+enabled, and the disks already listed. So the editor always opens an existing file with sensible
+defaults. There is no empty-file start to design for.
 
 **`control_function` disables four fields.** When the key carries a value, `min_temp`, `max_temp`,
 `min_level` and `max_level` are ignored and never validated. On `nas`, `[CPU]` carries both. The
@@ -134,7 +147,7 @@ No optional dependency. No extras. No second binary package.
  │ > CPU        ✓     │ ipmi_zone      0                     │
  │   HD         ✓     │ temp_calc      1                     │
  │   NVME       ✗     │ sensitivity    3.0                   │
- │   PCI        +     │ polling        2                     │
+ │   PCI        ✗     │ polling        2                     │
  │   ───────────────  │ steps          6                     │
  │   Overview   !     │ min_temp      [40.0_____]            │
  │                    │ max_temp       60.0                  │
@@ -152,28 +165,106 @@ Two glyph columns. The first is the enabled state. The second is the check state
 | Glyph | Column | Meaning |
 |---|---|---|
 | blank | enabled | `[Ipmi]`, always active, no toggle |
-| `✓` / `✗` | enabled | section enabled or disabled |
-| `+` | enabled | family absent from the file; Enter adds it |
+| `✓` / `✗` | enabled | family enabled or disabled |
 | `-` | check | not checked yet |
 | `!` | check | warning |
 | `X` | check | error |
 
-A disabled section gets no check glyph. It never gets a green one.
+A disabled family gets no check glyph. It never gets a green one.
 
 The `Overview` row holds the checks that belong to no section.
 
-Field states in the right pane: normal, disabled, read-only, and inactive. Inactive means
-`control_function` overrides the field. Read-only means the key is unknown to smfc. Never delete an
-unknown key.
+### 5.1 The left pane renders the schema, not the file
 
-**Draw the frame with `curses` line constants, never with Unicode box characters.** `│` and `─` have
-ambiguous width. They occupy one cell in a Western locale and two in a CJK locale. A wrong width
-shifts every character after it and breaks the frame. Use `win.box()`, `win.hline()` and
-`win.vline()` with `curses.ACS_HLINE` and `curses.ACS_VLINE`. The terminal then supplies its own
-line-drawing set, and the screen also works without UTF-8. `✓` and `✗` are narrow and safe; every
-other status glyph stays ASCII.
+The pane always lists the same 9 families. The file supplies their state, not the list.
 
-### 5.1 The help pane
+The reason is in the parser. A missing section and `enabled=0` mean the same thing to smfc:
+`smfc-sample1.conf` holds only `[Ipmi]` and `[CPU]`, and every other family reads back as an empty
+list with no error. A difference the daemon cannot see must not be shown to the user.
+
+So an absent `[PCI]` shows as `✗`, exactly like a disabled one. There is no `+` glyph and no "add
+section" action.
+
+| Action | What is written |
+|---|---|
+| switch a family on | the section header, `enabled=1`, and the keys the user sets; every other key runs on its default |
+| switch a family off | `enabled=0`; the section and the user's values stay |
+
+Switching off never deletes a section. A user who turns `[HD]` off for a week must find their disk
+list intact.
+
+**The rows are instances, not families.** A family can hold several instances, and each one is a
+complete, independent fan controller with its own full parameter set. They share only the
+temperature source. `[CPU]` is itself an instance, so there is no parent row above the numbered
+ones.
+
+| The file holds | The pane shows |
+|---|---|
+| `[CPU]` | one row, `CPU` |
+| `[CPU]` and `[CPU:1]` | two rows, `CPU` and `CPU:1` |
+| `[CPU:0]` and `[CPU:1]` | two rows, `CPU:0` and `CPU:1` |
+| no CPU section at all | one row, `CPU`, disabled — the schema placeholder |
+
+All three naming styles are valid and may be mixed. The suffix number is used only for ordering and
+logging; it has no relationship to the `ipmi_zone=` value.
+
+**A new instance can be added at any time. The only rule is a different zone.** Two *enabled*
+instances of one family must not share an IPMI zone. `Config._validate_no_duplicate_zones()` enforces
+exactly that, and it skips disabled instances, so a disabled one claims no zone.
+
+| The add action | Behaviour |
+|---|---|
+| when it is offered | on any family row, at any time |
+| the zone it proposes | the lowest zone not claimed by an enabled instance of that family |
+| the number it writes | the next free suffix; `[CPU]` plus `[CPU:1]` is valid, `[CPU:0]` need not exist |
+| the values it writes | the defaults, not a copy |
+
+Defaults rather than a copy, because 9.4 of `ARCHITECTURE.md` states the case plainly: two instances
+with the same parameters and different zones are pointless. The value is in tuning them apart. A
+copy invites a user to leave two identical curves behind.
+
+For `[HD]` and `[NVME]` the device list is part of that independence. The example in 9.4 gives the
+front backplane and the rear cage their own disks:
+
+```ini
+[HD]                    ; front backplane -> zone 1
+ipmi_zone   = 1
+hd_names    = ...front-1 ...front-2
+min_temp    = 32
+
+[HD:1]                  ; rear cage, hotter, less airflow -> zone 2
+ipmi_zone   = 2
+hd_names    = ...rear-1 ...rear-2
+min_temp    = 30
+sensitivity = 1.0
+```
+
+So a new instance starts with an empty device list, and the popup of chapter 7 fills it.
+
+**Splitting a multi-zone section is the same action with a prefill.** When the section the cursor
+sits on lists several zones, the add action offers to move one of them into the new instance instead
+of proposing a free zone. It is a convenience, not a separate feature and not a gate.
+
+```
+[CPU]                     [CPU]                [CPU:1]
+enabled=1        ->       enabled=1            enabled=1
+ipmi_zone=0,1             ipmi_zone=0          ipmi_zone=1
+```
+
+**Removing an instance** asks first, because it deletes lines the user wrote.
+
+Three cases checked against the parser:
+
+| File | Result |
+|---|---|
+| `[CPU] ipmi_zone=0,1` | one curve on two zones |
+| `[CPU]` zone 0 plus `[CPU:1]` zone 1 | two curves, accepted |
+| `[CPU]` zone 0,1 plus `[CPU:1]` zone 1 | rejected: `[CPU:1] IPMI zone 1 is already used by [CPU]` |
+
+The editor writes no zone rule of its own. The parser already rejects the one wrong case and names
+both sections.
+
+### 5.2 The help pane
 
 The bottom four lines are a pane of their own, inside the frame. They are the part a first-time
 user actually reads.
@@ -233,7 +324,7 @@ A section that is absent from the file shows the same text, plus one line saying
 The key list is the last line, outside the frame. It changes with the context: the list above is the
 editor, and a popup shows its own keys.
 
-### 5.2 When the terminal changes size
+### 5.3 When the terminal changes size
 
 The screen is recomputed from the terminal size, at start and on every `KEY_RESIZE` event. `curses`
 delivers that key when the window changes. The editor keeps the selected section, the selected
@@ -261,7 +352,7 @@ section list fits with no scrolling at all.
 **The frame stops growing at 100 columns.** Beyond that the window is left empty on the right. Help
 text wrapped across 200 columns is hard to read, and a value column that wide is wasted space.
 
-**The popup rule of 5.3 does not change with the width.** A path is edited in a popup on a 200-column
+**The popup rule of 5.4 does not change with the width.** A path is edited in a popup on a 200-column
 terminal too. A rule that changes with the window is a rule a user cannot learn.
 
 **Below the floor of 64 columns or 14 rows**, drop to a single pane. The section list fills the
@@ -269,7 +360,7 @@ screen, and Enter opens the field list of the selected section. Esc returns. Tha
 where a screen stack exists, and it exists because two panes do not fit. The help pane stays, and
 drops to 2 lines below 12 rows. Never refuse to start, and never draw outside the window.
 
-### 5.3 Where a value is typed
+### 5.4 Where a value is typed
 
 The right pane gives a value about 21 columns at the minimum width. Every shipped default fits.
 Four kinds of real value do not: `control_function` at 27 characters, `remote_parameters` at 31, a
@@ -323,7 +414,7 @@ are slow. `npu_smi_timeout` is the existing precedent for a per-tool timeout.
 
 | Section | Checks |
 |---|---|
-| Ipmi | `command` exists **and is executable**; `ipmi_si` and `ipmi_devintf` loaded; `platform_name` matches what `platform_factory` probes; `exit_level` in -1..100 |
+| Ipmi | `command` exists **and is executable**; `ipmi_si` and `ipmi_devintf` loaded; `platform_name` matches what `platform_factory` probes; `exit_level` in -1..100; every `ipmi_zone` value within the board's zone count where the platform knows it — 4 on `generic_x9` and `X10QBi`, probed on an X14 OpenBMC board, unknown on `generic` |
 | CPU | `coretemp` or `k10temp` loaded; a hwmon path exists |
 | HD | `drivetemp` loaded or `smartctl_path` exists; every `hd_names` device exists; standby guard needs smartctl; `standby_hd_limit` ≤ number of names |
 | NVME | every `nvme_names` device exists; its hwmon temperature reads |
@@ -332,10 +423,23 @@ are slow. `npu_smi_timeout` is the existing precedent for a per-tool timeout.
 | PCI | exactly one of `pci_address`, `pci_id`, `pci_driver`; the `temp_sensor` path reads a number |
 | CONST | `level` in 0..100 |
 | Exporter | `port` in 1..65535; the port is free **or held by smfc itself**; `bind_address` is `0.0.0.0` or an address this host holds, IPv4 only |
-| Overview | no section enabled at all; detected hardware that no section covers; config file not writable |
+| Overview | no section enabled at all; detected hardware that no section covers; config file not writable; the zone map (see below) |
 
 Every zone family shares three: `min_temp < max_temp`, `min_level < max_level`, `steps >= 1`. Skip
 all three when `control_function` carries a value.
+
+**The Overview row carries the zone map.** Several families on one zone is normal, not a fault. smfc
+arbitrates: the highest requested level wins, and a `[CONST]` level acts as the floor of its zone.
+The map is an `info` line, so the user can see what they built:
+
+```
+zone 0   CPU, NVME
+zone 1   HD, CONST
+```
+
+The editor writes no zone rule of its own. `Config._validate_no_duplicate_zones()` already rejects
+the one wrong case, two enabled instances of the same family on one zone, and it names both
+sections in the message.
 
 Severity rules: an `error` blocks saving. A `warn` asks for confirmation. An `info` is a suggestion.
 
@@ -510,7 +614,7 @@ and no `sed` of its own.
 |---|---|
 | change a value | replace the text after `=` on that line; keep the comment above it |
 | add a key to a section | insert it under the last key of that section, with its template comment |
-| add a section | append the section block from `config/smfc.conf`, comments included |
+| add a section | append the section header and only the keys the user sets; the rest run on defaults |
 | remove a key | never; set it to its default instead |
 | unknown key | leave it exactly as found |
 
@@ -533,6 +637,22 @@ already writes them.
 
 Also make `Config.parse_device_names()` drop empty lines. Fix both ends of that trap.
 
+### 9.1 When the config file is missing
+
+This is rare. Every install path leaves `/etc/smfc/smfc.conf` in place. A missing file means the
+user deleted it.
+
+The tool must not create one silently. It offers, in this order:
+
+1. Restore from a local backup: `smfc.conf.<tag>` written by `install.sh`, or `.rpmsave` and
+   `.dpkg-old` left by a package removal.
+2. Download the template of the installed version:
+   `https://raw.githubusercontent.com/petersulyok/smfc/refs/tags/v{version}/config/smfc.conf`.
+   The version comes from `importlib.metadata.version("smfc")`, as `client.py` already reads it, so
+   the template always matches the installed daemon. Ask before fetching, use a 5 second timeout,
+   and try once.
+3. Say that neither worked, and name both paths. Never invent a file without telling the user.
+
 After a successful save, verify by loading the file through `Config(path)`. Then offer the restart:
 
 ```
@@ -548,15 +668,14 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 
 | # | Deliverable | Notes |
 |---|---|---|
-| 0 | Commit the `^usb-` fix, and add `_[0-9]+$` | three files, already edited for `^usb-` |
+| 0 | the `^usb-` and `_[0-9]+$` filter fixes | **done**, commits `a43a79c` and `4fc6452` |
 | 1 | `schema.py` | field metadata and help text for all 9 sections, plus the section help; it tells you how big the UI really is |
 | 2 | `checks.py` | refactor `Service.check_dependencies()`; the daemon uses it too |
 | 3 | `discover.py` | lift the filters; point the three scripts at it |
-| 4 | `confwriter.py` | round-trip every sample file unchanged |
-| 5 | first-run flow | prompts only, no TUI; it delivers the stated purpose alone |
-| 6 | the editor | the curses master-detail screen |
-| 7 | the popups | needs phases 3 and 6 |
-| 8 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries |
+| 4 | `confwriter.py` | round-trip every sample file unchanged; add and remove a section; the missing-file path of 9.1 |
+| 5 | the editor | the curses master-detail screen |
+| 6 | the popups | needs phases 3 and 5 |
+| 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries |
 
 Phase 8 note: `debian/changelog` is DEB-only and `smfc.spec` `%changelog` is RPM-only. Keep the
 scopes separate.
@@ -573,7 +692,7 @@ function. The editor must open all eleven, round-trip each one unchanged, and re
 Add two fixtures:
 
 - the live `nas` config — 8 sections, no `[PCI]`, `control_function` in `[CPU]`
-- an empty file, for the first-run path
+- `smfc-sample1.conf`, two sections only, to prove that a missing section reads as disabled
 
 Run the suite with `uv run pytest`.
 
