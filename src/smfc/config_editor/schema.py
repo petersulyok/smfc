@@ -115,16 +115,14 @@ class Field:
         return self.key in CURVE_OVERRIDES
 
     def hint_text(self) -> str:
-        """What an empty field offers: the default, or an example where there is no default.
+        """The value an empty field offers: the default, or an example where there is no default.
         A parameter with no default leaves a user staring at an empty field, and the syntax is the
-        hard part of a fan curve or of a PCI address, so a value that works is shown instead.
+        hard part of a fan curve or of a PCI address, so a value that works is offered instead.
+        It carries no label, because the field takes it as it stands.
         Returns:
-            str: the line to draw in an empty field, empty when there is nothing to say
+            str: the value to offer, empty when there is nothing to offer
         """
-        default = self.default_text()
-        if default:
-            return f"default: {default}"
-        return f"example: {self.example}" if self.example else ""
+        return self.default_text() or self.example
 
     def default_text(self) -> str:
         """Render the default value the way the configuration file would hold it.

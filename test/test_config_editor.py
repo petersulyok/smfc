@@ -933,37 +933,70 @@ class TestPopups:
         - refuse a value
         - ASSERT: the reason is the only line added
         """
-        popup = popups.TextPopup(title="command", text="", hint="default: /usr/bin/ipmitool",
+        popup = popups.TextPopup(title="command", text="", hint="/usr/bin/ipmitool",
                                  validator=lambda value: "not a path")
         assert popup.lines() == ["", ""]
         assert popup.INPUT_ROW == 1
         popup.handle_key(10)
         assert popup.lines() == ["", "", "! not a path"]
 
+    def test_end_takes_the_offered_value_into_the_field(self) -> None:
+        """Positive unit test for TextPopup.handle_key(). It contains the following steps:
+        - open a text popup on an empty field that offers a value
+        - ASSERT: the key line names End, because the offer is worth nothing if nobody finds it
+        - press End
+        - ASSERT: the field holds the offered value, so it can be edited rather than retyped
+        - ASSERT: the key line no longer names End, because there is nothing left to take
+        - press End again and edit the value
+        - ASSERT: End now moves the cursor, which is what it does in a field that holds a value
+        """
+        popup = popups.TextPopup(title="control_function", hint="30-35, 50-55, 65-100",
+                                 validator=lambda value: "")
+        assert "End" in popup.keys()
+        popup.handle_key(curses.KEY_END)
+        assert popup.text == "30-35, 50-55, 65-100"
+        assert "End" not in popup.keys()
+
+        popup.handle_key(curses.KEY_HOME)
+        popup.handle_key(curses.KEY_END)
+        popup.handle_key(ord("0"))
+        assert popup.text == "30-35, 50-55, 65-1000"
+
+    def test_an_offer_is_not_taken_when_the_field_holds_a_value(self) -> None:
+        """Negative unit test for TextPopup.handle_key(). It contains the following steps:
+        - open a text popup whose field already holds a value, on a parameter that offers one
+        - press End
+        - ASSERT: the value is untouched, because End only takes an offer from an empty field
+        """
+        popup = popups.TextPopup(title="command", text="/usr/local/bin/ipmitool",
+                                 hint="/usr/bin/ipmitool", validator=lambda value: "")
+        popup.handle_key(curses.KEY_END)
+        assert popup.text == "/usr/local/bin/ipmitool"
+
     def test_a_parameter_with_no_default_offers_an_example(self) -> None:
         """Positive unit test for Field.hint_text(). It contains the following steps:
         - read the hint of a parameter that has a default
-        - ASSERT: it names the default
+        - ASSERT: it is the default, with nothing around it, because the field takes it as it stands
         - read the hint of a parameter that has none
-        - ASSERT: it names an example, because an empty field with no default says nothing at all
+        - ASSERT: it is an example, because an empty field with no default says nothing at all
         - ASSERT: the example is a value the parser of that parameter accepts
         """
         command = field_of("Ipmi", "command")
-        assert command.hint_text() == "default: /usr/bin/ipmitool"
+        assert command.hint_text() == "/usr/bin/ipmitool"
         curve = field_of("CPU", "control_function")
-        assert curve.hint_text() == "example: 30-35, 50-55, 65-100"
+        assert curve.hint_text() == "30-35, 50-55, 65-100"
         assert validate(curve, curve.example) == ""
         for section, key in (("Ipmi", "remote_parameters"), ("PCI", "pci_address"),
                              ("PCI", "pci_id"), ("PCI", "pci_driver")):
-            assert field_of(section, key).hint_text().startswith("example: ")
+            assert field_of(section, key).hint_text() != ""
 
     def test_an_empty_field_offers_the_default(self, tmp_path: Path) -> None:
         """Positive unit test for EditorApp._draw_popup(). It contains the following steps:
         - open a value that has a default and delete every character of it
         - draw the popup on a window that records what it writes
-        - ASSERT: the field shows the default, so the user sees what smfc applies without it
+        - ASSERT: the field offers the default, so the user sees what smfc applies without it
         - type one character
-        - ASSERT: the default is gone, because the field now holds a value
+        - ASSERT: the offer is gone, because the field now holds a value
         """
         app = EditorApp(_model(tmp_path), colour=False)
         app.row_index = next(i for i, r in enumerate(app.model.rows) if r.name == "Ipmi")
@@ -978,11 +1011,11 @@ class TestPopups:
 
         screen = _FakeWindow()
         app._draw_popup(screen, panes.layout_for(80, 24))    # pylint: disable=protected-access
-        assert "default: /usr/bin/ipmitool" in written(screen)
-        app.popup.handle_key(ord("/"))
+        assert "/usr/bin/ipmitool" in written(screen)
+        app.popup.handle_key(ord("x"))
         screen = _FakeWindow()
         app._draw_popup(screen, panes.layout_for(80, 24))    # pylint: disable=protected-access
-        assert "default:" not in written(screen)
+        assert "/usr/bin/ipmitool" not in written(screen)
 
     def test_the_choice_popup_starts_on_the_current_value(self) -> None:
         """Positive unit test for ChoicePopup. It contains the following steps:

@@ -7,7 +7,7 @@ import curses
 from dataclasses import dataclass, field as dataclass_field
 from typing import Callable, List, Optional, Sequence, Tuple
 
-from smfc.config_editor.lineedit import LineEdit
+from smfc.config_editor.lineedit import KEY_END, LineEdit
 from smfc.config_editor.panes import fit
 
 # Keys every popup answers to. The letters of the device selector are on top of these.
@@ -111,6 +111,15 @@ class TextPopup(Popup):
             body.append(f"! {self.error}")
         return [fit(line, self.width - 4) for line in body]
 
+    def keys(self) -> str:
+        """The keys of the window, naming End only while there is a value to take.
+        Returns:
+            str: the keys
+        """
+        if not self.line.text and self.hint:
+            return "Enter OK   Esc cancel   End take the value shown"
+        return "Enter OK   Esc cancel"
+
     def handle_key(self, key: int) -> None:
         """Type into the field, accept it, or cancel.
         A value the parser would refuse does not close the popup: the reason is shown and the text
@@ -120,6 +129,12 @@ class TextPopup(Popup):
         """
         if key in KEY_CANCEL:
             self._cancel()
+        elif key in KEY_END and not self.line.text and self.hint:
+            # The field offers a value when it has nothing else to show. End takes that value into
+            # the field, where it can be edited, the way a shell takes the suggestion it greys out.
+            self.line = LineEdit.of(self.hint)
+            self.text = self.line.text
+            self.error = ""
         elif key in KEY_ACCEPT:
             self.error = self.validator(self.text.strip()) if self.validator else ""
             if not self.error:
