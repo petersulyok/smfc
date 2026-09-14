@@ -37,14 +37,16 @@ These six were never settled in discussion. I state my choice and the reason. Ov
 | # | Choice | Reason |
 |---|---|---|
 | A | **Save by surgical line edit.** Change only the text after `=` on the matching line. | `config/smfc.conf` is mostly comments, and the live file on `nas` carries them too. `ConfigParser.write()` deletes every comment. |
-| B | **Edit a scalar field in place.** Use a popup only for list-valued keys and `control_function`. | Less code. The three-line footer carries the help text, the valid range and the error. |
+| B | **Edit numbers, booleans and enums in place. Use a popup for text, paths, lists and `control_function`.** | The value cell holds about 21 columns. Four kinds of real value are longer, up to 51. See 5.3. |
 | C | **The first-run flow writes the full commented template**, then sets the answered keys. | The user keeps the documentation in their own file. It matches what `install.sh` already does. |
 | D | **Offer a service restart after save. Never restart alone.** | The tool must stay safe to run on a live server. |
 | E | **Fix `_1+$` to `_[0-9]+$`** in all three filter copies. | udev numbers duplicates `_1`, `_2`, `_3`. The current pattern matches `_1` and `_11`, never `_2`. |
 | F | **Lift the filters into `src/smfc/discover.py`.** The shell scripts call it. | The regex exists in three copies today. The `^usb-` fix had to be made three times. |
 
-Minimum terminal size: the two panes need 64 columns and 14 rows. Below either figure, fall back to a
-single pane. Never refuse to start.
+Minimum terminal size: 64 columns and 14 rows. Eight rows are fixed — 2 frame lines, 1 divider, the
+4-line help pane and the key line — which leaves 6 section rows, and the list scrolls. 16 rows is
+comfortable, and 19 shows the whole list without scrolling. Below the floor, fall back to a single
+pane. Never refuse to start.
 
 ## 3. What the real config files require
 
@@ -88,7 +90,7 @@ Three modules are shared by the daemon and the editor. Only the screens belong t
 
 | Module | Consumers | Path |
 |---|---|---|
-| `schema.py` — field type, range, default, help text, provider | validation and the right pane | `src/smfc/schema.py` |
+| `schema.py` — field metadata, section help, provider functions | validation, the right pane, the help pane | `src/smfc/schema.py` |
 | `checks.py` — per-section checks | `service.py` at startup, and the editor | `src/smfc/checks.py` |
 | `discover.py` — the by-id filters | `install.sh`, both package scripts, the editor | `src/smfc/discover.py` |
 | `confwriter.py` — the comment-preserving writer | the editor and the first-run flow | `src/smfc/confwriter.py` |
@@ -127,19 +129,21 @@ No optional dependency. No extras. No second binary package.
 ## 5. The screen
 
 ```
- ┌ Sections ───────────┬ [NVME] ─────────────────────────────┐
- │   Ipmi         X    │  enabled        yes                 │
- │   CPU:0     ✓       │  ipmi_zone      0                   │
- │   CPU:1     ✓  !    │  temp_calc      1                   │
- │ > NVME      ✓       │  sensitivity    4.0                 │
- │   HD        ✓       │  polling        10                  │
- │   GPU       ✗       │  steps          4                   │
- │   PCI       +       │  min_temp       38.0                │
- │   ─────────────     │  max_temp       65.0                │
- │   Overview     !    │  nvme_names     6 devices...        │
- └─────────────────────┴─────────────────────────────────────┘
-  sensitivity — temperature change that triggers a new fan level
-  float, C, default 2.0, minimum 0.1
+ ┌ Sections ──────────┬ [CPU] ───────────────────────────────┐
+ │   Ipmi             │ enabled        yes                   │
+ │ > CPU        ✓     │ ipmi_zone      0                     │
+ │   HD         ✓     │ temp_calc      1                     │
+ │   NVME       ✗     │ sensitivity    3.0                   │
+ │   PCI        +     │ polling        2                     │
+ │   ───────────────  │ steps          6                     │
+ │   Overview   !     │ min_temp      [40.0_____]            │
+ │                    │ max_temp       60.0                  │
+ ├────────────────────┴──────────────────────────────────────┤
+ │ min_temp   Lowest temperature of the fan curve            │
+ │ Below this temperature the fan stays at min_level. Raise  │
+ │ it if the fans spin up too early. Keep it below max_temp. │
+ │ ! 40.0 is not below max_temp 60.0 of this section         │
+ └───────────────────────────────────────────────────────────┘
   Tab pane   Enter edit   F5 test hardware   F2 save   F10 quit
 ```
 
@@ -156,21 +160,132 @@ Two glyph columns. The first is the enabled state. The second is the check state
 
 A disabled section gets no check glyph. It never gets a green one.
 
-**Draw the frame with `curses` line constants, never with Unicode box characters.** `│`, `─`, `▲`
-and `…` have ambiguous width. They occupy one cell in a Western locale and two in a CJK locale. A
-wrong width shifts every character after it and breaks the frame. Use `win.box()`, `win.hline()` and
-`win.vline()` with `curses.ACS_HLINE` and `curses.ACS_VLINE`. The terminal then supplies its own
-line-drawing set, and the screen also works without UTF-8. `✓` and `✗` are narrow and safe; every
-other status glyph stays ASCII.
-
 The `Overview` row holds the checks that belong to no section.
-
-The footer has three lines: the help text, the type and range, and the key list. The help text comes
-from `schema.py`. It is the part a first-time user actually reads.
 
 Field states in the right pane: normal, disabled, read-only, and inactive. Inactive means
 `control_function` overrides the field. Read-only means the key is unknown to smfc. Never delete an
 unknown key.
+
+**Draw the frame with `curses` line constants, never with Unicode box characters.** `│` and `─` have
+ambiguous width. They occupy one cell in a Western locale and two in a CJK locale. A wrong width
+shifts every character after it and breaks the frame. Use `win.box()`, `win.hline()` and
+`win.vline()` with `curses.ACS_HLINE` and `curses.ACS_VLINE`. The terminal then supplies its own
+line-drawing set, and the screen also works without UTF-8. `✓` and `✗` are narrow and safe; every
+other status glyph stays ASCII.
+
+### 5.1 The help pane
+
+The bottom four lines are a pane of their own, inside the frame. They are the part a first-time
+user actually reads.
+
+**The help follows the cursor. It does not wait for an edit.** A user who is only looking around
+learns what each key does before they touch it.
+
+| Line | Content |
+|---|---|
+| 1 | the key name, then the one-sentence summary |
+| 2 | the detail, first line |
+| 3 | the detail, second line |
+| 4 | the type, unit, default and range — replaced by the check result when the field has one |
+
+Line 4 stays one fixed row, so the pane never changes height.
+
+**`schema.py` owns the wording.** It is not a copy of the comments in `config/smfc.conf`. The file
+comment must stay one short line above the key. The pane has four lines and no such limit, so it
+says more: what the value does, when to change it, and what it interacts with.
+
+```python
+FIELDS = {
+    "min_temp": Field(
+        type=float, default=30.0, unit="C", minimum=0.0,
+        summary="Lowest temperature of the fan curve",
+        detail="Below this temperature the fan stays at min_level. "
+               "Raise it if the fans spin up too early. It must stay below max_temp.",
+    ),
+}
+```
+
+The shipped comment stays as it is. The two never contradict each other, and the richer text lives
+in one place.
+
+**A section has its own help text.** The cursor spends time in the left pane, and a section name
+alone says little to a first-time user. So `schema.py` carries a `SECTIONS` table beside `FIELDS`.
+
+| Line | Content when the cursor is in the left pane |
+|---|---|
+| 1 | the section name, then what it controls |
+| 2 | the detail, first line |
+| 3 | the detail, second line |
+| 4 | its state: enabled or not, which zones it drives, how many devices it lists — or its check result |
+
+```python
+SECTIONS = {
+    "CPU": SectionHelp(
+        summary="Drives fan zones from the CPU temperature",
+        detail="Add CPU:1 for a second fan curve on other zones. "
+               "Needs the coretemp or k10temp kernel module.",
+    ),
+}
+```
+
+A section that is absent from the file shows the same text, plus one line saying that Enter adds it.
+
+The key list is the last line, outside the frame. It changes with the context: the list above is the
+editor, and a popup shows its own keys.
+
+### 5.2 When the terminal changes size
+
+The screen is recomputed from the terminal size, at start and on every `KEY_RESIZE` event. `curses`
+delivers that key when the window changes. The editor keeps the selected section, the selected
+field, and any edit in progress.
+
+**What grows with the height**
+
+| Part | Behaviour |
+|---|---|
+| section rows and field rows | take every extra row |
+| help pane | stays 4 rows |
+| key line | stays 1 row |
+
+So a taller window shows more sections and more fields, and scrolls less. At 19 rows the whole
+section list fits with no scrolling at all.
+
+**What grows with the width**
+
+| Part | Behaviour |
+|---|---|
+| left pane | fixed at 20 columns; the longest label is `Overview` plus two glyphs |
+| right pane | takes every extra column, so longer values show in place |
+| help pane | takes the full width, so the detail text wraps over fewer lines |
+
+**The frame stops growing at 100 columns.** Beyond that the window is left empty on the right. Help
+text wrapped across 200 columns is hard to read, and a value column that wide is wasted space.
+
+**The popup rule of 5.3 does not change with the width.** A path is edited in a popup on a 200-column
+terminal too. A rule that changes with the window is a rule a user cannot learn.
+
+**Below the floor of 64 columns or 14 rows**, drop to a single pane. The section list fills the
+screen, and Enter opens the field list of the selected section. Esc returns. That is the only place
+where a screen stack exists, and it exists because two panes do not fit. The help pane stays, and
+drops to 2 lines below 12 rows. Never refuse to start, and never draw outside the window.
+
+### 5.3 Where a value is typed
+
+The right pane gives a value about 21 columns at the minimum width. Every shipped default fits.
+Four kinds of real value do not: `control_function` at 27 characters, `remote_parameters` at 31, a
+full `npu_smi_path` at 51, and any device list.
+
+So the rule follows the value, not the preference:
+
+| Field kind | Where |
+|---|---|
+| numbers, booleans, enums — `min_temp`, `steps`, `enabled`, `port` | in place, in the value cell |
+| text and paths — `command`, `smartctl_path`, `npu_smi_path`, `remote_parameters` | a popup with a wide field |
+| lists — `hd_names`, `nvme_names`, `gpu_device_ids`, `npu_device_ids` | the multi-select popup of chapter 7 |
+| `control_function` | a popup with a wide field |
+
+Most keys are numbers, so most edits stay in place. This also removes the need for a field that
+scrolls sideways, which is the fiddly part of `curses` text entry.
 
 ## 6. Checks
 
@@ -434,7 +549,7 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 | # | Deliverable | Notes |
 |---|---|---|
 | 0 | Commit the `^usb-` fix, and add `_[0-9]+$` | three files, already edited for `^usb-` |
-| 1 | `schema.py` | field metadata for all 9 sections; it tells you how big the UI really is |
+| 1 | `schema.py` | field metadata and help text for all 9 sections, plus the section help; it tells you how big the UI really is |
 | 2 | `checks.py` | refactor `Service.check_dependencies()`; the daemon uses it too |
 | 3 | `discover.py` | lift the filters; point the three scripts at it |
 | 4 | `confwriter.py` | round-trip every sample file unchanged |
