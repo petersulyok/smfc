@@ -26,6 +26,7 @@ COLOURS: tuple = (
     (panes.PAIR_ERROR, curses.COLOR_RED, curses.COLOR_WHITE),
     (panes.PAIR_DIM, curses.COLOR_BLUE, curses.COLOR_WHITE),
     (panes.PAIR_POPUP, curses.COLOR_BLACK, curses.COLOR_CYAN),
+    (panes.PAIR_SELECT_DIM, curses.COLOR_BLUE, curses.COLOR_WHITE),
 )
 
 # Which pane the cursor is in.
@@ -320,9 +321,10 @@ class EditorApp:
             box.vline(1, divider, curses.ACS_VLINE, layout.pane_rows)
             box.addch(0, divider, curses.ACS_TTEE)
             box.addch(rule, divider, curses.ACS_BTEE)
-            self._put(box, 0, 2, " Sections ", 10, self.attr(panes.PAIR_TITLE, bold=True))
+            left_focus = self.pane is PANE_SECTIONS
+            self._put(box, 0, 2, " Sections ", 10, self._title_attr(left_focus))
             title = f" [{self.row.name}] "
-            self._put(box, 0, divider + 2, title, len(title), self.attr(panes.PAIR_TITLE, bold=True))
+            self._put(box, 0, divider + 2, title, len(title), self._title_attr(not left_focus))
             self._draw_section_lines(box, layout, left, 1)
             self._draw_field_lines(box, layout, right, divider + 1)
         else:
@@ -339,6 +341,15 @@ class EditorApp:
             attr = self.attr(panes.PAIR_ERROR if error else panes.PAIR_PANE, bold=index == 0)
             self._put(box, rule + 1 + index, 2, text, layout.width - 4, attr)
 
+    def _title_attr(self, focused: bool) -> int:
+        """Attribute of a pane title, so the border says which pane has the keyboard.
+        Args:
+            focused (bool): True for the pane the cursor is in
+        Returns:
+            int: the curses attribute
+        """
+        return self.attr(panes.PAIR_BANNER if focused else panes.PAIR_TITLE, bold=True)
+
     def _draw_section_lines(self, box: "curses.window", layout: Layout, lines: List[str],
                             column: int) -> None:
         """Draw the section list, with the two glyph columns in their own colour.
@@ -352,10 +363,16 @@ class EditorApp:
         for index, text in enumerate(lines):
             row_index = index + self.row_top
             row = self.model.rows[row_index]
-            selected = self.pane is PANE_SECTIONS and row_index == self.row_index
-            base = self.attr(panes.PAIR_SELECT, bold=True) if selected else self.attr(panes.PAIR_PANE)
+            cursor = row_index == self.row_index
+            focused = cursor and self.pane is PANE_SECTIONS
+            if focused:
+                base = self.attr(panes.PAIR_SELECT, bold=True)
+            elif cursor:
+                base = self.attr(panes.PAIR_SELECT_DIM, bold=True)
+            else:
+                base = self.attr(panes.PAIR_PANE)
             self._put(box, index + 1, column, text.ljust(layout.left_width), layout.left_width, base)
-            if selected:
+            if focused:
                 continue
             glyph = panes.enabled_glyph(row)
             if glyph.strip():
@@ -380,9 +397,11 @@ class EditorApp:
         width = layout.right_width if layout.two_pane else layout.width - 2
         for index, text in enumerate(lines):
             field_index = index + self.field_top
-            selected = self.pane is PANE_FIELDS and field_index == self.field_index
-            if selected:
+            cursor = field_index == self.field_index
+            if cursor and self.pane is PANE_FIELDS:
                 attr = self.attr(panes.PAIR_SELECT, bold=True)
+            elif cursor:
+                attr = self.attr(panes.PAIR_SELECT_DIM, bold=True)
             elif field_index < len(views) and views[field_index].state is not FieldState.NORMAL:
                 attr = self.attr(panes.PAIR_DIM)
             else:
