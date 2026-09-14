@@ -186,7 +186,10 @@ def run_probe(command: Sequence[str], sudo: bool = False) -> Tuple[int, str]:
     Returns:
         Tuple[int, str]: the exit code and the output, or -1 and the reason it could not run
     """
-    arguments = (["sudo"] + list(command)) if sudo else list(command)
+    # -n keeps sudo from asking for a password. The caller is a full-screen editor that owns the
+    # terminal, so the prompt would be invisible and the probe would sit there until it timed out.
+    # Without a password sudo fails at once, and the finding can say what to do about it.
+    arguments = (["sudo", "-n"] + list(command)) if sudo else list(command)
     try:
         result = subprocess.run(arguments, check=False, capture_output=True, text=True,
                                 timeout=PROBE_TIMEOUT)
@@ -196,7 +199,10 @@ def run_probe(command: Sequence[str], sudo: bool = False) -> Tuple[int, str]:
         return -1, f"{arguments[0]} did not answer within {PROBE_TIMEOUT:.0f} seconds"
     except OSError as error:
         return -1, str(error)
-    return result.returncode, (result.stdout or result.stderr).strip()
+    output = (result.stdout or result.stderr).strip()
+    if sudo and result.returncode != 0 and "password is required" in output:
+        output = "sudo needs a password, which cannot be typed here; run: sudo smfc-config"
+    return result.returncode, output
 
 
 def probe_ipmi(cfg: IpmiConfig, sudo: bool = False) -> List[CheckResult]:
