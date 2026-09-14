@@ -113,6 +113,19 @@ class Field:
         """
         return self.key in CURVE_OVERRIDES
 
+    def default_text(self) -> str:
+        """Render the default value the way the configuration file would hold it.
+        Returns:
+            str: the default, or an empty string when the parameter has none
+        """
+        if self.kind is FieldKind.BOOL:
+            return bool_text(bool_value(bool(self.default)))
+        if self.default in ("", [], ()):
+            return ""
+        if isinstance(self.default, (list, tuple)):
+            return ", ".join(str(item) for item in self.default)
+        return str(self.default)
+
     def range_text(self) -> str:
         """Render the type, the unit, the default and the valid range for line 4 of the help pane.
         Returns:
@@ -281,8 +294,8 @@ IPMI_SECTION: Section = Section(
         Field(
             key=Config.CV_IPMI_COMMAND, kind=FieldKind.PATH, default=Config.DV_IPMI_COMMAND,
             summary="Path of the ipmitool command",
-            detail="smfc drives the fans through this program. It needs root rights, or the sudo flag of "
-                   "smfc-config and smfc-client."),
+            detail="smfc drives the fans through this program. It needs root rights, so the service runs "
+                   "as root and smfc-config is run with sudo."),
         Field(
             key=Config.CV_IPMI_FAN_MODE_DELAY, kind=FieldKind.INT, default=Config.DV_IPMI_FAN_MODE_DELAY,
             unit="seconds", minimum=0,

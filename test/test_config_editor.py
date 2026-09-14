@@ -925,6 +925,48 @@ class TestPopups:
         popup.handle_key(curses.KEY_BACKSPACE)
         assert popup.error == ""
 
+    def test_a_text_popup_holds_only_the_field(self) -> None:
+        """Positive unit test for TextPopup.lines(). It contains the following steps:
+        - open a text popup on a parameter that has a default
+        - ASSERT: the body is the input line alone, because the help pane below already carries the
+          help text and stays visible while the popup is open
+        - refuse a value
+        - ASSERT: the reason is the only line added
+        """
+        popup = popups.TextPopup(title="command", text="", default="/usr/bin/ipmitool",
+                                 validator=lambda value: "not a path")
+        assert popup.lines() == [""]
+        assert popup.INPUT_ROW == 0
+        popup.handle_key(10)
+        assert popup.lines() == ["", "! not a path"]
+
+    def test_an_empty_field_offers_the_default(self, tmp_path: Path) -> None:
+        """Positive unit test for EditorApp._draw_popup(). It contains the following steps:
+        - open a value that has a default and delete every character of it
+        - draw the popup on a window that records what it writes
+        - ASSERT: the field shows the default, so the user sees what smfc applies without it
+        - type one character
+        - ASSERT: the default is gone, because the field now holds a value
+        """
+        app = EditorApp(_model(tmp_path), colour=False)
+        app.row_index = next(i for i, r in enumerate(app.model.rows) if r.name == "Ipmi")
+        app.pane = PANE_FIELDS
+        app.field_index = next(i for i, v in enumerate(app.views()) if v.key == "command")
+        app.start_edit()
+        for _ in range(60):
+            app.popup.handle_key(curses.KEY_BACKSPACE)
+
+        def written(window) -> str:
+            return " ".join(str(c) for call in window.children[0].calls for c in call)
+
+        screen = _FakeWindow()
+        app._draw_popup(screen, panes.layout_for(80, 24))    # pylint: disable=protected-access
+        assert "default: /usr/bin/ipmitool" in written(screen)
+        app.popup.handle_key(ord("/"))
+        screen = _FakeWindow()
+        app._draw_popup(screen, panes.layout_for(80, 24))    # pylint: disable=protected-access
+        assert "default:" not in written(screen)
+
     def test_the_choice_popup_starts_on_the_current_value(self) -> None:
         """Positive unit test for ChoicePopup. It contains the following steps:
         - open a choice popup on the second of three values

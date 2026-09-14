@@ -354,14 +354,14 @@ class TestChecks:
         """Negative unit test for probe_ipmi(). It contains the following steps:
         - answer the probe the way ipmitool answers on a machine with no BMC
         - ASSERT: one error is reported, with the reason the tool gave
-        - ASSERT: the fix line names the sudo flag, because that is the usual cause
+        - ASSERT: the fix line names the command that runs the check as root, the usual cause
         """
         script = self._script(tmp_path, "ipmitool", 'echo "Could not open device" >&2; exit 1')
         cfg = _write_config(tmp_path, f"[Ipmi]\ncommand={script}\n")
         results = probe_ipmi(cfg.ipmi)
         assert results[0].level is Level.ERROR
         assert "Could not open device" in results[0].message
-        assert "-s" in results[0].fix
+        assert "sudo smfc-config" in results[0].fix
 
     def test_a_sleeping_disk_is_not_woken(self, tmp_path: Path) -> None:
         """Positive unit test for probe_hd(). It contains the following steps:

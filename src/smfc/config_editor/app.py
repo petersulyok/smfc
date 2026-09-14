@@ -31,6 +31,7 @@ COLOURS: tuple = (
     (panes.PAIR_POPUP, curses.COLOR_BLACK, curses.COLOR_CYAN),
     (panes.PAIR_SELECT_DIM, curses.COLOR_BLUE, curses.COLOR_WHITE),
     (panes.PAIR_INPUT, curses.COLOR_WHITE, curses.COLOR_BLUE),
+    (panes.PAIR_HINT, curses.COLOR_CYAN, curses.COLOR_BLUE),
 )
 
 # Shape of the cursor, as DECSCUSR numbers the styles. curs_set() cannot do this: its two visible
@@ -197,7 +198,7 @@ class EditorApp:
             return
         self.popup = popups.TextPopup(
             title=view.key, width=72, text=view.value.replace("\n", " ").replace("\t", " ").strip(),
-            summary=view.field.summary, detail=view.field.range_text(),
+            default=view.field.default_text(),
             validator=lambda text, f=view.field: validate(f, text))
 
     def _device_popup(self, view: FieldView) -> popups.DevicePopup:
@@ -333,11 +334,11 @@ class EditorApp:
         """
         popup = self.popup
         if isinstance(popup, popups.DevicePopup) and key == ord("p"):
+            # This popup has no parameter behind it, so the title carries the one rule it has: the
+            # /dev/disk/by-id/ form, which survives a reboot. The field opens on that prefix.
             self.popup = popups.TextPopup(
-                title="add a device by path", width=72, text="/dev/disk/by-id/",
-                summary="A device this machine does not have yet is kept and marked missing.",
-                detail="the /dev/disk/by-id/ form, which survives a reboot",
-                validator=_validate_device_path)
+                title="add a device by its /dev/disk/by-id/ path", width=72,
+                text="/dev/disk/by-id/", validator=_validate_device_path)
             self.pending = popup
             return
         popup.handle_key(key)
@@ -721,6 +722,11 @@ class EditorApp:
             text, caret = popup.line.view(field_width)
             row = popup.INPUT_ROW + 1
             self._put(window, row, 2, text, field_width, self.attr(panes.PAIR_INPUT))
+            if not popup.line.text and popup.default:
+                # An empty field shows what smfc applies when the parameter is not set. It is drawn
+                # in its own colour, so it reads as a note rather than as the value of the field.
+                hint = f"default: {popup.default}"
+                self._put(window, row, 2, hint[:field_width], field_width, self.attr(panes.PAIR_HINT))
             self.cursor_at = (top + row, left + 2 + caret)
 
     def _put(self, window: "curses.window", row: int, column: int, text: str, width: int,

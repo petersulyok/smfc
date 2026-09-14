@@ -216,7 +216,7 @@ def probe_ipmi(cfg: IpmiConfig) -> List[CheckResult]:
         return [CheckResult(Level.INFO, Config.CS_IPMI,
                             f"BMC answered{': ' + product if product else ''}")]
     return [CheckResult(Level.ERROR, Config.CS_IPMI, f"the BMC did not answer: {output}",
-                        "check /dev/ipmi0 and the rights of this user, or run smfc-config with -s")]
+                        "check /dev/ipmi0 and the rights of this user, or run: sudo smfc-config")]
 
 
 def probe_hd(configs: Sequence[HdConfig]) -> List[CheckResult]:

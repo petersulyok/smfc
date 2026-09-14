@@ -81,30 +81,31 @@ class Popup:
 class TextPopup(Popup):
     """A wide input field for a value the right pane is too narrow to hold.
 
-    A path can be 51 characters and a curve 27, while the value cell holds about 21. The popup also
-    has room for the help text of the parameter and for the reason a value was refused.
+    A path can be 51 characters and a curve 27, while the value cell holds about 21. An empty field
+    shows the default instead, so the user sees what smfc would apply.
     """
     text: str = ""                              # The value being typed
-    summary: str = ""                           # One line about the parameter
-    detail: str = ""                            # The range or the syntax
+    default: str = ""                           # What smfc applies when the parameter is not set
     validator: Optional[Callable[[str], str]] = None    # Returns why the value is wrong, or ""
     line: Optional[LineEdit] = None             # The caret and the insert flag of the input field
 
     # Index of the input field in the body, so the caller knows which line to paint as a field.
-    INPUT_ROW: int = 3
+    INPUT_ROW: int = 0
 
     def __post_init__(self) -> None:
         """Open the value for editing, with the caret at its end."""
         self.line = LineEdit.of(self.text)
 
     def lines(self) -> List[str]:
-        """The body: the help, the input field, and the reason a value was refused.
-        The input line is left empty here. The caller paints it as a field of its own, because a
-        coloured field says where the value is typed better than any character can.
+        """The body: the input field, and the reason a value was refused.
+        The help pane below carries what the parameter does and what it accepts, and it stays visible
+        while the popup is open, so repeating it here would only make the window taller.
+        The input line is left empty. The caller paints it as a field of its own, because a coloured
+        field says where the value is typed better than any character can.
         Returns:
             List[str]: one entry per line
         """
-        body = [self.summary, self.detail, "", ""]
+        body = [""]
         if self.error:
             body.append(f"! {self.error}")
         return [fit(line, self.width - 4) for line in body]

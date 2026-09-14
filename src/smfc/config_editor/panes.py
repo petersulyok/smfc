@@ -51,6 +51,7 @@ PAIR_DIM: int = 9           # an inactive or unknown parameter
 PAIR_POPUP: int = 10        # a popup window
 PAIR_SELECT_DIM: int = 11   # the selected row of the pane that does not have the keyboard
 PAIR_INPUT: int = 12        # the field a value is typed into: white on blue
+PAIR_HINT: int = 13         # the default shown in an empty field: cyan on blue
 
 # Rows the frame always takes: the banner, the two pane borders and the key bar.
 FRAME_ROWS: int = 4

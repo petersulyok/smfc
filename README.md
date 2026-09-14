@@ -1484,7 +1484,7 @@ A family can hold several instances — `[CPU]` and `[CPU:1]`, each driving a di
 | `Esc` | leave the parameters, or cancel what is being typed |
 | `F10` or `q` | quit |
 
-A number is typed in place. A value with two states is switched with `Enter`. A path, a fan curve or a device list opens a window, because those values are longer than the value cell.
+A number is typed in place. A value with two states is switched with `Enter`. A path, a fan curve or a device list opens a window, because those values are longer than the value cell. The window holds the field alone: the help pane stays visible below it, so the help text is not repeated. An empty field shows the default `smfc` applies when the parameter is not set.
 
 While a value is open, the field it is typed into is painted in its own colour, and the cursor sits where the next character lands. These keys work in it:
 
