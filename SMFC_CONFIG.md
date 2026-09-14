@@ -39,10 +39,11 @@ These six were never settled in discussion. I state my choice and the reason. Ov
 | A | **Save by surgical line edit.** Change only the text after `=` on the matching line. | `config/smfc.conf` is mostly comments, and the live file on `nas` carries them too. `ConfigParser.write()` deletes every comment. |
 | B | **Edit numbers, booleans and enums in place. Use a popup for text, paths, lists and `control_function`.** | The value cell holds about 21 columns. Four kinds of real value are longer, up to 51. See 5.4. |
 | C | **Write a section header plus only the keys the user sets.** A missing section means disabled. | Verified with the parser: a 3-key `[PCI]` section fills every other key from its default. No template text is needed at run time. |
-| D | **Offer a service restart after save. Never restart alone.** | The tool must stay safe to run on a live server. |
+| D | **Offer a service restart after save, only when the process can do it. Never restart alone.** | The tool must stay safe to run on a live server. Without privileges it prints the command instead. |
 | E | **Fix `_1+$` to `_[0-9]+$`** in all three filter copies. | udev numbers duplicates `_1`, `_2`, `_3`. The current pattern matches `_1` and `_11`, never `_2`. |
 | F | **Lift the filters into `src/smfc/discover.py`.** The shell scripts call it. | The regex exists in three copies today. The `^usb-` fix had to be made three times. |
 | G | **A missing config file is an error, not a start state.** Offer to download the template from the release tag; name the local backups when that fails. | Every install path leaves `/etc/smfc/smfc.conf` in place, and `install.sh` backs the old one up. |
+| H | **Run as any user. Never require root, never re-exec under `sudo`.** | The config file is `0644`, so reading works for anyone. Writing, restarting and the hardware checks need privileges, and each says so on its own. |
 
 Minimum terminal size: 64 columns and 14 rows. Eight rows are fixed — 2 frame lines, 1 divider, the
 4-line help pane and the key line — which leaves 6 section rows, and the list scrolls. 16 rows is
@@ -423,7 +424,7 @@ are slow. `npu_smi_timeout` is the existing precedent for a per-tool timeout.
 | PCI | exactly one of `pci_address`, `pci_id`, `pci_driver`; the `temp_sensor` path reads a number |
 | CONST | `level` in 0..100 |
 | Exporter | `port` in 1..65535; the port is free **or held by smfc itself**; `bind_address` is `0.0.0.0` or an address this host holds, IPv4 only |
-| Overview | no section enabled at all; detected hardware that no section covers; config file not writable; the zone map (see below) |
+| Overview | no section enabled at all; detected hardware that no section covers; config file not writable, with the `sudo` hint; the zone map (see below) |
 
 Every zone family shares three: `min_temp < max_temp`, `min_level < max_level`, `steps >= 1`. Skip
 all three when `control_function` carries a value.
@@ -637,7 +638,38 @@ already writes them.
 
 Also make `Config.parse_device_names()` drop empty lines. Fix both ends of that trap.
 
-### 9.1 When the config file is missing
+### 9.1 Privileges
+
+`/etc/smfc/smfc.conf` is `root:root` and mode `0644`. Anyone may read it; only root may write it.
+The service itself runs as root: `config/smfc.service` sets no `User=`.
+
+So the documented command is `sudo smfc-config`. The program must not require it.
+
+| Capability | Needs root | Without it |
+|---|---|---|
+| browse sections, fields and help | no | works fully |
+| save | yes | read-only mode |
+| hardware checks on `F5` | yes | pass `-s`, or they report a permission error |
+| restart the service | yes | the command is printed |
+
+**Read-only mode is announced at start, not at save time.** The tool tests `os.access(path, W_OK)`
+before drawing anything. The user learns it in the first second, not after editing twenty fields:
+
+```
+read-only: /etc/smfc/smfc.conf is not writable by this user
+re-run as: sudo smfc-config
+```
+
+`F2` is disabled in that mode, and the key line says so.
+
+**Never re-exec under `sudo`.** A full-screen program that relaunches itself loses the terminal state
+and surprises the user. Print the command and let them run it.
+
+**The `-s, --sudo` flag is the one `smfc-client` already has**, with the same letter and the same
+help text: "use sudo for ipmitool/smartctl (if not run as root)". Pass it to `Ipmi` and `HdFc` exactly
+as `client.py` does. Two sibling commands must not differ on a flag that means the same thing.
+
+### 9.2 When the config file is missing
 
 This is rare. Every install path leaves `/etc/smfc/smfc.conf` in place. A missing file means the
 user deleted it.
@@ -653,13 +685,23 @@ The tool must not create one silently. It offers, in this order:
    and try once.
 3. Say that neither worked, and name both paths. Never invent a file without telling the user.
 
-After a successful save, verify by loading the file through `Config(path)`. Then offer the restart:
+After a successful save, verify by loading the file through `Config(path)`. Then offer the restart,
+but only when the process can perform it and the service is active:
 
 ```
 Saved /etc/smfc/smfc.conf
 
 smfc.service is active.
 Restart it to apply the changes? [y/N]
+```
+
+Without the privilege to restart, print the command instead. Never try and fail:
+
+```
+Saved /etc/smfc/smfc.conf
+
+Run this to apply the changes:
+  sudo systemctl restart smfc
 ```
 
 ## 10. Phases
@@ -672,7 +714,7 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 | 1 | `schema.py` | field metadata and help text for all 9 sections, plus the section help; it tells you how big the UI really is |
 | 2 | `checks.py` | refactor `Service.check_dependencies()`; the daemon uses it too |
 | 3 | `discover.py` | lift the filters; point the three scripts at it |
-| 4 | `confwriter.py` | round-trip every sample file unchanged; add and remove a section; the missing-file path of 9.1 |
+| 4 | `confwriter.py` | round-trip every sample file unchanged; add and remove an instance; read-only mode; the missing-file path of 9.2 |
 | 5 | the editor | the curses master-detail screen |
 | 6 | the popups | needs phases 3 and 5 |
 | 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries |
