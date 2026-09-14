@@ -50,6 +50,7 @@ Issues = "https://github.com/petersulyok/smfc/issues"
 [project.scripts]
 smfc = "smfc.cmd:main"
 smfc-client = "smfc.client:main"
+smfc-config = "smfc.config_editor.cmd:main"
 
 [tool.uv]
 default-groups = ["dev", "lint"]
