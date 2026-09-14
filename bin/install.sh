@@ -161,30 +161,13 @@ chown root:root \
   /usr/local/share/man/man1/smfc-client.1.gz
 verbose_echo "smfc files have been installed."
 
-# Collect all disk names for `hd_names=` parameter in 'smfc.conf' file.
+# Collect the disk names for the `hd_names=` and `nvme_names=` parameters in 'smfc.conf'.
+# smfc.discover owns the filters and the write format, and it fills a key only while that key is
+# still empty. The DEB and the RPM scripts call the same module.
 if [ -z "${KEEP_CONFIG}" ]; then
-  hd_list=$(ls /dev/disk/by-id/|grep -v -E '\-part|^wwn-|\-eui|nvme|^usb-|^dm-|^lvm-|^md-|^zd-|_[0-9]+$' || true)
-  if [ -n "$hd_list" ]; then
-    hd_names=""
-    for hl in $hd_list; do
-      hd_names+="/dev/disk/by-id/$hl\n\t"
-    done
-    sed -i "s|^hd_names=|hd_names=$hd_names|g" /etc/smfc/smfc.conf
-    verbose_echo "HDD names are listed in the new configuration file (please edit!)."
-  fi
-fi
-
-# Collect all NVMe names for `nvme_names=` parameter in 'smfc.conf' file.
-if [ -z "${KEEP_CONFIG}" ]; then
-  nvme_list=$(ls /dev/disk/by-id/|grep -E '^nvme-'|grep -v -E '\-part|\-eui|\-nvme|_[0-9]+$' || true)
-  if [ -n "$nvme_list" ]; then
-    nvme_names=""
-    for nl in $nvme_list; do
-      nvme_names+="/dev/disk/by-id/$nl\n\t"
-    done
-    sed -i "s|^nvme_names=|nvme_names=$nvme_names|g" /etc/smfc/smfc.conf
-    verbose_echo "NVMe names are listed in the new configuration file (please edit!)."
-  fi
+  python3 -m smfc.discover hd --fill /etc/smfc/smfc.conf || true
+  python3 -m smfc.discover nvme --fill /etc/smfc/smfc.conf || true
+  verbose_echo "Disk names are listed in the new configuration file (please edit!)."
 fi
 
 verbose_echo "smfc installation finished successfully."

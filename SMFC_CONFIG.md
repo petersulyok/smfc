@@ -40,8 +40,8 @@ These six were never settled in discussion. I state my choice and the reason. Ov
 | B | **Edit numbers, booleans and enums in place. Use a popup for text, paths, lists and `control_function`.** | The value cell holds about 21 columns. Four kinds of real value are longer, up to 51. See 5.4. |
 | C | **Write a section header plus only the keys the user sets.** A missing section means disabled. | Verified with the parser: a 3-key `[PCI]` section fills every other key from its default. No template text is needed at run time. |
 | D | **Offer a service restart after save, only when the process can do it. Never restart alone.** | The tool must stay safe to run on a live server. Without privileges it prints the command instead. |
-| E | **Fix `_1+$` to `_[0-9]+$`** in all three filter copies. | udev numbers duplicates `_1`, `_2`, `_3`. The current pattern matches `_1` and `_11`, never `_2`. |
-| F | **Lift the filters into `src/smfc/discover.py`.** The shell scripts call it. | The regex exists in three copies today. The `^usb-` fix had to be made three times. |
+| E | **Fix `_1+$` to `_[0-9]+$`.** | **Done.** udev numbers duplicates `_1`, `_2`, `_3`; the old pattern matched `_1` and `_11`, never `_2`. |
+| F | **Lift the filters into `src/smfc/discover.py`.** The shell scripts call it. | **Done.** The regex existed in three copies, and the `^usb-` fix had to be made three times. |
 | G | **A missing config file is an error, not a start state.** Offer to download the template from the release tag; name the local backups when that fails. | Every install path leaves `/etc/smfc/smfc.conf` in place, and `install.sh` backs the old one up. |
 | H | **Run as any user. Never require root, never re-exec under `sudo`.** | The config file is `0644`, so reading works for anyone. Writing, restarting and the hardware checks need privileges, and each says so on its own. |
 
@@ -543,83 +543,44 @@ Re-run the section's value checks when the popup closes. Changing `hd_names` can
 
 ## 8. Discovery
 
-`bin/install.sh:166` and `:179` already do this correctly. Verified on two machines:
+`src/smfc/discover.py` owns three things, and the installer, the DEB script and the RPM script all
+call it:
 
-| Host | by-id entries | Filter output | Ground truth |
+1. **The two filters.** `discover_hds()` returns the whole SATA and SAS disks, `discover_nvmes()` the
+   whole NVMe drives, each as a `/dev/disk/by-id/...` path.
+2. **The write format.** `format_device_list()` puts the first device on the key line, every further
+   device on its own tab-indented line, and one trailing separator.
+3. **The empty-key guard.** `fill_empty_key()` writes a list only where the key is still empty. A key
+   that already carries a value belongs to the user.
+
+The command line is what the three scripts use:
+
+```bash
+python3 -m smfc.discover hd --fill /etc/smfc/smfc.conf
+python3 -m smfc.discover nvme --fill /etc/smfc/smfc.conf
+```
+
+Without `--fill` it prints one path per line, which is what the device popup of chapter 7 reads.
+
+**The filters, and what they drop**
+
+| List | Kept | Dropped |
+|---|---|---|
+| HD | every name the exclusion does not match | a partition, `wwn-` and `-eui` aliases, any `nvme` name, `usb-`, `dm-`, `lvm-`, `md-`, `zd-`, and a numbered duplicate `_1`, `_2`, `_3` |
+| NVMe | names starting `nvme-` | a partition, an `-eui` alias, the NQN-style `-nvme` alias, and a numbered duplicate |
+
+A `usb-` name can never reach the NVMe filter, because that filter is anchored on the `nvme-` prefix.
+
+**Verified against the shell filters they replaced**, on two machines:
+
+| Host | by-id entries | Module output | Ground truth |
 |---|---|---|---|
-| this workstation | 39 | 1 HD, 2 NVMe | 1 SATA, 2 NVMe |
+| a workstation | 39 | 1 HD, 2 NVMe | 1 SATA, 2 NVMe |
 | `nas` | 102 | 8 HD, 6 NVMe | 8 HDD, 6 NVMe |
 
-On `nas` the filters correctly dropped 8 `wwn-`, 6 `nvme-..._1`, 3 `nvme-eui.` and 3 NQN-style
-aliases. The 17 ZFS zvols produce no by-id entry at all, so `^zd-`, `^dm-`, `^lvm-` and `^md-` are
-insurance, not load-bearing.
-
-`discover.py` owns the two filters. `bin/install.sh`, `debian/smfc.postinst` and `smfc.spec` call it
-instead of holding their own regex. By the time each script needs it, the package files are already
-installed, so `python3 -m smfc.discover hd` works.
-
-### 8.1 The three copies do not agree
-
-Three files collect the device list: `bin/install.sh`, `debian/smfc.postinst` and `smfc.spec`. I
-compared all six regexes and both write paths.
-
-**The six regexes are identical today.** They became identical only with the `^usb-` fix on this
-branch. Before it, the three copies had already drifted apart.
-
-**The `^usb-` exclusion is insurance, not a live fix.** Neither test host carries a `usb-` by-id
-entry, so the HD filter returns 8 names on `nas` and 1 here, with or without it. It guards the case
-of a plugged-in flash drive becoming a monitored disk. The NVMe filter needs no such exclusion: its
-first `grep` is anchored `^nvme-`, so a `usb-` name can never reach it.
-
-`debian/smfc/DEBIAN/postinst` is a build artifact from version 5.1.0. It is listed in `.gitignore`
-and it is regenerated on the next build. Its filter is older still: it has no `^usb-`, and its NVMe
-filter lacks `\-nvme`, so it keeps the NQN-style aliases. Never edit that file.
-
-**The write format differs between the installer and the packages.**
-
-| Source | Separator | Trailing line |
-|---|---|---|
-| `bin/install.sh` | appends `\n\t` after **every** entry | yes, one tab line |
-| `debian/smfc.postinst`, `smfc.spec` | joins `\n\t` **between** entries | no |
-
-Both parse correctly. But the two paths produce different files from the same disks. The live file
-on `nas` carries the trailing tab line, so it came from `install.sh`. A round-trip test must accept
-both shapes.
-
-**The installer's `sed` is less safe than the packages'.**
-
-```
-install.sh :  sed -i "s|^hd_names=|hd_names=$hd_names|g"     # no end anchor, /g flag
-postinst   :  grep -q '^hd_names=$' ... && sed -i "s|^hd_names=$|...|"
-```
-
-The package scripts test that the key is empty, then replace only an empty key. The installer
-replaces the prefix of any `hd_names=` line. On a file that already lists disks it would insert the
-detected list in front of them. Today `KEEP_CONFIG` guards that case, so the fault is latent, not
-live.
-
-**Both filters still carry the `_1+$` fault**, in all six places. See decision E.
-
-**The guards differ**, and each is correct for its context.
-
-| Source | Runs when |
-|---|---|
-| `bin/install.sh` | `KEEP_CONFIG` is unset |
-| `debian/smfc.postinst` | the `configure` action, and the key is empty |
-| `smfc.spec` | `$1 -eq 1`, a fresh install, and the key is empty |
-
-### 8.2 What `discover.py` must therefore own
-
-Three things, not one:
-
-1. **The two filters.** One regex, one place.
-2. **The writer for a device list.** One shape for every caller, so the installer and the packages
-   stop producing different files.
-3. **The empty-key guard.** Fill `hd_names=` only when it is empty. Take the safer rule from the
-   package scripts, and drop the installer's unanchored `sed`.
-
-Each script then calls `python3 -m smfc.discover hd --fill /etc/smfc/smfc.conf` and holds no regex
-and no `sed` of its own.
+On `nas` the filters drop 8 `wwn-` aliases, 6 `nvme-..._1` duplicates, 3 `nvme-eui.` and 3 NQN-style
+names. The 17 ZFS volumes produce no by-id entry at all, so `^zd-`, `^dm-`, `^lvm-` and `^md-` are
+insurance rather than load-bearing.
 
 ## 9. The writer
 
@@ -727,7 +688,7 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 | 0 | the `^usb-` and `_[0-9]+$` filter fixes | **done**, commits `a43a79c` and `4fc6452` |
 | 1 | `schema.py` | **done**; field metadata and help text for all 9 sections, plus the section help |
 | 2 | `checks.py` | **done**; `Service.check_dependencies()` now reports every fault, not the first |
-| 3 | `discover.py` | lift the filters; point the three scripts at it |
+| 3 | `discover.py` | **done**; the three scripts call it and hold no regex of their own |
 | 4 | `confwriter.py` | round-trip every sample file unchanged; add and remove an instance; read-only mode; the missing-file path of 9.2 |
 | 5 | the editor | the curses master-detail screen |
 | 6 | the popups | needs phases 3 and 5 |

@@ -41,41 +41,12 @@ install -m644 config/samples/*.conf %{buildroot}%{_docdir}/%{name}/examples/
 
 %post
 %systemd_post smfc.service
-# Auto-detect disks on fresh install only
+# Auto-detect disks on fresh install only. smfc.discover owns the device filters and the write
+# format, so the installer, the DEB script and this one share one implementation. It fills a key
+# only while that key is still empty.
 if [ $1 -eq 1 ]; then
-    CONF_FILE="/etc/smfc/smfc.conf"
-    if [ -d /dev/disk/by-id ] && grep -q '^hd_names=$' "$CONF_FILE"; then
-        hd_disks=$(ls /dev/disk/by-id/ | grep -v -E '\-part|^wwn-|\-eui|nvme|^usb-|^dm-|^lvm-|^md-|^zd-|_[0-9]+$' || true)
-        if [ -n "$hd_disks" ]; then
-            replacement=""
-            first=1
-            for disk in $hd_disks; do
-                if [ "$first" = 1 ]; then
-                    replacement="/dev/disk/by-id/${disk}"
-                    first=0
-                else
-                    replacement="${replacement}\n\t/dev/disk/by-id/${disk}"
-                fi
-            done
-            sed -i "s|^hd_names=$|hd_names=${replacement}|" "$CONF_FILE"
-        fi
-    fi
-    if [ -d /dev/disk/by-id ] && grep -q '^nvme_names=$' "$CONF_FILE"; then
-        nvme_disks=$(ls /dev/disk/by-id/ | grep -E '^nvme-' | grep -v -E '\-part|\-eui|\-nvme|_[0-9]+$' || true)
-        if [ -n "$nvme_disks" ]; then
-            replacement=""
-            first=1
-            for disk in $nvme_disks; do
-                if [ "$first" = 1 ]; then
-                    replacement="/dev/disk/by-id/${disk}"
-                    first=0
-                else
-                    replacement="${replacement}\n\t/dev/disk/by-id/${disk}"
-                fi
-            done
-            sed -i "s|^nvme_names=$|nvme_names=${replacement}|" "$CONF_FILE"
-        fi
-    fi
+    python3 -m smfc.discover hd --fill /etc/smfc/smfc.conf || true
+    python3 -m smfc.discover nvme --fill /etc/smfc/smfc.conf || true
 fi
 
 %preun
