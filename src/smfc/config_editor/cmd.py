@@ -40,6 +40,8 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         help=f"configuration file to edit (default: {DEFAULT_CONFIG_PATH})")
     parser.add_argument("-s", "--sudo", action="store_true", default=False,
                         help="use sudo for ipmitool/smartctl (if not run as root)")
+    parser.add_argument("-nc", "--no-color", action="store_true", default=False, dest="no_color",
+                        help="plain output, no colors")
     parser.add_argument("-v", "--version", action="version", version="%(prog)s " + version("smfc"))
     return parser.parse_args(argv)
 
@@ -110,7 +112,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return EXIT_CONFIG_ERROR
     # Import the terminal layer only here, so the checks above can run on a machine without a terminal.
     from smfc.config_editor.app import run  # pylint: disable=import-outside-toplevel
-    return run(model)
+    return run(model, no_color=args.no_color)
 
 
 if __name__ == "__main__":

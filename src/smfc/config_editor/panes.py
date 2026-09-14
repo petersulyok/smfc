@@ -33,6 +33,24 @@ GLYPH_WARN: str = "!"
 GLYPH_ERROR: str = "X"
 
 
+# Colour pair numbers. The scheme follows the Debian installer: a painted banner and key bar, light
+# panes, and a strong selection bar. Colour carries orientation here, so it is part of the design; the
+# glyphs still say the same thing on a terminal that has no colour.
+PAIR_BANNER: int = 1        # the title line: white on blue
+PAIR_PANE: int = 2          # the panes: black on light grey
+PAIR_SELECT: int = 3        # the cursor row: white on blue
+PAIR_TITLE: int = 4         # a pane title in its border: blue on light grey
+PAIR_KEYS: int = 5          # the key bar: black on cyan
+PAIR_OK: int = 6            # an enabled section
+PAIR_WARN: int = 7          # a warning finding
+PAIR_ERROR: int = 8         # an error finding
+PAIR_DIM: int = 9           # an inactive or unknown parameter
+PAIR_POPUP: int = 10        # a popup window
+
+# Rows the frame always takes: the banner, the two pane borders and the key bar.
+FRAME_ROWS: int = 4
+
+
 @dataclass
 class Layout:
     """Sizes the editor draws with, computed from the terminal size."""
@@ -63,6 +81,19 @@ def layout_for(width: int, height: int) -> Layout:
     right = frame_width - left - 5 if two_pane else frame_width - 4
     return Layout(width=frame_width, height=height, two_pane=two_pane, left_width=left,
                   right_width=max(right, 1), pane_rows=pane_rows, help_rows=help_rows)
+
+
+def glyph_columns(layout: Layout) -> tuple:
+    """Column of the enabled glyph and of the check glyph inside a section line.
+    The two are drawn in their own colour, so the caller has to know where they are. This is the only
+    place that knows the shape of the line.
+    Args:
+        layout (Layout): the sizes to draw with
+    Returns:
+        tuple: the two column offsets
+    """
+    name_width = layout.left_width - 8
+    return name_width + 3, name_width + 6
 
 
 def fit(text: str, width: int) -> str:
