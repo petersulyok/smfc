@@ -394,9 +394,10 @@ scrolls sideways, which is the fiddly part of `curses` text entry.
 
 ## 6. Checks
 
-`Service.check_dependencies()` at `src/smfc/service.py:126-197` already does this work. It returns on the first error, so it is a gate,
-not a report. An editor needs every result at once. So `checks.py` is a refactor of that code, not a
-second implementation. The daemon then gains a full report at start too.
+`src/smfc/checks.py` holds this work. It was a refactor of `Service.check_dependencies()`, which
+returned on the first error and was therefore a gate rather than a report. An editor needs every
+result at once, so the checks became one function per family, each returning a list. The daemon
+calls the same functions and now logs every fault at start, one per line.
 
 ```python
 @dataclass
@@ -725,7 +726,7 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 |---|---|---|
 | 0 | the `^usb-` and `_[0-9]+$` filter fixes | **done**, commits `a43a79c` and `4fc6452` |
 | 1 | `schema.py` | **done**; field metadata and help text for all 9 sections, plus the section help |
-| 2 | `checks.py` | refactor `Service.check_dependencies()`; the daemon uses it too |
+| 2 | `checks.py` | **done**; `Service.check_dependencies()` now reports every fault, not the first |
 | 3 | `discover.py` | lift the filters; point the three scripts at it |
 | 4 | `confwriter.py` | round-trip every sample file unchanged; add and remove an instance; read-only mode; the missing-file path of 9.2 |
 | 5 | the editor | the curses master-detail screen |

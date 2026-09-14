@@ -373,7 +373,7 @@ class TestService:
         npu_smi_path resolved via PATH. It contains the following steps:
         - mock print(), builtins.open() (redirects /proc/modules to a fake module list with coretemp)
         - build a temporary config file via `td` with [CPU] and [NPU] enabled and npu_smi_path = "npu-smi"
-        - mock shutil.which to return the parametrized result
+        - mock smfc.checks.shutil.which to return the parametrized result
         - instantiate Service and assign a Config loaded from the temp config file
         - call Service.check_dependencies()
         - ASSERT: empty string when found (which returns a path), "command cannot be found" when not found
@@ -387,7 +387,7 @@ class TestService:
             target = modules if path == "/proc/modules" else path
             return original_open(target, *a, **kw)  # pylint: disable=consider-using-with
         mocker.patch("builtins.open", MagicMock(side_effect=fake_open))
-        mocker.patch("smfc.service.shutil.which", MagicMock(return_value=which_result))
+        mocker.patch("smfc.checks.shutil.which", MagicMock(return_value=which_result))
         config_content = (f"[Ipmi]\ncommand = {ipmi_command}\n"
                           f"[CPU]\nenabled = 1\n"
                           f"[NPU]\nenabled = 1\nnpu_smi_path = npu-smi\n")

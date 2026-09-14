@@ -4,8 +4,6 @@
 #   smfc.Service() class implementation.
 #
 import atexit
-import os
-import shutil
 import signal
 import sys
 import time
@@ -13,6 +11,7 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 from importlib.metadata import version
 from argparse import ArgumentParser, Namespace
 from pyudev import Context
+from smfc import checks
 from smfc.constfc import ConstFc
 from smfc.exporter import Exporter
 from smfc.fancontroller import FanController
@@ -123,78 +122,13 @@ class Service:
         # Unregister this function.
         atexit.unregister(self.exit_func)
 
-    def check_dependencies(self) -> str:  # pylint: disable=too-many-return-statements
-        """Check run-time dependencies of smfc:
-              - ipmitool command
-              - if CPU fan controller enabled: either `coretemp` or `k10temp` kernel module
-              - if HD fan controller enabled: either `drivetemp` kernel module or `smartctl` command
-              - if GPU fan controller enabled: `nvidia-smi` command
+    def check_dependencies(self) -> str:
+        """Check the run-time dependencies of every configured section.
+        Every section is checked, so a user who is missing two commands learns both at once.
         Returns:
-            str: error string (empty = no errors)
+            str: the error messages, one per line (empty = no missing dependency)
         """
-        path: str
-        no_smartctl: bool = False
-        no_drivetemp: bool = False
-
-        # Check if `ipmitool` command is available.
-        path = self.config.ipmi.command
-        if not os.path.exists(path):
-            return f"ERROR: ipmitool command cannot be found {path}!"
-
-        # Load the list of kernel modules.
-        with open("/proc/modules", "rt", encoding="utf-8") as file:
-            modules = file.read()
-
-        # Check the kernel modules for CPU fan controller.
-        if any(cfg.enabled for cfg in self.config.cpu):
-            if "coretemp" not in modules and "k10temp" not in modules:
-                return "ERROR: coretemp or k10temp kernel module must be loaded!"
-
-        # Check dependencies for HD fan controller.
-        enabled_hd_configs = [cfg for cfg in self.config.hd if cfg.enabled]
-        if enabled_hd_configs:
-            # Check if `drivetemp` module is loaded.
-            if "drivetemp" not in modules:
-                no_drivetemp = True
-            for cfg in enabled_hd_configs:
-                # Check if `smartctl` command is available.
-                path = cfg.smartctl_path
-                if not os.path.exists(path):
-                    no_smartctl = True
-                # If neither `drivetemp` nor `smartctl` is available.
-                if no_smartctl and no_drivetemp:
-                    return (f"ERROR: drivetemp kernel module must be loaded or "
-                            f"smartctl command ({path}) must be installed!")
-                # If Standby Guard feature enabled, `smartctl` command should be available.
-                if cfg.standby_guard_enabled and no_smartctl:
-                    return f"ERROR: smartctl command ({path}) must be installed for Standby Guard feature!"
-
-        # Check dependencies for GPU fan controller.
-        for cfg in self.config.gpu:
-            if not cfg.enabled:
-                continue
-            if cfg.gpu_type == "nvidia":
-                path = cfg.nvidia_smi_path
-            else:
-                path = cfg.rocm_smi_path
-            if not os.path.exists(path):
-                return f"ERROR: {path} command cannot be found!"
-
-        # Check dependencies for NPU fan controller. npu_smi_path may be a bare command name
-        # (resolved via PATH) or a full path.
-        for cfg in self.config.npu:
-            if not cfg.enabled:
-                continue
-            path = cfg.npu_smi_path
-            if os.path.isabs(path):
-                found = os.path.exists(path)
-            else:
-                found = shutil.which(path) is not None
-            if not found:
-                return f"ERROR: {path} command cannot be found!"
-
-        # All required run-time dependencies are available.
-        return ""
+        return checks.error_text(checks.check_all(self.config))
 
     def _collect_desired_levels(self) -> List[Tuple[str, List[int], int, float]]:
         """Collect desired fan levels from deferred controllers only (non-deferred controllers handle their own zones).
@@ -435,7 +369,9 @@ class Service:
         if not parsed_results.nd:
             error_msg = self.check_dependencies()
             if error_msg:
-                self.log.msg(Log.LOG_ERROR, error_msg)
+                # One finding per log line: a multi-line syslog entry is hard to read.
+                for line in error_msg.splitlines():
+                    self.log.msg(Log.LOG_ERROR, line)
                 sys.exit(7)
 
         # Create an Ipmi class instance.

@@ -1,0 +1,337 @@
+#!/usr/bin/env python3
+#
+#   test_checks.py (C) 2026, Peter Sulyok
+#   Unit test for smfc.checks module.
+#
+from pathlib import Path
+from typing import List
+import pytest
+from smfc.checks import (CPU_MODULES, CheckResult, Level, check_all, check_by_section, check_cpu, check_gpu,
+                         check_hd, check_ipmi, check_npu, error_text, errors, loaded_modules)
+from smfc.config import Config
+
+
+# Module lists used by the tests.
+ALL_MODULES: str = "coretemp 1 - Live 0x0\ndrivetemp 1 - Live 0x0\n"
+NO_MODULES: str = "usbcore 1 - Live 0x0\n"
+
+
+def _write_config(tmp_path: Path, body: str) -> Config:
+    """Write a configuration file and parse it.
+    Args:
+        tmp_path (Path): pytest temporary directory
+        body (str): content of the configuration file
+    Returns:
+        Config: the parsed configuration
+    """
+    path = tmp_path / "test.conf"
+    path.write_text(body, encoding="utf-8")
+    return Config(str(path))
+
+
+def _command(tmp_path: Path, name: str) -> Path:
+    """Create an executable file that stands in for an external command.
+    Args:
+        tmp_path (Path): pytest temporary directory
+        name (str): file name of the command
+    Returns:
+        Path: path of the created file
+    """
+    path = tmp_path / name
+    path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+class TestChecks:
+    """Unit test class for the smfc.checks module."""
+
+    def test_loaded_modules_reads_the_file(self, tmp_path: Path) -> None:
+        """Positive unit test for loaded_modules(). It contains the following steps:
+        - write a file that stands in for /proc/modules
+        - call loaded_modules() with that path
+        - ASSERT: the raw content of the file is returned
+        """
+        path = tmp_path / "modules"
+        path.write_text(ALL_MODULES, encoding="utf-8")
+        assert loaded_modules(str(path)) == ALL_MODULES
+
+    def test_ipmi_command_present(self, tmp_path: Path) -> None:
+        """Positive unit test for check_ipmi(). It contains the following steps:
+        - build a configuration whose ipmitool command exists
+        - call check_ipmi()
+        - ASSERT: it reports no finding
+        """
+        cmd = _command(tmp_path, "ipmitool")
+        cfg = _write_config(tmp_path, f"[Ipmi]\ncommand={cmd}\n")
+        assert not check_ipmi(cfg.ipmi)
+
+    def test_ipmi_command_missing(self, tmp_path: Path) -> None:
+        """Negative unit test for check_ipmi(). It contains the following steps:
+        - build a configuration whose ipmitool command does not exist
+        - call check_ipmi()
+        - ASSERT: exactly one finding is reported
+        - ASSERT: the finding is an error, because smfc cannot drive the fans without it
+        - ASSERT: it belongs to the [Ipmi] section and names the missing path
+        - ASSERT: it carries a fix line the user can act on
+        """
+        cfg = _write_config(tmp_path, f"[Ipmi]\ncommand={tmp_path}/nosuch\n")
+        results = check_ipmi(cfg.ipmi)
+        assert len(results) == 1
+        assert results[0].level is Level.ERROR
+        assert results[0].section == Config.CS_IPMI
+        assert "nosuch" in results[0].message
+        assert results[0].fix
+
+    @pytest.mark.parametrize("module", list(CPU_MODULES))
+    def test_cpu_module_loaded(self, tmp_path: Path, module: str) -> None:
+        """Positive unit test for check_cpu(). It contains the following steps:
+        - build a configuration with the CPU fan controller enabled
+        - call check_cpu() with a module list holding coretemp, then one holding k10temp
+        - ASSERT: either module satisfies the check on its own
+        """
+        cfg = _write_config(tmp_path, "[Ipmi]\n[CPU]\nenabled=1\n")
+        assert not check_cpu(cfg.cpu, f"{module} 1 - Live 0x0\n")
+
+    def test_cpu_module_missing(self, tmp_path: Path) -> None:
+        """Negative unit test for check_cpu(). It contains the following steps:
+        - build a configuration with the CPU fan controller enabled
+        - call check_cpu() with a module list holding neither coretemp nor k10temp
+        - ASSERT: exactly one finding is reported, not one per instance
+        - ASSERT: the finding is an error and names both accepted modules
+        """
+        cfg = _write_config(tmp_path, "[Ipmi]\n[CPU]\nenabled=1\n[CPU:1]\nenabled=1\nipmi_zone=1\n")
+        results = check_cpu(cfg.cpu, NO_MODULES)
+        assert len(results) == 1
+        assert results[0].level is Level.ERROR
+        assert "coretemp" in results[0].message and "k10temp" in results[0].message
+
+    def test_cpu_disabled_section_is_skipped(self, tmp_path: Path) -> None:
+        """Positive unit test for check_cpu(). It contains the following steps:
+        - build a configuration with the CPU fan controller disabled
+        - call check_cpu() with a module list holding neither accepted module
+        - ASSERT: it reports no finding, because a disabled section needs nothing
+        """
+        cfg = _write_config(tmp_path, "[Ipmi]\n[CPU]\nenabled=0\n")
+        assert not check_cpu(cfg.cpu, NO_MODULES)
+
+    def test_hd_drivetemp_is_enough(self, tmp_path: Path) -> None:
+        """Positive unit test for check_hd(). It contains the following steps:
+        - build a configuration with the HD fan controller enabled and a missing smartctl
+        - call check_hd() with a module list holding drivetemp
+        - ASSERT: it reports no finding, because the module reads the temperature on its own
+        """
+        cfg = _write_config(tmp_path, f"[Ipmi]\n[HD]\nenabled=1\nhd_names=/dev/sda\n"
+                                      f"smartctl_path={tmp_path}/nosuch\n")
+        assert not check_hd(cfg.hd, ALL_MODULES)
+
+    def test_hd_smartctl_is_enough(self, tmp_path: Path) -> None:
+        """Positive unit test for check_hd(). It contains the following steps:
+        - build a configuration with the HD fan controller enabled and an existing smartctl
+        - call check_hd() with a module list that does not hold drivetemp
+        - ASSERT: it reports no finding, because smartctl reads the temperature instead
+        """
+        cmd = _command(tmp_path, "smartctl")
+        cfg = _write_config(tmp_path, f"[Ipmi]\n[HD]\nenabled=1\nhd_names=/dev/sda\nsmartctl_path={cmd}\n")
+        assert not check_hd(cfg.hd, NO_MODULES)
+
+    def test_hd_neither_source_available(self, tmp_path: Path) -> None:
+        """Negative unit test for check_hd(). It contains the following steps:
+        - build a configuration with the HD fan controller enabled and a missing smartctl
+        - call check_hd() with a module list that does not hold drivetemp
+        - ASSERT: one error is reported, because no temperature source is left
+        - ASSERT: the message names both ways to fix it
+        """
+        cfg = _write_config(tmp_path, f"[Ipmi]\n[HD]\nenabled=1\nhd_names=/dev/sda\n"
+                                      f"smartctl_path={tmp_path}/nosuch\n")
+        results = check_hd(cfg.hd, NO_MODULES)
+        assert len(results) == 1
+        assert results[0].level is Level.ERROR
+        assert "drivetemp" in results[0].message and "smartctl" in results[0].message
+
+    def test_hd_standby_guard_needs_smartctl(self, tmp_path: Path) -> None:
+        """Negative unit test for check_hd(). It contains the following steps:
+        - build a configuration with the standby guard on and a missing smartctl
+        - call check_hd() with a module list holding drivetemp
+        - ASSERT: one error is reported, although drivetemp covers the temperature reading
+        - ASSERT: the message names the standby guard, which needs smartctl itself
+        """
+        cfg = _write_config(tmp_path, f"[Ipmi]\n[HD]\nenabled=1\nhd_names=/dev/sda\n"
+                                      f"smartctl_path={tmp_path}/nosuch\nstandby_guard_enabled=1\n")
+        results = check_hd(cfg.hd, ALL_MODULES)
+        assert len(results) == 1
+        assert results[0].level is Level.ERROR
+        assert "Standby Guard" in results[0].message
+
+    def test_hd_instances_are_checked_on_their_own(self, tmp_path: Path) -> None:
+        """Negative unit test for check_hd(). It contains the following steps:
+        - build two HD instances, the first with a missing smartctl and the second with a working one
+        - call check_hd() with a module list that does not hold drivetemp
+        - ASSERT: only the first instance is reported
+        - ASSERT: the finding names the section it belongs to, so the editor can place it
+        """
+        cmd = _command(tmp_path, "smartctl")
+        cfg = _write_config(tmp_path, f"[Ipmi]\n"
+                                      f"[HD]\nenabled=1\nipmi_zone=1\nhd_names=/dev/sda\n"
+                                      f"smartctl_path={tmp_path}/nosuch\n"
+                                      f"[HD:1]\nenabled=1\nipmi_zone=2\nhd_names=/dev/sdb\n"
+                                      f"smartctl_path={cmd}\n")
+        results = check_hd(cfg.hd, NO_MODULES)
+        assert len(results) == 1
+        assert results[0].section == "HD"
+
+    @pytest.mark.parametrize(
+        "gpu_type, present, missing",
+        [
+            pytest.param("nvidia", "nvidia_smi_path", "rocm_smi_path", id="nvidia"),
+            pytest.param("amd", "rocm_smi_path", "nvidia_smi_path", id="amd"),
+        ],
+    )
+    def test_gpu_checks_the_tool_of_its_type(self, tmp_path: Path, gpu_type: str, present: str,
+                                             missing: str) -> None:
+        """Positive unit test for check_gpu(). It contains the following steps:
+        - build a GPU section whose own vendor tool exists and whose other tool does not
+        - call check_gpu()
+        - ASSERT: it reports no finding, because only the tool of the configured type matters
+        """
+        cmd = _command(tmp_path, "vendor-smi")
+        cfg = _write_config(tmp_path, f"[Ipmi]\n[GPU]\nenabled=1\ngpu_type={gpu_type}\n"
+                                      f"{present}={cmd}\n{missing}={tmp_path}/nosuch\n")
+        assert not check_gpu(cfg.gpu)
+
+    def test_gpu_tool_missing(self, tmp_path: Path) -> None:
+        """Negative unit test for check_gpu(). It contains the following steps:
+        - build a GPU section whose nvidia-smi does not exist
+        - call check_gpu()
+        - ASSERT: one error is reported and it names the missing path
+        """
+        cfg = _write_config(tmp_path, f"[Ipmi]\n[GPU]\nenabled=1\nnvidia_smi_path={tmp_path}/nosuch\n")
+        results = check_gpu(cfg.gpu)
+        assert len(results) == 1
+        assert results[0].level is Level.ERROR
+        assert "nosuch" in results[0].message
+
+    def test_gpu_disabled_section_is_skipped(self, tmp_path: Path) -> None:
+        """Positive unit test for check_gpu(). It contains the following steps:
+        - build a GPU section that is disabled and names a missing tool
+        - call check_gpu()
+        - ASSERT: it reports no finding
+        """
+        cfg = _write_config(tmp_path, f"[Ipmi]\n[GPU]\nenabled=0\nnvidia_smi_path={tmp_path}/nosuch\n")
+        assert not check_gpu(cfg.gpu)
+
+    def test_npu_absolute_path(self, tmp_path: Path) -> None:
+        """Positive unit test for check_npu(). It contains the following steps:
+        - build an NPU section whose npu_smi_path is an absolute path that exists
+        - call check_npu()
+        - ASSERT: it reports no finding
+        """
+        cmd = _command(tmp_path, "npu-smi")
+        cfg = _write_config(tmp_path, f"[Ipmi]\n[NPU]\nenabled=1\nnpu_smi_path={cmd}\n")
+        assert not check_npu(cfg.npu)
+
+    def test_npu_bare_name_is_looked_up_on_path(self, tmp_path: Path, monkeypatch) -> None:
+        """Positive unit test for check_npu(). It contains the following steps:
+        - build an NPU section whose npu_smi_path is a bare command name
+        - put a directory holding that command on PATH
+        - call check_npu()
+        - ASSERT: it reports no finding, because a bare name is resolved through PATH
+        """
+        _command(tmp_path, "npu-smi")
+        monkeypatch.setenv("PATH", str(tmp_path))
+        cfg = _write_config(tmp_path, "[Ipmi]\n[NPU]\nenabled=1\nnpu_smi_path=npu-smi\n")
+        assert not check_npu(cfg.npu)
+
+    def test_npu_bare_name_not_on_path(self, tmp_path: Path, monkeypatch) -> None:
+        """Negative unit test for check_npu(). It contains the following steps:
+        - build an NPU section whose npu_smi_path is a bare command name
+        - set PATH to a directory that does not hold that command
+        - call check_npu()
+        - ASSERT: one error is reported and it names the command
+        """
+        empty = tmp_path / "empty"
+        empty.mkdir()
+        monkeypatch.setenv("PATH", str(empty))
+        cfg = _write_config(tmp_path, "[Ipmi]\n[NPU]\nenabled=1\nnpu_smi_path=npu-smi\n")
+        results = check_npu(cfg.npu)
+        assert len(results) == 1
+        assert "npu-smi" in results[0].message
+
+    def test_check_all_reports_every_section(self, tmp_path: Path) -> None:
+        """Negative unit test for check_all(). It contains the following steps:
+        - build a configuration where the ipmitool, the CPU module and the GPU tool are all missing
+        - call check_all() with a module list holding neither accepted CPU module
+        - ASSERT: three findings are reported, one per fault
+        - ASSERT: they name the [Ipmi], the [CPU] and the [GPU] sections
+        - ASSERT: the old behaviour of stopping at the first fault is gone
+        """
+        cfg = _write_config(tmp_path, f"[Ipmi]\ncommand={tmp_path}/nosuch\n"
+                                      f"[CPU]\nenabled=1\n"
+                                      f"[GPU]\nenabled=1\nipmi_zone=2\nnvidia_smi_path={tmp_path}/nosuch\n")
+        results = check_all(cfg, NO_MODULES)
+        assert len(results) == 3
+        assert [r.section for r in results] == ["Ipmi", "CPU", "GPU"]
+
+    def test_check_all_reads_the_module_list_when_it_is_not_given(self, tmp_path: Path, mocker) -> None:
+        """Positive unit test for check_all(). It contains the following steps:
+        - mock loaded_modules() so no real /proc/modules is read
+        - call check_all() without a module list
+        - ASSERT: the module list is read once from the system
+        """
+        mocked = mocker.patch("smfc.checks.loaded_modules", return_value=ALL_MODULES)
+        cmd = _command(tmp_path, "ipmitool")
+        cfg = _write_config(tmp_path, f"[Ipmi]\ncommand={cmd}\n[CPU]\nenabled=1\n")
+        assert not check_all(cfg)
+        mocked.assert_called_once()
+
+    def test_check_by_section_groups_the_findings(self, tmp_path: Path) -> None:
+        """Positive unit test for check_by_section(). It contains the following steps:
+        - build a configuration with a fault in two different sections
+        - call check_by_section()
+        - ASSERT: the findings are grouped under the section they belong to
+        - ASSERT: a section without a finding is absent from the result
+        """
+        cfg = _write_config(tmp_path, f"[Ipmi]\ncommand={tmp_path}/nosuch\n"
+                                      f"[CPU]\nenabled=1\n"
+                                      f"[NVME]\nenabled=0\n")
+        grouped = check_by_section(cfg, NO_MODULES)
+        assert sorted(grouped) == ["CPU", "Ipmi"]
+        assert len(grouped["Ipmi"]) == 1
+        assert "NVME" not in grouped
+
+    def test_errors_filters_by_severity(self) -> None:
+        """Positive unit test for errors(). It contains the following steps:
+        - build one finding of each severity
+        - call errors()
+        - ASSERT: only the error is returned, so a warning never stops the daemon
+        """
+        findings: List[CheckResult] = [
+            CheckResult(Level.ERROR, "Ipmi", "an error"),
+            CheckResult(Level.WARN, "HD", "a warning"),
+            CheckResult(Level.INFO, "HD", "an observation"),
+        ]
+        assert errors(findings) == [findings[0]]
+
+    def test_error_text_lists_one_finding_per_line(self) -> None:
+        """Positive unit test for error_text(). It contains the following steps:
+        - build two errors and one warning
+        - call error_text()
+        - ASSERT: both error messages appear, one per line
+        - ASSERT: the warning is left out
+        """
+        findings: List[CheckResult] = [
+            CheckResult(Level.ERROR, "Ipmi", "first error"),
+            CheckResult(Level.WARN, "HD", "a warning"),
+            CheckResult(Level.ERROR, "GPU", "second error"),
+        ]
+        assert error_text(findings) == "first error\nsecond error"
+
+    def test_error_text_of_a_clean_run_is_empty(self) -> None:
+        """Positive unit test for error_text(). It contains the following steps:
+        - call error_text() with no finding at all
+        - ASSERT: the result is an empty string, which is what the daemon treats as success
+        """
+        assert error_text([]) == ""
+
+
+# End.
