@@ -692,7 +692,7 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 | 4 | `confwriter.py` | round-trip every sample file unchanged; add and remove an instance; read-only mode; the missing-file path of 9.2 |
 | 5 | the editor | the curses master-detail screen |
 | 6 | the popups | needs phases 3 and 5 |
-| 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries |
+| 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries; see chapter 12 for the rest of the release |
 
 Phase 8 note: `debian/changelog` is DEB-only and `smfc.spec` `%changelog` is RPM-only. Keep the
 scopes separate.
@@ -716,7 +716,102 @@ Run the suite with `uv run pytest`.
 The curses screen is tested through the key dispatch and the render functions, not through a real
 terminal. Keep the drawing code thin and the state code testable.
 
-## 12. Risks
+## 12. The 7.0.0 release
+
+`smfc-config` ships in 7.0.0, together with a change to where a manually installed smfc lives. There
+is no 6.5.0. A major release is the right place for both, because one of them asks the user to act.
+
+| # | Item | Breaks anything? |
+|---|---|---|
+| 1 | `smfc-config`, phases 1 to 7 of chapter 10 | no, it is a new command |
+| 2 | the install layout, see 12.1 | yes, for a manual installation only |
+| 3 | remove the `-ne` command line option | yes, for anyone still passing it |
+| 4 | remove the `genericx9` platform name | yes, silently until now, see 12.2 |
+| 5 | replace the `Ipmi.*_MODE` constants with `FanMode` | no, they are internal |
+| 6 | warn about an unknown section name, see 12.3 | no, it is a new warning |
+| 7 | docs: the README install chapter, `DOCKER.md`, the man pages, the changelogs | no |
+
+Order of work: finish the `smfc-config` phases first, because they are additive and independent.
+The install layout comes after, because it needs testing on a Debian and a Fedora machine and it
+touches the same documents as the release notes.
+
+### 12.1 Where a manually installed smfc lives
+
+`bin/install.sh` installs into the system Python with `pip --break-system-packages`, and the three
+Docker images do the same with `pip install --prefix=/usr`. Both write into directories the
+distribution owns, which is what PEP 668 exists to prevent. It works today and the escape hatch
+keeps narrowing.
+
+The rule becomes two lines:
+
+| Installer | Location | Owner |
+|---|---|---|
+| DEB, RPM | `/usr` | the distribution's package manager |
+| the manual script, the Docker images | `/opt/smfc` | smfc itself |
+
+```bash
+python3 -m venv /opt/smfc
+/opt/smfc/bin/pip install -q smfc==$VERSION
+ln -sf /opt/smfc/bin/smfc        /usr/local/bin/smfc
+ln -sf /opt/smfc/bin/smfc-client /usr/local/bin/smfc-client
+ln -sf /opt/smfc/bin/smfc-config /usr/local/bin/smfc-config
+```
+
+The unit file stays in `/etc/systemd/system/`, which is the correct place for a locally installed
+unit, and `ExecStart=/opt/smfc/bin/smfc` names the binary explicitly so nothing can shadow it.
+
+**The migration must fail safe.** An existing manual installation keeps working until the user runs
+the script again, and the old copy in `/usr/local/lib/python3*/dist-packages/smfc` must not be left
+behind. So the order is fixed:
+
+1. Test that `python3 -m venv` works at all. Debian and Ubuntu ship it as a separate package, so say
+   `apt install python3-venv` and stop, before touching anything.
+2. Remove any previous `/opt/smfc` and build it again. A venv is cheap, and a rebuild makes a first
+   install and a fifth install end the same way.
+3. Verify that `/opt/smfc/bin/smfc --version` runs.
+4. Only then remove the old copy: `python3 -m pip uninstall -y smfc`. It is safe on a DEB or RPM
+   machine, where pip simply reports that smfc is not installed.
+5. Only then replace the symlinks, reload systemd, and restart the service if it was running.
+
+If anything before step 4 fails, the old installation is intact and the machine still has fan
+control. `bin/uninstall.sh` must then handle both layouts.
+
+**The Docker images need the same change and no migration**, because an image is rebuilt from
+scratch. Create the venv with `--without-pip`, install into it with the pip that is already deleted
+in the same layer, and symlink `/usr/bin/smfc`. Drop the distro `python3-pyudev` and `py3-udev`
+packages: the venv gets `pyudev` from PyPI, which is pure Python and needs no compiler.
+
+### 12.2 The two removals that break a working configuration
+
+`-ne` has logged a deprecation warning since 6.2.0, so its removal is expected.
+
+`genericx9` has not. `Config.PLATFORM_NAME_ALIASES` maps it to `generic_x9` silently, so a user on
+that value has never been told. Removing it in a release that also never warned means the error
+message has to do the teaching:
+
+```
+[Ipmi] invalid value: platform_name=genericx9.
+Use generic_x9. Valid values: auto, generic, generic_x9, generic_x14, X10QBi.
+```
+
+Today the message names the bad value and stops there. That is not enough for a value that worked
+in the previous release.
+
+### 12.3 An unknown section name is silent today
+
+The section names lost their zone tags in 5.0.0: `[CPU zone]` became `[CPU]`. The parser has no
+alias for the old form, and a missing section means disabled, so a file that still uses the old
+names parses into a configuration with no fan controller at all and says nothing. The fans then run
+on the BMC curve with no explanation.
+
+`checks.py` gains one `warn` per section name the schema does not know, which covers the old names,
+a typo like `[CPU1]`, and anything else. The editor shows such a section read-only and never deletes
+it, exactly as chapter 5 already says for an unknown key.
+
+The changelog also states that the old section names "will be supported for a while". That has not
+been true since 5.0.0 and is corrected in this release.
+
+## 13. Risks
 
 | Risk | Handling |
 |---|---|
@@ -728,3 +823,4 @@ terminal. Keep the drawing code thin and the state code testable.
 | an ambiguous-width glyph breaks the frame | `curses` line constants, and ASCII status glyphs |
 | the terminal is too narrow | fall back to one pane below 64 columns or 14 rows |
 | the config file is not writable | test at start, and say what to do |
+| the install migration leaves an orphan copy | uninstall the old package before the symlinks, see 12.1 |
