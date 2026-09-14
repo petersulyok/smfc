@@ -1498,7 +1498,7 @@ While a value is open, the field it is typed into is painted in its own colour, 
 | `Enter` | accept the value |
 | `Esc` | cancel and keep the old value |
 
-The shape of the cursor says which mode the field is in: a thin cursor inserts and pushes the rest of the value along, a block cursor types over it. A value longer than its field scrolls, so what you type is always visible.
+The shape of the cursor says which mode the field is in: an underline cursor inserts and pushes the rest of the value along, a block cursor types over it. This needs a terminal that can change the cursor shape (`xterm`, `tmux` and most terminal emulators do; the Linux text console does not). Where it is missing the cursor keeps one shape and the key line is what tells you the mode. A value longer than its field scrolls, so what you type is always visible.
 
 #### 15.3 Picking disks
 `hd_names=` and `nvme_names=` open a list of the disks this machine has, found with the same filters `install.sh` and the DEB and RPM packages use. Every line leads with the serial number, because a machine can hold eight disks of one model and the serial is the only part that tells them apart.

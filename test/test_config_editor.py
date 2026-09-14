@@ -10,7 +10,8 @@ from pathlib import Path
 import pytest
 from smfc.checks import Level
 from smfc.config_editor import panes, popups
-from smfc.config_editor.app import EditorApp, PANE_FIELDS, PANE_SECTIONS
+from smfc.config_editor.app import (CURSOR_INSERT, CURSOR_OVERWRITE, EditorApp, PANE_FIELDS,
+                                    PANE_SECTIONS)
 from smfc.config_editor.cmd import EXIT_CONFIG_ERROR, main
 from smfc.config_editor.lineedit import LineEdit
 from smfc.config_editor.model import EditorModel, FieldState, RowKind
@@ -815,6 +816,33 @@ class TestEditorApp:
         app.cursor_at = None
         app._draw_field_lines(_FakeWindow(), layout, lines, 1)   # pylint: disable=protected-access
         assert app.cursor_at is None
+
+    def test_the_cursor_shape_follows_the_mode(self, tmp_path: Path) -> None:
+        """Positive unit test for EditorApp.set_cursor_style(). It contains the following steps:
+        - open a value for editing and read the mode of the field
+        - ASSERT: a field starts in insert mode
+        - press the Insert key
+        - ASSERT: the field is in overwrite mode
+        - ask for each shape in turn, and then for the shape of the terminal
+        - ASSERT: the editor remembers which shape it asked for, so it writes only on a change
+        curs_set() cannot carry this: its two visible levels differ in blinking, not in shape.
+        """
+        app = EditorApp(_model(tmp_path), colour=False)
+        app.row_index = next(i for i, r in enumerate(app.model.rows) if r.name == "CPU")
+        app.pane = PANE_FIELDS
+        app.field_index = next(i for i, v in enumerate(app.views()) if v.key == "polling")
+        app.start_edit()
+        assert app._insert_mode() is True                    # pylint: disable=protected-access
+        app.handle_key(curses.KEY_IC)
+        assert app._insert_mode() is False                   # pylint: disable=protected-access
+
+        assert app.cursor_style is None
+        app.set_cursor_style(CURSOR_OVERWRITE)
+        assert app.cursor_style == CURSOR_OVERWRITE
+        app.set_cursor_style(CURSOR_INSERT)
+        assert app.cursor_style == CURSOR_INSERT
+        app.set_cursor_style(None)
+        assert app.cursor_style is None
 
     def test_f5_runs_the_hardware_probes(self, tmp_path: Path, mocker) -> None:
         """Positive unit test for EditorApp.check(). It contains the following steps:

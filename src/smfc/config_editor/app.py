@@ -32,6 +32,13 @@ COLOURS: tuple = (
     (panes.PAIR_INPUT, curses.COLOR_WHITE, curses.COLOR_BLUE),
 )
 
+# Shape of the cursor, as DECSCUSR numbers the styles. curs_set() cannot do this: its two visible
+# levels, cnorm and cvvis, differ only in whether the cursor blinks, so both look the same size. The
+# shape lives in the Ss capability of terminfo, which xterm and tmux carry and the Linux console does
+# not; where it is missing the cursor stays one shape and only curs_set() applies.
+CURSOR_INSERT: int = 3      # blinking underline: the text is pushed along
+CURSOR_OVERWRITE: int = 1   # blinking block: the text is typed over
+
 # The standing status line already says the file is read-only. A blocked key has to say something
 # else, or the screen does not change and the key looks dead. It names the way out instead.
 READ_ONLY_MESSAGE = "this file belongs to root; quit with F10 and run: sudo smfc-config"
@@ -61,6 +68,7 @@ class EditorApp:
     popup: Optional[popups.Popup]   # The window over the panes, None when there is none
     pending: Optional[popups.Popup] # The selector waiting under an add-by-path field
     cursor_at: Optional[tuple]      # Where the terminal cursor goes while typing, None when idle
+    cursor_style: Optional[int]     # The shape asked of the terminal, None when it is the default
 
     def __init__(self, model: EditorModel, colour: bool = True) -> None:
         """Build the screen state of one configuration file.
@@ -81,6 +89,7 @@ class EditorApp:
         self.message = ""
         self.running = True
         self.cursor_at = None
+        self.cursor_style = None
 
     # -- state -------------------------------------------------------------------------------------
 
@@ -455,14 +464,34 @@ class EditorApp:
         try:
             if self.cursor_at is None:
                 curses.curs_set(0)
+                self.set_cursor_style(None)
                 return
             row, column = self.cursor_at
-            # A thin caret inserts, a block caret types over. This is what a terminal editor does, so
-            # the shape alone says which mode the field is in.
-            curses.curs_set(1 if self._insert_mode() else 2)
+            # A thin cursor inserts, a block cursor types over. This is what a terminal editor does,
+            # so the shape alone says which mode the field is in.
+            curses.curs_set(1)
+            self.set_cursor_style(CURSOR_INSERT if self._insert_mode() else CURSOR_OVERWRITE)
             screen.move(min(row, height - 1), min(column, width - 1))
         except curses.error:
             # A terminal that cannot show or hide the cursor is not a reason to stop drawing.
+            pass
+
+    def set_cursor_style(self, style: Optional[int]) -> None:
+        """Ask the terminal for a cursor shape, or give it its own back.
+        The sequence is written only when the shape changes, and only on a terminal whose terminfo
+        entry carries the capability. Everywhere else the cursor keeps one shape.
+        Args:
+            style (Optional[int]): a DECSCUSR style number, None for the shape of the terminal
+        """
+        if style == self.cursor_style:
+            return
+        self.cursor_style = style
+        try:
+            capability = curses.tigetstr("Ss") if style is not None else curses.tigetstr("Se")
+            if not capability:
+                return
+            curses.putp(curses.tparm(capability, style) if style is not None else capability)
+        except (curses.error, TypeError):
             pass
 
     def _insert_mode(self) -> bool:
@@ -799,12 +828,16 @@ def run(model: EditorModel, no_color: bool = False) -> int:
                 curses.init_pair(pair, foreground, background)
         else:
             app.colour = False
-        while app.running:
-            app.draw(screen)
-            key = screen.getch()
-            if key == curses.KEY_RESIZE:
-                continue
-            app.handle_key(key)
+        try:
+            while app.running:
+                app.draw(screen)
+                key = screen.getch()
+                if key == curses.KEY_RESIZE:
+                    continue
+                app.handle_key(key)
+        finally:
+            # The cursor shape is not part of the state curses restores, so it is given back by hand.
+            app.set_cursor_style(None)
 
     curses.wrapper(loop)
     return 0
