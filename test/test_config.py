@@ -475,8 +475,6 @@ exit_level = 60
     @pytest.mark.parametrize(
         "value, expected",
         [
-            # Legacy value is normalized to the canonical one
-            pytest.param("genericx9", "generic_x9", id="legacy-genericx9-normalized"),
             # All documented values are accepted and passed through unchanged
             pytest.param("auto", "auto", id="auto"),
             pytest.param("generic", "generic", id="generic"),
@@ -490,7 +488,7 @@ exit_level = 60
         - mock the on-disk config via the create_config fixture (tmp_path-backed)
         - write [Ipmi] with platform_name set to a documented value and instantiate Config
         - inspect ipmi.platform_name
-        - ASSERT: ipmi.platform_name equals the expected normalized value (legacy "genericx9" -> "generic_x9")
+        - ASSERT: ipmi.platform_name equals the documented value, passed through unchanged
         """
         cfg = create_config(f"[Ipmi]\nplatform_name = {value}\n")
         assert cfg.ipmi.platform_name == expected
@@ -502,6 +500,8 @@ exit_level = 60
             pytest.param("X11DPH-T", id="bmc-product-name"),
             # A typo in a documented value
             pytest.param("genericx14", id="typo-genericx14"),
+            # The legacy spelling of generic_x9, removed in 7.0.0
+            pytest.param("genericx9", id="legacy-genericx9"),
             # An empty value
             pytest.param("", id="empty"),
         ],
@@ -516,6 +516,32 @@ exit_level = 60
         with pytest.raises(ValueError) as cm:
             create_config(f"[Ipmi]\nplatform_name = {value}\n")
         assert cm.type is ValueError
+
+    @pytest.mark.parametrize(
+        "value, hint_expected",
+        [
+            # The spelling that worked until 7.0.0 is named its replacement
+            pytest.param("genericx9", True, id="legacy-genericx9-gets-a-hint"),
+            # Any other wrong value gets the list of valid values only
+            pytest.param("genericx14", False, id="typo-gets-no-hint"),
+        ],
+    )
+    def test_ipmi_platform_name_invalid_message(self, create_config, value: str, hint_expected: bool):
+        """Negative unit test for the [Ipmi] section parser inside Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write [Ipmi] with platform_name set to a rejected value and call create_config
+        - read the message of the raised ValueError
+        - ASSERT: the message names the rejected value
+        - ASSERT: the message lists every valid platform name, because a wrong one stops the service
+        - ASSERT: the message names generic_x9 for the legacy spelling only, which worked until 7.0.0
+        """
+        with pytest.raises(ValueError) as cm:
+            create_config(f"[Ipmi]\nplatform_name = {value}\n")
+        message = str(cm.value)
+        assert f"platform_name={value}" in message
+        for name in ("auto", "generic", "generic_x9", "generic_x14", "X10QBi"):
+            assert name in message
+        assert ("Use generic_x9." in message) is hint_expected
 
     @pytest.mark.parametrize(
         "value, expected",

@@ -288,8 +288,7 @@ speed) to all configured zones before it exits. This happens on a normal `system
 terminates the service; use an `ExecStopPost=` drop-in in the systemd unit if you want to cover those cases too.
 
 The `exit_level=` parameter accepts the `[0-100]` range plus the special value `-1`, which means _"do not change the fan
-levels"_ - `smfc` then exits without issuing any fan command and the zones stay at the last applied level, exactly like
-the deprecated `-ne` command-line option did.
+levels"_ - `smfc` then exits without issuing any fan command and the zones stay at the last applied level.
 A lower value (e.g. `exit_level=40`) is a compromise for quiet systems: the fans keep running, but the machine does not
 go to full speed every time the service is stopped or restarted.
 
@@ -1202,7 +1201,7 @@ The `smfc` program has the following parameters:
 
 ```
 root@nas$ smfc --help
-usage: smfc [-h] [-c CONFIG_FILE] [-v] [-l {0,1,2,3,4}] [-o {0,1,2}] [-nd] [-s] [-ne]
+usage: smfc [-h] [-c CONFIG_FILE] [-v] [-l {0,1,2,3,4}] [-o {0,1,2}] [-nd] [-s]
 
 options:
   -h, --help      show this help message and exit
@@ -1212,12 +1211,7 @@ options:
   -o {0,1,2}      set log output: 0-stdout, 1-stderr, 2-syslog(default)
   -nd             no dependency checking at start
   -s              use sudo command
-  -ne             deprecated, use [Ipmi] exit_level=-1 instead
 ```
-
-> [!NOTE]
-> The `-ne` option is deprecated. It is still accepted and still means "no fan level change at exit", but it is
-> equivalent to the `[Ipmi] exit_level=-1` configuration parameter and it will be removed in a future release.
 
 `smfc` command-line options can be specified in `/etc/default/smfc` file if you run `smfc` as a systemd service. 
 

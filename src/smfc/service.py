@@ -292,8 +292,6 @@ class Service:
                             help="set log output: 0-stdout, 1-stderr, 2-syslog(default)")
         parser.add_argument("-nd", action="store_true", default=False, help="no dependency checking at start")
         parser.add_argument("-s", action="store_true", default=False, help="use sudo command")
-        parser.add_argument("-ne", action="store_true", default=False,
-                            help="deprecated, use [Ipmi] exit_level=-1 instead")
         return parser.parse_args()
 
     def run(self) -> None:
@@ -357,13 +355,6 @@ class Service:
             self.log.msg(Log.LOG_ERROR, f"Configuration error: {e}")
             sys.exit(6)
         self.log.msg(Log.LOG_DEBUG, f"Configuration file ({parsed_results.config_file}) loaded")
-
-        # The deprecated `-ne` option is still honored (it is equivalent to `exit_level=-1`) but it will be
-        # removed in a future release.
-        if parsed_results.ne:
-            self.log.msg(Log.LOG_ERROR, "WARNING: the -ne option is deprecated, "
-                                        "use the [Ipmi] exit_level=-1 configuration parameter instead.")
-            self.config.ipmi.exit_level = Config.EXIT_LEVEL_NONE
 
         # Check run-time dependencies (commands, kernel modules) if `-nd` command line option is not specified.
         if not parsed_results.nd:

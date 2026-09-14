@@ -1013,19 +1013,19 @@ man pages are the same for both layouts.
 
 ### 12.4 The two removals that break a working configuration
 
-`-ne` has logged a deprecation warning since 6.2.0, so its removal is expected.
+`-ne` had logged a deprecation warning since 6.2.0, so its removal was expected.
 
-`genericx9` has not. `Config.PLATFORM_NAME_ALIASES` maps it to `generic_x9` silently, so a user on
-that value has never been told. Removing it in a release that also never warned means the error
-message has to do the teaching:
+`genericx9` has not. `Config.PLATFORM_NAME_ALIASES` mapped it to `generic_x9` silently, so a user on
+that value was never told. Removing it in a release that also never warned means the error message
+has to do the teaching:
 
 ```
 [Ipmi] invalid value: platform_name=genericx9.
 Use generic_x9. Valid values: auto, generic, generic_x9, generic_x14, X10QBi.
 ```
 
-Today the message names the bad value and stops there. That is not enough for a value that worked
-in the previous release.
+Both removals are done. `Config.PLATFORM_NAME_ALIASES` is gone, the `-ne` argument is gone, and the
+error message carries the hint and the list of valid values shown above.
 
 ### 12.5 An unknown section name is silent today
 

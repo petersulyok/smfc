@@ -286,9 +286,6 @@ class Config:
     # Sentinel value of `exit_level=` meaning "do not change the fan levels at exit".
     EXIT_LEVEL_NONE: int = -1
 
-    # Backward-compatible platform_name aliases (legacy value -> canonical value)
-    PLATFORM_NAME_ALIASES: dict = {"genericx9": "generic_x9"}
-
     # Default values — [CPU] section
     DV_CPU_STEPS: int = 6
     DV_CPU_SENSITIVITY: float = 3.0
@@ -560,14 +557,17 @@ class Config:
         exit_level = parser[s].getint(self.CV_IPMI_EXIT_LEVEL, fallback=self.DV_IPMI_EXIT_LEVEL)
         if exit_level < self.EXIT_LEVEL_NONE or exit_level > 100:
             raise ValueError(f"Invalid {self.CV_IPMI_EXIT_LEVEL}= parameter ({exit_level}). Valid range is [-1,100].")
-        # Normalize legacy platform_name values (e.g. 'genericx9' -> 'generic_x9') for backward compatibility.
         platform_name = parser[s].get(self.CV_IPMI_PLATFORM_NAME, fallback=self.DV_IPMI_PLATFORM_NAME)
-        platform_name = self.PLATFORM_NAME_ALIASES.get(platform_name, platform_name)
         # Only the documented platform names are accepted; BMC product-name matching happens in 'auto' mode.
         try:
             PlatformName(platform_name)
         except ValueError as e:
-            raise ValueError(f"[{s}] invalid value: {self.CV_IPMI_PLATFORM_NAME}={platform_name}.") from e
+            # The message names the valid values, because a wrong one stops the service. `genericx9` gets a
+            # line of its own: it worked until 7.0.0 and was never warned about, so the error has to teach.
+            valid = ", ".join(p.value for p in PlatformName)
+            hint = " Use generic_x9." if platform_name == "genericx9" else ""
+            message = f"[{s}] invalid value: {self.CV_IPMI_PLATFORM_NAME}={platform_name}.{hint} Valid values: {valid}."
+            raise ValueError(message) from e
         # Timeout of a single `ipmitool` execution. 0 is a sentinel meaning "wait indefinitely", i.e. the
         # behaviour before this parameter existed.
         ipmitool_timeout = parser[s].getint(self.CV_IPMI_IPMITOOL_TIMEOUT, fallback=self.DV_IPMI_IPMITOOL_TIMEOUT)

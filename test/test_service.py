@@ -534,7 +534,7 @@ class TestService:
         mocker.patch("builtins.print", mock_print)
         mock_parser_parse_args = MagicMock()
         mocker.patch("argparse.ArgumentParser.parse_args", mock_parser_parse_args)
-        mock_parser_parse_args.return_value = Namespace(config_file="smfc.conf", ne=False, s=False, l=level, o=output)
+        mock_parser_parse_args.return_value = Namespace(config_file="smfc.conf", s=False, l=level, o=output)
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
@@ -566,7 +566,7 @@ class TestService:
         mocker.patch("builtins.print", mock_print)
         mock_parser_parse_args = MagicMock()
         mocker.patch("argparse.ArgumentParser.parse_args", mock_parser_parse_args)
-        mock_parser_parse_args.return_value = Namespace(config_file=conf_file, ne=True, nd=False, s=False, l=0, o=0)
+        mock_parser_parse_args.return_value = Namespace(config_file=conf_file, nd=False, s=False, l=0, o=0)
         mock_check_dependencies = MagicMock()
         mock_check_dependencies.return_value = "ERROR"
         mocker.patch("smfc.Service.check_dependencies", mock_check_dependencies)
@@ -623,31 +623,22 @@ class TestService:
         # would spin its full retry budget in real 5 s sleeps before failing at `bmc info`; mock it out.
         mocker.patch("time.sleep", MagicMock())
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
-        sys.argv = ("smfc.py -o 0 -nd -ne -c " + conf_file).split()
+        sys.argv = ("smfc.py -o 0 -nd -c " + conf_file).split()
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
         assert cm.value.code == exit_code
 
-    @pytest.mark.parametrize(
-        "options, expected_level",
-        [
-            pytest.param("-nd", Config.DV_IPMI_EXIT_LEVEL, id="without-ne"),
-            pytest.param("-nd -ne", Config.EXIT_LEVEL_NONE, id="with-deprecated-ne"),
-        ],
-    )
-    def test_run_registers_sigterm_and_honors_ne(self, mocker: MockerFixture, td: TestData, options: str,
-                                                 expected_level: int):
+    def test_run_registers_sigterm(self, mocker: MockerFixture, td: TestData):
         """Positive unit test for Service.run() method. It contains the following steps:
         - mock print(), time.sleep(), pyudev Context and signal.signal()
         - build a config file where no fan controller is enabled, so run() exits with code 10 right after the
           configuration is loaded
-        - call Service.run() with and without the deprecated -ne option
-        - ASSERT: run() exits with code 10 in both cases, i.e. -ne is still accepted and never a parse error
+        - call Service.run()
+        - ASSERT: run() exits with code 10
         - ASSERT: a SIGTERM handler is installed, so `systemctl stop` triggers a normal interpreter shutdown and
           the registered atexit handler runs
-        - ASSERT: the deprecated -ne option forces exit_level to the -1 sentinel, otherwise the configured value
-          is kept
+        - ASSERT: exit_level keeps the value the configuration file holds
         """
         my_config = ConfigParser()
         my_config[Config.CS_IPMI] = {Config.CV_IPMI_COMMAND: td.create_ipmi_command()}
@@ -662,13 +653,13 @@ class TestService:
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
         mock_signal = MagicMock()
         mocker.patch("signal.signal", mock_signal)
-        sys.argv = f"smfc.py -o 0 {options} -c {conf_file}".split()
+        sys.argv = f"smfc.py -o 0 -nd -c {conf_file}".split()
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
         assert cm.value.code == 10
         assert mock_signal.call_args[0][0] == signal.SIGTERM
-        assert service.config.ipmi.exit_level == expected_level
+        assert service.config.ipmi.exit_level == Config.DV_IPMI_EXIT_LEVEL
 
     def test_check_dependencies_amd_p(self, mocker: MockerFixture, td: TestData, tmp_path):
         """Positive unit test for Service.check_dependencies() method with AMD GPU. It contains the following steps:
@@ -756,7 +747,7 @@ class TestService:
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mocker.patch("pyudev.Context.__init__", MockedContextError.__init__)
-        sys.argv = ("smfc.py -o 0 -ne -nd -c " + conf_file).split()
+        sys.argv = ("smfc.py -o 0 -nd -c " + conf_file).split()
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
@@ -996,7 +987,7 @@ class TestService:
         mocker.patch("smfc.ConstFc.__init__", mocked_constfc_init)
         # pylint: enable=R0801
         self.sleep_counter = 0
-        sys.argv = ("smfc.py -o 0 -l 4 -ne -nd -c " + conf_file).split()
+        sys.argv = ("smfc.py -o 0 -l 4 -nd -c " + conf_file).split()
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
@@ -1066,7 +1057,7 @@ class TestService:
         mocker.patch("smfc.CpuFc.__init__", mocked_cpufc_init)
         mock_run = MagicMock(side_effect=RuntimeError("sensor gone"))
         mocker.patch("smfc.CpuFc.run", mock_run)
-        sys.argv = ("smfc.py -o 0 -l 4 -ne -nd -c " + conf_file).split()
+        sys.argv = ("smfc.py -o 0 -l 4 -nd -c " + conf_file).split()
         service = Service()
         with pytest.raises(RuntimeError, match="sensor gone"):
             service.run()
@@ -1148,7 +1139,7 @@ class TestService:
         mocker.patch("smfc.CpuFc.run", mock_run)
         mock_log_msg = MagicMock()
         mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
-        sys.argv = ("smfc.py -o 0 -l 4 -ne -nd -c " + conf_file).split()
+        sys.argv = ("smfc.py -o 0 -l 4 -nd -c " + conf_file).split()
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
@@ -1246,7 +1237,7 @@ class TestService:
         mock_set = MagicMock()
         mocker.patch("smfc.platform.Platform.set_fan_mode", mock_set)
         self.sleep_counter = 0
-        sys.argv = ("smfc.py -o 0 -l 4 -ne -nd -c " + conf_file).split()
+        sys.argv = ("smfc.py -o 0 -l 4 -nd -c " + conf_file).split()
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
@@ -1293,7 +1284,7 @@ class TestService:
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
         mocker.patch("smfc.CpuFc.__init__", mocked_cpufc_init)
         mocker.patch("smfc.platform.Platform.start", MagicMock(side_effect=RuntimeError("zone 0 refused")))
-        sys.argv = ("smfc.py -o 0 -l 3 -ne -nd -c " + conf_file).split()
+        sys.argv = ("smfc.py -o 0 -l 3 -nd -c " + conf_file).split()
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()
@@ -2331,7 +2322,7 @@ class TestService:
         mock_print = MagicMock()
         mocker.patch("builtins.print", mock_print)
         mocker.patch("pyudev.Context.__init__", MockedContextGood.__init__)
-        sys.argv = ("smfc.py -o 0 -nd -ne -c " + conf_file).split()
+        sys.argv = ("smfc.py -o 0 -nd -c " + conf_file).split()
         service = Service()
         with pytest.raises(SystemExit) as cm:
             service.run()

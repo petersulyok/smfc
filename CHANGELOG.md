@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The nvidia and amd docker images are 7 MB smaller.** Documentation, manual pages, the IANA vendor table of `ipmitool` and the test suite of the Python standard library serve nothing in a service image. Each install layer removes its own, because a file deleted in a later layer is only hidden and its bytes still travel with the image.
 - **A boolean parameter is described as `yes or no`.** The comments of `config/smfc.conf` said `(bool, default=0/false)`, which names three things a reader does not need. Units are written in full for the same reason: `Celsius`, `seconds` and `percent` rather than `C`, `sec` and `%`. The file still holds `0` and `1`.
 
+### Removed
+- **The `-ne` command line option.** It has logged a deprecation warning since 6.2.0. Use `[Ipmi] exit_level=-1`, which means the same thing: do not change the fan levels at exit. `smfc` now stops with `unrecognized arguments: -ne`, so a service file or an `/etc/default/smfc` still passing it has to be edited.
+- **The `platform_name=genericx9` value.** The canonical spelling is `generic_x9`, and the parser mapped the old one to it silently, so a user on that value was never told. The value is rejected now, and the error message names its replacement: `[Ipmi] invalid value: platform_name=genericx9. Use generic_x9. Valid values: auto, generic, generic_x9, generic_x14, X10QBi.` Every rejected platform name now lists the valid ones, because a wrong one stops the service.
+
 ### Fixed
 - **A rebuild of a GPU docker image could fail with `404 Not Found`.** The package index was fetched in a layer of its own, so docker cached it; the cached list then named point releases the mirror had already replaced. The index, the installation and the cleanup are one layer now, which also drops the 51 MB of package lists that a later `rm` could not remove.
 - **A USB disk could be collected into `hd_names=`.** A flash drive plugged in at install time was named `/dev/disk/by-id/usb-...`, survived every exclusion, and became a monitored disk. All three collectors exclude it now.
