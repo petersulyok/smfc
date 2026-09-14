@@ -607,6 +607,20 @@ Notes:
 ### 9. Installation and uninstallation
 For the installation and uninstallation, you need root privileges. There are several ways to install and uninstall `smfc`, this chapter will show them.
 
+All installation paths leave the machine in the same state: the service is enabled but not started. Review your configuration file first (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration)), then start the service by hand (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc)). From then on it starts on every boot.
+
+|                                    | DEB and RPM package         | Manual script               | Docker image                          |
+|------------------------------------|-----------------------------|-----------------------------|---------------------------------------|
+| Python package                     | Python of the distribution  | `/opt/smfc/venv`            | `/opt/smfc/venv` in the image         |
+| Commands                           | `/usr/bin`                  | `/usr/local/bin` (links)    | `/usr/bin` (links)                    |
+| Service enabled on a fresh install | yes                         | yes                         | no service, the container runs `smfc` |
+| Service started on a fresh install | no                          | no                          | the container starts it               |
+| On an upgrade                      | restarted if it was running | restarted if it was running | a new image is pulled                 |
+| Enable state on an upgrade         | kept                        | kept                        | not applicable                        |
+| On uninstallation                  | stopped and disabled        | stopped and disabled        | the container is removed              |
+
+The AUR package is maintained by a community member and is not listed here, see [chapter 9.3.](https://github.com/petersulyok/smfc/blob/main/README.md#93-arch-linux-aur-package-installation)
+
 #### 9.1. DEB package installation
 Pre-built `.deb` packages are available from the [smfc-deb APT repository](https://github.com/petersulyok/smfc-deb), hosted on GitHub Pages and signed with a dedicated GPG key.
 
@@ -645,7 +659,7 @@ sudo rm -f /etc/apt/sources.list.d/smfc.list /etc/apt/keyrings/smfc-repo.gpg  # 
 Note: if you added the repository with b) earlier and switch to a), delete the files of the old format (`smfc.list` and `smfc-repo.gpg`), otherwise the repository is configured twice.
 
 Compatible with Debian 12+, Ubuntu 22.04+. See the [smfc-deb README](https://github.com/petersulyok/smfc-deb) for the full distribution list. The package installs the same files as the manual installation (service unit, configuration, man page, sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
-The DEB package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc)); from then on it starts automatically on every boot. On upgrade the service is restarted if it was running, and left stopped if you had stopped it.
+The DEB package enables the `smfc` service but does not start it, and an upgrade restarts it only if it was running. See the table at the head of [chapter 9.](https://github.com/petersulyok/smfc/blob/main/README.md#9-installation-and-uninstallation)
 
 
 #### 9.2. RPM package installation
@@ -670,7 +684,7 @@ sudo rm /etc/yum.repos.d/smfc.repo
 ```
 
 Compatible with Fedora 39+, RHEL/Rocky/AlmaLinux 9+ (with EPEL), CentOS Stream 9+, openSUSE Leap 15.5+. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for the full distribution list. The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
-The RPM package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc)); from then on it starts automatically on every boot. On upgrade the service is restarted if it was running, and left stopped if you had stopped it.
+The RPM package enables the `smfc` service but does not start it, and an upgrade restarts it only if it was running. See the table at the head of [chapter 9.](https://github.com/petersulyok/smfc/blob/main/README.md#9-installation-and-uninstallation)
 
 #### 9.3. Arch Linux (AUR) package installation
 An `smfc` package is available in the [AUR](https://aur.archlinux.org/packages/smfc). It is created and maintained by
@@ -701,8 +715,8 @@ There is an installation script ([`bin/install.sh`](https://raw.githubuserconten
 - remotely from the GitHub repository (no cloning required)
 - locally from a git repository (GitHub repository needs to be cloned)
 
-The installation script requires `curl`, `pip`, `gzip`, and `mandb` commands, and it has the following
-command line parameters:
+The script needs `python3 -m venv`, `gzip` and `mandb`. Remote installation also needs `curl`. It does not need
+`pip` on your machine: the virtual environment brings its own. It has the following command line parameters:
 
 ```
 user@host:~$ ./install.sh --help
@@ -728,20 +742,39 @@ The default location of the installed files:
 | `smfc-config`        | `/usr/local/bin`            | smfc-config command (a link)    |
 | the Python package   | `/opt/smfc/venv`            | smfc and its dependencies       |
 
-> From `smfc v7.0.0` the script installs the Python package into a virtual environment of its own, at `/opt/smfc/venv`, and links the three commands into `/usr/local/bin`. Earlier versions installed it into the Python of the distribution with `pip --break-system-packages`, which writes into directories the package manager owns and which the distributions block on purpose. The three commands are at the same path as before, the service file and the configuration are untouched, and the script removes the previous installation for you. The DEB, RPM and AUR packages are not affected: a distribution package belongs in `/usr`.
+> From `smfc v7.0.0` the script installs the Python package into a virtual environment of its own, at `/opt/smfc/venv`, and links the three commands into `/usr/local/bin`. Earlier versions installed it into the Python of the distribution with `pip --break-system-packages`, which writes into directories the package manager owns and which the distributions block on purpose. The three commands are at the same path as before, and the service file and the configuration are untouched. The script removes a previous `pip` installation for you. If a package manager owns it instead, the script stops and names the command that removes it. The DEB, RPM and AUR packages are not affected: a distribution package belongs in `/usr`.
 
 Notes for the script:
-- It needs `python3 -m venv` and the `pyudev` module of your distribution. It says which package to install if either is missing, and stops before changing anything.
-- The installation process stops on any error
 - Remote installation is the default method
 - The `--local` parameter installs from the current folder (the GitHub repository must be cloned first)
 - The default action is the following:
   - the existing configuration file is renamed
   - a new configuration file is installed
-  - the `hd_names=` configuration parameter is pre-filled with the list of existing hard disks for the user's convenience
-    (please check/edit this parameter!)
+  - the `hd_names=` and `nvme_names=` configuration parameters are pre-filled with the disks of the machine for the
+    user's convenience (please check/edit these parameters!)
 - With the `--keep-config` parameter, the original configuration file is preserved
 - With the `--verbose` parameter, the installation phases are displayed
+- The installation process stops on any error. It checks `python3 -m venv` before it changes anything, and it proves
+  that the new installation runs before it removes the old one. If a step fails, your machine keeps the installation it
+  had, and its fans are still regulated.
+- `pyudev` comes from PyPI with `smfc`, into the virtual environment. It reaches `libudev` at run time, so your machine
+  needs that library: `libudev1` on Debian and Ubuntu, `systemd-libs` on Fedora. The script tests it and names the
+  package if it is missing.
+- If your package manager owns an earlier `smfc`, the script stops and names the package and the command that removes
+  it. It never removes a package itself.
+
+What the script does with the service:
+- It reloads the `systemd` configuration, because it has just written the service definition file.
+- On a fresh installation it enables `smfc.service` and does not start it.
+- On an existing installation it leaves the enable state alone. A service you disabled on purpose stays disabled.
+- It restarts the service only if the service was already running. The restart is the last step, so the service comes
+  back with the configuration file of this run.
+
+This is what the DEB and the RPM packages do.
+
+An operating system upgrade that replaces `python3` with a new minor version breaks the virtual environment, because
+the package folder carries the version in its name. Run `install.sh` again after such an upgrade: it rebuilds the
+environment on the new interpreter.
 
 For remote installation the script can be executed (as root user) this way:
 
@@ -784,8 +817,13 @@ It can be executed locally or remotely, just like the installation script. Examp
 curl --silent https://raw.githubusercontent.com/petersulyok/smfc/refs/heads/main/bin/uninstall.sh|bash /dev/stdin --verbose
 ```
 
-The script removes the installed `smfc` files and the Python package. With the `--keep-config` parameter, the original
-configuration files (`/etc/smfc/smfc.conf` and `/etc/default/smfc`) are preserved.
+Before it removes anything, the script stops `smfc.service` and disables it, so no enable link is left pointing at a
+service definition file that has gone. Then it removes the installed `smfc` files, the three command links and the
+virtual environment, and it reloads the `systemd` configuration.
+
+With the `--keep-config` parameter, the original configuration files (`/etc/smfc/smfc.conf` and `/etc/default/smfc`)
+are preserved. Without it both are removed, and `/etc/smfc` is removed too when nothing is left in it. Backup copies
+of your configuration file are your own files, so they stay, and they keep the folder with them.
 
 ### 10. Configuration
 After successful installation, create/edit your new configuration file. Its default location is `/etc/smfc/smfc.conf` (and command line options live in `/etc/default/smfc`). If you just upgraded to a new `smfc` version, you can preserve the existing one. 
