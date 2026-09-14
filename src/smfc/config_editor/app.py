@@ -239,9 +239,15 @@ class EditorApp:
             self.message = "saved"
 
     def check(self) -> None:
-        """Run the checks of the whole file."""
-        self.model.run_checks()
-        self.message = "checked" if not self.model.has_errors() else "checked: errors found"
+        """Run every check, the ones that talk to the hardware included.
+        A probe costs seconds, so the screen says what is happening before the keyboard stops
+        answering.
+        """
+        self.message = "testing the hardware..."
+        self.model.run_checks(hardware=True)
+        findings = sum(len(v) for v in self.model.findings.values())
+        self.message = (f"checked, {findings} findings" if not self.model.has_errors()
+                        else f"checked, {findings} findings, errors found")
 
     # -- keys --------------------------------------------------------------------------------------
 

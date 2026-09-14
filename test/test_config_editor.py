@@ -720,6 +720,33 @@ class TestEditorApp:
         app.handle_key(curses.KEY_F10)
         assert app.running is False
 
+    def test_f5_runs_the_hardware_probes(self, tmp_path: Path, mocker) -> None:
+        """Positive unit test for EditorApp.check(). It contains the following steps:
+        - press F5 with the probes mocked
+        - ASSERT: the probes are run, which is what the key promises
+        - ASSERT: the sudo flag of the model is passed to them, so -s reaches ipmitool and smartctl
+        - ASSERT: the message says how many findings there are
+        """
+        probe = mocker.patch("smfc.config_editor.model.probe_all", return_value=[])
+        mocker.patch("smfc.config_editor.model.loaded_modules", return_value=NO_MODULES)
+        app = EditorApp(_model(tmp_path))
+        app.model.sudo = True
+        app.handle_key(curses.KEY_F5)
+        probe.assert_called_once()
+        assert probe.call_args[0][1] is True
+        assert "findings" in app.message
+
+    def test_the_sudo_flag_reaches_the_model(self, tmp_path: Path, mocker) -> None:
+        """Positive unit test for main(). It contains the following steps:
+        - run smfc-config with -s, with the editor loop mocked out
+        - ASSERT: the model carries the flag, so the hardware probes run under sudo
+        """
+        run = mocker.patch("smfc.config_editor.app.run", return_value=0)
+        path = tmp_path / "smfc.conf"
+        path.write_text(SMALL, encoding="utf-8")
+        assert main(["-c", str(path), "-s"]) == 0
+        assert run.call_args[0][0].sudo is True
+
     def test_saving_an_invalid_file_is_allowed_and_says_so(self, tmp_path: Path) -> None:
         """Positive unit test for EditorApp.save(). It contains the following steps:
         - open the shipped configuration file, which the parser rejects, and press F2

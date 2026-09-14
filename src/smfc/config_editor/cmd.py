@@ -110,6 +110,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     except OSError as error:
         print(f"ERROR: cannot read {path}: {error}", file=sys.stderr)
         return EXIT_CONFIG_ERROR
+    # The hardware probes of F5 run ipmitool and smartctl, which need root or sudo.
+    model.sudo = args.sudo
     # Import the terminal layer only here, so the checks above can run on a machine without a terminal.
     from smfc.config_editor.app import run  # pylint: disable=import-outside-toplevel
     return run(model, no_color=args.no_color)

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field as dataclass_field
 from enum import Enum
 from typing import Dict, List, Optional
 
-from smfc.checks import CheckResult, Level, check_all, loaded_modules
+from smfc.checks import CheckResult, Level, check_all, loaded_modules, probe_all
 from smfc.config import Config
 from smfc.config_editor.confwriter import ConfWriter, is_writable
 from smfc.config_editor.schema import SECTIONS, Field, Section, family_of, section_of, validate
@@ -75,6 +75,7 @@ class EditorModel:
     rows: List[Row] = dataclass_field(default_factory=list)     # The section list
     findings: Dict[str, List[CheckResult]] = dataclass_field(default_factory=dict)   # Findings per row
     checked: bool = False                                       # True once the checks have run
+    sudo: bool = False                                          # Run the hardware probes under sudo
 
     @classmethod
     def load(cls, path: str) -> "EditorModel":
@@ -258,10 +259,13 @@ class EditorModel:
                     claimed.add(int(part))
         return [zone for zone in range(count) if zone not in claimed]
 
-    def run_checks(self, modules: Optional[str] = None) -> None:
-        """Run the parse tier and the dependency checks, and group the findings by row.
+    def run_checks(self, modules: Optional[str] = None, hardware: bool = False) -> None:
+        """Run the checks and group the findings by row.
+        The parse tier and the dependency checks cost microseconds and run on every call. The hardware
+        probes cost seconds and talk to the BMC and the disks, so they run only when asked for.
         Args:
             modules (Optional[str]): content of /proc/modules, read from the system when omitted
+            hardware (bool): True to run the probes that talk to the hardware
         """
         findings: Dict[str, List[CheckResult]] = {}
 
@@ -277,6 +281,9 @@ class EditorModel:
             return
         for result in check_all(config, modules if modules is not None else loaded_modules()):
             add(result)
+        if hardware:
+            for result in probe_all(config, self.sudo):
+                add(result)
         self.findings = findings
         self.checked = True
 

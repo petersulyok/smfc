@@ -479,7 +479,7 @@ One limit: `Config` raises on the **first** error, unlike `checks.py`, which rep
 editor shows one parse error at a time and the next appears when that one is fixed. Making the
 parser collect every error is a larger change and is not in this release.
 
-Start with `F5` only, as agreed. Add the value tier later if editing feels blind.
+The parse tier and the value tier run on every load and save. The hardware tier runs on `F5` only, and `smfc-config -s` runs its commands under `sudo`, the same flag `smfc-client` has.
 
 **`smartctl` on a standby disk wakes it.** An editor that spins up eight sleeping disks on every
 refresh is worse than no editor. The key must say so: `F5: test hardware (may wake disks)`.
