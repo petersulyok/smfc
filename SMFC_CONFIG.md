@@ -392,6 +392,27 @@ So the rule follows the value, not the preference:
 Most keys are numbers, so most edits stay in place. This also removes the need for a field that
 scrolls sideways, which is the fiddly part of `curses` text entry.
 
+### 5.5 A boolean is yes or no
+
+The value `1` tells a user nothing. The editor shows every boolean as `yes` or `no`, in the value
+cell, in the range line of the help pane and in the message after a change. `Enter` on a boolean
+switches it, the way `Space` switches a section, because a value with two states is chosen rather
+than typed.
+
+The file keeps `0` and `1`, which is the form every shipped sample uses, so what the editor writes
+matches the documentation. The parser also accepts `true`, `yes` and `on` in a hand-written file; the
+editor reads any of them as `yes` and writes `1` if the user changes that parameter.
+
+**One thing left for phase 7.** The comments of `config/smfc.conf` still describe a boolean in four
+words at once:
+
+```
+# Fan controller enabled (bool, default=0/false)
+```
+
+That says `bool`, `0` and `false` to a reader who needs none of the three. The comments, the README
+and the man page should use the same two words the editor now uses.
+
 ## 6. Checks
 
 `src/smfc/checks.py` holds this work. It was a refactor of `Service.check_dependencies()`, which
@@ -751,7 +772,7 @@ Each phase ends with passing tests. Phases 1 to 4 are useful on their own, with 
 | 4 | `confwriter.py` | **done**; all 11 samples and the shipped file round-trip byte for byte; add and remove an instance; atomic save; `is_writable()` |
 | 5 | the editor | the curses master-detail screen |
 | 6 | the popups | needs phases 3 and 5 |
-| 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries |
+| 7 | packaging and docs | `pyproject.toml`, README chapter, man page, changelog entries; the boolean wording of the shipped comments, see 5.5 |
 | 8 | the venv installer | `install.sh`, `uninstall.sh`, the three Dockerfiles, README 9.5; see 12.1 |
 
 Phase 7 note: `debian/changelog` is DEB-only and `smfc.spec` `%changelog` is RPM-only. Keep the

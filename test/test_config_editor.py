@@ -522,6 +522,57 @@ class TestEditorApp:
         assert views["steps"].state is FieldState.INVALID
         assert views["max_temp"].state is FieldState.NORMAL
 
+    @pytest.mark.parametrize(
+        "written, shown",
+        [
+            pytest.param("1", "yes", id="one"),
+            pytest.param("0", "no", id="zero"),
+            pytest.param("true", "yes", id="true"),
+            pytest.param("false", "no", id="false"),
+            pytest.param("on", "yes", id="on"),
+            pytest.param("off", "no", id="off"),
+        ],
+    )
+    def test_a_boolean_is_shown_in_words(self, tmp_path: Path, written: str, shown: str) -> None:
+        """Positive unit test for the boolean rendering. It contains the following steps:
+        - write each form the parser accepts into a boolean parameter
+        - ASSERT: the value cell reads yes or no, whichever form the file holds
+        """
+        model = _model(tmp_path, f"[Ipmi]\n[CPU]\nenabled={written}\n")
+        views = model.fields_of(_row(model, "CPU"))
+        lines = panes.render_fields(views, 0, 0, panes.layout_for(80, 24))
+        assert lines[0].split()[-1] == shown
+
+    def test_enter_switches_a_boolean(self, tmp_path: Path) -> None:
+        """Positive unit test for EditorApp.start_edit(). It contains the following steps:
+        - press Enter on a boolean parameter twice
+        - ASSERT: no text edit opens, because a boolean has two values rather than free text
+        - ASSERT: the file carries 1 and then 0, the form every shipped sample uses
+        - ASSERT: the message names the state in words
+        """
+        app = EditorApp(_model(tmp_path, "[Ipmi]\n[HD]\nenabled=1\nhd_names=/dev/a\n"
+                                         "standby_guard_enabled=0\n"))
+        app.row_index = [i for i, r in enumerate(app.model.rows) if r.name == "HD"][0]
+        app.pane = PANE_FIELDS
+        app.field_index = [i for i, v in enumerate(app.views())
+                           if v.key == "standby_guard_enabled"][0]
+        app.start_edit()
+        assert app.editing is None and app.popup is None
+        assert app.model.writer.get("HD", "standby_guard_enabled") == "1"
+        assert app.message.endswith("yes")
+        app.start_edit()
+        assert app.model.writer.get("HD", "standby_guard_enabled") == "0"
+        assert app.message.endswith("no")
+
+    def test_the_help_of_a_boolean_says_yes_or_no(self, tmp_path: Path) -> None:
+        """Positive unit test for Field.range_text(). It contains the following steps:
+        - read the range line of a boolean parameter
+        - ASSERT: it names the two words, not a type and a number
+        """
+        model = _model(tmp_path)
+        views = {v.key: v for v in model.fields_of(_row(model, "CPU"))}
+        assert views["enabled"].field.range_text() == "yes or no, default no"
+
     def test_an_enum_opens_the_choice_popup_and_writes_the_choice(self, tmp_path: Path) -> None:
         """Positive unit test for the choice popup. It contains the following steps:
         - open temp_calc, which accepts three values

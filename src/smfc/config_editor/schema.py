@@ -32,6 +32,34 @@ class Widget(str, Enum):
     DEVICES = "devices"     # several values ticked in the device popup
 
 
+# What a boolean looks like to a user, and what is written into the file. The parser also accepts
+# true, yes and on in a hand-written file; the editor shows any of them as "yes" and writes 1.
+BOOL_WORDS: Dict[str, str] = {"1": "yes", "0": "no"}
+BOOL_TRUE: tuple = ("1", "true", "yes", "on")
+BOOL_ACCEPTED: tuple = ("0", "1", "true", "false", "yes", "no", "on", "off")
+
+
+def bool_text(value: str) -> str:
+    """Render a boolean the way a user reads it.
+    Args:
+        value (str): the value as the file holds it
+    Returns:
+        str: "yes" or "no"
+    """
+    return "yes" if value.strip().lower() in BOOL_TRUE else "no"
+
+
+def bool_value(yes: bool) -> str:
+    """Render a boolean the way the file holds it.
+    Every shipped sample writes 0 and 1, so the editor writes the same.
+    Args:
+        yes (bool): the state
+    Returns:
+        str: "1" or "0"
+    """
+    return "1" if yes else "0"
+
+
 # Value kinds edited in a popup, because their value is longer than the value cell of the right pane.
 _POPUP_KINDS: Tuple[FieldKind, ...] = (FieldKind.STR, FieldKind.PATH, FieldKind.CURVE,
                                       FieldKind.STR_LIST)
@@ -90,6 +118,8 @@ class Field:
         Returns:
             str: for example "float, C, default 30.0, 0.0 or more"
         """
+        if self.kind is FieldKind.BOOL:
+            return f"yes or no, default {bool_text(bool_value(bool(self.default)))}"
         parts: List[str] = [self.kind.value]
         if self.unit:
             parts.append(self.unit)
@@ -545,8 +575,8 @@ def validate(f: Field, value: str) -> str:
     problem = ""
     try:
         if f.kind is FieldKind.BOOL:
-            if text.lower() not in ("0", "1", "true", "false", "yes", "no", "on", "off"):
-                problem = "use 0 or 1"
+            if text.lower() not in BOOL_ACCEPTED:
+                problem = "yes or no"
         elif f.kind in (FieldKind.INT, FieldKind.FLOAT):
             problem = _validate_number(f, text)
         elif f.kind is FieldKind.ENUM:

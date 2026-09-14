@@ -10,7 +10,7 @@ from typing import List, Optional
 from smfc.config_editor import panes, popups
 from smfc.config_editor.model import EditorModel, FieldState, FieldView, Row, RowKind
 from smfc.config_editor.panes import Layout
-from smfc.config_editor.schema import SECTIONS, FieldKind, Widget, validate
+from smfc.config_editor.schema import SECTIONS, FieldKind, Widget, bool_text, bool_value, validate
 from smfc.discover import discover_hds, discover_nvmes
 
 # The colour scheme, taken from the Debian installer: a painted banner and key bar, light panes and a
@@ -148,6 +148,12 @@ class EditorApp:
             return
         if view.field is None:
             self.message = "smfc does not know this parameter; it is kept as it is"
+            return
+        if view.field.kind is FieldKind.BOOL:
+            # A boolean has two values, so it is switched rather than typed, the same way a section is.
+            new_value = bool_value(bool_text(view.value) == "no")
+            self.model.set_value(self.row, view.key, new_value)
+            self.message = f"{view.key} = {bool_text(new_value)}"
             return
         if view.field.widget is Widget.INLINE:
             self.editing = view.value

@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from smfc.checks import Level
 from smfc.config_editor.model import EditorModel, FieldState, FieldView, Row, RowKind
+from smfc.config_editor.schema import FieldKind, bool_text
 
 # Smallest screen the two-pane layout needs. Below either figure the editor falls back to one pane.
 MIN_WIDTH: int = 64
@@ -318,6 +319,8 @@ def _display_value(view: FieldView) -> str:
     if "\n" in view.value:
         count = len([line for line in view.value.splitlines() if line.strip()])
         return f"{count} devices..."
+    if view.field is not None and view.field.kind is FieldKind.BOOL:
+        return bool_text(view.value)
     if view.field is not None and view.field.choices and view.field.labels:
         for choice, label in zip(view.field.choices, view.field.labels):
             if str(choice) == view.value.strip():
