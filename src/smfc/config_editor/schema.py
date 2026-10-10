@@ -320,7 +320,8 @@ IPMI_SECTION: Section = Section(
             detail="A BMC needs time to apply a new level. Raise it if a level read back straight after a "
                    "write returns the old value."),
         Field(
-            key=Config.CV_IPMI_REMOTE_PARAMETERS, example="-U ADMIN -P ADMIN -H 10.0.0.5", kind=FieldKind.STR, default=Config.DV_IPMI_REMOTE_PARAMETERS,
+            key=Config.CV_IPMI_REMOTE_PARAMETERS, kind=FieldKind.STR, default=Config.DV_IPMI_REMOTE_PARAMETERS,
+            example="-U ADMIN -P ADMIN -H 10.0.0.5",
             summary="Extra ipmitool arguments for a remote BMC",
             detail="Empty means the local BMC through /dev/ipmi0. A remote board needs the user, the "
                    "password and the host, for example -U ADMIN -P ADMIN -H 10.0.0.5."),

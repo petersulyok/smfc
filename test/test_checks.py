@@ -3,7 +3,6 @@
 #   test_checks.py (C) 2026, Peter Sulyok
 #   Unit test for smfc.checks module.
 #
-import os
 from pathlib import Path
 from typing import List
 import pytest

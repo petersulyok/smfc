@@ -7,8 +7,8 @@ import curses
 import os
 import shutil
 from pathlib import Path
-import pytest
 from unittest.mock import patch
+import pytest
 from smfc.checks import Level
 from smfc.config_editor import panes, popups
 from smfc.config_editor.app import (CURSOR_INSERT, CURSOR_OVERWRITE, EditorApp, PANE_FIELDS,
@@ -399,16 +399,18 @@ class _FakeWindow:
         self.children: list = []
 
     def getmaxyx(self):
+        """Size of the window, as curses returns it."""
         return self.height, self.width
 
     def derwin(self, height, width, top, left):
+        """A child window, recorded with its geometry."""
         child = _FakeWindow(height, width)
         self.children.append(child)
         self.calls.append(("derwin", height, width, top, left))
         return child
 
     def __getattr__(self, name):
-        def record(*args, **kwargs):
+        def record(*args, **_kwargs):
             self.calls.append((name,) + args)
         return record
 

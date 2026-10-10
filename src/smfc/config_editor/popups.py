@@ -5,7 +5,7 @@
 #
 import curses
 from dataclasses import dataclass, field as dataclass_field
-from typing import Callable, List, Optional, Sequence, Tuple
+from typing import Callable, ClassVar, List, Optional, Sequence, Tuple
 
 from smfc.config_editor.lineedit import KEY_END, LineEdit
 from smfc.config_editor.panes import fit
@@ -90,7 +90,7 @@ class TextPopup(Popup):
     line: Optional[LineEdit] = None             # The caret and the insert flag of the input field
 
     # Index of the input field in the body, so the caller knows which line to paint as a field.
-    INPUT_ROW: int = 1
+    INPUT_ROW: ClassVar[int] = 1
 
     def __post_init__(self) -> None:
         """Open the value for editing, with the caret at its end."""
