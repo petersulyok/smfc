@@ -1467,6 +1467,8 @@ the first iteration.
 
 Both `smfc-deb` and `smfc-rpm` use the `gh-pages` branch as the GitHub Pages source, exposing the repository at `https://petersulyok.github.io/smfc-deb/` and `https://petersulyok.github.io/smfc-rpm/` respectively.
 
+Every long-lived branch is guarded by a repository ruleset that blocks deletion and force pushes: `main` in `smfc` ("Protect main"), and both `main` and `gh-pages` in `smfc-deb` and `smfc-rpm` ("Protect main and gh-pages"). No status checks or pull requests are required, so direct pushes to `main` and the publish workflows' fast-forward pushes to `gh-pages` are unaffected. The rulesets have no bypass actors: rewriting or recreating a protected branch (e.g. resetting `gh-pages`) requires setting the ruleset to *Disabled* first, under Settings → Rules → Rulesets.
+
 ### 15.2 Release trigger flow
 
 ```mermaid
