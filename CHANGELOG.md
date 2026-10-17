@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.4.3] - 2026.10.17
+
+### Fixed
+- **`smfc` failed to start when the BMC base fan mode was above 9**, e.g. Performance (`0x0A`) on an X14/H14 board, with `invalid literal for int() with base 10: ' 0a\n'`. `ipmitool` prints the mode byte in hex, and `smfc` parsed it as a decimal number, which only works for modes 0-9. The mode is parsed as hex now. The same fix applies to `ipmi/get_ipmi_fan_mode.sh`, which also failed on modes 8 and 9 and knows the X14/H14 mode names now. Reported by [@Yakje](https://github.com/Yakje) in [discussion #106](https://github.com/petersulyok/smfc/discussions/106).
+
 ## [6.4.2] - 2026.09.07
 
 ### Fixed

@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        6.4.2
+Version:        6.4.3
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -100,6 +100,12 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Sat Oct 17 2026 Peter Sulyok <peter@sulyok.net> - 6.4.3-1
+- Fixed: smfc failed to start when the BMC base fan mode was above 9 (e.g.
+  Performance, 0x0A, on an X14/H14 board). ipmitool prints the mode byte in
+  hex, and smfc parsed it as a decimal number, which only works for modes
+  0-9. The mode is parsed as hex now.
+
 * Mon Sep 07 2026 Peter Sulyok <peter@sulyok.net> - 6.4.2-1
 - Fixed: the X14/H14 firmware stack probe accepted only completion code 0xC1
   as the ATEN signal, so a board rejecting the probe with any other code
