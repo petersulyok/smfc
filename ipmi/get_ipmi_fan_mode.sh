@@ -12,9 +12,15 @@ then
     exit -1
 fi
 
-# Read current IPMI fan mode.
-fan_mode=$(( $(ipmitool raw 0x30 0x45 0x00) ))
+# Read current IPMI fan mode (ipmitool prints the byte in hex, e.g. " 0a").
+reply=$(ipmitool raw 0x30 0x45 0x00)
 rc=$?
+if [ $rc -ne 0 ] || [ -z "${reply// /}" ]
+then
+    echo "ERROR: IPMI fan mode cannot be read (ipmitool return code: $rc)."
+    exit 1
+fi
+fan_mode=$(( 16#${reply// /} ))
 
 # Check input parameter.
 case $fan_mode in
@@ -32,6 +38,27 @@ case $fan_mode in
     ;;
 4)
     mode_str="Heavy IO"
+    ;;
+5)
+    mode_str="PUE3"
+    ;;
+6)
+    mode_str="Liquid Cooling"
+    ;;
+7)
+    mode_str="Smart"
+    ;;
+8)
+    mode_str="PUE"
+    ;;
+9)
+    mode_str="Smart Cooling"
+    ;;
+10)
+    mode_str="Performance"
+    ;;
+11)
+    mode_str="Silent"
     ;;
 *)
     mode_str="Unknown"

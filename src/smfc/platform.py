@@ -204,7 +204,7 @@ class Platform(ABC):
             ValueError: output of the ipmitool cannot be interpreted/converted
         """
         r = self._exec(["raw", "0x30", "0x45", "0x00"])
-        return int(r.stdout)
+        return int(r.stdout, 16)
 
     def set_fan_mode(self, mode: int) -> None:
         """Set the IPMI fan mode.

@@ -262,7 +262,7 @@ if [[ $1 = "raw" && $2 = "0x30" && $3 = "0x45" && $4 = "0x00" ]] ; then
   if [[ "$r" -eq "3" ]] ; then
     r=1
   fi
-	echo "$r"
+	printf " %02x\n" "$r"
 	exit 0
 fi
 
@@ -703,7 +703,7 @@ class FakeOpenBmc:
     def _fan_mode(self, args: List[str]) -> subprocess.CompletedProcess:
         """Handle the base fan mode commands: read, supported-mode bitmask, and write."""
         if args[3] == "0x00":
-            return self._reply(f"{self.fan_mode}")
+            return self._reply(f" {self.fan_mode:02x}")
         if args[3] == "0x02":
             # Two bytes, little-endian, one bit per mode value.
             return self._reply(f" {self.supported_modes & 0xFF:02x} {self.supported_modes >> 8:02x}")
