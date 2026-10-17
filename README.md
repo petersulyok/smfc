@@ -620,7 +620,7 @@ sudo curl -fsSL https://petersulyok.github.io/smfc-deb/smfc.sources \
 sudo apt update && sudo apt install smfc
 ```
 
-The `smfc.sources` file contains the repository signing key, so it is a single, self-contained file and no separate keyring is needed. Embedded keys require `apt` 2.4 or newer, available on all supported distributions (Debian 12+, Ubuntu 22.04+).
+The `smfc.sources` file contains the repository signing key, so it is a single, self-contained file and no separate keyring is needed. Embedded keys require `apt` 2.4 or newer, available on all supported distributions (Debian 12+, Ubuntu 24.04+).
 
 **b) One-line format with a separate key file**
 
@@ -644,7 +644,7 @@ sudo rm -f /etc/apt/sources.list.d/smfc.list /etc/apt/keyrings/smfc-repo.gpg  # 
 
 Note: if you added the repository with b) earlier and switch to a), delete the files of the old format (`smfc.list` and `smfc-repo.gpg`), otherwise the repository is configured twice.
 
-Compatible with Debian 12+, Ubuntu 22.04+. See the [smfc-deb README](https://github.com/petersulyok/smfc-deb) for the full distribution list. The package installs the same files as the manual installation (service unit, configuration, man page, sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
+Compatible with Debian 12+, Ubuntu 24.04+. See the [smfc-deb README](https://github.com/petersulyok/smfc-deb) for the full distribution list. The package installs the same files as the manual installation (service unit, configuration, man page, sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
 The DEB package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc)); from then on it starts automatically on every boot. On upgrade the service is restarted if it was running, and left stopped if you had stopped it.
 
 
@@ -669,7 +669,7 @@ sudo dnf remove smfc
 sudo rm /etc/yum.repos.d/smfc.repo
 ```
 
-Compatible with Fedora 39+, RHEL/Rocky/AlmaLinux 9+ (with EPEL), CentOS Stream 9+, openSUSE Leap 15.5+. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for the full distribution list. The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
+Compatible with Fedora 39+, RHEL/Rocky/AlmaLinux 10+ (with EPEL), CentOS Stream 10+, openSUSE Leap 16+. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for the full distribution list. The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
 The RPM package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc)); from then on it starts automatically on every boot. On upgrade the service is restarted if it was running, and left stopped if you had stopped it.
 
 #### 9.3. Arch Linux (AUR) package installation

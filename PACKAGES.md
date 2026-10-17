@@ -47,10 +47,10 @@ The `.deb` file will be created in the parent directory (`../`).
 | Distribution    | Version                          |
 |-----------------|----------------------------------|
 | Debian          | 12 (Bookworm), 13 (Trixie), Sid  |
-| Ubuntu          | 22.04+, 24.04+                   |
+| Ubuntu          | 24.04+                           |
 | Proxmox VE      | 8+                               |
-| Linux Mint      | 21+                              |
-| Pop!_OS         | 22.04+                           |
+| Linux Mint      | 22+                              |
+| Pop!_OS         | 24.04+                           |
 | Raspberry Pi OS | Bookworm+                        |
 
 ## RPM package
@@ -94,8 +94,8 @@ The `.rpm` file will be created in `~/rpmbuild/RPMS/noarch/`.
 | Distribution  | Version                |
 |---------------|------------------------|
 | Fedora        | 39+                    |
-| RHEL          | 9+ (with EPEL)         |
-| CentOS Stream | 9+ (with EPEL)         |
-| Rocky Linux   | 9+ (with EPEL)         |
-| AlmaLinux     | 9+ (with EPEL)         |
-| openSUSE      | Leap 15.5+, Tumbleweed |
+| RHEL          | 10+ (with EPEL)        |
+| CentOS Stream | 10+ (with EPEL)        |
+| Rocky Linux   | 10+ (with EPEL)        |
+| AlmaLinux     | 10+ (with EPEL)        |
+| openSUSE      | Leap 16+, Tumbleweed   |
