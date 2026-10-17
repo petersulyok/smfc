@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- GitHub Actions in the package workflows run on Node.js 24 now, because GitHub deprecated Node.js 20. `packages.yml` uses `actions/upload-artifact@v7` and `actions/download-artifact@v8`, and the publish workflows of [`smfc-deb`](https://github.com/petersulyok/smfc-deb) and [`smfc-rpm`](https://github.com/petersulyok/smfc-rpm) use `actions/checkout@v6`. `download-artifact@v8` stops with an error on a hash mismatch, where the earlier version only gave a warning.
+
 ## [6.4.3] - 2026.10.17
 
 ### Fixed

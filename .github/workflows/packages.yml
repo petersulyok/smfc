@@ -28,7 +28,7 @@ jobs:
       - name: Get version
         run: echo "VERSION=$(dpkg-parsechangelog -S Version)" >> $GITHUB_ENV
       - name: Upload DEB package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smfc-${{ env.VERSION }}-deb
           path: smfc_*.deb
@@ -51,7 +51,7 @@ jobs:
       - name: Build RPM package
         run: rpmbuild -bb smfc.spec
       - name: Upload RPM package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smfc-${{ env.VERSION }}-rpm
           path: ~/rpmbuild/RPMS/noarch/smfc-*.rpm
@@ -65,13 +65,13 @@ jobs:
 
     steps:
       - name: Download DEB artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: smfc-*-deb
           merge-multiple: true
 
       - name: Download RPM artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: smfc-*-rpm
           merge-multiple: true
