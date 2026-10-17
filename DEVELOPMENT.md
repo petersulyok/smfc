@@ -178,8 +178,8 @@ The docker images can be built locally in the project root folder:
 ./docker/docker-build.sh 4.1.0 latest
 ```
 Notes:
-- All three dockerfiles pin an exact base image tag (`alpine:3.24.1`, `debian:13.6-slim`,
-  `ubuntu:noble-20260810`) instead of a floating one, so a rebuild always produces the same base. The AMD image
+- All three dockerfiles pin an exact base image tag (`alpine:3.24.2`, `debian:13.7-slim`,
+  `ubuntu:noble-20260917`) instead of a floating one, so a rebuild always produces the same base. The AMD image
   also pins the ROCm APT repository version (`7.2.4`), from which only `rocm-smi-lib` is installed.
   Before a release, check for newer base images and bump the `FROM` lines deliberately, then update the component
   lists in [`DOCKER.md`](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md) accordingly. The versions
