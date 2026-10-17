@@ -14,7 +14,7 @@ This is a `systemd service` running on Linux that can control fans with the help
 
 ### 1. Prerequisites
  - a Supermicro motherboard with IPMI 2.0 (ASPEED AST2400/2500/2600 chip)
- - Python 3.10-3.14
+ - Python 3.11-3.15
  - a Linux distribution with:
    - `systemd` and `bash`
    - `coretemp` kernel module for Intel CPUs or `k10temp` kernel module for AMD CPUs
