@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- `smfc` names all base fan modes of X14/H14 boards in the log, the snapshot and `smfc-client`: `PUE3` (`0x05`), `LIQUID COOLING` (`0x06`), `SMART` (`0x07`), `PUE` (`0x08`), `SMART COOLING` (`0x09`), `PERFORMANCE` (`0x0A`) and `SILENT` (`0x0B`). Before, these modes showed as `UNKNOWN`. Mode `0x03` is named `PUE2` now, its Supermicro name, so that it is different from `PUE` (`0x08`).
 - GitHub Actions in the package workflows run on Node.js 24 now, because GitHub deprecated Node.js 20. `packages.yml` uses `actions/upload-artifact@v7` and `actions/download-artifact@v8`, and the publish workflows of [`smfc-deb`](https://github.com/petersulyok/smfc-deb) and [`smfc-rpm`](https://github.com/petersulyok/smfc-rpm) use `actions/checkout@v6`. `download-artifact@v8` stops with an error on a hash mismatch, where the earlier version only gave a warning.
 
 ## [6.4.3] - 2026.10.17
