@@ -145,8 +145,9 @@ The project implemented the following GitHub workflows:
 
 3. Build and publish DEB / RPM packages (`packages.yml`). A published release triggers this action:
    * build DEB package on `debian:trixie`
-   * build RPM package on `fedora:latest`
-   * upload both packages as CI artifacts (90-day retention) and attach them to the GitHub release as assets
+   * build one RPM package for each target (Fedora 43, Fedora 44, EL10) with `mock` on `fedora:latest`
+   * install each RPM package in a container of its target and run `smfc -v`
+   * upload all packages as CI artifacts (90-day retention) and attach them to the GitHub release as assets
    * dispatch a `package-published` event to [`smfc-deb`](https://github.com/petersulyok/smfc-deb) and [`smfc-rpm`](https://github.com/petersulyok/smfc-rpm), which then republish the packages into their signed APT and DNF repositories on GitHub Pages (see [`ARCHITECTURE.md` chapter 15](https://github.com/petersulyok/smfc/blob/main/ARCHITECTURE.md#15-release-and-distribution))
 
 
