@@ -3,6 +3,8 @@ name: Build packages
 on:
   release:
     types: [published]
+  pull_request:
+    paths: [smfc.spec, "debian/**", pyproject.toml, .github/workflows/packages.yml]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -34,31 +36,70 @@ jobs:
           path: smfc_*.deb
 
   build-rpm:
-    name: Build RPM package
+    name: Build RPM package (${{ matrix.dist }})
     runs-on: ubuntu-latest
-    container: fedora:latest
+    container:
+      image: fedora:latest
+      options: --privileged
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: fedora-43-x86_64, dist: fc43 }
+          - { target: fedora-44-x86_64, dist: fc44 }
+          - { target: alma+epel-10-x86_64, dist: el10 }
 
     steps:
       - uses: actions/checkout@v6
       - name: Install build dependencies
-        run: dnf install -y rpm-build python3-devel python3-setuptools python3-pip python3-wheel pyproject-rpm-macros systemd-rpm-macros
+        run: dnf install -y mock rpm-build
       - name: Get version
         run: echo "VERSION=$(grep '^Version:' smfc.spec | awk '{print $2}')" >> $GITHUB_ENV
       - name: Create source tarball
         run: |
           mkdir -p ~/rpmbuild/SOURCES
           tar czf ~/rpmbuild/SOURCES/smfc-${VERSION}.tar.gz --transform="s,^./,smfc-${VERSION}/," --exclude='.git' --exclude='.venv' .
+      - name: Build SRPM package
+        run: rpmbuild -bs smfc.spec
       - name: Build RPM package
-        run: rpmbuild -bb smfc.spec
+        run: mock -r ${{ matrix.target }} --isolation=simple --no-bootstrap-image --resultdir=out --rebuild ~/rpmbuild/SRPMS/smfc-*.src.rpm
       - name: Upload RPM package
         uses: actions/upload-artifact@v7
         with:
-          name: smfc-${{ env.VERSION }}-rpm
-          path: ~/rpmbuild/RPMS/noarch/smfc-*.rpm
+          name: smfc-${{ env.VERSION }}-rpm-${{ matrix.dist }}
+          path: out/smfc-*.noarch.rpm
+
+  test-rpm:
+    name: Test RPM package (${{ matrix.dist }})
+    needs: build-rpm
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "fedora:43", dist: fc43 }
+          - { image: "fedora:44", dist: fc44 }
+          - { image: "almalinux:10", dist: el10 }
+
+    steps:
+      - name: Download RPM package
+        uses: actions/download-artifact@v8
+        with:
+          pattern: smfc-*-rpm-${{ matrix.dist }}
+          merge-multiple: true
+      - name: Enable EPEL
+        if: matrix.dist == 'el10'
+        run: dnf install -y epel-release
+      - name: Install RPM package
+        run: dnf install -y ./smfc-*.${{ matrix.dist }}.noarch.rpm
+      - name: Run smfc
+        run: smfc -v
 
   publish:
     name: Publish packages to release and APT repository
-    needs: [build-deb, build-rpm]
+    needs: [build-deb, build-rpm, test-rpm]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -70,10 +111,10 @@ jobs:
           pattern: smfc-*-deb
           merge-multiple: true
 
-      - name: Download RPM artifact
+      - name: Download RPM artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: smfc-*-rpm
+          pattern: smfc-*-rpm-*
           merge-multiple: true
 
       - name: Attach packages to release

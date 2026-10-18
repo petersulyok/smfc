@@ -72,6 +72,20 @@ rpmbuild -bb smfc.spec
 
 The `.rpm` file will be created in `~/rpmbuild/RPMS/noarch/`.
 
+### Build for one target with `mock`
+
+The release workflow builds one RPM for each target with `mock`. The same build runs locally on Fedora, as a
+user in the `mock` group:
+
+```bash
+sudo dnf install mock rpm-build
+rpmbuild -bs smfc.spec
+mock -r alma+epel-10-x86_64 --resultdir=out --rebuild ~/rpmbuild/SRPMS/smfc-*.src.rpm
+```
+
+The source tarball must be in `~/rpmbuild/SOURCES/` first (see above). The targets of the release workflow are
+`fedora-43-x86_64`, `fedora-44-x86_64` and `alma+epel-10-x86_64`. The `.rpm` file will be created in `out/`.
+
 ### Important notes
 
 - The package installs the following files:
