@@ -8,6 +8,7 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
 BuildRequires:  python3-devel
+BuildRequires:  pyproject-rpm-macros
 BuildRequires:  python3-setuptools
 BuildRequires:  python3-pip
 BuildRequires:  python3-wheel
@@ -24,6 +25,11 @@ IPMI fan function.
 
 %prep
 %autosetup
+%if 0%{?rhel}
+# setuptools 69 on EL10 cannot read PEP 639 license metadata
+sed -i -e 's/^license = "GPL-3.0-only"$/license = {text = "GPL-3.0-only"}/' -e '/^license-files = /d' pyproject.toml
+grep -q '^license = {text = "GPL-3.0-only"}$' pyproject.toml
+%endif
 
 %build
 %pyproject_wheel
