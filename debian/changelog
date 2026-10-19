@@ -1,3 +1,14 @@
+smfc (6.5.0) unstable; urgency=medium
+
+  * Changed: the supported Python versions are 3.11-3.15. Distributions with
+    an older default Python are no longer supported: Ubuntu 22.04, Linux Mint
+    21 and Pop!_OS 22.04.
+  * Changed: smfc names all base fan modes of X14/H14 boards (PUE3, LIQUID
+    COOLING, SMART, PUE, SMART COOLING, PERFORMANCE, SILENT) in the log, the
+    snapshot and smfc-client. Mode 0x03 is named PUE2.
+
+ -- Peter Sulyok <peter@sulyok.net>  Mon, 19 Oct 2026 06:35:27 +0200
+
 smfc (6.4.3) unstable; urgency=medium
 
   * Fixed: smfc failed to start when the BMC base fan mode was above 9

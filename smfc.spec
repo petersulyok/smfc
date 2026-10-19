@@ -1,5 +1,5 @@
 Name:           smfc
-Version:        6.4.3
+Version:        6.5.0
 Release:        1%{?dist}
 Summary:        Supermicro Fan Control for Linux
 License:        GPL-3.0-only
@@ -106,6 +106,25 @@ fi
 %{_docdir}/%{name}/examples/
 
 %changelog
+* Mon Oct 19 2026 Peter Sulyok <peter@sulyok.net> - 6.5.0-1
+- Added: RPM package for Enterprise Linux 10 (RHEL, AlmaLinux, Rocky Linux,
+  CentOS Stream, Oracle Linux, with EPEL), in the el10/ tree of the
+  repository with smfc-el.repo. The spec builds on EL10: the license
+  metadata is changed for setuptools 69, and pyproject-rpm-macros is a build
+  requirement.
+- Fixed: the RPM package could not be installed on Enterprise Linux 10. The
+  only RPM was built on Fedora 44 and required Python 3.14, but EL10 has
+  Python 3.12. A separate .el10 RPM is built for EL10 now. Reported by
+  @baka-yuki (smfc-rpm issue #1).
+- Changed: one RPM is built with mock for each target (Fedora 43, Fedora 44,
+  EL10), with the Python dependencies of that target. The Fedora RPMs are in
+  fedora/$releasever/ of the repository; an old smfc.repo that points to the
+  root of the repository must be replaced.
+- Changed: the supported Python versions are 3.11-3.15.
+- Changed: smfc names all base fan modes of X14/H14 boards (PUE3, LIQUID
+  COOLING, SMART, PUE, SMART COOLING, PERFORMANCE, SILENT). Mode 0x03 is
+  named PUE2.
+
 * Sat Oct 17 2026 Peter Sulyok <peter@sulyok.net> - 6.4.3-1
 - Fixed: smfc failed to start when the BMC base fan mode was above 9 (e.g.
   Performance, 0x0A, on an X14/H14 board). ipmitool prints the mode byte in

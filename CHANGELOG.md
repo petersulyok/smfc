@@ -5,12 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [6.5.0] - 2026.10.19
+
+### Added
+- Support of Python 3.15 added. It is in the classifiers and in the test matrix.
+- **RPM package for Enterprise Linux 10** (RHEL, AlmaLinux, Rocky Linux, CentOS Stream, Oracle Linux, with EPEL). Add `smfc-el.repo` to install it, see [README chapter 9.2](https://github.com/petersulyok/smfc/blob/main/README.md#92-rpm-package-installation).
 
 ### Changed
-- The supported Python versions are 3.11-3.15 now. Python 3.10 is no longer supported, and Python 3.15 is added to the classifiers and to the test matrix. Distributions with an older default Python are no longer supported: Ubuntu 22.04, Linux Mint 21, Pop!_OS 22.04, RHEL/CentOS Stream/Rocky Linux/AlmaLinux 9 and openSUSE Leap 15.
+- **Each RPM target has its own package and repository.** The release workflow builds one RPM with `mock` for each target: Fedora 43 (`.fc43`), Fedora 44 (`.fc44`) and Enterprise Linux 10 (`.el10`). Each RPM depends on the Python version of its target. The Fedora RPMs are in `fedora/$releasever/` of the RPM repository, and the EL10 RPM is in `el10/`. If your `/etc/yum.repos.d/smfc.repo` contains `baseurl=https://petersulyok.github.io/smfc-rpm/` (without `fedora/`), replace it with `sudo dnf config-manager addrepo --overwrite --from-repofile=https://petersulyok.github.io/smfc-rpm/smfc.repo`. The old repository receives updates only for a limited time.
+- openSUSE is no longer listed as compatible with the RPM package, because `smfc.spec` uses Fedora macros and package names. On openSUSE, use the Docker image or the manual installation (see [README chapters 9.4 and 9.5](https://github.com/petersulyok/smfc/blob/main/README.md#94-docker-installation)).
+- The supported Python versions are 3.11-3.15 now. Python 3.10 is no longer supported. Distributions with an older default Python are no longer supported: Ubuntu 22.04, Linux Mint 21, Pop!_OS 22.04, RHEL/CentOS Stream/Rocky Linux/AlmaLinux 9 and openSUSE Leap 15.
 - `smfc` names all base fan modes of X14/H14 boards in the log, the snapshot and `smfc-client`: `PUE3` (`0x05`), `LIQUID COOLING` (`0x06`), `SMART` (`0x07`), `PUE` (`0x08`), `SMART COOLING` (`0x09`), `PERFORMANCE` (`0x0A`) and `SILENT` (`0x0B`). Before, these modes showed as `UNKNOWN`. Mode `0x03` is named `PUE2` now, its Supermicro name, so that it is different from `PUE` (`0x08`).
 - GitHub Actions in the package workflows run on Node.js 24 now, because GitHub deprecated Node.js 20. `packages.yml` uses `actions/upload-artifact@v7` and `actions/download-artifact@v8`, and the publish workflows of [`smfc-deb`](https://github.com/petersulyok/smfc-deb) and [`smfc-rpm`](https://github.com/petersulyok/smfc-rpm) use `actions/checkout@v6`. `download-artifact@v8` stops with an error on a hash mismatch, where the earlier version only gave a warning.
+
+### Fixed
+- **The RPM package could not be installed on Enterprise Linux 10**, e.g. on AlmaLinux 10 with EPEL, with `nothing provides python3.14dist(pyudev) needed by smfc-6.1.0-1.fc44.noarch`. The only RPM was built on Fedora 44, so it required Python 3.14 and the `pyudev` package of Python 3.14, but EL10 has Python 3.12. A separate `.el10` RPM is built for EL10 now (see Added). Reported by [@baka-yuki](https://github.com/baka-yuki) in [smfc-rpm issue #1](https://github.com/petersulyok/smfc-rpm/issues/1), with a first solution in [smfc-rpm PR #2](https://github.com/petersulyok/smfc-rpm/pull/2).
 
 ## [6.4.3] - 2026.10.17
 
