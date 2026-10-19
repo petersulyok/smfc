@@ -1494,7 +1494,7 @@ Sequence on release:
 
 1. `release: published` event fires `packages.yml` in `smfc` (it can also be run manually — see §15.5).
 2. `build-deb` and `build-rpm` jobs run in parallel. `build-deb` produces `smfc_X.Y.Z_all.deb`. `build-rpm` is a matrix job that builds one SRPM with `rpmbuild -bs` and rebuilds it with `mock` for each target (`fedora-43-x86_64`, `fedora-44-x86_64`, `alma+epel-10-x86_64`), producing `smfc-X.Y.Z-1.fc43.noarch.rpm`, `smfc-X.Y.Z-1.fc44.noarch.rpm` and `smfc-X.Y.Z-1.el10.noarch.rpm`. Each RPM carries the `python(abi)` and `python3.Xdist(pyudev)` dependencies of its own target.
-3. The `test-rpm` matrix job installs each RPM in a container of its target (`fedora:43`, `fedora:44`, `almalinux:10` with EPEL) and runs `smfc -v`, so a dependency error stops the pipeline before anything is published.
+3. The `test-rpm` matrix job installs each RPM in a container of its target (`fedora:43`, `fedora:44`, `almalinux:10`) from the default repositories of the image, without EPEL, and runs `smfc -v`, so a dependency error stops the pipeline before anything is published.
 4. The `publish` job (after the DEB build and all RPM tests succeed) downloads all artifacts, attaches them as **release assets** (public, version-pinned downloads), and fires a `repository_dispatch` event of type `package-published` with `client_payload.release_tag` set, to both downstream repos.
 5. Each downstream workflow downloads its packages from the release page, refreshes the repository metadata, and pushes to `gh-pages`. `publish-rpm.yml` puts each RPM in the tree of its dist tag (see §15.3). GitHub Pages auto-deploys.
 

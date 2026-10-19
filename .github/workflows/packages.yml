@@ -88,9 +88,6 @@ jobs:
         with:
           pattern: smfc-*-rpm-${{ matrix.dist }}
           merge-multiple: true
-      - name: Enable EPEL
-        if: matrix.dist == 'el10'
-        run: dnf install -y epel-release
       - name: Install RPM package
         run: dnf install -y ./smfc-*.${{ matrix.dist }}.noarch.rpm
       - name: Run smfc
