@@ -165,6 +165,9 @@ Follow these steps to create a new release:
 * Run linters `pylint` and `ruff`, and correct all warnings
 * Update CHANGELOG.md with the new release information
 * Commit all changes and test again
+* Check the `README.md` of [`smfc-deb`](https://github.com/petersulyok/smfc-deb) and
+  [`smfc-rpm`](https://github.com/petersulyok/smfc-rpm): the supported distributions, the Python version and the
+  installation commands must match `PACKAGES.md` and chapter 9 of `README.md`. Update and push them if needed.
 * Create a new release on GitHub with the same version number, and the new package will be published on PyPI automatically. DEB and RPM packages will be built automatically by the `packages.yml` workflow.
 * Build new images for docker and upload them
 
