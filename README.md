@@ -649,6 +649,12 @@ The DEB package enables the `smfc` service but does not start it on installation
 
 
 #### 9.2. RPM package installation
+> [!WARNING]
+> **Existing Fedora users: replace your `smfc.repo` file.** From v6.5.0, the RPM repository has a separate tree for each distribution. If `/etc/yum.repos.d/smfc.repo` contains `baseurl=https://petersulyok.github.io/smfc-rpm/` (without `fedora/`), it points to the old repository. The old repository has v6.5.0 as its last version, and it will be removed with the next smfc release. Then `dnf` reports an error for it. Replace the file with the current one:
+> ```bash
+> sudo dnf config-manager addrepo --overwrite --from-repofile=https://petersulyok.github.io/smfc-rpm/smfc.repo
+> ```
+
 Pre-built `.rpm` packages are available from the [smfc-rpm DNF repository](https://github.com/petersulyok/smfc-rpm), hosted on GitHub Pages and signed with a dedicated GPG key. Each supported distribution has its own package in the repository, so add the `.repo` file of your distribution.
 
 **a) Fedora**
@@ -677,12 +683,6 @@ To remove:
 sudo dnf remove smfc
 sudo rm -f /etc/yum.repos.d/smfc.repo     # a)
 sudo rm -f /etc/yum.repos.d/smfc-el.repo  # b)
-```
-
-Note: if `/etc/yum.repos.d/smfc.repo` on your Fedora system contains `baseurl=https://petersulyok.github.io/smfc-rpm/` (without `fedora/`), it points to the old repository, which receives updates only for a limited time. Replace the file with the current one:
-
-```bash
-sudo dnf config-manager addrepo --overwrite --from-repofile=https://petersulyok.github.io/smfc-rpm/smfc.repo
 ```
 
 Compatible with the supported Fedora releases (currently Fedora 43 and 44) and Enterprise Linux 10. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for more details. openSUSE is not supported by the RPM packages; use the Docker image (see [chapter 9.4.](https://github.com/petersulyok/smfc/blob/main/README.md#94-docker-installation)) or the manual installation (see [chapter 9.5.](https://github.com/petersulyok/smfc/blob/main/README.md#95-manual-installation-and-uninstallation)). The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
