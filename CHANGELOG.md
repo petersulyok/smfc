@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **The DEB package requires Python 3.11 or newer now.** `debian/control` sets `X-Python3-Version: >= 3.11`, so the package depends on `python3 (>= 3.11~)`. Before, it depended on any Python 3 version, so `apt` installed it on Ubuntu 22.04, Linux Mint 21 and Pop!_OS 22.04 with Python 3.10, which are not supported. On these releases, `apt` refuses the installation now and holds back the upgrade of an installed version. The PyPI and RPM packages already required the supported Python version.
+
 ## [6.5.0] - 2026.10.19
 
 ### Added
