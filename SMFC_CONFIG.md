@@ -593,13 +593,22 @@ lines for no reason and makes the diff unreadable.
 |---|---|---|
 | `hd_names` | `discover.discover_hds()` | by-id paths |
 | `nvme_names` | `discover.discover_nvmes()` | by-id paths |
-| `gpu_device_ids` | `nvidia-smi -L` or `rocm-smi` | integer indexes |
-| `npu_device_ids` | `npu-smi info -m` | integer indexes |
+| `gpu_device_ids` | `discover.discover_gpus()`: `nvidia-smi -L` or `rocm-smi --showproductname --json` | integer indexes |
+| `npu_device_ids` | `discover.discover_npus()`: `npu-smi info -m` | integer card IDs |
 
 Name the provider in the field schema.
 
 The two disk providers read the filesystem and fill at once. The GPU and NPU providers run an
-external tool, so they are tier 3. Those popups open empty with a `press F5 to scan` line.
+external tool, so they are tier 3. Those popups open with the indexes the file lists, and `F5` in
+the popup runs the tool the section configures. A scan keeps every ticked index: one the tool did
+not report stays, marked `(missing)`. A failed scan leaves the list as it was and shows the reason.
+
+The GPU index is the line of `nvidia-smi` or the `cardN` key of `rocm-smi`, the same positions
+`GpuFc` reads its temperatures from. The NPU card ID is the first column of `npu-smi info -m`. A card
+with two NPU chips is one entry, and its MCU is not counted as a chip.
+
+An empty card list does not parse, so the popup refuses `Enter` with nothing ticked. A value that is
+not a list of numbers opens as a text field instead, so it can be corrected.
 
 Re-run the section's value checks when the popup closes. Changing `hd_names` can invalidate
 `standby_hd_limit`.

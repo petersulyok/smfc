@@ -1519,10 +1519,12 @@ While a value is open, the field it is typed into is painted in its own colour, 
 
 The shape of the cursor says which mode the field is in: a bar cursor inserts and pushes the rest of the value along, a block cursor types over it. This needs a terminal that can change the cursor shape (`xterm`, `tmux` and most terminal emulators do; the Linux text console does not). Where it is missing the cursor keeps one shape and the key line is what tells you the mode. A value longer than its field scrolls, so what you type is always visible.
 
-#### 15.3 Picking disks
+#### 15.3 Picking disks and cards
 `hd_names=` and `nvme_names=` open a list of the disks this machine has, found with the same filters `install.sh` and the DEB and RPM packages use. Every line leads with the serial number, because a machine can hold eight disks of one model and the serial is the only part that tells them apart.
 
 A disk your file lists and the machine does not have is kept and marked `(missing)`, because that is what explains a warning about a missing disk. `p` adds a `/dev/disk/by-id/...` path by hand, for a disk that is not plugged in yet.
+
+`gpu_device_ids=` and `npu_device_ids=` open the same kind of list, with the indexes your file holds. Only the vendor tool can name the cards, and `npu-smi` takes seconds to answer, so the list does not ask it on its own: press `F5` in the list to scan. The editor runs the tool the section configures: `nvidia-smi -L` or `rocm-smi` for a GPU, as `gpu_type=` says, and `npu-smi info -m` for an NPU card. A card with two NPU chips is one card, and its MCU is not counted. If the tool cannot be run, the list says why and keeps your indexes. A card you listed and the scan did not find is marked `(missing)`. `p` adds an index by hand, for a card that is not installed yet.
 
 #### 15.4 Checks
 The checks run when you press `F5`, not while you type, because some of them talk to the hardware and take seconds. Reading a sleeping disk with `smartctl` wakes it, so the editor never does that on its own.

@@ -12,8 +12,10 @@ from smfc.config_editor import panes, popups
 from smfc.config_editor.lineedit import LineEdit
 from smfc.config_editor.model import EditorModel, FieldState, FieldView, Row, RowKind
 from smfc.config_editor.panes import Layout
+from smfc.config import Config
 from smfc.config_editor.schema import SECTIONS, FieldKind, Widget, bool_text, bool_value, validate
-from smfc.discover import discover_hds, discover_nvmes
+from smfc.discover import (TOOL_TIMEOUT, Card, DiscoveryError, discover_gpus, discover_hds, discover_npus,
+                           discover_nvmes)
 
 # The colour scheme, taken from the Debian installer: a painted banner and key bar, light panes and a
 # strong selection bar. Colour carries orientation here. The glyphs say the same thing without it, so
@@ -196,6 +198,9 @@ class EditorApp:
         if view.field.widget is Widget.DEVICES and view.field.kind is FieldKind.DEVICE_LIST:
             self.popup = self._device_popup(view)
             return
+        if view.field.widget is Widget.DEVICES and _card_indexes(view.value) is not None:
+            self.popup = self._card_popup(view)
+            return
         self.popup = popups.TextPopup(
             title=view.key, width=72, text=view.value.replace("\n", " ").replace("\t", " ").strip(),
             hint=view.field.hint_text(),
@@ -221,6 +226,57 @@ class EditorApp:
                                                   ticked=True, present=False))
         return popups.DevicePopup(title=view.key, width=72, entries=entries,
                                   note="p adds a device this machine does not have yet")
+
+    def _card_popup(self, view: FieldView) -> popups.DevicePopup:
+        """Build the selector of gpu_device_ids= or npu_device_ids=.
+        It opens with the indexes the file lists and does not run the vendor tool: npu-smi takes
+        seconds, and a user who only looks at the list should not wait for it. F5 runs the tool.
+        Args:
+            view (FieldView): the parameter being edited
+        Returns:
+            popups.DevicePopup: the selector
+        """
+        entries = [popups.DeviceEntry(path=str(i), label=f"{i:<4} not scanned", ticked=True)
+                   for i in _card_indexes(view.value)]
+        return popups.DevicePopup(title=view.key, width=76, entries=entries, cards=True,
+                                  note=f"F5 asks {self._card_tool()} which cards this machine has")
+
+    def _card_tool(self) -> str:
+        """The vendor tool that lists the cards of the selected section.
+        Returns:
+            str: the path or name of the tool, as the section configures it
+        """
+        if self.row.family == Config.CS_NPU:
+            return self.model.value_of(self.row, Config.CV_NPU_SMI_PATH).strip()
+        if self.model.value_of(self.row, Config.CV_GPU_TYPE).strip().lower() == "amd":
+            return self.model.value_of(self.row, Config.CV_GPU_ROCM_SMI_PATH).strip()
+        return self.model.value_of(self.row, Config.CV_GPU_NVIDIA_SMI_PATH).strip()
+
+    def scan_cards(self, popup: popups.DevicePopup) -> None:
+        """Ask the vendor tool which cards this machine has, and show them in the selector.
+        The tool is the one the section configures, so a wrong path fails here the same way it would
+        fail in the service, and the selector says why.
+        Args:
+            popup (popups.DevicePopup): the open card selector
+        """
+        row = self.row
+        try:
+            if row.family == Config.CS_NPU:
+                # The section bounds every npu-smi call, so the scan waits as long as the service would.
+                try:
+                    timeout = float(self.model.value_of(row, Config.CV_NPU_SMI_TIMEOUT))
+                except ValueError:
+                    timeout = TOOL_TIMEOUT
+                cards = discover_npus(self._card_tool(), timeout)
+            else:
+                gpu_type = self.model.value_of(row, Config.CV_GPU_TYPE).strip().lower()
+                cards = discover_gpus(gpu_type, self.model.value_of(row, Config.CV_GPU_NVIDIA_SMI_PATH).strip(),
+                                      self.model.value_of(row, Config.CV_GPU_ROCM_SMI_PATH).strip())
+        except DiscoveryError as e:
+            popup.error = str(e)
+            return
+        popup.merge([popups.DeviceEntry(path=str(c.index), label=_card_label(c)) for c in cards])
+        self.message = f"{self._card_tool()} lists {len(cards)} card{'' if len(cards) == 1 else 's'}"
 
     def finish_edit(self, accept: bool) -> None:
         """Close the editor of one parameter.
@@ -333,6 +389,15 @@ class EditorApp:
             key (int): the key, as curses reports it
         """
         popup = self.popup
+        if isinstance(popup, popups.DevicePopup) and popup.cards and key == curses.KEY_F5:
+            self.scan_cards(popup)
+            return
+        if isinstance(popup, popups.DevicePopup) and popup.cards and key == ord("p"):
+            # A card that is not in the machine yet is named by the index it will have.
+            self.popup = popups.TextPopup(title="add a card by its index", width=54,
+                                          validator=_validate_card_index)
+            self.pending = popup
+            return
         if isinstance(popup, popups.DevicePopup) and key == ord("p"):
             # This popup has no parameter behind it, so the title carries the one rule it has: the
             # /dev/disk/by-id/ form, which survives a reboot. The field opens on that prefix.
@@ -348,7 +413,7 @@ class EditorApp:
         if isinstance(popup, popups.TextPopup) and self.pending is not None:
             selector, self.pending = self.pending, None
             if popup.accepted:
-                selector.add_path(popup.value())
+                selector.add_path(str(int(popup.value())) if selector.cards else popup.value())
             self.popup = selector
             return
         if popup.accepted:
@@ -373,6 +438,12 @@ class EditorApp:
             return
         view = self.view()
         if view is None:
+            return
+        if isinstance(popup, popups.DevicePopup) and popup.cards:
+            # The form every shipped sample uses, e.g. gpu_device_ids=0, 1, 2, 3.
+            self.model.set_value(self.row, view.key, ", ".join(popup.value()))
+            self.message = f"{view.key} = {', '.join(popup.value())}"
+            self.model.run_checks()
             return
         if isinstance(popup, popups.DevicePopup):
             self.model.set_device_list(self.row, view.key, popup.value())
@@ -777,6 +848,41 @@ def _device_label(path: str) -> str:
     serial = body.rsplit("_", 1)[-1] if "_" in body else body
     model = body[:-(len(serial) + 1)] if body.endswith(serial) and len(body) > len(serial) else ""
     return f"{serial:<14} {model.replace('_', ' ')}"
+
+
+def _card_label(card: Card) -> str:
+    """Build the line of one GPU or NPU card in the selector.
+    Args:
+        card (Card): the card a vendor tool reported
+    Returns:
+        str: the line
+    """
+    return f"{card.index:<4} {card.name or 'no name reported'}"
+
+
+def _card_indexes(value: str) -> Optional[List[int]]:
+    """Read the indexes of gpu_device_ids= or npu_device_ids= the way the parser does.
+    Args:
+        value (str): the value in the file
+    Returns:
+        Optional[List[int]]: the indexes, empty for an empty value, or None when the value does not parse
+    """
+    tokens = [t for t in value.replace(",", " ").split() if t]
+    if not all(t.isdigit() for t in tokens):
+        return None
+    return sorted({int(t) for t in tokens})
+
+
+def _validate_card_index(text: str) -> str:
+    """Check a card index typed by hand.
+    Args:
+        text (str): the index
+    Returns:
+        str: what is wrong with it, or an empty string
+    """
+    if not text.isdigit() or int(text) > 100:
+        return "type a number from 0 to 100"
+    return ""
 
 
 def _validate_device_path(text: str) -> str:

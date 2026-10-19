@@ -17,6 +17,7 @@ from smfc.config_editor.cmd import EXIT_CONFIG_ERROR, main
 from smfc.config_editor.lineedit import LineEdit
 from smfc.config_editor.model import EditorModel, FieldState, RowKind
 from smfc.config_editor.schema import SECTIONS, field_of, validate
+from smfc.discover import Card, DiscoveryError
 
 
 # Repository paths used by the tests.
@@ -716,6 +717,108 @@ class TestEditorApp:
         assert app.popup is None
         assert app.model.writer.get("HD", "hd_names") == "/dev/disk/by-id/ata-TYPED"
 
+    @staticmethod
+    def _card_app(tmp_path: Path, body: str, section: str, key: str) -> EditorApp:
+        """Build an editor with the card list of one section open.
+        Args:
+            tmp_path (Path): pytest temporary directory
+            body (str): content of the configuration file
+            section (str): the section to select
+            key (str): the parameter to open
+        Returns:
+            EditorApp: the editor, with the card selector open
+        """
+        app = EditorApp(_model(tmp_path, body))
+        app.row_index = [i for i, r in enumerate(app.model.rows) if r.name == section][0]
+        app.pane = PANE_FIELDS
+        app.field_index = [i for i, v in enumerate(app.views()) if v.key == key][0]
+        app.start_edit()
+        return app
+
+    def test_the_gpu_list_opens_without_running_the_tool(self, tmp_path: Path) -> None:
+        """Positive unit test for the card selector. It contains the following steps:
+        - open gpu_device_ids of a section that lists two GPUs
+        - ASSERT: a card selector opens with both indexes ticked
+        - ASSERT: the vendor tool was not run, because it can take seconds
+        """
+        with patch("smfc.config_editor.app.discover_gpus") as scan:
+            app = self._card_app(tmp_path, "[Ipmi]\n[GPU]\nenabled=1\ngpu_device_ids=0, 1\n",
+                                 "GPU", "gpu_device_ids")
+        assert isinstance(app.popup, popups.DevicePopup) and app.popup.cards is True
+        assert [(e.path, e.ticked) for e in app.popup.entries] == [("0", True), ("1", True)]
+        scan.assert_not_called()
+
+    def test_f5_scans_the_gpus_and_enter_writes_the_indexes(self, tmp_path: Path) -> None:
+        """Positive unit test for the card selector. It contains the following steps:
+        - open gpu_device_ids of an amd section and press F5 with three GPUs reported
+        - ASSERT: rocm-smi is asked, with the path the section configures
+        - tick the third GPU and accept
+        - ASSERT: the file holds the indexes in the form of the shipped samples, and it parses back
+        """
+        body = "[Ipmi]\n[GPU]\nenabled=1\ngpu_type=amd\nrocm_smi_path=/opt/rocm/bin/rocm-smi\ngpu_device_ids=0\n"
+        app = self._card_app(tmp_path, body, "GPU", "gpu_device_ids")
+        cards = [Card(0, "MI210"), Card(1, "MI210"), Card(2, "MI210")]
+        with patch("smfc.config_editor.app.discover_gpus", return_value=cards) as scan:
+            app.handle_key(curses.KEY_F5)
+        assert scan.call_args.args[0] == "amd"
+        assert scan.call_args.args[2] == "/opt/rocm/bin/rocm-smi"
+        assert [e.ticked for e in app.popup.entries] == [True, False, False]
+        app.handle_key(curses.KEY_DOWN)
+        app.handle_key(curses.KEY_DOWN)
+        app.handle_key(ord(" "))
+        app.handle_key(10)
+        assert app.popup is None
+        assert app.model.writer.get("GPU", "gpu_device_ids") == "0, 2"
+
+    def test_a_failed_scan_is_shown_in_the_selector(self, tmp_path: Path) -> None:
+        """Negative unit test for the card selector. It contains the following steps:
+        - open npu_device_ids and press F5 while npu-smi cannot be found
+        - ASSERT: the selector stays open, with its entries, and says why the scan failed
+        """
+        app = self._card_app(tmp_path, "[Ipmi]\n[NPU]\nenabled=1\nnpu_device_ids=4\n", "NPU", "npu_device_ids")
+        with patch("smfc.config_editor.app.discover_npus", side_effect=DiscoveryError("npu-smi cannot be found")):
+            app.handle_key(curses.KEY_F5)
+        assert isinstance(app.popup, popups.DevicePopup)
+        assert app.popup.error == "npu-smi cannot be found"
+        assert [e.path for e in app.popup.entries] == ["4"]
+
+    def test_the_npu_scan_waits_as_long_as_the_section_allows(self, tmp_path: Path) -> None:
+        """Positive unit test for the card selector. It contains the following steps:
+        - open npu_device_ids of a section with its own npu-smi path and timeout, and press F5
+        - ASSERT: npu-smi is run from that path, with that timeout
+        """
+        body = "[Ipmi]\n[NPU]\nenabled=1\nnpu_smi_path=/usr/local/bin/npu-smi\nnpu_smi_timeout=25\n"
+        app = self._card_app(tmp_path, body, "NPU", "npu_device_ids")
+        with patch("smfc.config_editor.app.discover_npus", return_value=[Card(8, "Ascend 310P3 x2")]) as scan:
+            app.handle_key(curses.KEY_F5)
+        scan.assert_called_once_with("/usr/local/bin/npu-smi", 25.0)
+
+    def test_a_card_typed_by_hand_reaches_the_file(self, tmp_path: Path) -> None:
+        """Positive unit test for the add key of the card selector. It contains the following steps:
+        - open npu_device_ids, press p, and type a card ID with a leading zero
+        - ASSERT: the selector comes back with the card ticked and marked missing
+        - accept the selector
+        - ASSERT: the file holds both IDs in numeric order, the typed one without the zero
+        """
+        app = self._card_app(tmp_path, "[Ipmi]\n[NPU]\nenabled=1\nnpu_device_ids=8\n", "NPU", "npu_device_ids")
+        app.handle_key(ord("p"))
+        assert isinstance(app.popup, popups.TextPopup)
+        for char in "09":
+            app.handle_key(ord(char))
+        app.handle_key(10)
+        assert isinstance(app.popup, popups.DevicePopup)
+        assert app.popup.entries[-1].present is False
+        app.handle_key(10)
+        assert app.model.writer.get("NPU", "npu_device_ids") == "8, 9"
+
+    def test_a_card_list_that_does_not_parse_opens_as_text(self, tmp_path: Path) -> None:
+        """Negative unit test for the card selector. It contains the following steps:
+        - open gpu_device_ids holding a value that is not a list of numbers
+        - ASSERT: a text field opens instead of the selector, so the value can be corrected
+        """
+        app = self._card_app(tmp_path, "[Ipmi]\n[GPU]\nenabled=1\ngpu_device_ids=0, x\n", "GPU", "gpu_device_ids")
+        assert isinstance(app.popup, popups.TextPopup)
+
     def test_a_typed_path_must_be_a_by_id_path(self, tmp_path: Path) -> None:
         """Negative unit test for the add-by-path key. It contains the following steps:
         - open the selector, press p, and clear the prefix it offers
@@ -1071,6 +1174,44 @@ class TestPopups:
         assert popup.entries[0].ticked is True
         assert popup.entries[0].present is False
         assert "(missing)" in popup.entries[0].label
+
+    def test_card_indexes_are_sorted_by_number(self) -> None:
+        """Positive unit test for DevicePopup with cards. It contains the following steps:
+        - open a card selector with indexes 10 and 2 ticked, and accept it
+        - ASSERT: the indexes are returned in numeric order, not in text order
+        """
+        entries = [popups.DeviceEntry(path="10", label="10", ticked=True),
+                   popups.DeviceEntry(path="2", label="2", ticked=True)]
+        popup = popups.DevicePopup(title="gpu_device_ids", entries=entries, cards=True)
+        popup.handle_key(10)
+        assert popup.value() == ["2", "10"]
+
+    def test_a_card_list_needs_one_card(self) -> None:
+        """Negative unit test for DevicePopup with cards. It contains the following steps:
+        - untick every card and press Enter
+        - ASSERT: the popup stays open and says why, because an empty list does not parse
+        """
+        popup = popups.DevicePopup(title="npu_device_ids", entries=[popups.DeviceEntry("0", "0", True)],
+                                   cards=True)
+        popup.handle_key(ord("n"))
+        popup.handle_key(10)
+        assert popup.done is False
+        assert "at least one" in popup.error
+
+    def test_a_scan_keeps_the_ticks_and_marks_what_it_did_not_find(self) -> None:
+        """Positive unit test for DevicePopup.merge(). It contains the following steps:
+        - open a selector with card 0 and card 5 ticked and card 7 unticked, then merge a scan of 0 and 1
+        - ASSERT: card 0 stays ticked, card 1 is new and unticked
+        - ASSERT: card 5 stays ticked and is marked missing, and the unticked card 7 is dropped
+        """
+        entries = [popups.DeviceEntry("0", "0", True), popups.DeviceEntry("5", "5", True),
+                   popups.DeviceEntry("7", "7", False)]
+        popup = popups.DevicePopup(title="gpu_device_ids", entries=entries, cards=True, error="old")
+        popup.merge([popups.DeviceEntry("0", "0  RTX"), popups.DeviceEntry("1", "1  RTX")])
+        assert [(e.path, e.ticked, e.present) for e in popup.entries] == [
+            ("0", True, True), ("1", False, True), ("5", True, False)]
+        assert "(missing)" in popup.entries[2].label
+        assert popup.error == ""
 
     def test_the_confirm_popup_answers_yes_or_no(self) -> None:
         """Positive unit test for ConfirmPopup. It contains the following steps:

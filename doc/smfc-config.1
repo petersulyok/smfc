@@ -113,7 +113,16 @@ takes that value into the field, where it can be edited rather than typed out.
 Switch the selected family on or off.
 .TP
 .B F5
-Run the checks, including the ones that talk to the hardware.
+Run the checks, including the ones that talk to the hardware. In the card list
+of
+.B gpu_device_ids=
+or
+.BR npu_device_ids= ,
+ask the vendor tool which cards the machine has:
+.BR nvidia-smi ,
+.B rocm-smi
+or
+.BR npu-smi .
 .TP
 .B F2
 Save the file.

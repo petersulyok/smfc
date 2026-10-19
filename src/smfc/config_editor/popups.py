@@ -216,10 +216,14 @@ class DevicePopup(Popup):
     The serial leads every line, because a machine can hold eight disks of one model and the serial is
     the only part that tells them apart. An entry the configuration lists and the machine does not have
     is kept and marked, because that is what explains a warning about a missing disk.
+
+    The same selector lists GPU and NPU cards, where an entry is an index rather than a path. Only a
+    vendor tool can list those cards, and it takes seconds, so they are listed when the user asks.
     """
     entries: List[DeviceEntry] = dataclass_field(default_factory=list)
     index: int = 0                              # The selected entry
     note: str = ""                              # One line under the list
+    cards: bool = False                         # True when the entries are card indexes, not device paths
 
     def lines(self) -> List[str]:
         """The body: one line per device, then the note.
@@ -228,7 +232,7 @@ class DevicePopup(Popup):
         """
         body = [f"[{'x' if e.ticked else ' '}] {e.label}" for e in self.entries]
         if not body:
-            body = ["no device found"]
+            body = ["no card listed" if self.cards else "no device found"]
         if self.note:
             body += ["", self.note]
         return [fit(line, self.width - 4) for line in body]
@@ -238,6 +242,8 @@ class DevicePopup(Popup):
         Returns:
             str: the keys
         """
+        if self.cards:
+            return "Space toggle   a all   n none   p add   F5 scan   Enter OK   Esc cancel"
         return "Space toggle   a all   n none   p add by path   Enter OK   Esc cancel"
 
     def cursor(self) -> int:
@@ -255,6 +261,10 @@ class DevicePopup(Popup):
         if key in KEY_CANCEL:
             self._cancel()
         elif key in KEY_ACCEPT:
+            # An empty card list does not parse, while an empty disk list only reads as no disk.
+            if self.cards and not any(entry.ticked for entry in self.entries):
+                self.error = "tick at least one card"
+                return
             self.done = True
             self.accepted = True
         elif key in (curses.KEY_UP, ord("k")):
@@ -279,17 +289,47 @@ class DevicePopup(Popup):
         """
         if any(entry.path == path for entry in self.entries):
             return
-        self.entries.append(DeviceEntry(path=path, label=f"(missing)  {path.split('/')[-1]}",
-                                        ticked=True, present=False))
+        self.entries.append(DeviceEntry(path=path, label=self._missing_label(path), ticked=True, present=False))
         self.index = len(self.entries) - 1
+
+    def merge(self, found: List[DeviceEntry]) -> None:
+        """Replace the entries with the devices a scan found, and keep what the user ticked.
+        A ticked entry the scan did not find stays, marked missing, for the same reason a missing disk
+        stays: it explains the warning. An unticked entry the scan did not find has nothing to explain.
+        Args:
+            found (List[DeviceEntry]): the devices of the machine, in the order to show them
+        """
+        ticked = {entry.path for entry in self.entries if entry.ticked}
+        found_paths = {entry.path for entry in found}
+        merged = [DeviceEntry(path=e.path, label=e.label, ticked=e.path in ticked) for e in found]
+        merged += [DeviceEntry(path=e.path, label=self._missing_label(e.path), ticked=True, present=False)
+                   for e in self.entries if e.ticked and e.path not in found_paths]
+        self.entries = merged
+        self.index = min(self.index, max(len(merged) - 1, 0))
+        self.error = ""
+
+    def _missing_label(self, path: str) -> str:
+        """Build the line of a device the machine does not have.
+        A card keeps its index in the column where a found card has it, so the two kinds of line align.
+        Args:
+            path (str): the /dev/disk/by-id/... path, or the card index
+        Returns:
+            str: the line
+        """
+        if self.cards:
+            return f"{path:<4} (missing)"
+        return f"(missing)  {path.split('/')[-1]}"
 
     def value(self) -> Optional[List[str]]:
         """The devices that are ticked.
         Returns:
-            Optional[List[str]]: the paths, sorted as the file holds them, or None when cancelled
+            Optional[List[str]]: the paths, sorted as the file holds them, or None when cancelled; card
+            indexes are sorted by number
         """
         if not self.accepted:
             return None
+        if self.cards:
+            return sorted((entry.path for entry in self.entries if entry.ticked), key=int)
         return sorted(entry.path for entry in self.entries if entry.ticked)
 
 

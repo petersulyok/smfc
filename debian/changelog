@@ -2,9 +2,9 @@ smfc (7.0.0) unstable; urgency=medium
 
   * Added: smfc-config, a full-screen editor for /etc/smfc/smfc.conf. It
     switches fan controllers on and off, edits every parameter, checks the
-    hardware each controller needs, and offers the disks of the machine. It
-    keeps the comments of the file. The package installs the smfc-config
-    command and its manual page.
+    hardware each controller needs, and offers the disks and the GPU and NPU
+    cards of the machine. It keeps the comments of the file. The package
+    installs the smfc-config command and its manual page.
   * Added: the disk detection of the postinst script calls smfc.discover, so
     the installer, this package and the RPM package share one implementation
     of the filters instead of three copies.
