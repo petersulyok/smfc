@@ -746,6 +746,8 @@ Notes for the script:
 - Different Linux distros install the Python package to different folders (tested on Ubuntu 24.04, Debian 13,
 openSUSE Leap 16, openSUSE Tumbleweed, Proxmox 9, and Arch Linux)
 - On openSUSE, install the required commands first: `sudo zypper install python3-pip curl gzip man`
+- `pip` installs `smfc` for the current Python version. On openSUSE Tumbleweed, run `install.sh` again after a
+  change of the default Python version, otherwise `smfc` stops working
 - The installation process stops on any error
 - Remote installation is the default method
 - The `--local` parameter installs from the current folder (the GitHub repository must be cloned first)

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **The DEB package requires Python 3.11 or newer now.** `debian/control` sets `X-Python3-Version: >= 3.11`, so the package depends on `python3 (>= 3.11~)`. Before, it depended on any Python 3 version, so `apt` installed it on Ubuntu 22.04, Linux Mint 21 and Pop!_OS 22.04 with Python 3.10, which are not supported. On these releases, `apt` refuses the installation now and holds back the upgrade of an installed version. The PyPI and RPM packages already required the supported Python version.
 
+### Fixed
+- **`bin/install.sh` stopped before the end when `/usr/local/share/man/man1` did not exist**, e.g. on openSUSE Leap 16 and Tumbleweed, with exit code 23 from `curl`. The script created `/usr/share/man/man1`, but it saves the man pages to `/usr/local/share/man/man1`. `smfc`, the configuration files and the systemd unit were already installed, but the man pages, the `mandb` update and the disk names in `hd_names=` and `nvme_names=` were missing. The script creates `/usr/local/share/man/man1` now.
+
 ## [6.5.0] - 2026.10.19
 
 ### Added

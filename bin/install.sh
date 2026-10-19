@@ -81,9 +81,9 @@ if [ ! -d /etc/smfc ]; then
   verbose_echo "/etc/smfc folder created."
 fi
 # Create the target folder for manual page.
-if [ ! -d /usr/share/man/man1 ]; then
-  mkdir -p /usr/share/man/man1
-  verbose_echo "/usr/share/man/man1 folder created."
+if [ ! -d /usr/local/share/man/man1 ]; then
+  mkdir -p /usr/local/share/man/man1
+  verbose_echo "/usr/local/share/man/man1 folder created."
 fi
 # PIP parameters.
 PIP_PARAM="-q --root-user-action=ignore --break-system-packages"
