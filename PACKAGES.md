@@ -99,17 +99,19 @@ The source tarball must be in `~/rpmbuild/SOURCES/` first (see above). The targe
   - `/usr/share/doc/smfc/examples/` — sample configuration files
 - Configuration files are marked with `%config(noreplace)`. On upgrade, `rpm` will not overwrite locally modified files.
 - The `smfc.service` systemd unit is automatically enabled (but not started) on install, so the configuration can be reviewed before the service first runs; it is stopped on removal. On upgrade a running service is restarted and a stopped one is left stopped (`%systemd_postun_with_restart`).
-- `%systemd_post` runs `systemctl preset`, which enables the unit only if the systemd preset policy allows it. Fedora, RHEL and openSUSE ship a `disable *` catch-all rule, so the package ships `/usr/lib/systemd/system-preset/50-smfc.preset` with the line `enable smfc.service`; the `50` prefix puts it ahead of the catch-all.
+- `%systemd_post` runs `systemctl preset`, which enables the unit only if the systemd preset policy allows it. Fedora and Enterprise Linux ship a `disable *` catch-all rule, so the package ships `/usr/lib/systemd/system-preset/50-smfc.preset` with the line `enable smfc.service`; the `50` prefix puts it ahead of the catch-all.
 - The build commands above extract the version from `smfc.spec` automatically, so the tarball name always matches.
-- On RHEL, CentOS Stream, Rocky Linux, and AlmaLinux the [EPEL](https://docs.fedoraproject.org/en-US/epel/) repository is required for the `python3-pyudev` dependency.
+- On Enterprise Linux 10 (RHEL, AlmaLinux, Rocky Linux, CentOS Stream, Oracle Linux) the [EPEL](https://docs.fedoraproject.org/en-US/epel/) repository is required for the `python3-pyudev` dependency. For a build, `pyproject-rpm-macros` comes from the CodeReady Linux Builder (CRB) repository.
 
 ### Compatible distributions
 
-| Distribution  | Version                |
-|---------------|------------------------|
-| Fedora        | 39+                    |
-| RHEL          | 10+ (with EPEL)        |
-| CentOS Stream | 10+ (with EPEL)        |
-| Rocky Linux   | 10+ (with EPEL)        |
-| AlmaLinux     | 10+ (with EPEL)        |
-| openSUSE      | Leap 16+, Tumbleweed   |
+| Distribution  | Version        | Package          |
+|---------------|----------------|------------------|
+| Fedora        | 43, 44         | `.fc43`, `.fc44` |
+| RHEL          | 10 (with EPEL) | `.el10`          |
+| AlmaLinux     | 10 (with EPEL) | `.el10`          |
+| Rocky Linux   | 10 (with EPEL) | `.el10`          |
+| CentOS Stream | 10 (with EPEL) | `.el10`          |
+| Oracle Linux  | 10 (with EPEL) | `.el10`          |
+
+Each Fedora release has its own package, built for its Python version. The supported Fedora releases change with the Fedora release cycle. One `.el10` package serves all Enterprise Linux 10 distributions. openSUSE is not supported, because `smfc.spec` uses Fedora macros and package names; on openSUSE, use the Docker image or the manual installation (see chapters 9.4 and 9.5 of the [README](https://github.com/petersulyok/smfc/blob/main/README.md#9-installation-and-uninstallation)).

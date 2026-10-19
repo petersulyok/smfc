@@ -649,16 +649,28 @@ The DEB package enables the `smfc` service but does not start it on installation
 
 
 #### 9.2. RPM package installation
-Pre-built `.rpm` packages are available from the [smfc-rpm DNF repository](https://github.com/petersulyok/smfc-rpm), hosted on GitHub Pages and signed with a dedicated GPG key.
+Pre-built `.rpm` packages are available from the [smfc-rpm DNF repository](https://github.com/petersulyok/smfc-rpm), hosted on GitHub Pages and signed with a dedicated GPG key. Each supported distribution has its own package in the repository, so add the `.repo` file of your distribution.
 
-Add the repository and install:
+**a) Fedora**
 
 ```bash
 sudo dnf config-manager addrepo --from-repofile=https://petersulyok.github.io/smfc-rpm/smfc.repo
 sudo dnf install smfc
 ```
 
-(On older `dnf` versions: `sudo dnf config-manager --add-repo=https://petersulyok.github.io/smfc-rpm/smfc.repo`.)
+**b) Enterprise Linux 10 (RHEL, AlmaLinux, Rocky Linux, CentOS Stream, Oracle Linux)**
+
+The `python3-pyudev` dependency comes from [EPEL](https://docs.fedoraproject.org/en-US/epel/getting-started/), so enable EPEL first:
+
+```bash
+sudo dnf install epel-release
+sudo dnf config-manager --add-repo https://petersulyok.github.io/smfc-rpm/smfc-el.repo
+sudo dnf install smfc
+```
+
+On RHEL and Oracle Linux, the `epel-release` package is not available under this name; enable EPEL as described in the [EPEL documentation](https://docs.fedoraproject.org/en-US/epel/getting-started/).
+
+On the first installation, `dnf` asks you to accept the repository signing key. Check that its fingerprint is `6912 A339 7CF9 7359 857A  B82F 9E06 E863 D50D 7541`.
 
 To update: `sudo dnf upgrade smfc`.
 
@@ -666,10 +678,17 @@ To remove:
 
 ```bash
 sudo dnf remove smfc
-sudo rm /etc/yum.repos.d/smfc.repo
+sudo rm -f /etc/yum.repos.d/smfc.repo     # a)
+sudo rm -f /etc/yum.repos.d/smfc-el.repo  # b)
 ```
 
-Compatible with Fedora 39+, RHEL/Rocky/AlmaLinux 10+ (with EPEL), CentOS Stream 10+, openSUSE Leap 16+. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for the full distribution list. The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
+Note: if `/etc/yum.repos.d/smfc.repo` on your Fedora system contains `baseurl=https://petersulyok.github.io/smfc-rpm/` (without `fedora/`), it points to the old repository, which receives updates only for a limited time. Replace the file with the current one:
+
+```bash
+sudo dnf config-manager addrepo --overwrite --from-repofile=https://petersulyok.github.io/smfc-rpm/smfc.repo
+```
+
+Compatible with the supported Fedora releases (currently Fedora 43 and 44) and Enterprise Linux 10 (with EPEL). See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for more details. openSUSE is not supported by the RPM packages; use the Docker image (see [chapter 9.4.](https://github.com/petersulyok/smfc/blob/main/README.md#94-docker-installation)) or the manual installation (see [chapter 9.5.](https://github.com/petersulyok/smfc/blob/main/README.md#95-manual-installation-and-uninstallation)). The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
 The RPM package enables the `smfc` service but does not start it on installation. First review your configuration (see [chapter 10.](https://github.com/petersulyok/smfc/blob/main/README.md#10-configuration)), then start the service manually (see [chapter 11.](https://github.com/petersulyok/smfc/blob/main/README.md#11-how-to-run-smfc)); from then on it starts automatically on every boot. On upgrade the service is restarted if it was running, and left stopped if you had stopped it.
 
 #### 9.3. Arch Linux (AUR) package installation
