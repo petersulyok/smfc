@@ -8,9 +8,9 @@ There are three images created for `smfc`:
 
 | Image type          | Tags                            | Base image                      | Pros                                          | Cons                                                         |
 |---------------------|---------------------------------|---------------------------------|-----------------------------------------------|--------------------------------------------------------------|
-| Standard            | `6.4.3` / `latest`              | Alpine Linux 3.24.2             | Small image size                              | GPU/NPU fan controllers not supported                        |
-| NVIDIA GPU-enabled  | `6.4.3-nvidia`/ `latest-nvidia` | Debian 13.7 (slim)              | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
-| AMD GPU-enabled     | `6.4.3-amd` / `latest-amd`      | Ubuntu 24.04.5 (rocm-smi 7.8.0) | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
+| Standard            | `6.5.0` / `latest`              | Alpine Linux 3.24.2             | Small image size                              | GPU/NPU fan controllers not supported                        |
+| NVIDIA GPU-enabled  | `6.5.0-nvidia`/ `latest-nvidia` | Debian 13.7 (slim)              | GPU fan controller supported via `nvidia-smi` | Larger image size; requires NVIDIA Container Toolkit on host |
+| AMD GPU-enabled     | `6.5.0-amd` / `latest-amd`      | Ubuntu 24.04.5 (rocm-smi 7.8.0) | GPU fan controller supported via `rocm-smi`   | Larger image size; requires `amdgpu` kernel driver on host   |
 
 > Docker image tags changed for GPU-enabled images with the newly implemented AMD GPU support in `smfc v5.4.0`!
 
@@ -297,6 +297,7 @@ Notes:
 
 # Versions
 See [CHANGELOG.md](https://github.com/petersulyok/smfc/blob/main/CHANGELOG.md) for more details:
+  - **6.5.0** (2026.10.19): Updated to smfc 6.5.0 (Alpine 3.24.2/Debian 13.7 slim/Ubuntu 24.04.5 with rocm-smi 7.8.0)
   - **6.4.3** (2026.10.17): Updated to smfc 6.4.3 (Alpine 3.24.2/Debian 13.7 slim/Ubuntu 24.04.5 with rocm-smi 7.8.0)
   - **6.4.2** (2026.09.07): Updated to smfc 6.4.2 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
   - **6.4.0** (2026.09.02): Updated to smfc 6.4.0 (Alpine 3.24.1/Debian 13.6 slim/Ubuntu 24.04.4 with rocm-smi 7.8.0)
