@@ -4,7 +4,7 @@
 ](https://github.com/petersulyok/smfc/actions/workflows/test.yml) [![Codecov](https://codecov.io/gh/petersulyok/smfc/branch/main/graph/badge.svg)
 ](https://app.codecov.io/gh/petersulyok/smfc) [![Issues](https://img.shields.io/github/issues/petersulyok/smfc)
 ](https://github.com/petersulyok/smfc/issues) [![Supported Python Versions](https://img.shields.io/pypi/pyversions/smfc)](https://pypi.org/project/smfc)
-[![PyPI version](https://badge.fury.io/py/smfc.svg)](https://badge.fury.io/py/smfc)
+[![PyPI version](https://img.shields.io/pypi/v/smfc)](https://pypi.org/project/smfc)
 
 Supermicro fan control for Linux (home) servers.
 
