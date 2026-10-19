@@ -154,3 +154,6 @@ deb-output/
 
 # Mac
 .DS_Store
+
+# Local drafts
+.draft/
