@@ -51,7 +51,6 @@ The `.deb` file will be created in the parent directory (`../`).
 | Proxmox VE      | 8+                               |
 | Linux Mint      | 22+                              |
 | Pop!_OS         | 24.04+                           |
-| Raspberry Pi OS | Bookworm+                        |
 
 ## RPM package
 
