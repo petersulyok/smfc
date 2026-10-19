@@ -7,7 +7,7 @@ import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 
 def validate_input_range(value: int, valrepr: str, minval: int, maxval: int) -> None:
@@ -58,27 +58,32 @@ class FanMode(IntEnum):
     HEAVY_IO = 4
 
 
+# Names of the base fan mode values. 0x00-0x04 are shared by all platforms, 0x05-0x0B exist only on X14/H14
+# boards (doc/X14H14_MANUAL_FANCONTROL.md, Part 3.4).
+FAN_MODE_NAMES: Dict[int, str] = {
+    FanMode.STANDARD: "STANDARD",
+    FanMode.FULL: "FULL",
+    FanMode.OPTIMAL: "OPTIMAL",
+    FanMode.PUE: "PUE2",
+    FanMode.HEAVY_IO: "HEAVY IO",
+    0x05: "PUE3",
+    0x06: "LIQUID COOLING",
+    0x07: "SMART",
+    0x08: "PUE",
+    0x09: "SMART COOLING",
+    0x0A: "PERFORMANCE",
+    0x0B: "SILENT",
+}
+
+
 def get_fan_mode_name(mode: int) -> str:
     """Get the name of the specified IPMI fan mode.
     Args:
         mode (int): fan mode
     Returns:
-        str: name of the fan mode ('UNKNOWN', 'STANDARD', 'FULL', 'OPTIMAL', 'PUE', 'HEAVY IO')
+        str: name of the fan mode (see FAN_MODE_NAMES), or 'UNKNOWN' for any other value
     """
-    fan_mode_name: str  # Name of the fan mode
-
-    fan_mode_name = "UNKNOWN"
-    if mode == FanMode.STANDARD:
-        fan_mode_name = "STANDARD"
-    elif mode == FanMode.FULL:
-        fan_mode_name = "FULL"
-    elif mode == FanMode.OPTIMAL:
-        fan_mode_name = "OPTIMAL"
-    elif mode == FanMode.PUE:
-        fan_mode_name = "PUE"
-    elif mode == FanMode.HEAVY_IO:
-        fan_mode_name = "HEAVY IO"
-    return fan_mode_name
+    return FAN_MODE_NAMES.get(mode, "UNKNOWN")
 
 
 class ControlState(IntEnum):
@@ -204,7 +209,7 @@ class Platform(ABC):
             ValueError: output of the ipmitool cannot be interpreted/converted
         """
         r = self._exec(["raw", "0x30", "0x45", "0x00"])
-        return int(r.stdout)
+        return int(r.stdout, 16)
 
     def set_fan_mode(self, mode: int) -> None:
         """Set the IPMI fan mode.

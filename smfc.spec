@@ -8,6 +8,7 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
 BuildRequires:  python3-devel
+BuildRequires:  pyproject-rpm-macros
 BuildRequires:  python3-setuptools
 BuildRequires:  python3-pip
 BuildRequires:  python3-wheel
@@ -24,6 +25,11 @@ IPMI fan function.
 
 %prep
 %autosetup
+%if 0%{?rhel}
+# setuptools 69 on EL10 cannot read PEP 639 license metadata
+sed -i -e 's/^license = "GPL-3.0-only"$/license = {text = "GPL-3.0-only"}/' -e '/^license-files = /d' pyproject.toml
+grep -q '^license = {text = "GPL-3.0-only"}$' pyproject.toml
+%endif
 
 %build
 %pyproject_wheel
@@ -94,6 +100,31 @@ fi
 - Fixed: a USB disk could be collected into hd_names= at install time.
 - Fixed: a duplicate by-id name ending _2 or higher reached the device lists,
   so a disk with a third alias was listed twice.
+
+* Mon Oct 19 2026 Peter Sulyok <peter@sulyok.net> - 6.5.0-1
+- Added: RPM package for Enterprise Linux 10 (RHEL, AlmaLinux, Rocky Linux,
+  CentOS Stream, Oracle Linux, with EPEL), in the el10/ tree of the
+  repository with smfc-el.repo. The spec builds on EL10: the license
+  metadata is changed for setuptools 69, and pyproject-rpm-macros is a build
+  requirement.
+- Fixed: the RPM package could not be installed on Enterprise Linux 10. The
+  only RPM was built on Fedora 44 and required Python 3.14, but EL10 has
+  Python 3.12. A separate .el10 RPM is built for EL10 now. Reported by
+  @baka-yuki (smfc-rpm issue #1).
+- Changed: one RPM is built with mock for each target (Fedora 43, Fedora 44,
+  EL10), with the Python dependencies of that target. The Fedora RPMs are in
+  fedora/$releasever/ of the repository; an old smfc.repo that points to the
+  root of the repository must be replaced.
+- Changed: the supported Python versions are 3.11-3.15.
+- Changed: smfc names all base fan modes of X14/H14 boards (PUE3, LIQUID
+  COOLING, SMART, PUE, SMART COOLING, PERFORMANCE, SILENT). Mode 0x03 is
+  named PUE2.
+
+* Sat Oct 17 2026 Peter Sulyok <peter@sulyok.net> - 6.4.3-1
+- Fixed: smfc failed to start when the BMC base fan mode was above 9 (e.g.
+  Performance, 0x0A, on an X14/H14 board). ipmitool prints the mode byte in
+  hex, and smfc parsed it as a decimal number, which only works for modes
+  0-9. The mode is parsed as hex now.
 
 * Mon Sep 07 2026 Peter Sulyok <peter@sulyok.net> - 6.4.2-1
 - Fixed: the X14/H14 firmware stack probe accepted only completion code 0xC1

@@ -47,11 +47,10 @@ The `.deb` file will be created in the parent directory (`../`).
 | Distribution    | Version                          |
 |-----------------|----------------------------------|
 | Debian          | 12 (Bookworm), 13 (Trixie), Sid  |
-| Ubuntu          | 22.04+, 24.04+                   |
+| Ubuntu          | 24.04+                           |
 | Proxmox VE      | 8+                               |
-| Linux Mint      | 21+                              |
-| Pop!_OS         | 22.04+                           |
-| Raspberry Pi OS | Bookworm+                        |
+| Linux Mint      | 22+                              |
+| Pop!_OS         | 24.04+                           |
 
 ## RPM package
 
@@ -72,6 +71,20 @@ rpmbuild -bb smfc.spec
 
 The `.rpm` file will be created in `~/rpmbuild/RPMS/noarch/`.
 
+### Build for one target with `mock`
+
+The release workflow builds one RPM for each target with `mock`. The same build runs locally on Fedora, as a
+user in the `mock` group:
+
+```bash
+sudo dnf install mock rpm-build
+rpmbuild -bs smfc.spec
+mock -r alma+epel-10-x86_64 --resultdir=out --rebuild ~/rpmbuild/SRPMS/smfc-*.src.rpm
+```
+
+The source tarball must be in `~/rpmbuild/SOURCES/` first (see above). The targets of the release workflow are
+`fedora-43-x86_64`, `fedora-44-x86_64` and `alma+epel-10-x86_64`. The `.rpm` file will be created in `out/`.
+
 ### Important notes
 
 - The package installs the following files:
@@ -85,17 +98,19 @@ The `.rpm` file will be created in `~/rpmbuild/RPMS/noarch/`.
   - `/usr/share/doc/smfc/examples/` — sample configuration files
 - Configuration files are marked with `%config(noreplace)`. On upgrade, `rpm` will not overwrite locally modified files.
 - The `smfc.service` systemd unit is automatically enabled (but not started) on install, so the configuration can be reviewed before the service first runs; it is stopped on removal. On upgrade a running service is restarted and a stopped one is left stopped (`%systemd_postun_with_restart`).
-- `%systemd_post` runs `systemctl preset`, which enables the unit only if the systemd preset policy allows it. Fedora, RHEL and openSUSE ship a `disable *` catch-all rule, so the package ships `/usr/lib/systemd/system-preset/50-smfc.preset` with the line `enable smfc.service`; the `50` prefix puts it ahead of the catch-all.
+- `%systemd_post` runs `systemctl preset`, which enables the unit only if the systemd preset policy allows it. Fedora and Enterprise Linux ship a `disable *` catch-all rule, so the package ships `/usr/lib/systemd/system-preset/50-smfc.preset` with the line `enable smfc.service`; the `50` prefix puts it ahead of the catch-all.
 - The build commands above extract the version from `smfc.spec` automatically, so the tarball name always matches.
-- On RHEL, CentOS Stream, Rocky Linux, and AlmaLinux the [EPEL](https://docs.fedoraproject.org/en-US/epel/) repository is required for the `python3-pyudev` dependency.
+- On Enterprise Linux 10 (RHEL, AlmaLinux, Rocky Linux, CentOS Stream, Oracle Linux) the `python3-pyudev` dependency is in the BaseOS repository, so [EPEL](https://docs.fedoraproject.org/en-US/epel/) is not required. For a build, `pyproject-rpm-macros` comes from the CodeReady Linux Builder (CRB) repository.
 
 ### Compatible distributions
 
-| Distribution  | Version                |
-|---------------|------------------------|
-| Fedora        | 39+                    |
-| RHEL          | 9+ (with EPEL)         |
-| CentOS Stream | 9+ (with EPEL)         |
-| Rocky Linux   | 9+ (with EPEL)         |
-| AlmaLinux     | 9+ (with EPEL)         |
-| openSUSE      | Leap 15.5+, Tumbleweed |
+| Distribution  | Version | Package          |
+|---------------|---------|------------------|
+| Fedora        | 43, 44  | `.fc43`, `.fc44` |
+| RHEL          | 10      | `.el10`          |
+| AlmaLinux     | 10      | `.el10`          |
+| Rocky Linux   | 10      | `.el10`          |
+| CentOS Stream | 10      | `.el10`          |
+| Oracle Linux  | 10      | `.el10`          |
+
+Each Fedora release has its own package, built for its Python version. The supported Fedora releases change with the Fedora release cycle. One `.el10` package serves all Enterprise Linux 10 distributions. openSUSE is not supported, because `smfc.spec` uses Fedora macros and package names; on openSUSE, use the Docker image or the manual installation (see chapters 9.4 and 9.5 of the [README](https://github.com/petersulyok/smfc/blob/main/README.md#9-installation-and-uninstallation)).

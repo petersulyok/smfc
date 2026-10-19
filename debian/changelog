@@ -20,6 +20,26 @@ smfc (7.0.0) unstable; urgency=medium
 
  -- Peter Sulyok <peter@sulyok.net>  Sun, 14 Sep 2026 18:00:00 +0200
 
+smfc (6.5.0) unstable; urgency=medium
+
+  * Changed: the supported Python versions are 3.11-3.15. Distributions with
+    an older default Python are no longer supported: Ubuntu 22.04, Linux Mint
+    21 and Pop!_OS 22.04.
+  * Changed: smfc names all base fan modes of X14/H14 boards (PUE3, LIQUID
+    COOLING, SMART, PUE, SMART COOLING, PERFORMANCE, SILENT) in the log, the
+    snapshot and smfc-client. Mode 0x03 is named PUE2.
+
+ -- Peter Sulyok <peter@sulyok.net>  Mon, 19 Oct 2026 06:35:27 +0200
+
+smfc (6.4.3) unstable; urgency=medium
+
+  * Fixed: smfc failed to start when the BMC base fan mode was above 9
+    (e.g. Performance, 0x0A, on an X14/H14 board). ipmitool prints the mode
+    byte in hex, and smfc parsed it as a decimal number, which only works
+    for modes 0-9. The mode is parsed as hex now.
+
+ -- Peter Sulyok <peter@sulyok.net>  Sat, 17 Oct 2026 16:19:24 +0200
+
 smfc (6.4.2) unstable; urgency=medium
 
   * Fixed: the X14/H14 firmware stack probe accepted only completion code

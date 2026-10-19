@@ -1467,6 +1467,8 @@ the first iteration.
 
 Both `smfc-deb` and `smfc-rpm` use the `gh-pages` branch as the GitHub Pages source, exposing the repository at `https://petersulyok.github.io/smfc-deb/` and `https://petersulyok.github.io/smfc-rpm/` respectively.
 
+Every long-lived branch is guarded by a repository ruleset that blocks deletion and force pushes: `main` in `smfc` ("Protect main"), and both `main` and `gh-pages` in `smfc-deb` and `smfc-rpm` ("Protect main and gh-pages"). No status checks or pull requests are required, so direct pushes to `main` and the publish workflows' fast-forward pushes to `gh-pages` are unaffected. The rulesets have no bypass actors: rewriting or recreating a protected branch (e.g. resetting `gh-pages`) requires setting the ruleset to *Disabled* first, under Settings → Rules → Rulesets.
+
 ### 15.2 Release trigger flow
 
 ```mermaid
@@ -1474,9 +1476,10 @@ flowchart LR
     REL([release: published<br/>vX.Y.Z]) --> PKG[packages.yml]
     subgraph smfc[petersulyok/smfc]
         PKG --> BD[build-deb]
-        PKG --> BR[build-rpm]
+        PKG --> BR[build-rpm<br/>fc43 / fc44 / el10]
+        BR --> TR[test-rpm<br/>fc43 / fc44 / el10]
         BD --> PUB[publish job]
-        BR --> PUB
+        TR --> PUB
         PUB -- attach assets --> REL
     end
     PUB -- repository_dispatch<br/>package-published --> DEB[smfc-deb<br/>publish-deb.yml]
@@ -1490,9 +1493,10 @@ flowchart LR
 Sequence on release:
 
 1. `release: published` event fires `packages.yml` in `smfc` (it can also be run manually — see §15.5).
-2. `build-deb` and `build-rpm` jobs run in parallel, producing `smfc_X.Y.Z_all.deb` and `smfc-X.Y.Z-1.noarch.rpm`.
-3. The `publish` job (after both builds succeed) downloads both artifacts, attaches them as **release assets** (public, version-pinned downloads), and fires a `repository_dispatch` event of type `package-published` with `client_payload.release_tag` set, to both downstream repos.
-4. Each downstream workflow downloads its package from the release page, refreshes the repository metadata, and pushes to `gh-pages`. GitHub Pages auto-deploys.
+2. `build-deb` and `build-rpm` jobs run in parallel. `build-deb` produces `smfc_X.Y.Z_all.deb`. `build-rpm` is a matrix job that builds one SRPM with `rpmbuild -bs` and rebuilds it with `mock` for each target (`fedora-43-x86_64`, `fedora-44-x86_64`, `alma+epel-10-x86_64`), producing `smfc-X.Y.Z-1.fc43.noarch.rpm`, `smfc-X.Y.Z-1.fc44.noarch.rpm` and `smfc-X.Y.Z-1.el10.noarch.rpm`. Each RPM carries the `python(abi)` and `python3.Xdist(pyudev)` dependencies of its own target.
+3. The `test-rpm` matrix job installs each RPM in a container of its target (`fedora:43`, `fedora:44`, `almalinux:10`) from the default repositories of the image, without EPEL, and runs `smfc -v`, so a dependency error stops the pipeline before anything is published.
+4. The `publish` job (after the DEB build and all RPM tests succeed) downloads all artifacts, attaches them as **release assets** (public, version-pinned downloads), and fires a `repository_dispatch` event of type `package-published` with `client_payload.release_tag` set, to both downstream repos.
+5. Each downstream workflow downloads its packages from the release page, refreshes the repository metadata, and pushes to `gh-pages`. `publish-rpm.yml` puts each RPM in the tree of its dist tag (see §15.3). GitHub Pages auto-deploys.
 
 Cross-repo dispatch requires the `PACKAGE_REPO_DISPATCH_TOKEN` secret in `smfc` — a fine-grained PAT with `Contents: Read and write` on both `smfc-deb` and `smfc-rpm`. The default `GITHUB_TOKEN` cannot dispatch across repositories.
 
@@ -1502,11 +1506,22 @@ Cross-repo dispatch requires the `PACKAGE_REPO_DISPATCH_TOKEN` secret in `smfc` 
 |---|---|---|
 | Tool | `reprepro` | `createrepo_c` + `rpm-sign` |
 | Runner | `ubuntu-latest` | `ubuntu-latest` in `fedora:latest` container |
-| Output structure | `dists/stable/…`, `pool/main/s/smfc/*.deb` | `repodata/…`, `packages/*.rpm` |
-| Version retention | **Latest only** (reprepro replaces previous versions in a suite) | **All versions retained** (createrepo_c accumulates) |
-| Signing | `Release` + `InRelease` metadata signed with `SignWith: <KEYID>` | each `.rpm` signed with `rpm --addsign`; `repomd.xml.asc` detached signature |
+| Output structure | `dists/stable/…`, `pool/main/s/smfc/*.deb` | one tree for each target: `fedora/<NN>/` and `el10/`, each with its `*.rpm` and `repodata/` |
+| Version retention | **Latest only** (reprepro replaces previous versions in a suite) | **All versions retained** in each tree (createrepo_c accumulates) |
+| Signing | `Release` + `InRelease` metadata signed with `SignWith: <KEYID>` | each new `.rpm` signed with `rpm --addsign`; one `repomd.xml.asc` detached signature for each tree |
 | Manual trigger | `workflow_dispatch` with `release_tag` input | same |
 | Idempotency | re-export metadata if the same version is already present | `createrepo_c --update` is naturally idempotent |
+
+The RPM trees on `gh-pages` follow the dist tag of each package:
+
+| Dist tag | Tree | `.repo` file | `baseurl` |
+|---|---|---|---|
+| `fcNN` | `fedora/NN/` | `smfc.repo` | `…/smfc-rpm/fedora/$releasever/` |
+| `elNN` | `elNN/` | `smfc-el.repo` | `…/smfc-rpm/el$releasever_major/` |
+
+An RPM with any other dist tag stops the workflow before the push. `dnf` fills in `$releasever` and `$releasever_major` on the host, so each host reads the tree of its own release. A noarch Python RPM is not portable across releases: the build adds `python(abi) = 3.x` and `python3.xdist(...)` dependencies for the Python of the build target. So each target has its own RPM and its own tree. A new Fedora release needs a new `mock` target in `packages.yml` before users upgrade to it; otherwise `dnf` stops with a metadata error for the missing tree.
+
+The root of `gh-pages` also has an older Fedora tree (`packages/*.rpm` and `repodata/`), for `smfc.repo` files with the root as `baseurl`. During a transition period, two steps of `publish-rpm.yml` keep it alive: the newest Fedora RPM is also copied to `packages/`, and a new `fedora/NN/` tree gets the earlier `.fcNN` RPMs of the root. `createrepo_c` reads only `packages/*.rpm` for the root (`--pkglist`), so the root metadata never lists the RPMs of the other trees. At the end of the transition, both steps are removed, and `packages/` and the root `repodata/` are deleted.
 
 For users who need a specific historical version, the corresponding `.deb` / `.rpm` remains downloadable from the GitHub release page even after the APT repo has moved on to a newer release.
 
@@ -1526,7 +1541,12 @@ The signing key never lives in the `smfc` source repository or in `smfc/packages
 
 `packages.yml` also accepts a manual **`workflow_dispatch`** trigger with a `release_tag` input, so the full build → attach → dispatch → downstream-publish chain can be run against any existing release without cutting a new version. Both downstream publishes are idempotent (reprepro re-exports if the version is already present; `createrepo_c --update` is idempotent) and the asset attach uses `--clobber`, so re-running against an already-published tag is safe. Use this to validate the pipeline — including the cross-repo `PACKAGE_REPO_DISPATCH_TOKEN` — after any workflow change.
 
+A **`pull_request`** trigger runs `build-deb`, `build-rpm` and `test-rpm` on every pull request that changes `smfc.spec`, `debian/`, `pyproject.toml` or `packages.yml`. The `publish` job is skipped for pull requests (`if: github.event_name != 'pull_request'`), so a packaging change is built and install-tested on every target before the merge without touching a release or the downstream repositories.
+
 Non-obvious constraints:
+
+- **`mock` needs a `--privileged` container.** Without it, `mock` cannot mount `/proc` in its chroot. `--isolation=simple` selects the plain chroot (no `systemd-nspawn` inside a container), and `--no-bootstrap-image` avoids pulling a bootstrap image with `podman`, which the container does not have.
+- **Each `mock` target installs only the `BuildRequires` of `smfc.spec`.** A build dependency that the host or a Fedora meta-package happens to pull in, but the spec does not name, breaks the EL10 build — e.g. `pyproject-rpm-macros`, which `python3-devel` requires on Fedora but not on EL10.
 
 - **Re-running a failed *release* run reuses the workflow file pinned to the release tag's commit, not `main`.** A fix committed to `main` does not apply to a re-run of the original release run; re-trigger via `workflow_dispatch` (which uses `main`) or cut a new release.
 - **PyPI publishing (`publish.yml`) also fires on `release: published` and rejects re-uploading an existing version**, so deleting and recreating a release to retry package publishing fails at the PyPI step. The `workflow_dispatch` path does not touch PyPI.

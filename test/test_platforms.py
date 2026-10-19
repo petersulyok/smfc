@@ -224,7 +224,7 @@ PLATFORMS: List[PlatformSpec] = [
     PlatformSpec(
         label="x14_openbmc",
         make=lambda exec_fn: X14OpenBmcPlatform(PlatformName.GENERIC_X14, exec_fn),
-        get_mode_values=(0, 1, 2, 4, 0x0B),
+        get_mode_values=(0, 1, 2, 4, 0x0A, 0x0B),
         get_level_cmd=_x14_get_cmd,
         get_level_vectors=((0, " 64", 0x64), (1, " 32", 0x32), (2, " 00", 0x00), (3, " 4b", 0x4B)),
         bad_zones=(-1, 5),
@@ -254,7 +254,7 @@ PLATFORMS: List[PlatformSpec] = [
         # fails. What differs is the lever - a global bypass flag instead of FULL fan mode - and the 5% floor.
         label="x14_aten",
         make=lambda exec_fn: X14AtenPlatform(PlatformName.GENERIC_X14, exec_fn),
-        get_mode_values=(0, 1, 2, 4),
+        get_mode_values=(0, 1, 2, 4, 0x0A),
         get_level_cmd=_generic_get_cmd,
         get_level_vectors=((0, " 32", 0x32), (1, " 64", 0x64), (2, " 31", 0x31), (3, " 05", 0x05)),
         bad_zones=(-1, 101),
@@ -342,7 +342,7 @@ class TestPlatforms:
         - ASSERT: get_fan_mode() returns the BMC-reported mode value
         - ASSERT: exec callback is invoked with the GET_FAN_MODE_CMD ipmitool byte sequence
         """
-        mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {mode:02}")
+        mock_exec.return_value = subprocess.CompletedProcess([], returncode=0, stdout=f" {mode:02x}")
         platform = spec.make(mock_exec)
         assert platform.get_fan_mode() == mode
         mock_exec.assert_called_with(GET_FAN_MODE_CMD)
@@ -858,6 +858,24 @@ class TestX14OpenBmcBehaviour:
         self._platform(bmc).start([0, 2])
         assert bmc.latched_zones == [0, 2], f"{f}: latched zones"
         assert bmc.fan_mode_writes == 0, f"{f}: base fan mode untouched"
+
+    def test_base_fan_mode_above_nine_is_read_as_hex(self) -> None:
+        """Positive unit test for X14OpenBmcPlatform.get_fan_mode() method. It contains the following steps:
+        - build a modelled board whose base fan mode is Performance (0x0A), which the BMC reports as ` 0a`
+        - invoke get_fan_mode(), then start() and check_fan_mode() for zones 0 and 1
+        - ASSERT: get_fan_mode() returns 0x0A. ipmitool prints the byte in hex, so a decimal parse fails
+          on every mode value above 9 and smfc cannot start
+        - ASSERT: check_fan_mode() reports OK with the base fan mode cached, rather than a lost control
+          state on every poll because the base fan mode could not be read
+        """
+        f = "TestX14OpenBmcBehaviour.test_base_fan_mode_above_nine_is_read_as_hex"
+        bmc = FakeOpenBmc(fan_mode=0x0A)
+        platform = self._platform(bmc)
+        assert platform.get_fan_mode() == 0x0A, f"{f}: base fan mode"
+        platform.start(self.ZONES)
+        status = platform.check_fan_mode(self.ZONES)
+        assert status.state == ControlState.OK, f"{f}: control state"
+        assert status.fan_mode == 0x0A, f"{f}: cached base fan mode"
 
     def test_duty_reaches_the_fans_of_a_latched_zone(self) -> None:
         """Positive unit test for X14OpenBmcPlatform.set_fan_level() method. It contains the following steps:

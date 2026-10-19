@@ -33,13 +33,11 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "build",
     "coverage",
     "mock",
     "pytest",
     "pytest-cov",
-    "pytest-mock",
-    "twine"
+    "pytest-mock"
 ]
 
 lint = [
@@ -137,7 +135,7 @@ shared infrastructure, and how to invoke each layer — lives in
 The project implemented the following GitHub workflows:
 
 1. Unit test and lint execution (`test.yml`). A commit can trigger this action:
-   * executes unit test on `ubuntu-latest` OS and on Python versions `3.10`, `3.11`, `3.12`, `3.13`, `3.14`
+   * executes unit test on `ubuntu-latest` OS and on Python versions `3.11`, `3.12`, `3.13`, `3.14`, `3.15`
    * executes `pylint` and `ruff`
    * generates coverage data and upload it to [codecov.io](https://codecov.io/)
 
@@ -147,8 +145,9 @@ The project implemented the following GitHub workflows:
 
 3. Build and publish DEB / RPM packages (`packages.yml`). A published release triggers this action:
    * build DEB package on `debian:trixie`
-   * build RPM package on `fedora:latest`
-   * upload both packages as CI artifacts (90-day retention) and attach them to the GitHub release as assets
+   * build one RPM package for each target (Fedora 43, Fedora 44, EL10) with `mock` on `fedora:latest`
+   * install each RPM package in a container of its target and run `smfc -v`
+   * upload all packages as CI artifacts (90-day retention) and attach them to the GitHub release as assets
    * dispatch a `package-published` event to [`smfc-deb`](https://github.com/petersulyok/smfc-deb) and [`smfc-rpm`](https://github.com/petersulyok/smfc-rpm), which then republish the packages into their signed APT and DNF repositories on GitHub Pages (see [`ARCHITECTURE.md` chapter 15](https://github.com/petersulyok/smfc/blob/main/ARCHITECTURE.md#15-release-and-distribution))
 
 
@@ -166,6 +165,9 @@ Follow these steps to create a new release:
 * Run linters `pylint` and `ruff`, and correct all warnings
 * Update CHANGELOG.md with the new release information
 * Commit all changes and test again
+* Check the `README.md` of [`smfc-deb`](https://github.com/petersulyok/smfc-deb) and
+  [`smfc-rpm`](https://github.com/petersulyok/smfc-rpm): the supported distributions, the Python version and the
+  installation commands must match `PACKAGES.md` and chapter 9 of `README.md`. Update and push them if needed.
 * Create a new release on GitHub with the same version number, and the new package will be published on PyPI automatically. DEB and RPM packages will be built automatically by the `packages.yml` workflow.
 * Build new images for docker and upload them
 
@@ -178,8 +180,8 @@ The docker images can be built locally in the project root folder:
 ./docker/docker-build.sh 4.1.0 latest
 ```
 Notes:
-- All three dockerfiles pin an exact base image tag (`alpine:3.24.1`, `debian:13.6-slim`,
-  `ubuntu:noble-20260810`) instead of a floating one, so a rebuild always produces the same base. The AMD image
+- All three dockerfiles pin an exact base image tag (`alpine:3.24.2`, `debian:13.7-slim`,
+  `ubuntu:noble-20260930.1`) instead of a floating one, so a rebuild always produces the same base. The AMD image
   also pins the ROCm APT repository version (`7.2.4`), from which only `rocm-smi-lib` is installed.
   Before a release, check for newer base images and bump the `FROM` lines deliberately, then update the component
   lists in [`DOCKER.md`](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md) accordingly. The versions

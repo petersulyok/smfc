@@ -4,7 +4,7 @@
 ](https://github.com/petersulyok/smfc/actions/workflows/test.yml) [![Codecov](https://codecov.io/gh/petersulyok/smfc/branch/main/graph/badge.svg)
 ](https://app.codecov.io/gh/petersulyok/smfc) [![Issues](https://img.shields.io/github/issues/petersulyok/smfc)
 ](https://github.com/petersulyok/smfc/issues) [![Supported Python Versions](https://img.shields.io/pypi/pyversions/smfc)](https://pypi.org/project/smfc)
-[![PyPI version](https://badge.fury.io/py/smfc.svg)](https://badge.fury.io/py/smfc)
+[![PyPI version](https://img.shields.io/pypi/v/smfc)](https://pypi.org/project/smfc)
 
 Supermicro fan control for Linux (home) servers.
 
@@ -14,7 +14,7 @@ This is a `systemd service` running on Linux that can control fans with the help
 
 ### 1. Prerequisites
  - a Supermicro motherboard with IPMI 2.0 (ASPEED AST2400/2500/2600 chip)
- - Python 3.10-3.14
+ - Python 3.11-3.15
  - a Linux distribution with:
    - `systemd` and `bash`
    - `coretemp` kernel module for Intel CPUs or `k10temp` kernel module for AMD CPUs
@@ -633,7 +633,7 @@ sudo curl -fsSL https://petersulyok.github.io/smfc-deb/smfc.sources \
 sudo apt update && sudo apt install smfc
 ```
 
-The `smfc.sources` file contains the repository signing key, so it is a single, self-contained file and no separate keyring is needed. Embedded keys require `apt` 2.4 or newer, available on all supported distributions (Debian 12+, Ubuntu 22.04+).
+The `smfc.sources` file contains the repository signing key, so it is a single, self-contained file and no separate keyring is needed. Embedded keys require `apt` 2.4 or newer, available on all supported distributions (Debian 12+, Ubuntu 24.04+).
 
 **b) One-line format with a separate key file**
 
@@ -657,21 +657,36 @@ sudo rm -f /etc/apt/sources.list.d/smfc.list /etc/apt/keyrings/smfc-repo.gpg  # 
 
 Note: if you added the repository with b) earlier and switch to a), delete the files of the old format (`smfc.list` and `smfc-repo.gpg`), otherwise the repository is configured twice.
 
-Compatible with Debian 12+, Ubuntu 22.04+. See the [smfc-deb README](https://github.com/petersulyok/smfc-deb) for the full distribution list. The package installs the same files as the manual installation (service unit, configuration, man page, sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
+Compatible with Debian 12+, Ubuntu 24.04+. See the [smfc-deb README](https://github.com/petersulyok/smfc-deb) for the full distribution list. The package installs the same files as the manual installation (service unit, configuration, man page, sample configs). Configuration files under `/etc/` are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
 The DEB package enables the `smfc` service but does not start it, and an upgrade restarts it only if it was running. See the table at the head of [chapter 9.](https://github.com/petersulyok/smfc/blob/main/README.md#9-installation-and-uninstallation)
 
 
 #### 9.2. RPM package installation
-Pre-built `.rpm` packages are available from the [smfc-rpm DNF repository](https://github.com/petersulyok/smfc-rpm), hosted on GitHub Pages and signed with a dedicated GPG key.
+> [!WARNING]
+> **Existing Fedora users: replace your `smfc.repo` file.** From v6.5.0, the RPM repository has a separate tree for each distribution. If `/etc/yum.repos.d/smfc.repo` contains `baseurl=https://petersulyok.github.io/smfc-rpm/` (without `fedora/`), it points to the old repository. The old repository has v6.5.0 as its last version, and it will be removed with the next smfc release. Then `dnf` reports an error for it. Replace the file with the current one:
+> ```bash
+> sudo dnf config-manager addrepo --overwrite --from-repofile=https://petersulyok.github.io/smfc-rpm/smfc.repo
+> ```
 
-Add the repository and install:
+Pre-built `.rpm` packages are available from the [smfc-rpm DNF repository](https://github.com/petersulyok/smfc-rpm), hosted on GitHub Pages and signed with a dedicated GPG key. Each supported distribution has its own package in the repository, so add the `.repo` file of your distribution.
+
+**a) Fedora**
 
 ```bash
 sudo dnf config-manager addrepo --from-repofile=https://petersulyok.github.io/smfc-rpm/smfc.repo
 sudo dnf install smfc
 ```
 
-(On older `dnf` versions: `sudo dnf config-manager --add-repo=https://petersulyok.github.io/smfc-rpm/smfc.repo`.)
+**b) Enterprise Linux 10 (RHEL, AlmaLinux, Rocky Linux, CentOS Stream, Oracle Linux)**
+
+```bash
+sudo dnf config-manager --add-repo https://petersulyok.github.io/smfc-rpm/smfc-el.repo
+sudo dnf install smfc
+```
+
+The `python3-pyudev` dependency is in the BaseOS repository of Enterprise Linux 10, so EPEL is not required. `dnf config-manager` comes from the `dnf-plugins-core` package.
+
+On the first installation, `dnf` asks you to accept the repository signing key. Check that its fingerprint is `6912 A339 7CF9 7359 857A  B82F 9E06 E863 D50D 7541`.
 
 To update: `sudo dnf upgrade smfc`.
 
@@ -679,10 +694,11 @@ To remove:
 
 ```bash
 sudo dnf remove smfc
-sudo rm /etc/yum.repos.d/smfc.repo
+sudo rm -f /etc/yum.repos.d/smfc.repo     # a)
+sudo rm -f /etc/yum.repos.d/smfc-el.repo  # b)
 ```
 
-Compatible with Fedora 39+, RHEL/Rocky/AlmaLinux 9+ (with EPEL), CentOS Stream 9+, openSUSE Leap 15.5+. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for the full distribution list. The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
+Compatible with the supported Fedora releases (currently Fedora 43 and 44) and Enterprise Linux 10. See the [smfc-rpm README](https://github.com/petersulyok/smfc-rpm) for more details. openSUSE is not supported by the RPM packages; use the Docker image (see [chapter 9.4.](https://github.com/petersulyok/smfc/blob/main/README.md#94-docker-installation)) or the manual installation (see [chapter 9.5.](https://github.com/petersulyok/smfc/blob/main/README.md#95-manual-installation-and-uninstallation)). The package installs the same files as the manual installation. Configuration files are preserved on upgrade. See [PACKAGES.md](https://github.com/petersulyok/smfc/blob/main/PACKAGES.md) for build-from-source instructions.
 The RPM package enables the `smfc` service but does not start it, and an upgrade restarts it only if it was running. See the table at the head of [chapter 9.](https://github.com/petersulyok/smfc/blob/main/README.md#9-installation-and-uninstallation)
 
 #### 9.3. Arch Linux (AUR) package installation
@@ -759,6 +775,9 @@ Notes for the script:
 - `pyudev` comes from PyPI with `smfc`, into the virtual environment. It reaches `libudev` at run time, so your machine
   needs that library: `libudev1` on Debian and Ubuntu, `systemd-libs` on Fedora. The script tests it and names the
   package if it is missing.
+- On openSUSE, install the required commands first: `sudo zypper install python3-pip curl gzip man`
+- The virtual environment works only with the Python version that created it. On openSUSE Tumbleweed, run
+  `install.sh` again after a change of the default Python version, otherwise `smfc` stops working
 - If your package manager owns an earlier `smfc`, the script stops and names the package and the command that removes
   it. It never removes a package itself.
 

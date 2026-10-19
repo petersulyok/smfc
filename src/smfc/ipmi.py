@@ -294,7 +294,7 @@ class Ipmi:
         Args:
             mode (int): fan mode
         Returns:
-            str: name of the fan mode ('UNKNOWN', 'STANDARD', 'FULL', 'OPTIMAL', 'PUE', 'HEAVY IO')
+            str: name of the fan mode (see platform.FAN_MODE_NAMES), or 'UNKNOWN' for any other value
         """
         return get_fan_mode_name(mode)
 
