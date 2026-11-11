@@ -380,8 +380,8 @@ class FanController:
         * Step 1: Read current time. If the elapsed time is bigger than the polling time period
           then go to step 2, otherwise return.
         * Step 2: Read the current temperature. If the change of the temperature goes beyond
-          the sensitivity limit, or the last fan level write did not complete, then go to step 3,
-          otherwise return
+          the sensitivity limit, or the smoothing window is stable, or the last fan level write did
+          not complete, then go to step 3, otherwise return
         * Step 3: Calculate the current gain and fan level based on the measured temperature
         * Step 4: If the new fan level is different, or the last fan level write did not complete,
           it will be set and logged
@@ -390,10 +390,17 @@ class FanController:
         (`_level_dirty`) is set before the write and cleared after it, so it stays set when the write
         fails. While it is set, the fan level is written on every poll, because `last_temp` and
         `last_level` already hold the new values and the BMC may or may not have applied them.
+
+        With `smoothing > 1` the smoothed temperature reaches a new stable value in small steps, and
+        the last of them can be smaller than the sensitivity. The fan level would then stay one step
+        below the level of the real temperature. So the sensitivity check is skipped when the smoothing
+        window is full and all its samples differ by less than the sensitivity. A single spike or a
+        noisy sensor does not give such a window, so the sensitivity check stays active for them.
         """
         current_time: float  # Current system timestamp (measured)
         current_temp: float  # Current temperature (measured)
         current_level: int   # Current fan level (looked up from LUT)
+        stable: bool         # The smoothing window is full and its samples are nearly equal
 
         # Step 1: check the elapsed time.
         current_time = time.monotonic()
@@ -411,7 +418,9 @@ class FanController:
                                  f"(window {len(self._temp_history)}/{self.config.smoothing})")
                 else:
                     self.log.msg(Log.LOG_DEBUG, f"{self.name}: new temperature > {current_temp:.1f}C")
-            if self._level_dirty or abs(current_temp - self.last_temp) >= self.config.sensitivity:
+            stable = (self.config.smoothing > 1 and len(self._temp_history) == self.config.smoothing and
+                      max(self._temp_history) - min(self._temp_history) < self.config.sensitivity)
+            if self._level_dirty or stable or abs(current_temp - self.last_temp) >= self.config.sensitivity:
                 self.last_temp = current_temp
 
                 # Step 3: look up the fan level for the (clamped, integer-rounded) temperature.

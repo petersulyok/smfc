@@ -1216,4 +1216,98 @@ class TestFanController:
         assert mock_set_multiple_fan_levels.call_count == 0
 
 
+    def test_run_smoothing_reaches_level_of_stable_temp(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.run() method when the smoothed temperature settles within the sensitivity. Contains the following steps:
+        - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
+        - build a CPU config with a 5-point control_function, steps=7, smoothing=3 and sensitivity=1.0
+        - re-mock smfc.FanController.set_fan_level and feed 3 readings of 36 C, then 6 readings of 38 C
+        - ASSERT: after the 2nd reading of 38 C the level is 90 (smoothed 37.33 C passed the sensitivity check)
+        - ASSERT: the 3rd reading of 38 C gives a stable window, so the last step of 0.67 C is not blocked
+          by the sensitivity and the level reaches 100
+        - ASSERT: last_temp is 38 C and the level stays 100 for the remaining readings
+        - ASSERT: the levels 80, 90 and 100 were written, each of them once
+        """
+        # LUT of this curve with steps=7: T=36C -> 80%, T=37C -> 90%, T=38C -> 100%.
+        cfg = create_cpu_config(steps=7, sensitivity=1.0, polling=1, smoothing=3,
+                                control_function=[(30, 40), (33, 50), (35, 65), (36, 80), (38, 100)])
+        my_fc, _, _, mock_temp = _make_fc(mocker, cfg, count=1)
+        mock_set_fan_level = mocker.patch("smfc.FanController.set_fan_level")
+        levels = []
+        for temp in [36.0, 36.0, 36.0, 38.0, 38.0, 38.0, 38.0, 38.0, 38.0]:
+            mock_temp.return_value = temp
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+            levels.append(my_fc.last_level)
+        # Smoothed temperatures: 36, 36, 36, 36.67 (blocked), 37.33 (passed), 38 (delta 0.67C, stable window).
+        assert levels[4] == 90
+        assert levels[5:] == [100, 100, 100, 100]
+        assert my_fc.last_temp == pytest.approx(38.0)
+        assert mock_set_fan_level.call_args_list == [call(80), call(90), call(100)]
+
+    def test_run_smoothing_stable_window_keeps_spike_damped(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.run() method with a spike in a stable smoothing window. Contains the following steps:
+        - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
+        - build a FanController via _create_test_fc with smoothing=3 and sensitivity=5
+        - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level
+        - feed 3 stable 40 C readings, a spike to 52 C, then 3 readings of 40 C again
+        - ASSERT: while the spike is in the window, the window is not stable and the sensitivity blocks the
+          smoothed change of 4 C: last_temp stays 40 C and last_level stays 61
+        - ASSERT: the level 61 was written only once (raw 52 C would yield 100)
+        """
+        my_fc = self._create_test_fc(mocker, smoothing=3, sensitivity=5)
+        mock_temp = mocker.patch("smfc.FanController._get_nth_temp")
+        mock_set_fan_level = mocker.patch("smfc.FanController.set_fan_level")
+        # With the spike in the window, the smoothed temperature is (40+40+52)/3 = 44C and max-min = 12C.
+        for temp in [40.0, 40.0, 40.0, 52.0, 40.0, 40.0, 40.0]:
+            mock_temp.return_value = temp
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+            assert my_fc.last_temp == pytest.approx(40.0)
+            assert my_fc.last_level == 61
+        mock_set_fan_level.assert_called_once_with(61)
+
+    def test_run_smoothing_noisy_window_keeps_sensitivity(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.run() method with a noisy smoothing window. Contains the following steps:
+        - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
+        - build a FanController via _create_test_fc with smoothing=3 and sensitivity=3
+        - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level
+        - feed readings alternating between 40 C and 43 C
+        - ASSERT: the full window is never stable (max - min = 3 C is not below the sensitivity), so the
+          sensitivity blocks the smoothed changes of 1-2 C: last_temp stays 40 C and last_level stays 61
+        - ASSERT: the level 61 was written only once (the smoothed 42 C would yield 74)
+        """
+        my_fc = self._create_test_fc(mocker, smoothing=3, sensitivity=3)
+        mock_temp = mocker.patch("smfc.FanController._get_nth_temp")
+        mock_set_fan_level = mocker.patch("smfc.FanController.set_fan_level")
+        # Smoothed temperatures: 40, 41.5, 41, 42, 41, 42, ...
+        for temp in [40.0, 43.0, 40.0, 43.0, 40.0, 43.0, 40.0, 43.0]:
+            mock_temp.return_value = temp
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+            assert my_fc.last_temp == pytest.approx(40.0)
+            assert my_fc.last_level == 61
+        mock_set_fan_level.assert_called_once_with(61)
+
+    def test_run_no_smoothing_keeps_sensitivity(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.run() method with smoothing=1 and a stable temperature. Contains the following steps:
+        - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
+        - build a FanController via _create_test_fc with smoothing=1 and sensitivity=2
+        - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level
+        - feed one reading of 40 C, then 3 readings of 41.5 C
+        - ASSERT: the stable window rule is not active without smoothing, so the sensitivity blocks the
+          change of 1.5 C: last_temp stays 40 C and last_level stays 61
+        - ASSERT: the level 61 was written only once (41.5 C would yield 74)
+        """
+        my_fc = self._create_test_fc(mocker, smoothing=1, sensitivity=2)
+        mock_temp = mocker.patch("smfc.FanController._get_nth_temp")
+        mock_set_fan_level = mocker.patch("smfc.FanController.set_fan_level")
+        for temp in [40.0, 41.5, 41.5, 41.5]:
+            mock_temp.return_value = temp
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+            assert my_fc.last_temp == pytest.approx(40.0)
+            assert my_fc.last_level == 61
+        mock_set_fan_level.assert_called_once_with(61)
+
+
 # End.
