@@ -1769,6 +1769,63 @@ class TestService:
         log_output = str(mock_log_msg.call_args_list)
         assert "IPMI zone [0]: new level = 50% (CONST)" in log_output, f"{f}: log should not include temperature"
 
+    def test_apply_fan_levels_retries_failed_write(self, mocker: MockerFixture):
+        """Negative unit test for Service._apply_fan_levels() method when a fan level write fails. It contains the
+        following steps:
+        - mock print(), Ipmi.set_fan_level(), Log.msg_to_stdout()
+        - instantiate Service with a Log and Ipmi.__new__(Ipmi); set applied_levels={1: 50} and last_desired=[]
+        - attach a single deferred HD controller on zone 1 at 70%/42.0C
+        - call Service._apply_fan_levels() with Ipmi.set_fan_level() raising IpmiError (the BMC may or may not
+          have applied the level 70)
+        - ASSERT: the IpmiError reaches the caller (Service.run() logs it)
+        - ASSERT: zone 1 is removed from service.applied_levels, because its real level is not known
+        - set the desired level back to 50 (the level cached before the failed write) and call
+          Service._apply_fan_levels() again with a working Ipmi.set_fan_level()
+        - ASSERT: Ipmi.set_fan_level() is called with (1, 50), the write is not skipped
+        - ASSERT: service.applied_levels[1] is cached as 50
+        - call Service._apply_fan_levels() a third time
+        - ASSERT: Ipmi.set_fan_level() is not called again (the cache is valid again)
+        """
+        f = "TestService.test_apply_fan_levels_retries_failed_write"
+        mock_print = MagicMock()
+        mocker.patch("builtins.print", mock_print)
+        mock_set_fan_level = MagicMock(side_effect=IpmiError("ipmitool timed out after 10 seconds: raw 0x30 0x70."))
+        mocker.patch("smfc.Ipmi.set_fan_level", mock_set_fan_level)
+        mock_log_msg = MagicMock()
+        mocker.patch("smfc.Log.msg_to_stdout", mock_log_msg)
+        service = Service()
+        service.log = Log(Log.LOG_DEBUG, Log.LOG_STDOUT)
+        service.ipmi = Ipmi.__new__(Ipmi)
+        service.applied_levels = {1: 50}
+        service.last_desired = []
+
+        hd_fc = FanController.__new__(FanController)
+        hd_fc.name = Config.CS_HD
+        hd_fc.config = MockControllerConfig(ipmi_zone=[1])
+        hd_fc.last_level = 70
+        hd_fc.last_temp = 42.0
+        hd_fc.deferred_apply = True
+        service.controllers = [hd_fc]
+
+        # The write of level 70 fails: the reply is lost, the BMC may have applied it.
+        with pytest.raises(IpmiError):
+            service._apply_fan_levels()  # pylint: disable=protected-access
+        mock_set_fan_level.assert_called_once_with(1, 70)
+        assert 1 not in service.applied_levels, f"{f}: zone 1 should not have a cached level after a failed write"
+
+        # The desired level returns to the previously cached one: it must be written, not skipped.
+        mock_set_fan_level.side_effect = None
+        hd_fc.last_level = 50
+        hd_fc.last_temp = 38.0
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        assert mock_set_fan_level.call_count == 2, f"{f}: the level should be written after a failed write"
+        mock_set_fan_level.assert_called_with(1, 50)
+        assert service.applied_levels[1] == 50, f"{f}: zone 1 should cache level 50"
+
+        # The write completed, so an unchanged level is not written again.
+        service._apply_fan_levels()  # pylint: disable=protected-access
+        assert mock_set_fan_level.call_count == 2, f"{f}: an unchanged level should not be written again"
+
     def test_apply_fan_levels_shared_zone_const_winner(self, mocker: MockerFixture):
         """Positive unit test for Service._apply_fan_levels() method with CONST winning a shared zone. It contains the
         following steps:

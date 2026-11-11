@@ -12,6 +12,7 @@ from mock import MagicMock, call
 from pytest_mock import MockerFixture
 from smfc import FanController, Log, Ipmi
 from smfc.config import Config
+from smfc.platform import IpmiError
 from .test_config_builders import create_cpu_config
 from .test_mocks import MockDevice, MockContext
 
@@ -36,6 +37,9 @@ def _make_fc(mocker: MockerFixture, cfg, count: int = 1, *, log_level: int = Log
     FanController.__init__(fc, log, ipmi, cfg.section, count)
     return fc, log, ipmi, mock_temp
 
+
+# The real FanController.set_fan_level(), for the tests which need it after _make_fc() has mocked it.
+_REAL_SET_FAN_LEVEL = FanController.set_fan_level
 
 class TestFanController:
     """Unit test class for smfc.FanController() class"""
@@ -1077,6 +1081,139 @@ class TestFanController:
         # Temperature should not have been read (polling was skipped silently).
         assert mock_temp.call_count == initial_temp_calls
         assert mock_set_fan_level.call_count == 0
+
+
+    def test_run_retries_rejected_write(self, mocker: MockerFixture) -> None:
+        """Negative unit test for FanController.run() method when the BMC rejects a fan level write. Contains the following steps:
+        - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
+        - build a FanController via _create_test_fc with sensitivity=2
+        - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level
+        - poll at 40 C with a successful write, then at 50 C with a write raising IpmiError
+        - ASSERT: run() lets the IpmiError through, and the dirty flag is set
+        - poll again at the same 50 C with a successful write
+        - ASSERT: the level 100 is written again, although the temperature and the level did not change
+        - ASSERT: the dirty flag is cleared after the completed write
+        - poll once more at 50 C
+        - ASSERT: set_fan_level is NOT called again (no write without a change)
+        """
+        my_fc = self._create_test_fc(mocker, sensitivity=2)
+        mock_temp = mocker.patch("smfc.FanController._get_nth_temp")
+        mock_set_fan_level = mocker.patch("smfc.FanController.set_fan_level")
+        # 40C maps to step round((40-30)/4) = 2 -> level = 2*13+35 = 61.
+        mock_temp.return_value = 40.0
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        mock_set_fan_level.assert_called_once_with(61)
+        assert my_fc._level_dirty is False  # pylint: disable=protected-access
+        # 50C maps to max_level=100, but the BMC rejects the write.
+        mock_temp.return_value = 50.0
+        mock_set_fan_level.side_effect = IpmiError("ipmitool error (1): raw 0x30 0x70 0x66 0x01 0x00 0x64.")
+        my_fc.last_time = time.monotonic() - 2
+        with pytest.raises(IpmiError):
+            my_fc.run()
+        assert my_fc._level_dirty is True  # pylint: disable=protected-access
+        assert mock_set_fan_level.call_count == 2
+        # Same temperature again: the delta is 0C and the level is the cached one, but the write is retried.
+        mock_set_fan_level.side_effect = None
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        assert mock_set_fan_level.call_count == 3
+        mock_set_fan_level.assert_called_with(100)
+        assert my_fc._level_dirty is False  # pylint: disable=protected-access
+        assert my_fc.last_level == 100
+        # The write completed, so the next poll at the same temperature does not write.
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        assert mock_set_fan_level.call_count == 3
+
+    def test_run_retry_ignores_sensitivity(self, mocker: MockerFixture) -> None:
+        """Negative unit test for FanController.run() method when a failed write is followed by a small temperature change. Contains the following steps:
+        - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
+        - build a FanController via _create_test_fc with sensitivity=4
+        - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level
+        - poll at 40 C with a successful write, then at 44 C with a write raising IpmiError
+        - poll at 42 C with a successful write (the change of 2 C is below the sensitivity)
+        - ASSERT: the deadband does not block the retry, the level of 42 C is written
+        - ASSERT: last_temp and last_level follow the retried poll, and the dirty flag is cleared
+        """
+        my_fc = self._create_test_fc(mocker, sensitivity=4)
+        mock_temp = mocker.patch("smfc.FanController._get_nth_temp")
+        mock_set_fan_level = mocker.patch("smfc.FanController.set_fan_level")
+        mock_temp.return_value = 40.0
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        mock_set_fan_level.assert_called_once_with(61)
+        # 44C maps to step round((44-30)/4) = round(3.5) = 4 -> level = 4*13+35 = 87, but the write fails.
+        mock_temp.return_value = 44.0
+        mock_set_fan_level.side_effect = IpmiError("ipmitool timed out after 10 seconds: raw 0x30 0x70 0x66.")
+        my_fc.last_time = time.monotonic() - 2
+        with pytest.raises(IpmiError):
+            my_fc.run()
+        assert my_fc.last_temp == pytest.approx(44.0)
+        # 42C is only 2C away from last_temp=44C. It maps to step 3 -> level = 3*13+35 = 74.
+        mock_temp.return_value = 42.0
+        mock_set_fan_level.side_effect = None
+        my_fc.last_time = time.monotonic() - 2
+        my_fc.run()
+        mock_set_fan_level.assert_called_with(74)
+        assert my_fc.last_temp == pytest.approx(42.0)
+        assert my_fc.last_level == 74
+        assert my_fc._level_dirty is False  # pylint: disable=protected-access
+
+    def test_run_retries_on_every_poll_until_write_completes(self, mocker: MockerFixture) -> None:
+        """Negative unit test for FanController.run() method when the fan level write fails several times. Contains the following steps:
+        - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
+        - build a FanController via _create_test_fc with sensitivity=2
+        - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level (raising IpmiError)
+        - poll three times at 50 C
+        - ASSERT: every poll writes the level 100 and the dirty flag stays set
+        - poll at 50 C with a successful write, then once more
+        - ASSERT: the 4th poll writes the level 100 and clears the dirty flag, the 5th poll does not write
+        """
+        my_fc = self._create_test_fc(mocker, sensitivity=2)
+        mock_temp = mocker.patch("smfc.FanController._get_nth_temp")
+        mock_set_fan_level = mocker.patch("smfc.FanController.set_fan_level")
+        mock_temp.return_value = 50.0
+        mock_set_fan_level.side_effect = IpmiError("ipmitool timed out after 10 seconds: raw 0x30 0x70 0x66.")
+        for i in range(1, 4):
+            my_fc.last_time = time.monotonic() - 2
+            with pytest.raises(IpmiError):
+                my_fc.run()
+            assert mock_set_fan_level.call_count == i
+            mock_set_fan_level.assert_called_with(100)
+            assert my_fc._level_dirty is True  # pylint: disable=protected-access
+        mock_set_fan_level.side_effect = None
+        for _ in range(2):
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+            assert mock_set_fan_level.call_count == 4
+            assert my_fc._level_dirty is False  # pylint: disable=protected-access
+
+    def test_run_deferred_never_dirty(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.run() method in deferred mode with the dirty flag. Contains the following steps:
+        - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
+        - build a FanController via _create_test_fc with sensitivity=2 and set deferred_apply=True
+        - restore the real smfc.FanController.set_fan_level and mock smfc.Ipmi.set_multiple_fan_levels (raising IpmiError)
+        - re-mock smfc.FanController._get_nth_temp and poll at 40 C, at 50 C and twice more at 50 C
+        - ASSERT: Ipmi.set_multiple_fan_levels is never called (Service._apply_fan_levels() writes the shared zones)
+        - ASSERT: the dirty flag is never set, and last_level holds the desired level after each poll
+        - ASSERT: last_temp does not change on the polls without a temperature change (the deadband is active)
+        """
+        my_fc = self._create_test_fc(mocker, sensitivity=2)
+        my_fc.deferred_apply = True
+        mocker.patch("smfc.FanController.set_fan_level", _REAL_SET_FAN_LEVEL)
+        mock_set_multiple_fan_levels = MagicMock(side_effect=IpmiError("must not be called"))
+        mocker.patch("smfc.Ipmi.set_multiple_fan_levels", mock_set_multiple_fan_levels)
+        mock_temp = mocker.patch("smfc.FanController._get_nth_temp")
+        for temp, expected_level in [(40.0, 61), (50.0, 100), (50.0, 100), (51.0, 100)]:
+            mock_temp.return_value = temp
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+            assert my_fc.last_level == expected_level
+            assert my_fc._level_dirty is False  # pylint: disable=protected-access
+        # 51C is only 1C away from 50C, so the last poll did not pass the sensitivity check.
+        assert my_fc.last_temp == pytest.approx(50.0)
+        assert mock_set_multiple_fan_levels.call_count == 0
 
 
 # End.

@@ -52,6 +52,7 @@ class FanController:
     last_level: int                     # Last configured fan level (0..100%)
     deferred_apply: bool                # If True, skip IPMI calls (used for zone arbitration)
     _temp_history: deque                # Circular buffer storing recent temperature readings
+    _level_dirty: bool                  # If True, the last fan level write did not complete (it is retried)
     _temp_read_errors: List[int]        # Consecutive failed temperature reads, one counter per device
     _temp_read_errors_total: List[int]  # Failed temperature reads since startup, one counter per device
 
@@ -96,6 +97,7 @@ class FanController:
         self.last_time = time.monotonic() - (self.config.polling + 1)
         self.deferred_apply = False
         self._temp_history = deque(maxlen=self.config.smoothing)
+        self._level_dirty = False
 
         # Print configuration at CONFIG log level.
         if self.log.log_level >= Log.LOG_CONFIG:
@@ -378,9 +380,16 @@ class FanController:
         * Step 1: Read current time. If the elapsed time is bigger than the polling time period
           then go to step 2, otherwise return.
         * Step 2: Read the current temperature. If the change of the temperature goes beyond
-          the sensitivity limit then go to step 3, otherwise return
+          the sensitivity limit, or the last fan level write did not complete, then go to step 3,
+          otherwise return
         * Step 3: Calculate the current gain and fan level based on the measured temperature
-        * Step 4: If the new fan level is different it will be set and logged
+        * Step 4: If the new fan level is different, or the last fan level write did not complete,
+          it will be set and logged
+
+        A fan level write can fail with an IpmiError, which Service.run() catches. The dirty flag
+        (`_level_dirty`) is set before the write and cleared after it, so it stays set when the write
+        fails. While it is set, the fan level is written on every poll, because `last_temp` and
+        `last_level` already hold the new values and the BMC may or may not have applied them.
         """
         current_time: float  # Current system timestamp (measured)
         current_temp: float  # Current temperature (measured)
@@ -402,7 +411,7 @@ class FanController:
                                  f"(window {len(self._temp_history)}/{self.config.smoothing})")
                 else:
                     self.log.msg(Log.LOG_DEBUG, f"{self.name}: new temperature > {current_temp:.1f}C")
-            if abs(current_temp - self.last_temp) >= self.config.sensitivity:
+            if self._level_dirty or abs(current_temp - self.last_temp) >= self.config.sensitivity:
                 self.last_temp = current_temp
 
                 # Step 3: look up the fan level for the (clamped, integer-rounded) temperature.
@@ -412,10 +421,13 @@ class FanController:
                     self.log.msg(Log.LOG_DEBUG, f"{self.name}: calculated level={current_level}% "
                                  f"for temp={current_temp:.1f}C")
 
-                # Step 4: the new fan level will be set and logged.
-                if current_level != self.last_level:
+                # Step 4: the new fan level will be set and logged. The dirty flag stays set if the write
+                # raises an exception, and then the next poll writes the fan level again.
+                if self._level_dirty or current_level != self.last_level:
                     self.last_level = current_level
+                    self._level_dirty = True
                     self.set_fan_level(current_level)
+                    self._level_dirty = False
                     if not self.deferred_apply:
                         self.log.msg(Log.LOG_INFO,
                                      f"IPMI zone {self.config.ipmi_zone}: new level = {current_level}% "
