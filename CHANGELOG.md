@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **`bin/install.sh` stopped before the end when `/usr/local/share/man/man1` did not exist**, e.g. on openSUSE Leap 16 and Tumbleweed, with exit code 23 from `curl`. The script created `/usr/share/man/man1`, but it saves the man pages to `/usr/local/share/man/man1`. `smfc`, the configuration files and the systemd unit were already installed, but the man pages, the `mandb` update and the disk names in `hd_names=` and `nvme_names=` were missing. The script creates `/usr/local/share/man/man1` now.
+- **A failed fan level write was not retried, so the fans could stay at the old level while the temperature was rising.** `FanController.run()` stores the new temperature and the new level before it writes the level to the BMC. If the write failed (e.g. a rejected command or an `ipmitool_timeout` expiry), the next poll found no change in the level and no change in the temperature above `sensitivity=`, so it did not write again until the temperature moved to another level. A controller remembers a fan level write that did not complete now, and it writes the level on every poll until the write completes. A shared IPMI zone forgets its cached level after a failed write, so its level is written again in the next loop, also if the BMC applied the level but its reply was lost. Reported in [issue #126](https://github.com/petersulyok/smfc/issues/126).
 
 ## [6.5.0] - 2026.10.19
 

@@ -227,7 +227,13 @@ class Service:
         for zone, (level, winner) in zone_levels.items():
             if self.applied_levels.get(zone) == level:
                 continue
-            self.ipmi.set_fan_level(zone, level)
+            try:
+                self.ipmi.set_fan_level(zone, level)
+            except IpmiError:
+                # The BMC may or may not have applied the level, so the cached level is not valid any more.
+                # Without it, the next loop writes the desired level of this zone again.
+                self.applied_levels.pop(zone, None)
+                raise
             self.applied_levels[zone] = level
             contributors = zone_contributors.get(zone, [])
             if len(contributors) > 1:
