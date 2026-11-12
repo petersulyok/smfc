@@ -639,8 +639,9 @@ State on a `FanController`:
 | `levels_lut`     | 101-element `List[int]` built by `build_lut()` at init; `levels_lut[T]` = fan level for temperature T°C |
 | `last_time`      | Last poll timestamp (`time.monotonic`)                                 |
 | `last_temp`      | Last smoothed temperature                                              |
-| `last_level`     | Last applied fan level (0 = "no level set yet")                        |
+| `last_level`     | Last requested fan level (0 = "no level set yet"); while `_level_dirty` is set, the BMC may not have applied it |
 | `_temp_history`  | `deque(maxlen=smoothing)` — moving-average window                      |
+| `_level_dirty`   | If True, the last fan level write did not complete, so `run()` writes the level again on every poll |
 | `_temp_read_errors` | `List[int]` — consecutive failed temperature reads per device (see §7.1.4) |
 | `_temp_read_errors_total` | `List[int]` — failed temperature reads per device since startup (never reset) |
 | `deferred_apply` | If True, controller stores its desired level but doesn't talk to IPMI  |
@@ -717,16 +718,18 @@ flowchart TD
     A -- no --> Z1[/debug log: polling skipped/] --> E1([return])
     A -- yes --> B["callback_func()<br/>(HdFc: Standby Guard)"]
     B --> C["raw = get_temp()<br/>_temp_history.append(raw)<br/>current = mean(_temp_history)"]
-    C --> D{"|current − last_temp| ≥ sensitivity?"}
+    C --> S["stable = smoothing > 1, window full,<br/>max − min below sensitivity,<br/>same level for min and max"]
+    S --> D{"_level_dirty or stable or<br/>|current − last_temp| ≥ sensitivity?"}
     D -- no --> E2([return: no change])
-    D -- yes --> F["idx = clamp(round(current), 0, 100)<br/>current_level = levels_lut[idx]"]
-    F --> G{current_level != last_level?}
+    D -- yes --> F["last_temp = current<br/>current_level = _lookup_level(current)"]
+    F --> G{"_level_dirty or<br/>current_level != last_level?"}
     G -- no --> E3([return: level unchanged])
-    G -- yes --> H[last_level = current_level]
+    G -- yes --> H["last_level = current_level<br/>_level_dirty = True"]
     H --> I{deferred_apply?}
-    I -- yes --> E4([return: desired level stored])
-    I -- no --> J["set_fan_level via IPMI<br/>log 'IPMI zone X: new level'"]
-    J --> E5([return])
+    I -- yes --> K[_level_dirty = False] --> E4([return: desired level stored])
+    I -- no --> J[set_fan_level via IPMI]
+    J -- IpmiError --> X(["raise: _level_dirty stays True,<br/>Service.run() logs the error"])
+    J -- ok --> L["_level_dirty = False<br/>log 'IPMI zone X: new level'"] --> E5([return])
 ```
 
 #### 7.1.3 Reducing unnecessary fan-level changes
@@ -748,10 +751,27 @@ useful:
   cooling transitions. Without it the staircase LUT would still trigger a
   fan-level change on every tread boundary crossing, even for thermally
   irrelevant fluctuations.
+- **Stable window, an exception to the threshold** (`smoothing > 1` only).
+  The smoothed temperature reaches a new stable value in small steps, and the
+  last step can be smaller than `sensitivity`. The level would then stay one
+  step below the level of the real temperature. So the sensitivity check is
+  skipped when the window is full, `max - min < sensitivity`, and the minimum
+  and the maximum sample give the same fan level. A single spike or a noisy
+  sensor does not give such a window. A reading that jitters around a tread
+  boundary gives two different levels, so the deadband stays active for it
+  too.
 
 The combination of smoothing (input side) and sensitivity (decision side) is
 what makes the digitalized staircase output (§7.1.2) actually steady in
 practice.
+
+A failed fan level write bypasses the sensitivity threshold. `run()` stores `last_temp` and
+`last_level` before it writes, so after an `IpmiError` the next poll would see
+no change. `_level_dirty` is set before the write and cleared after it, so it
+stays set when the write raises. While it is set, `run()` skips the
+sensitivity check and the `current_level != last_level` check, and it writes
+the level on every poll until a write completes. This also covers a lost
+reply: the BMC applied the level, but `ipmitool` reported an error.
 
 #### 7.1.4 Tolerating transient temperature read errors
 
@@ -997,7 +1017,12 @@ flowchart TD
 ### 9.3 Cache and logging
 
 - `applied_levels: Dict[int, int]` caches what was last written per zone so
-  the arbiter never re-issues an identical IPMI command.
+  the arbiter never re-issues an identical IPMI command. When a write raises
+  `IpmiError`, the arbiter removes the zone from the cache and re-raises,
+  because the BMC may or may not have applied the level. The next loop then
+  writes the desired level of that zone again, even if it equals the level
+  cached before the failed write. Deferred controllers never set
+  `_level_dirty` (§7.1.3), so this cache rule handles the shared zones.
 - `last_desired` caches the previous arbitration input, so at DEBUG level
   the arbiter only logs when the inputs change.
 - When a zone has multiple contributors, the INFO log line names the
