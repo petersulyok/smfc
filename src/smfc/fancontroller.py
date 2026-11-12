@@ -432,7 +432,7 @@ class FanController:
                 else:
                     self.log.msg(Log.LOG_DEBUG, f"{self.name}: new temperature > {current_temp:.1f}C")
             stable = False
-            if self.config.smoothing > 1 and len(self._temp_history) == self.config.smoothing:
+            if self.config.smoothing > 1 and len(self._temp_history) == self._temp_history.maxlen:
                 low, high = min(self._temp_history), max(self._temp_history)
                 stable = high - low < self.config.sensitivity and self._lookup_level(low) == self._lookup_level(high)
             if self._level_dirty or stable or abs(current_temp - self.last_temp) >= self.config.sensitivity:
