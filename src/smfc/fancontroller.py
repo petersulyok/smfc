@@ -431,9 +431,10 @@ class FanController:
                                  f"(window {len(self._temp_history)}/{self.config.smoothing})")
                 else:
                     self.log.msg(Log.LOG_DEBUG, f"{self.name}: new temperature > {current_temp:.1f}C")
-            stable = (self.config.smoothing > 1 and len(self._temp_history) == self.config.smoothing and
-                      max(self._temp_history) - min(self._temp_history) < self.config.sensitivity and
-                      self._lookup_level(min(self._temp_history)) == self._lookup_level(max(self._temp_history)))
+            stable = False
+            if self.config.smoothing > 1 and len(self._temp_history) == self.config.smoothing:
+                low, high = min(self._temp_history), max(self._temp_history)
+                stable = high - low < self.config.sensitivity and self._lookup_level(low) == self._lookup_level(high)
             if self._level_dirty or stable or abs(current_temp - self.last_temp) >= self.config.sensitivity:
                 self.last_temp = current_temp
 
