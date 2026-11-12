@@ -350,7 +350,7 @@ Changing fan rotational speed is a slow physical process — depending on the fa
 |---|---|---|---|
 | Sample  | Polling interval | `polling=` | Sets how often the controller reads the temperature. Larger values reduce the maximum rate of fan-level updates. |
 | Smooth  | Moving-average smoothing | `smoothing=` | Averages the last N temperature readings before they enter the control function. Suppresses brief spikes; `1` (default) disables smoothing. |
-| Filter  | Sensitivity threshold | `sensitivity=` | The controller does not react until the smoothed temperature has moved by at least this many °C since the last action. With `smoothing=` above 1, the controller also reacts when the temperature is stable, i.e. all samples of the smoothing window differ by less than this value. |
+| Filter  | Sensitivity threshold | `sensitivity=` | The controller does not react until the smoothed temperature has moved by at least this many °C since the last action. With `smoothing=` above 1, the controller also reacts when the temperature is stable, i.e. all samples of the smoothing window differ by less than this value and give the same fan level. |
 | Quantize | Discrete fan levels | `steps=` | The control function produces a fixed number of plateaus (linear: `steps + 1`, multi-segment: `steps + 2`) instead of a continuous curve, so small temperature drift inside a plateau yields the same fan level. |
 | Apply   | Post-change delay | `[Ipmi] fan_level_delay=` | After every fan-level change, the controller waits this many seconds before issuing another command, giving the fan time to reach the new speed physically. |
 

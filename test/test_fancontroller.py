@@ -41,6 +41,7 @@ def _make_fc(mocker: MockerFixture, cfg, count: int = 1, *, log_level: int = Log
 # The real FanController.set_fan_level(), for the tests which need it after _make_fc() has mocked it.
 _REAL_SET_FAN_LEVEL = FanController.set_fan_level
 
+
 class TestFanController:
     """Unit test class for smfc.FanController() class"""
 
@@ -1084,7 +1085,7 @@ class TestFanController:
 
 
     def test_run_retries_rejected_write(self, mocker: MockerFixture) -> None:
-        """Negative unit test for FanController.run() method when the BMC rejects a fan level write. Contains the following steps:
+        """Negative unit test for FanController.run() method when the BMC rejects a fan level write. It contains the following steps:
         - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
         - build a FanController via _create_test_fc with sensitivity=2
         - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level
@@ -1127,7 +1128,7 @@ class TestFanController:
         assert mock_set_fan_level.call_count == 3
 
     def test_run_retry_ignores_sensitivity(self, mocker: MockerFixture) -> None:
-        """Negative unit test for FanController.run() method when a failed write is followed by a small temperature change. Contains the following steps:
+        """Negative unit test for FanController.run() method when a failed write is followed by a small temperature change. It contains the following steps:
         - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
         - build a FanController via _create_test_fc with sensitivity=4
         - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level
@@ -1161,7 +1162,7 @@ class TestFanController:
         assert my_fc._level_dirty is False  # pylint: disable=protected-access
 
     def test_run_retries_on_every_poll_until_write_completes(self, mocker: MockerFixture) -> None:
-        """Negative unit test for FanController.run() method when the fan level write fails several times. Contains the following steps:
+        """Negative unit test for FanController.run() method when the fan level write fails several times. It contains the following steps:
         - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
         - build a FanController via _create_test_fc with sensitivity=2
         - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level (raising IpmiError)
@@ -1190,7 +1191,7 @@ class TestFanController:
             assert my_fc._level_dirty is False  # pylint: disable=protected-access
 
     def test_run_deferred_never_dirty(self, mocker: MockerFixture) -> None:
-        """Positive unit test for FanController.run() method in deferred mode with the dirty flag. Contains the following steps:
+        """Positive unit test for FanController.run() method in deferred mode with the dirty flag. It contains the following steps:
         - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
         - build a FanController via _create_test_fc with sensitivity=2 and set deferred_apply=True
         - restore the real smfc.FanController.set_fan_level and mock smfc.Ipmi.set_multiple_fan_levels (raising IpmiError)
@@ -1217,7 +1218,7 @@ class TestFanController:
 
 
     def test_run_smoothing_reaches_level_of_stable_temp(self, mocker: MockerFixture) -> None:
-        """Positive unit test for FanController.run() method when the smoothed temperature settles within the sensitivity. Contains the following steps:
+        """Positive unit test for FanController.run() method when the smoothed temperature settles within the sensitivity. It contains the following steps:
         - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
         - build a CPU config with a 5-point control_function, steps=7, smoothing=3 and sensitivity=1.0
         - re-mock smfc.FanController.set_fan_level and feed 3 readings of 36 C, then 6 readings of 38 C
@@ -1245,7 +1246,7 @@ class TestFanController:
         assert mock_set_fan_level.call_args_list == [call(80), call(90), call(100)]
 
     def test_run_smoothing_stable_window_keeps_spike_damped(self, mocker: MockerFixture) -> None:
-        """Positive unit test for FanController.run() method with a spike in a stable smoothing window. Contains the following steps:
+        """Positive unit test for FanController.run() method with a spike in a stable smoothing window. It contains the following steps:
         - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
         - build a FanController via _create_test_fc with smoothing=3 and sensitivity=5
         - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level
@@ -1267,7 +1268,7 @@ class TestFanController:
         mock_set_fan_level.assert_called_once_with(61)
 
     def test_run_smoothing_noisy_window_keeps_sensitivity(self, mocker: MockerFixture) -> None:
-        """Positive unit test for FanController.run() method with a noisy smoothing window. Contains the following steps:
+        """Positive unit test for FanController.run() method with a noisy smoothing window. It contains the following steps:
         - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
         - build a FanController via _create_test_fc with smoothing=3 and sensitivity=3
         - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level
@@ -1289,7 +1290,7 @@ class TestFanController:
         mock_set_fan_level.assert_called_once_with(61)
 
     def test_run_no_smoothing_keeps_sensitivity(self, mocker: MockerFixture) -> None:
-        """Positive unit test for FanController.run() method with smoothing=1 and a stable temperature. Contains the following steps:
+        """Positive unit test for FanController.run() method with smoothing=1 and a stable temperature. It contains the following steps:
         - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
         - build a FanController via _create_test_fc with smoothing=1 and sensitivity=2
         - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level
@@ -1308,6 +1309,27 @@ class TestFanController:
             assert my_fc.last_temp == pytest.approx(40.0)
             assert my_fc.last_level == 61
         mock_set_fan_level.assert_called_once_with(61)
+
+    def test_run_smoothing_jitter_at_step_limit_keeps_sensitivity(self, mocker: MockerFixture) -> None:
+        """Positive unit test for FanController.run() method with a reading that jitters at a step limit. It contains the following steps:
+        - mock builtins.print, smfc.FanController.set_fan_level, smfc.FanController._get_nth_temp via _make_fc
+        - build a FanController via _create_test_fc with smoothing=3 and sensitivity=2
+        - re-mock smfc.FanController._get_nth_temp and smfc.FanController.set_fan_level
+        - feed readings alternating between 32 C and 33 C
+        - ASSERT: the full window is not stable, because 32 C gives the level 35 and 33 C gives the level 48,
+          so the sensitivity blocks the smoothed changes of 0.33 C: last_level stays 35
+        - ASSERT: the level 35 was written only once (the smoothed 32.67 C would yield 48)
+        """
+        my_fc = self._create_test_fc(mocker, smoothing=3, sensitivity=2)
+        mock_temp = mocker.patch("smfc.FanController._get_nth_temp")
+        mock_set_fan_level = mocker.patch("smfc.FanController.set_fan_level")
+        # Smoothed temperatures: 32, 32.5, 32.33, 32.67, 32.33, 32.67, ... and max - min = 1C in every full window.
+        for temp in [32.0, 33.0, 32.0, 33.0, 32.0, 33.0, 32.0, 33.0]:
+            mock_temp.return_value = temp
+            my_fc.last_time = time.monotonic() - 2
+            my_fc.run()
+            assert my_fc.last_level == 35
+        mock_set_fan_level.assert_called_once_with(35)
 
 
 # End.

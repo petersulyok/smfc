@@ -278,6 +278,17 @@ class FanController:
         if not self.deferred_apply:
             self.ipmi.set_multiple_fan_levels(self.config.ipmi_zone, level)
 
+    def _lookup_level(self, temp: float) -> int:
+        """Look up the fan level of a temperature in the LUT.
+
+        Args:
+            temp (float): temperature in C, clamped to 0..100 and rounded to an integer
+
+        Returns:
+            int: fan level (0..100%)
+        """
+        return self.levels_lut[max(0, min(100, int(round(temp))))]
+
     def callback_func(self) -> None:
         """Call-back function for a child class."""
 
@@ -394,13 +405,15 @@ class FanController:
         With `smoothing > 1` the smoothed temperature reaches a new stable value in small steps, and
         the last of them can be smaller than the sensitivity. The fan level would then stay one step
         below the level of the real temperature. So the sensitivity check is skipped when the smoothing
-        window is full and all its samples differ by less than the sensitivity. A single spike or a
-        noisy sensor does not give such a window, so the sensitivity check stays active for them.
+        window is full, all its samples differ by less than the sensitivity, and all its samples give
+        the same fan level. A single spike or a noisy sensor does not give such a window, so the
+        sensitivity check stays active for them. A reading that jitters around a step limit gives
+        samples with two different fan levels, so the sensitivity check stays active for it too.
         """
         current_time: float  # Current system timestamp (measured)
         current_temp: float  # Current temperature (measured)
         current_level: int   # Current fan level (looked up from LUT)
-        stable: bool         # The smoothing window is full and its samples are nearly equal
+        stable: bool         # The smoothing window is full and its samples give the same fan level
 
         # Step 1: check the elapsed time.
         current_time = time.monotonic()
@@ -419,13 +432,13 @@ class FanController:
                 else:
                     self.log.msg(Log.LOG_DEBUG, f"{self.name}: new temperature > {current_temp:.1f}C")
             stable = (self.config.smoothing > 1 and len(self._temp_history) == self.config.smoothing and
-                      max(self._temp_history) - min(self._temp_history) < self.config.sensitivity)
+                      max(self._temp_history) - min(self._temp_history) < self.config.sensitivity and
+                      self._lookup_level(min(self._temp_history)) == self._lookup_level(max(self._temp_history)))
             if self._level_dirty or stable or abs(current_temp - self.last_temp) >= self.config.sensitivity:
                 self.last_temp = current_temp
 
                 # Step 3: look up the fan level for the (clamped, integer-rounded) temperature.
-                idx = max(0, min(100, int(round(current_temp))))
-                current_level = self.levels_lut[idx]
+                current_level = self._lookup_level(current_temp)
                 if self.log.log_level >= Log.LOG_DEBUG:
                     self.log.msg(Log.LOG_DEBUG, f"{self.name}: calculated level={current_level}% "
                                  f"for temp={current_temp:.1f}C")
