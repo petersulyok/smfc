@@ -29,7 +29,6 @@ class IpmiConfig:
     platform_name: str      # Platform name (from config or "auto" for auto-detection)
     enforce_fan_mode: bool  # Re-assert FULL fan mode if BMC drifts (default: True; False = exit on drift)
     exit_level: int         # Fan level applied to all configured zones at exit (0..100%, -1 = do not change)
-    ipmitool_timeout: int   # Timeout of a single ipmitool execution (sec, 0 = wait indefinitely)
 
 
 @dataclass
@@ -136,7 +135,6 @@ class NpuConfig:
     error_tolerance: int        # Consecutive failed temperature reads tolerated per device (0=disabled)
     npu_device_ids: List[int]   # NPU card IDs (`-i` arguments of npu-smi)
     npu_smi_path: str           # Path for 'npu-smi' command
-    npu_smi_timeout: float      # Timeout in seconds for a single npu-smi call
     control_function: List[Tuple[int, int]] = field(default_factory=list)  # (T,L) breakpoints, empty = legacy
 
 
@@ -218,7 +216,6 @@ class Config:
     CV_IPMI_PLATFORM_NAME: str = "platform_name"            # Platform name or "auto"
     CV_IPMI_ENFORCE_FAN_MODE: str = "enforce_fan_mode"      # Re-assert FULL on BMC drift
     CV_IPMI_EXIT_LEVEL: str = "exit_level"                  # Fan level applied at exit (-1 = do not change)
-    CV_IPMI_IPMITOOL_TIMEOUT: str = "ipmitool_timeout"      # Timeout of one ipmitool execution (0 = none)
 
     # [HD] section variable names
     CV_HD_NAMES: str = "hd_names"                            # HD device names
@@ -239,7 +236,6 @@ class Config:
     # [NPU] section variable names
     CV_NPU_IDS: str = "npu_device_ids"              # NPU card IDs (npu-smi -i arguments)
     CV_NPU_SMI_PATH: str = "npu_smi_path"           # Path to npu-smi command
-    CV_NPU_SMI_TIMEOUT: str = "npu_smi_timeout"     # Timeout for a single npu-smi call (sec)
 
     # [PCI] section variable names
     CV_PCI_ADDRESS: str = "pci_address"         # PCI slot addresses of the cards
@@ -278,11 +274,6 @@ class Config:
     DV_IPMI_PLATFORM_NAME: str = "auto"
     DV_IPMI_ENFORCE_FAN_MODE: bool = True
     DV_IPMI_EXIT_LEVEL: int = 100
-    # A wedged /dev/ipmi0 makes ipmitool block forever, which would stall the control loop with no fan
-    # regulation behind it. 10 s is far above any healthy call (a not-ready BMC returns an error promptly
-    # rather than hanging) and still clears a remote LAN session setup, while keeping the worst-case
-    # shutdown - one level write per zone plus the platform release - inside systemd's 90 s stop window.
-    DV_IPMI_IPMITOOL_TIMEOUT: int = 10
     # Sentinel value of `exit_level=` meaning "do not change the fan levels at exit".
     EXIT_LEVEL_NONE: int = -1
 
@@ -352,7 +343,6 @@ class Config:
     DV_NPU_ERROR_TOLERANCE: int = 3
     DV_NPU_DEVICE_IDS: str = "0"
     DV_NPU_SMI_PATH: str = "npu-smi"
-    DV_NPU_SMI_TIMEOUT: float = 15.0
 
     # Default values — [PCI] section
     DV_PCI_STEPS: int = 6
@@ -566,11 +556,6 @@ class Config:
             PlatformName(platform_name)
         except ValueError as e:
             raise ValueError(f"[{s}] invalid value: {self.CV_IPMI_PLATFORM_NAME}={platform_name}.") from e
-        # Timeout of a single `ipmitool` execution. 0 is a sentinel meaning "wait indefinitely", i.e. the
-        # behaviour before this parameter existed.
-        ipmitool_timeout = parser[s].getint(self.CV_IPMI_IPMITOOL_TIMEOUT, fallback=self.DV_IPMI_IPMITOOL_TIMEOUT)
-        if ipmitool_timeout < 0:
-            raise ValueError(f"Negative {self.CV_IPMI_IPMITOOL_TIMEOUT}= parameter ({ipmitool_timeout})")
         return IpmiConfig(
             command=parser[s].get(self.CV_IPMI_COMMAND, self.DV_IPMI_COMMAND),
             fan_mode_delay=fan_mode_delay,
@@ -580,7 +565,6 @@ class Config:
             enforce_fan_mode=parser[s].getboolean(self.CV_IPMI_ENFORCE_FAN_MODE,
                                                   fallback=self.DV_IPMI_ENFORCE_FAN_MODE),
             exit_level=exit_level,
-            ipmitool_timeout=ipmitool_timeout,
         )
 
     def _parse_exporter(self, parser: ConfigParser) -> ExporterConfig:
@@ -824,9 +808,6 @@ class Config:
             npu_smi_path = parser[s].get(self.CV_NPU_SMI_PATH, self.DV_NPU_SMI_PATH)
             if enabled and not npu_smi_path.strip():
                 raise ValueError(f"[{s}] {self.CV_NPU_SMI_PATH} is empty")
-            npu_smi_timeout = parser[s].getfloat(self.CV_NPU_SMI_TIMEOUT, fallback=self.DV_NPU_SMI_TIMEOUT)
-            if npu_smi_timeout <= 0:
-                raise ValueError(f"[{s}] invalid value: {self.CV_NPU_SMI_TIMEOUT}={npu_smi_timeout}.")
             steps = parser[s].getint(self.CV_STEPS, fallback=self.DV_NPU_STEPS)
             cfg = NpuConfig(
                 section=s,
@@ -844,7 +825,6 @@ class Config:
                 error_tolerance=parser[s].getint(self.CV_ERROR_TOLERANCE, fallback=self.DV_NPU_ERROR_TOLERANCE),
                 npu_device_ids=npu_device_ids,
                 npu_smi_path=npu_smi_path,
-                npu_smi_timeout=npu_smi_timeout,
                 control_function=self._read_control_function(parser, s, steps),
             )
             self._validate_fan_controller_config(cfg, s)

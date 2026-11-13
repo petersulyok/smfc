@@ -189,7 +189,6 @@ def _make_npufc_init(npu_cmd: str, npu_count: int):
         if self.log.log_level >= Log.LOG_CONFIG:
             self.log.msg(Log.LOG_CONFIG, f"   npu_device_ids = {self.config.npu_device_ids}")
             self.log.msg(Log.LOG_CONFIG, f"   npu_smi_path = {self.config.npu_smi_path}")
-            self.log.msg(Log.LOG_CONFIG, f"   npu_smi_timeout = {self.config.npu_smi_timeout}")
     return _init
 
 

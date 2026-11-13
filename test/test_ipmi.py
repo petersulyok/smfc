@@ -9,9 +9,8 @@ import pytest
 from mock import MagicMock, call
 from pytest_mock import MockerFixture
 from smfc import Log, Ipmi
-from smfc.config import Config
 from smfc.generic import GenericPlatform
-from smfc.ipmi import parse_completion_code
+from smfc.ipmi import IPMITOOL_TIMEOUT, parse_completion_code
 from smfc.platform import IpmiError
 from .test_config_builders import create_ipmi_config
 from .test_fixtures import TestData
@@ -139,8 +138,7 @@ class TestIpmi:
         assert my_ipmi.config.fan_mode_delay == mode_delay
         assert my_ipmi.config.fan_level_delay == level_delay
         assert my_ipmi.config.remote_parameters == remote_pars
-        assert my_ipmi.config.ipmitool_timeout == Config.DV_IPMI_IPMITOOL_TIMEOUT
-        assert mock_print.call_count == 14  # Ipmi-14 (incl. the ipmitool_timeout line)
+        assert mock_print.call_count == 13  # Ipmi-13
         assert my_ipmi.sudo == sudo
         assert my_ipmi.bmc_device_id == 32
         assert my_ipmi.bmc_device_rev == 1
@@ -217,22 +215,6 @@ class TestIpmi:
                 Ipmi(my_log, cfg, False)
             assert cm.type is exception
 
-    def test_init_rejects_negative_ipmitool_timeout(self, mocker: MockerFixture, td: TestData) -> None:
-        """Negative unit test for Ipmi.__init__() method. It contains the following steps:
-        - mock builtins.print and Ipmi._exec_ipmitool (never reached)
-        - build an ipmi Config via create_ipmi_config with ipmitool_timeout=-1
-        - call Ipmi(my_log, cfg, False) inside pytest.raises
-        - ASSERT: ValueError is raised before any BMC access, and names the offending parameter. 0 is
-          accepted and means "wait indefinitely"; only a negative value is meaningless
-        """
-        f = "TestIpmi.test_init_rejects_negative_ipmitool_timeout"
-        mocker.patch("builtins.print", MagicMock())
-        mocker.patch("smfc.Ipmi._exec_ipmitool", MagicMock())
-        cfg = create_ipmi_config(command=td.create_command_file(), ipmitool_timeout=-1)
-        with pytest.raises(ValueError) as cm:
-            Ipmi(Log(Log.LOG_ERROR, Log.LOG_STDOUT), cfg, False)
-        assert "ipmitool_timeout" in str(cm.value), f"{f}: message names the parameter: {cm.value}"
-
     # pylint: disable=duplicate-code, protected-access
     @pytest.mark.parametrize(
         "args, remote_args, sudo",
@@ -276,7 +258,7 @@ class TestIpmi:
             expected.extend(remote_args.split())
         expected.extend(args)
         mock_subprocess_run.assert_called_with(expected, check=False, capture_output=True, text=True,
-                                              timeout=Config.DV_IPMI_IPMITOOL_TIMEOUT)
+                                              timeout=IPMITOOL_TIMEOUT)
         assert mock_subprocess_run.call_count == 1
 
     @pytest.mark.parametrize(
@@ -878,13 +860,11 @@ class TestIpmi:
             my_ipmi._exec_ipmitool(["raw", "0x2e"])
         assert cm.value.completion_code == 0xC1, f"{f}: completion code"
 
-    @pytest.mark.parametrize("timeout", [10, 0], ids=["timeout-10s", "timeout-disabled"])
-    def test_exec_ipmitool_timeout(self, mocker: MockerFixture, timeout: int) -> None:
+    def test_exec_ipmitool_timeout(self, mocker: MockerFixture) -> None:
         """Negative unit test for Ipmi._exec_ipmitool() method. It contains the following steps:
         - mock subprocess.run to raise subprocess.TimeoutExpired, i.e. ipmitool did not finish in time
-        - build a bare Ipmi with the parameterized `ipmitool_timeout` and call _exec_ipmitool()
-        - ASSERT: subprocess.run receives `timeout=10` when the parameter is 10, and `timeout=None` when it
-          is 0 - the sentinel selecting the pre-existing "wait indefinitely" behaviour
+        - build a bare Ipmi and call _exec_ipmitool()
+        - ASSERT: subprocess.run receives `timeout=IPMITOOL_TIMEOUT` (10 seconds)
         - ASSERT: an expired timeout surfaces as an IpmiError, not as a subprocess exception, so every
           existing `except RuntimeError` handles it: the watchdog reports it as an unconfirmed control loss
           and the control loop logs it and retries, instead of the daemon parking inside a wedged
@@ -892,14 +872,15 @@ class TestIpmi:
         - ASSERT: no completion code is attached, because the BMC returned nothing to parse
         """
         f = "TestIpmi.test_exec_ipmitool_timeout"
-        mock_run = MagicMock(side_effect=subprocess.TimeoutExpired(cmd="ipmitool", timeout=timeout))
+        mock_run = MagicMock(side_effect=subprocess.TimeoutExpired(cmd="ipmitool", timeout=IPMITOOL_TIMEOUT))
         mocker.patch("subprocess.run", mock_run)
         my_ipmi = Ipmi.__new__(Ipmi)
-        my_ipmi.config = create_ipmi_config(command="/usr/bin/ipmitool", ipmitool_timeout=timeout)
+        my_ipmi.config = create_ipmi_config(command="/usr/bin/ipmitool")
         my_ipmi.sudo = False
         with pytest.raises(IpmiError) as cm:
             my_ipmi._exec_ipmitool(["raw", "0x30", "0x45", "0x00"])
-        assert mock_run.call_args.kwargs["timeout"] == (timeout or None), f"{f}: timeout= passed through"
+        assert IPMITOOL_TIMEOUT == 10, f"{f}: timeout value"
+        assert mock_run.call_args.kwargs["timeout"] == IPMITOOL_TIMEOUT, f"{f}: timeout= passed through"
         assert "timed out" in str(cm.value), f"{f}: message: {cm.value}"
         assert cm.value.completion_code is None, f"{f}: no completion code"
     # pylint: enable=protected-access

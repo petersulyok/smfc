@@ -13,6 +13,10 @@ from smfc.log import Log
 from smfc.config import NpuConfig
 
 
+# Timeout of a single `npu-smi` execution (sec). A normal call ends in less than one second. The timeout stops
+# an `npu-smi` that waits forever, so that it cannot stop the control loop.
+NPU_SMI_TIMEOUT: int = 15
+
 class NpuFc(FanController):
     """Class for Ascend NPU (e.g. Atlas 300I Duo) fan controller.
 
@@ -57,7 +61,6 @@ class NpuFc(FanController):
         if self.log.log_level >= Log.LOG_CONFIG:
             self.log.msg(Log.LOG_CONFIG, f"   npu_device_ids = {self.config.npu_device_ids}")
             self.log.msg(Log.LOG_CONFIG, f"   npu_smi_path = {self.config.npu_smi_path}")
-            self.log.msg(Log.LOG_CONFIG, f"   npu_smi_timeout = {self.config.npu_smi_timeout}")
 
     def _exec_smi(self, card_id: int) -> str:
         """Execute `npu-smi info -t temp -i <card_id>` and return its standard output.
@@ -71,10 +74,9 @@ class NpuFc(FanController):
         """
         args = [self.config.npu_smi_path, "info", "-t", "temp", "-i", str(card_id)]
         try:
-            r = subprocess.run(args, check=False, capture_output=True, text=True,
-                               timeout=self.config.npu_smi_timeout)
+            r = subprocess.run(args, check=False, capture_output=True, text=True, timeout=NPU_SMI_TIMEOUT)
         except subprocess.TimeoutExpired as e:
-            raise RuntimeError(f"npu-smi timed out after {self.config.npu_smi_timeout}s (card {card_id})") from e
+            raise RuntimeError(f"npu-smi timed out after {NPU_SMI_TIMEOUT} seconds (card {card_id})") from e
         if r.returncode != 0:
             raise RuntimeError(f"npu-smi failed (card {card_id}, rc={r.returncode}): {r.stderr.strip()}")
         return r.stdout

@@ -9,6 +9,7 @@ import pytest
 from mock import MagicMock
 from pytest_mock import MockerFixture
 from smfc import NpuFc
+from smfc.npufc import NPU_SMI_TIMEOUT
 from smfc.config import Config
 from .test_config_builders import create_npu_config
 from .test_fc_helpers import (NPU_SMI_TEMP_OUTPUT, assert_fc_base_contract, build_npu_fc, make_bare_npu_fc)
@@ -60,7 +61,6 @@ class TestNpuFc:
         - ASSERT: the base-class contract holds with the Config.DV_NPU_* default values; no hwmon
         - ASSERT: fc.config.npu_device_ids == Config.parse_npu_ids(Config.DV_NPU_DEVICE_IDS)
         - ASSERT: fc.config.npu_smi_path == Config.DV_NPU_SMI_PATH
-        - ASSERT: fc.config.npu_smi_timeout == Config.DV_NPU_SMI_TIMEOUT
         """
         count = len(Config.parse_npu_ids(Config.DV_NPU_DEVICE_IDS))
         expected = {"ipmi_zone": [Config.HD_ZONE], "temp_calc": Config.CALC_AVG, "steps": Config.DV_NPU_STEPS,
@@ -73,7 +73,6 @@ class TestNpuFc:
                                 has_hwmon=False)
         assert h.fc.config.npu_device_ids == Config.parse_npu_ids(Config.DV_NPU_DEVICE_IDS)
         assert h.fc.config.npu_smi_path == Config.DV_NPU_SMI_PATH
-        assert h.fc.config.npu_smi_timeout == Config.DV_NPU_SMI_TIMEOUT
 
     @pytest.mark.parametrize(
         "device_ids",
@@ -100,18 +99,18 @@ class TestNpuFc:
         - build a bare NpuFc via make_bare_npu_fc() (no super().__init__())
         - call fc._exec_smi(card_id)
         - ASSERT: subprocess.run is called with ([npu_smi_path, info, -t, temp, -i, <id>],
-          capture_output=True, check=False, text=True, timeout=<configured>)
+          capture_output=True, check=False, text=True, timeout=NPU_SMI_TIMEOUT)
         - ASSERT: the stdout of the command is returned
         - ASSERT: subprocess.run is called exactly once
         """
         smi_path = "/opt/ascend/bin/npu-smi"
-        fc = make_bare_npu_fc(config=create_npu_config(npu_smi_path=smi_path, npu_smi_timeout=20.0))
+        fc = make_bare_npu_fc(config=create_npu_config(npu_smi_path=smi_path))
         mock_run = MagicMock(return_value=subprocess.CompletedProcess([], returncode=0,
                                                                       stdout=NPU_SMI_TEMP_OUTPUT, stderr=""))
         mocker.patch("subprocess.run", mock_run)
         out = fc._exec_smi(7)
         mock_run.assert_called_with([smi_path, "info", "-t", "temp", "-i", "7"], capture_output=True, check=False,
-                                    text=True, timeout=20.0)
+                                    text=True, timeout=NPU_SMI_TIMEOUT)
         assert mock_run.call_count == 1
         assert out == NPU_SMI_TEMP_OUTPUT
 
@@ -145,13 +144,17 @@ class TestNpuFc:
         - mock subprocess.run to raise subprocess.TimeoutExpired (npu-smi can hang on busy NPU stacks)
         - build a bare NpuFc via make_bare_npu_fc() (no super().__init__())
         - call fc._exec_smi(3)
+        - ASSERT: subprocess.run receives `timeout=NPU_SMI_TIMEOUT` (15 seconds)
         - ASSERT: RuntimeError is raised and mentions the timeout
         """
-        fc = make_bare_npu_fc(config=create_npu_config(npu_smi_timeout=1.5))
-        mocker.patch("subprocess.run", MagicMock(side_effect=subprocess.TimeoutExpired(
-            cmd="npu-smi", timeout=1.5)))
+        f = "TestNpuFc.test_exec_smi_raises_on_timeout"
+        fc = make_bare_npu_fc(config=create_npu_config())
+        mock_run = MagicMock(side_effect=subprocess.TimeoutExpired(cmd="npu-smi", timeout=NPU_SMI_TIMEOUT))
+        mocker.patch("subprocess.run", mock_run)
         with pytest.raises(RuntimeError, match="timed out"):
             fc._exec_smi(3)
+        assert NPU_SMI_TIMEOUT == 15, f"{f}: timeout value"
+        assert mock_run.call_args.kwargs["timeout"] == NPU_SMI_TIMEOUT, f"{f}: timeout= passed through"
 
     @pytest.mark.parametrize(
         "output, expected",

@@ -13,6 +13,13 @@ from smfc.log import Log
 from smfc.config import HdConfig
 
 
+# Timeout of a single `smartctl` execution (sec). A normal call ends in less than one second, the start of a
+# disk from standby takes 10-20 seconds. The timeout stops a `smartctl` that waits for a disk or an HBA that
+# does not answer, so that it cannot stop the control loop. It cannot interrupt a command inside the kernel:
+# `smartctl` ends only when its current command returns. With `sudo`, the signal reaches `sudo` and not
+# `smartctl`, thus a `smartctl` process can stay after the timeout.
+SMARTCTL_TIMEOUT: int = 30
+
 class HdFc(FanController):
     """Class for HD fan controller."""
 
@@ -111,7 +118,7 @@ class HdFc(FanController):
             subprocess.CompletedProcess: result of the executed subprocess
         Raises:
             FileNotFoundError: command not found
-            RuntimeError: sudo error
+            RuntimeError: sudo error, or the command did not finish within `SMARTCTL_TIMEOUT` seconds
         """
         r: subprocess.CompletedProcess
         args: List[str]
@@ -124,7 +131,10 @@ class HdFc(FanController):
         args.append(self.config.smartctl_path)
         args.extend(arguments)
         # May raise FileNotFoundError if smartctl is not found.
-        r = subprocess.run(args, check=False, capture_output=True, text=True)
+        try:
+            r = subprocess.run(args, check=False, capture_output=True, text=True, timeout=SMARTCTL_TIMEOUT)
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(f"smartctl timed out after {SMARTCTL_TIMEOUT} seconds: {' '.join(args)}") from e
         # In case if sudo return code report execution problem (for smartctl it could be any SMART error)
         if r.returncode != 0 and self.sudo and "sudo" in r.stderr:
             raise RuntimeError(f"sudo error ({r.returncode}): {r.stderr}!")
@@ -220,19 +230,23 @@ class HdFc(FanController):
         return result
 
     def check_standby_state(self) -> int:
-        """Check the actual power state of the HDs in the array and store them in 'standby_states'.
+        """Check the actual power state of the HDs in the array and store them in 'standby_states'. The states
+        are stored only when all HDs were checked, so a failed check keeps the last known states.
 
         Returns:
             int:   number of HDs in STANDBY mode
+        Raises:
+            FileNotFoundError: smartctl command not found
+            RuntimeError: sudo error or smartctl timeout
         """
         r: subprocess.CompletedProcess  # Result of the executed process.
+        states: List[bool] = []         # New power states of the HDs (True = STANDBY).
 
         # Check the current power state of the HDs
         for i in range(self.count):
-            self.standby_array_states[i] = False
             r = self._exec_smartctl(["-i", "-n", "standby", self.hd_device_names[i]])
-            if str(r.stdout).find("STANDBY") != -1:
-                self.standby_array_states[i] = True
+            states.append(str(r.stdout).find("STANDBY") != -1)
+        self.standby_array_states = states
         self.log.msg(Log.LOG_DEBUG, f"Standby guard: current state is {self.get_standby_state_str()}.")
         return self.standby_array_states.count(True)
 
@@ -254,13 +268,19 @@ class HdFc(FanController):
                       of HDs in STANDBY state), put the remaining active members to STANDBY state and log the event
             * step 3: Check if the array is waking up (i.e. was in STANDBY state before and there is any ACTIVE
                       HD(s) in the array) and log the event
+        A `smartctl` error (a sudo error or a timeout) is logged and the rest of this run is skipped. The array
+        keeps its last known state, and the next run checks the HDs again.
         """
         hds_in_standby: int  # HDDs in standby mode
         hours: float  # Elapsed time in minutes
         cur_time: float  # New timestamp for STANDBY change
 
         # Step 1: check the current power state of the HD array
-        hds_in_standby = self.check_standby_state()
+        try:
+            hds_in_standby = self.check_standby_state()
+        except RuntimeError as e:
+            self.log.msg(Log.LOG_ERROR, f"Standby guard: cannot check the power state of the HDs: {e}")
+            return
         cur_time = time.monotonic()
 
         # Step 2: check if the array is going to STANDBY state.
@@ -271,7 +291,11 @@ class HdFc(FanController):
             hours = (cur_time - self.standby_change_timestamp) / float(3600)
             self.log.msg(Log.LOG_INFO, f"Standby guard: Status change ACTIVE > STANDBY (after {hours:.1f} hours, "
                          f"{self.get_standby_state_str()})")
-            self.go_standby_state()
+            try:
+                self.go_standby_state()
+            except RuntimeError as e:
+                self.log.msg(Log.LOG_ERROR, f"Standby guard: cannot put the HDs to STANDBY state: {e}")
+                return
             self.standby_flag = True
             self.standby_change_timestamp = cur_time
 

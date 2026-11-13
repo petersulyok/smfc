@@ -554,7 +554,7 @@ class Service:
         # Main execution loop.
         while True:
             # A BMC or ipmitool failure while applying fan levels - a transient rejection, an unreachable
-            # BMC, or an `ipmitool_timeout` expiry on a wedged /dev/ipmi0 - must not terminate the daemon.
+            # BMC, or an `ipmitool` timeout on a wedged /dev/ipmi0 - must not terminate the daemon.
             # Only IpmiError is caught, deliberately: a controller fault (a vanished sensor, a bad value) is
             # not an IPMI problem, and it still terminates the service as it always has.
             # Exiting would leave the fans wherever they happen to be with nothing regulating them, which is

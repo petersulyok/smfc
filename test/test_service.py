@@ -1080,7 +1080,7 @@ class TestService:
         - mock time.sleep() so it exits with code 100 once CpuFc.run has been polled 3 times, bounding the
           main loop by the poll count rather than by the sleep count, which startup spends as well
         - mock smfc.CpuFc.run with a side_effect raising IpmiError on every call, as an unreachable BMC or an
-          `ipmitool_timeout` expiry on a wedged /dev/ipmi0 would
+          `ipmitool` timeout on a wedged /dev/ipmi0 would
         - build a minimal CPU-only config via `td` and invoke Service.run()
         - ASSERT: sys.exit() code is 100, i.e. the loop reached its 3rd poll - the IPMI failure did not
           terminate the daemon. Exiting would leave the fans wherever they happen to be with nothing

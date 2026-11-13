@@ -9,6 +9,7 @@ import pytest
 from mock import MagicMock
 from pytest_mock import MockerFixture
 from smfc.config import Config
+from smfc.gpufc import SMI_TIMEOUT
 from .test_config_builders import create_gpu_config
 from .test_fixtures import TestData
 from .test_fc_helpers import assert_fc_base_contract, build_gpu_fc, make_bare_gpu_fc
@@ -123,7 +124,8 @@ class TestGpuFc:
         - mock subprocess.run (MagicMock returning a CompletedProcess with stdout="40")
         - build a bare GpuFc via make_bare_gpu_fc() (no super().__init__())
         - call fc._exec_smi(smi_path, args) with the parametrized argument list
-        - ASSERT: subprocess.run is called with ([smi_path] + args, capture_output=True, check=False, text=True)
+        - ASSERT: subprocess.run is called with ([smi_path] + args, capture_output=True, check=False, text=True,
+          timeout=SMI_TIMEOUT)
         - ASSERT: subprocess.run is called exactly once
         """
         fc = make_bare_gpu_fc()
@@ -131,8 +133,29 @@ class TestGpuFc:
         mock_run = MagicMock(return_value=subprocess.CompletedProcess([], returncode=0, stdout="40", stderr=""))
         mocker.patch("subprocess.run", mock_run)
         fc._exec_smi(smi_path, args)
-        mock_run.assert_called_with([smi_path] + args, capture_output=True, check=False, text=True)
+        mock_run.assert_called_with([smi_path] + args, capture_output=True, check=False, text=True,
+                                    timeout=SMI_TIMEOUT)
         assert mock_run.call_count == 1
+
+    @pytest.mark.parametrize("smi_path", ["nvidia-smi", "rocm-smi"], ids=["nvidia", "amd"])
+    def test_exec_smi_raises_on_timeout(self, mocker: MockerFixture, smi_path: str):
+        """Negative unit test for GpuFc._exec_smi() method. It contains the following steps:
+        - mock subprocess.run to raise subprocess.TimeoutExpired (the SMI command does not answer)
+        - build a bare GpuFc via make_bare_gpu_fc() (no super().__init__())
+        - call fc._exec_smi(smi_path, ["-t"])
+        - ASSERT: SMI_TIMEOUT is 15 seconds, and subprocess.run receives it as `timeout=`
+        - ASSERT: RuntimeError is raised (not subprocess.TimeoutExpired) and names the command, so
+          FanController.get_temp() reuses the cached temperature within the error_tolerance budget
+        """
+        f = "TestGpuFc.test_exec_smi_raises_on_timeout"
+        fc = make_bare_gpu_fc()
+        mock_run = MagicMock(side_effect=subprocess.TimeoutExpired(cmd=smi_path, timeout=SMI_TIMEOUT))
+        mocker.patch("subprocess.run", mock_run)
+        with pytest.raises(RuntimeError) as cm:
+            fc._exec_smi(smi_path, ["-t"])
+        assert SMI_TIMEOUT == 15, f"{f}: timeout value"
+        assert mock_run.call_args.kwargs["timeout"] == SMI_TIMEOUT, f"{f}: timeout= passed through"
+        assert f"{smi_path} timed out after 15 seconds" in str(cm.value), f"{f}: message: {cm.value}"
 
     def test_exec_smi_raises_on_missing_command(self):
         """Negative unit test for GpuFc._exec_smi() method. It contains the following steps:

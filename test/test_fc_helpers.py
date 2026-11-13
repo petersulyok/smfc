@@ -310,7 +310,7 @@ def build_npu_fc(mocker: MockerFixture, *, npu_device_ids: Optional[List[int]] =
     Args:
         mocker (MockerFixture): pytest-mock fixture
         npu_device_ids (Optional[List[int]]): NPU card ids (default: the NPU config default ids)
-        **cfg_kwargs: forwarded to create_npu_config() (e.g. npu_smi_path, npu_smi_timeout)
+        **cfg_kwargs: forwarded to create_npu_config() (e.g. npu_smi_path)
     Returns:
         FcHarness: the controller plus the references used to build it (td is None for NPU)
     """

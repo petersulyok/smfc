@@ -335,15 +335,12 @@ class TestConfigFileLoading:
         - ASSERT: ipmi.command equals the DV_IPMI_COMMAND default (the written command matches the default)
         - ASSERT: ipmi.fan_mode_delay equals DV_IPMI_FAN_MODE_DELAY
         - ASSERT: ipmi.fan_level_delay equals DV_IPMI_FAN_LEVEL_DELAY
-        - ASSERT: ipmi.ipmitool_timeout equals DV_IPMI_IPMITOOL_TIMEOUT, i.e. a bound applies by default -
-          an omitted parameter must not silently restore the "ipmitool may block forever" behaviour
         - ASSERT: cpu, hd, nvme, gpu, const lists are all empty
         """
         cfg = create_config("[Ipmi]\ncommand = /usr/bin/ipmitool\n")
         assert cfg.ipmi.command == Config.DV_IPMI_COMMAND
         assert cfg.ipmi.fan_mode_delay == Config.DV_IPMI_FAN_MODE_DELAY
         assert cfg.ipmi.fan_level_delay == Config.DV_IPMI_FAN_LEVEL_DELAY
-        assert cfg.ipmi.ipmitool_timeout == Config.DV_IPMI_IPMITOOL_TIMEOUT
         assert cfg.cpu == []
         assert cfg.hd == []
         assert cfg.nvme == []
@@ -578,15 +575,13 @@ exit_level = 60
         [
             pytest.param("fan_mode_delay", "-1", id="negative-mode-delay"),
             pytest.param("fan_level_delay", "-5", id="negative-level-delay"),
-            pytest.param("ipmitool_timeout", "-1", id="negative-ipmitool-timeout"),
         ],
     )
     def test_ipmi_invalid_values(self, create_config_file, param: str, value: str):
         """Negative unit test for the [Ipmi] section parser inside Config.__init__(). It contains the following steps:
         - mock the on-disk config via the create_config_file fixture (tmp_path-backed)
-        - write [Ipmi] with a negative fan_mode_delay, fan_level_delay or ipmitool_timeout and call Config(path)
-        - ASSERT: Config(path) raises ValueError. 0 is a valid ipmitool_timeout (it means "wait
-          indefinitely"), so only a negative value is rejected
+        - write [Ipmi] with a negative fan_mode_delay or fan_level_delay and call Config(path)
+        - ASSERT: Config(path) raises ValueError
         """
         config_path = create_config_file(f"[Ipmi]\n{param} = {value}\n")
         with pytest.raises(ValueError):
@@ -1361,8 +1356,6 @@ class TestNpuConfigParsing:
             pytest.param("max_temp", "201", id="max-temp-over-200"),
             pytest.param("min_level", "-1", id="min-level-negative"),
             pytest.param("max_level", "101", id="max-level-over-100"),
-            pytest.param("npu_smi_timeout", "0", id="timeout-zero"),
-            pytest.param("npu_smi_timeout", "-1", id="timeout-negative"),
         ],
     )
     def test_npu_validation_errors(self, create_config_file, param: str, value: str):
@@ -1422,7 +1415,7 @@ class TestNpuConfigParsing:
         - write [NPU] with enabled = 1 only and instantiate Config
         - inspect the single NpuConfig in cfg.npu
         - ASSERT: exactly one NPU entry is parsed
-        - ASSERT: section "NPU", enabled is True, device ids/paths/timeout/temp keys match DV_NPU_*
+        - ASSERT: section "NPU", enabled is True, device ids/paths/temp keys match DV_NPU_*
         """
         cfg = create_config("[Ipmi]\n[NPU]\nenabled = 1\n")
         assert len(cfg.npu) == 1
@@ -1431,7 +1424,6 @@ class TestNpuConfigParsing:
         assert npu.enabled is True
         assert npu.npu_device_ids == Config.parse_npu_ids(Config.DV_NPU_DEVICE_IDS)
         assert npu.npu_smi_path == Config.DV_NPU_SMI_PATH
-        assert npu.npu_smi_timeout == Config.DV_NPU_SMI_TIMEOUT
         assert npu.min_temp == Config.DV_NPU_MIN_TEMP
         assert npu.max_temp == Config.DV_NPU_MAX_TEMP
         assert npu.error_tolerance == Config.DV_NPU_ERROR_TOLERANCE
@@ -1479,17 +1471,35 @@ class TestNpuConfigParsing:
         assert cfg.npu[0].enabled is False
         assert cfg.npu[0].npu_smi_path == ""
 
-    def test_npu_custom_path_and_timeout(self, create_config):
+    def test_npu_custom_path(self, create_config):
         """Positive unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:
         - mock the on-disk config via the create_config fixture (tmp_path-backed)
-        - write [NPU] with a full npu_smi_path and a custom npu_smi_timeout and instantiate Config
+        - write [NPU] with a full npu_smi_path and instantiate Config
         - ASSERT: cfg.npu[0].npu_smi_path equals "/opt/ascend/bin/npu-smi"
-        - ASSERT: cfg.npu[0].npu_smi_timeout equals 30.0
         """
-        cfg = create_config("[Ipmi]\n[NPU]\nenabled = 1\nnpu_smi_path = /opt/ascend/bin/npu-smi\n"
-                            "npu_smi_timeout = 30\n")
+        cfg = create_config("[Ipmi]\n[NPU]\nenabled = 1\nnpu_smi_path = /opt/ascend/bin/npu-smi\n")
         assert cfg.npu[0].npu_smi_path == "/opt/ascend/bin/npu-smi"
-        assert cfg.npu[0].npu_smi_timeout == 30.0
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            pytest.param("[Ipmi]\nipmitool_timeout = -1\n", id="ipmitool-timeout"),
+            pytest.param("[Ipmi]\n[NPU]\nenabled = 1\nnpu_smi_timeout = 0\n", id="npu-smi-timeout"),
+        ],
+    )
+    def test_timeout_keys_are_ignored(self, create_config, body: str):
+        """Positive unit test for Config.__init__(). It contains the following steps:
+        - mock the on-disk config via the create_config fixture (tmp_path-backed)
+        - write a config with an `ipmitool_timeout=` or `npu_smi_timeout=` key and instantiate Config
+        - ASSERT: Config loads without an error, because the command timeouts are internal constants and
+          these keys are not configuration parameters
+        - ASSERT: the parsed configuration has no `ipmitool_timeout` or `npu_smi_timeout` attribute
+        """
+        f = "TestNpuConfigParsing.test_timeout_keys_are_ignored"
+        cfg = create_config(body)
+        assert not hasattr(cfg.ipmi, "ipmitool_timeout"), f"{f}: no ipmitool_timeout attribute"
+        for npu in cfg.npu:
+            assert not hasattr(npu, "npu_smi_timeout"), f"{f}: no npu_smi_timeout attribute"
 
     def test_npu_numbered_sections(self, create_config):
         """Positive unit test for the [NPU] section parser inside Config.__init__(). It contains the following steps:

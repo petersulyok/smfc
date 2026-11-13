@@ -180,9 +180,9 @@ The CONST fan controller reads no temperature, so it uses `enabled=`, `ipmi_zone
 | **Target devices** | Huawei Ascend NPU cards, e.g. the Atlas 300I Duo. |
 | **Temperature source** | The `npu-smi` command. |
 | **Device identification** | `npu_device_ids=` -- the `-i` card IDs reported by `npu-smi info -m` |
-| **Other parameters** | `npu_smi_path=`, `npu_smi_timeout=` |
+| **Other parameters** | `npu_smi_path=` |
 | **Docker** | **Not supported in any image.** `npu-smi` is part of the Ascend driver on the host and is not in the images, so an enabled `[NPU]` section stops the container at start-up. Run `smfc` as a `systemd` service on the host instead. See [DOCKER.md](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md). |
-| **Need to know** | • The card IDs may not start from 0. Read them with `npu-smi info -m` instead of assuming.<br>• The controlled unit is a **card**, not a chip. On a multi-chip card the hottest chip drives the card temperature, so a dual-chip card still counts as one unit.<br>• The card also reports an MCU temperature. `smfc` excludes it on purpose: the MCU is a board sensor that barely follows the workload, and counting it would keep the fans up at idle.<br>• `npu-smi` is slow, about 1.5 seconds per call, which is why `polling=5` is the default. `npu_smi_timeout=` bounds a hung call.<br>• Ascend cards tolerate high temperatures, so the default window is `min_temp=40.0` to `max_temp=85.0`. |
+| **Need to know** | • The card IDs may not start from 0. Read them with `npu-smi info -m` instead of assuming.<br>• The controlled unit is a **card**, not a chip. On a multi-chip card the hottest chip drives the card temperature, so a dual-chip card still counts as one unit.<br>• The card also reports an MCU temperature. `smfc` excludes it on purpose: the MCU is a board sensor that barely follows the workload, and counting it would keep the fans up at idle.<br>• `npu-smi` is slow, about 1.5 seconds per call, which is why `polling=5` is the default. A call that hangs is stopped after 15 seconds.<br>• Ascend cards tolerate high temperatures, so the default window is `min_temp=40.0` to `max_temp=85.0`. |
 
 ##### 1.2.6 PCI fan controller
 
@@ -853,9 +853,6 @@ enforce_fan_mode=1
 # Use -1 to leave the fan levels untouched. On X14/H14 boards this level is only a transition: at exit
 # the BMC takes back fan control and rewrites fan levels.
 exit_level=100
-# Timeout of a single ipmitool execution (int, seconds, default=10, 0 = wait indefinitely)
-# It stops a wedged /dev/ipmi0 from parking the control loop; a timed-out call counts as an IPMI error.
-#ipmitool_timeout=10
 
 
 # CPU fan controller: works based on CPU(s) temperature.
@@ -1064,8 +1061,6 @@ npu_device_ids=0
 # Path for 'npu-smi' command (str, default=npu-smi). May be a bare command name (resolved via PATH)
 # or a full path (e.g. /usr/local/Ascend/ascend-toolkit/latest/bin/npu-smi).
 npu_smi_path=npu-smi
-# Timeout for a single npu-smi call (float, sec, default=15.0)
-npu_smi_timeout=15.0
 
 
 # PCI fan controller: works based on the HWMON temperature of PCI device(s).

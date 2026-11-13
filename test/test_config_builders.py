@@ -16,8 +16,7 @@ def create_ipmi_config(command=Config.DV_IPMI_COMMAND, fan_mode_delay=Config.DV_
                        remote_parameters=Config.DV_IPMI_REMOTE_PARAMETERS,
                        platform_name=Config.DV_IPMI_PLATFORM_NAME,
                        enforce_fan_mode=Config.DV_IPMI_ENFORCE_FAN_MODE,
-                       exit_level=Config.DV_IPMI_EXIT_LEVEL,
-                       ipmitool_timeout=Config.DV_IPMI_IPMITOOL_TIMEOUT):
+                       exit_level=Config.DV_IPMI_EXIT_LEVEL):
     """Factory function to create IpmiConfig instances for testing without needing a config file.
 
     Args:
@@ -28,15 +27,13 @@ def create_ipmi_config(command=Config.DV_IPMI_COMMAND, fan_mode_delay=Config.DV_
         platform_name (str): Platform name (default: "auto")
         enforce_fan_mode (bool): Re-assert FULL fan mode on BMC drift (default: True)
         exit_level (int): Fan level applied to all configured zones at exit (default: 100)
-        ipmitool_timeout (int): Timeout of one ipmitool execution in seconds (default: 10, 0 = none)
 
     Returns:
         IpmiConfig: configured IpmiConfig instance
     """
     return IpmiConfig(command=command, fan_mode_delay=fan_mode_delay, fan_level_delay=fan_level_delay,
                       remote_parameters=remote_parameters, platform_name=platform_name,
-                      enforce_fan_mode=enforce_fan_mode, exit_level=exit_level,
-                      ipmitool_timeout=ipmitool_timeout)
+                      enforce_fan_mode=enforce_fan_mode, exit_level=exit_level)
 
 
 def create_cpu_config(section="CPU", enabled=False, ipmi_zone=None, temp_calc=Config.CALC_AVG,
@@ -241,8 +238,7 @@ def create_npu_config(section="NPU", enabled=False, ipmi_zone=None, temp_calc=Co
                       max_temp=Config.DV_NPU_MAX_TEMP, min_level=Config.DV_NPU_MIN_LEVEL,
                       max_level=Config.DV_NPU_MAX_LEVEL, smoothing=Config.DV_NPU_SMOOTHING,
                       error_tolerance=Config.DV_NPU_ERROR_TOLERANCE, npu_device_ids=None,
-                      npu_smi_path=Config.DV_NPU_SMI_PATH, npu_smi_timeout=Config.DV_NPU_SMI_TIMEOUT,
-                      control_function=None):
+                      npu_smi_path=Config.DV_NPU_SMI_PATH, control_function=None):
     """Factory function to create NpuConfig instances for testing without needing a config file.
 
     Args:
@@ -261,7 +257,6 @@ def create_npu_config(section="NPU", enabled=False, ipmi_zone=None, temp_calc=Co
         error_tolerance (int): consecutive failed reads tolerated per device (default: Config.DV_NPU_ERROR_TOLERANCE)
         npu_device_ids (list): NPU card IDs (default: [0])
         npu_smi_path (str): path to npu-smi (default: Config.DV_NPU_SMI_PATH)
-        npu_smi_timeout (float): timeout for a single npu-smi call in sec (default: Config.DV_NPU_SMI_TIMEOUT)
         control_function (list): (T,L) breakpoints; empty = legacy mode
 
     Returns:
@@ -273,7 +268,7 @@ def create_npu_config(section="NPU", enabled=False, ipmi_zone=None, temp_calc=Co
                      temp_calc=temp_calc, steps=steps, sensitivity=sensitivity, polling=polling, min_temp=min_temp,
                      max_temp=max_temp, min_level=min_level, max_level=max_level, smoothing=smoothing,
                      error_tolerance=error_tolerance, npu_device_ids=device_ids,
-                     npu_smi_path=npu_smi_path, npu_smi_timeout=npu_smi_timeout,
+                     npu_smi_path=npu_smi_path,
                      control_function=control_function if control_function is not None else [])
 
 

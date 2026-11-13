@@ -130,7 +130,7 @@ class TestConstFc:
         """Negative unit test for ConstFc.run() method when the BMC read itself fails. It contains the
         following steps:
         - mock print(), Ipmi.set_fan_level(), and Ipmi.get_fan_level() to raise IpmiError, as an unreachable
-          BMC or an ipmitool_timeout expiry does
+          BMC or an ipmitool timeout does
         - instantiate ConstFc via _make_const_fc() and force the polling interval to elapse
         - call ConstFc.run()
         - ASSERT: IpmiError propagates. Only the "cannot be answered at all" case is absorbed here; a real

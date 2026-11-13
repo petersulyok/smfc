@@ -14,6 +14,7 @@ from mock import MagicMock
 from pytest_mock import MockerFixture
 from smfc import Log
 from smfc.config import Config
+from smfc.hdfc import SMARTCTL_TIMEOUT
 from .test_config_builders import create_hd_config
 from .test_fixtures import TestData
 from .test_fc_helpers import assert_fc_base_contract, build_hd_fc, make_bare_hd_fc
@@ -158,7 +159,7 @@ class TestHdFc:
         - build a bare HdFc via make_bare_hd_fc with smartctl_path="smartctl" and the parametrized sudo flag
         - invoke fc._exec_smartctl(args) with the parametrized smartctl arguments
         - ASSERT: subprocess.run is called with (["sudo"] if sudo else []) + [smartctl_path] + args plus
-          capture_output=True, check=False, text=True
+          capture_output=True, check=False, text=True, timeout=SMARTCTL_TIMEOUT
         - ASSERT: subprocess.run is called exactly once
         """
         fc = make_bare_hd_fc(config=create_hd_config(smartctl_path="smartctl"), sudo=sudo)
@@ -166,8 +167,48 @@ class TestHdFc:
         mocker.patch("subprocess.run", mock_run)
         fc._exec_smartctl(args)
         expected_args = (["sudo"] if sudo else []) + [fc.config.smartctl_path] + args
-        mock_run.assert_called_with(expected_args, capture_output=True, check=False, text=True)
+        mock_run.assert_called_with(expected_args, capture_output=True, check=False, text=True,
+                                    timeout=SMARTCTL_TIMEOUT)
         assert mock_run.call_count == 1
+
+    def test_exec_smartctl_raises_on_timeout(self, mocker: MockerFixture):
+        """Negative unit test for HdFc._exec_smartctl() method. It contains the following steps:
+        - mock subprocess.run to raise subprocess.TimeoutExpired (a disk or an HBA does not answer)
+        - build a bare HdFc via make_bare_hd_fc with smartctl_path="smartctl"
+        - invoke fc._exec_smartctl(["-a", "/dev/sda"])
+        - ASSERT: SMARTCTL_TIMEOUT is 30 seconds, and subprocess.run receives it as `timeout=`
+        - ASSERT: RuntimeError is raised (not subprocess.TimeoutExpired), and it names the timeout and the
+          command, so the callers handle it the same as a sudo error
+        """
+        f = "TestHdFc.test_exec_smartctl_raises_on_timeout"
+        mock_run = MagicMock(side_effect=subprocess.TimeoutExpired(cmd="smartctl", timeout=SMARTCTL_TIMEOUT))
+        mocker.patch("subprocess.run", mock_run)
+        fc = make_bare_hd_fc(config=create_hd_config(smartctl_path="smartctl"))
+        with pytest.raises(RuntimeError) as cm:
+            fc._exec_smartctl(["-a", "/dev/sda"])
+        assert SMARTCTL_TIMEOUT == 30, f"{f}: timeout value"
+        assert mock_run.call_args.kwargs["timeout"] == SMARTCTL_TIMEOUT, f"{f}: timeout= passed through"
+        assert "timed out after 30 seconds" in str(cm.value), f"{f}: message: {cm.value}"
+        assert "smartctl -a /dev/sda" in str(cm.value), f"{f}: message names the command: {cm.value}"
+
+    def test_get_nth_temp_smartctl_timeout(self, mocker: MockerFixture):
+        """Negative unit test for HdFc._get_nth_temp() method when smartctl times out. It contains the steps:
+        - mock subprocess.run to raise subprocess.TimeoutExpired
+        - build a bare HdFc via make_bare_hd_fc with hwmon_path=[""] (forces the smartctl branch) and
+          hd_device_names=["/dev/sda"]
+        - call fc._get_nth_temp(0)
+        - ASSERT: RuntimeError is raised and names the disk, so FanController.get_temp() reuses the cached
+          temperature within the error_tolerance budget
+        - ASSERT: the original RuntimeError of the timeout is the cause of the raised exception
+        """
+        f = "TestHdFc.test_get_nth_temp_smartctl_timeout"
+        mocker.patch("subprocess.run", MagicMock(side_effect=subprocess.TimeoutExpired(cmd="smartctl",
+                                                                                       timeout=SMARTCTL_TIMEOUT)))
+        fc = make_bare_hd_fc(hwmon_path=[""], hd_device_names=["/dev/sda"])
+        with pytest.raises(RuntimeError) as cm:
+            fc._get_nth_temp(0)
+        assert "disk=/dev/sda" in str(cm.value), f"{f}: message names the disk: {cm.value}"
+        assert "timed out" in str(cm.value.__cause__), f"{f}: cause: {cm.value.__cause__}"
 
     @pytest.mark.parametrize(
         "smartctl_command, sudo, rc, exception",
@@ -541,6 +582,74 @@ class TestHdFc:
         mocker.patch("smfc.HdFc._exec_smartctl", MagicMock(return_value=subprocess.CompletedProcess([], returncode=0)))
         fc.run_standby_guard()
         assert fc.standby_flag == new_state
+
+    def test_check_standby_state_keeps_states_on_error(self, mocker: MockerFixture, td: TestData):
+        """Negative unit test for HdFc.check_standby_state() method. It contains the following steps:
+        - create four HD hwmon files via td.create_hd_data
+        - build a bare HdFc via make_bare_hd_fc with count=4 and standby_array_states=[True] * 4
+        - mock smfc.HdFc._exec_smartctl: the first drive answers ACTIVE, the second drive raises RuntimeError
+          (a smartctl timeout)
+        - call fc.check_standby_state()
+        - ASSERT: the RuntimeError is passed to the caller
+        - ASSERT: fc.standby_array_states keeps the last known states ([True] * 4), it is not partly updated
+        """
+        f = "TestHdFc.test_check_standby_state_keeps_states_on_error"
+        td.create_hd_data(4)
+        log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
+        fc = make_bare_hd_fc(count=4, hd_device_names=td.hd_name_list, standby_array_states=[True] * 4, log=log)
+        active = subprocess.CompletedProcess([], returncode=0, stdout="Power mode is:    ACTIVE or IDLE\n")
+        mock_exec = MagicMock(side_effect=[active, RuntimeError("smartctl timed out after 30 seconds")])
+        mocker.patch("smfc.HdFc._exec_smartctl", mock_exec)
+        with pytest.raises(RuntimeError):
+            fc.check_standby_state()
+        assert fc.standby_array_states == [True] * 4, f"{f}: states: {fc.standby_array_states}"
+
+    @pytest.mark.parametrize(
+        "old_state, failing, message",
+        [
+            pytest.param(False, "check", "cannot check the power state", id="check-fails-array-active"),
+            pytest.param(True, "check", "cannot check the power state", id="check-fails-array-standby"),
+            pytest.param(False, "go", "cannot put the HDs to STANDBY state", id="go-standby-fails"),
+        ],
+    )
+    def test_run_standby_guard_survives_smartctl_error(self, td: TestData, old_state: bool, failing: str,
+                                                       message: str):
+        """Negative unit test for HdFc.run_standby_guard() method. It contains the following steps:
+        - create eight HD hwmon files via td.create_hd_data
+        - build a bare HdFc via make_bare_hd_fc with standby_hd_limit=1, count=8 and an ERROR Log
+        - seed fc.standby_flag with old_state and fc.standby_change_timestamp with a fixed value
+        - when failing is "check", fc.check_standby_state raises RuntimeError (a smartctl timeout or sudo error)
+        - when failing is "go", fc.check_standby_state reports 1 HD in STANDBY (the array goes to STANDBY) and
+          fc.go_standby_state raises RuntimeError
+        - call fc.run_standby_guard()
+        - ASSERT: run_standby_guard() does not raise, so the control loop and the service continue
+        - ASSERT: one LOG_ERROR message is written with the expected text
+        - ASSERT: fc.standby_flag and fc.standby_change_timestamp keep their last known values, so the next run
+          checks the HDs again
+        """
+        f = "TestHdFc.test_run_standby_guard_survives_smartctl_error"
+        td.create_hd_data(8)
+        log = Log(Log.LOG_ERROR, Log.LOG_STDOUT)
+        mock_msg = MagicMock()
+        log.msg = mock_msg
+        config = create_hd_config(smartctl_path="/usr/sbin/smartctl", standby_hd_limit=1)
+        fc = make_bare_hd_fc(config=config, count=8, hd_device_names=td.hd_name_list,
+                             standby_array_states=[False] * 8, log=log)
+        fc.standby_flag = old_state
+        fc.standby_change_timestamp = 1000.0
+        error = RuntimeError("smartctl timed out after 30 seconds")
+        if failing == "check":
+            fc.check_standby_state = MagicMock(name="check_standby_state", side_effect=error)
+            fc.go_standby_state = MagicMock(name="go_standby_state")
+        else:
+            fc.check_standby_state = MagicMock(name="check_standby_state", return_value=1)
+            fc.go_standby_state = MagicMock(name="go_standby_state", side_effect=error)
+        fc.run_standby_guard()
+        errors = [c.args[1] for c in mock_msg.call_args_list if c.args[0] == Log.LOG_ERROR]
+        assert len(errors) == 1, f"{f}: one error message: {errors}"
+        assert message in errors[0] and "timed out" in errors[0], f"{f}: message: {errors[0]}"
+        assert fc.standby_flag == old_state, f"{f}: standby_flag"
+        assert fc.standby_change_timestamp == 1000.0, f"{f}: standby_change_timestamp"
 
     def test_get_nth_temp_smartctl_debug_logging(self, mocker: MockerFixture):
         """Positive unit test for HdFc._get_nth_temp() method with the smartctl fallback under DEBUG logging.

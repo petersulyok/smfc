@@ -465,40 +465,79 @@ shutdown via `Service.exit_func()`:
   `set_multiple_fan_levels` call, because the chip can drift back to SmartFan mode on
   its own; `end()` is inherited (the configuration persists until BMC restart).
 
-### 6.3.1 `ipmitool` execution bound (`[Ipmi] ipmitool_timeout=`)
+### 6.3.1 External command timeouts
 
-`subprocess.run()` in `_exec_ipmitool` carries `timeout=ipmitool_timeout` (default
-**10 s**; `0` selects `timeout=None`, the unbounded behaviour that predates the
-parameter). Without it a wedged `/dev/ipmi0` parks the whole control loop inside
-one call, with no polling, no level updates and no watchdog — and nothing
-regulating the fans meanwhile.
+Every `subprocess.run()` that `smfc` makes carries a fixed `timeout=`. The
+values are module constants, not configuration parameters: a timeout is a safety
+limit against a command that never ends, not a control value, and a healthy call
+stays far below it.
 
-The value is chosen between two bounds. From below, it must clear the slowest
-*legitimate* call, which is a remote LAN session setup (`remote_parameters=`),
-not local KCS; a not-yet-ready BMC returns an error promptly rather than
-hanging (§6.4), so slow-but-working is not the failure mode being guarded.
-From above, the timeout is **per call**, and `exit_func()` makes N+1 of them —
-one level write per zone, then the platform release — so the worst-case shutdown
-is `(N+1) × timeout` against systemd's 90 s `TimeoutStopSec`. Beyond ~15 s that
-would start defeating the release the timeout exists to protect.
+| Command | Constant | Value | Slowest healthy call |
+|---|---|---|---|
+| `ipmitool` | `ipmi.IPMITOOL_TIMEOUT` | 10 s | remote LAN session setup, slow `ipmitool sdr`: 5–10 s |
+| `smartctl` | `hdfc.SMARTCTL_TIMEOUT` | 30 s | `smartctl -a` that starts a disk from standby: 10–20 s |
+| `nvidia-smi`, `rocm-smi` | `gpufc.SMI_TIMEOUT` | 15 s | `nvidia-smi` without persistence mode (driver start): a few s |
+| `npu-smi` | `npufc.NPU_SMI_TIMEOUT` | 15 s | under 1 s |
 
-A timed-out run is raised as an ordinary `IpmiError`, so every existing handler
-covers it: `check_fan_mode()` reports it as `LOST/confirmed=False` and the control
-loop logs it and retries. Two changes had to land with it, because a bound is only
-safe if a tripped bound is survivable:
+Without a timeout, one blocked call parks the whole control loop: the loop has
+one thread, so no zone is polled, no level is written, and `_check_fan_mode()`
+does not run. A wedged `/dev/ipmi0`, or a disk or HBA that does not answer
+(a SATA link error, an `mpt3sas` controller reset), can cause this.
 
-- **Fan level writes in the main loop are no longer fatal.** `Service.run()` wraps
+**Where a timeout goes.** `subprocess.TimeoutExpired` is not an `OSError` or a
+`RuntimeError`, so each `_exec_*()` function converts it at the source:
+
+- `ipmitool` → `IpmiError`. `check_fan_mode()` reports it as
+  `LOST/confirmed=False`, and `Service.run()` logs it and retries on the next
+  poll (see below).
+- `smartctl`, `*-smi` → `RuntimeError`. In a temperature read, `get_temp()`
+  hands it to `_reuse_last_temp()`, so it counts against `error_tolerance=`
+  like any other read error. A timeout at startup, when no cached value exists,
+  stops the service.
+- `smartctl` in the Standby Guard → `run_standby_guard()` catches the
+  `RuntimeError` (a timeout or a `sudo` error), logs it, and skips the rest of
+  that run. `check_standby_state()` stores the new states only after all disks
+  answered, so the array keeps its last known state and the next poll checks
+  again.
+
+**The `ipmitool` value.** It sits between two bounds. From below, it must clear
+the slowest *legitimate* call, which is a remote LAN session setup
+(`remote_parameters=`), not local KCS; a not-yet-ready BMC returns an error
+promptly rather than hanging (§6.4), so slow-but-working is not the failure mode
+being guarded. From above, the timeout is **per call**, and `exit_func()` makes
+N+1 of them — one level write per zone, then the platform release — so the
+worst-case shutdown is `(N+1) × timeout` against systemd's 90 s
+`TimeoutStopSec`. Beyond ~15 s that would start defeating the release the
+timeout exists to protect.
+
+**The `smartctl` value.** `_get_nth_temp()` runs `smartctl -a` without
+`-n standby`, so it can start a disk; 30 s clears that. The HD controller calls
+`smartctl` once per disk, one after the other, so with a failed HBA the timeouts
+add up: 8 disks can hold the loop for about 4 minutes.
+
+**Limits.** `subprocess.run()` sends `SIGKILL` and then waits for the process. A
+process that waits inside the kernel (`D` state, e.g. an `SG_IO` command to a
+disk that does not answer) ends only when that kernel call returns, so the
+timeout shortens the wait to the current command, not to the timeout value.
+With `--sudo`, the signal reaches `sudo` and not the root `smartctl`, which can
+stay after the timeout. Only a watchdog outside the process can bound these
+cases.
+
+Two other parts make a tripped `ipmitool` timeout survivable:
+
+- **Fan level writes in the main loop are not fatal.** `Service.run()` wraps
   the controller pass in `except IpmiError`, logs, and continues to the next poll.
   Exiting would leave the fans wherever they happen to be with nothing regulating
   them — strictly worse than staying up and retrying, since the BMC may come back
   and `_check_fan_mode()` re-acquires control if it was lost. The handler is
   deliberately narrow: a controller fault (a vanished sensor) is not an IPMI
-  problem and still terminates the service, as it always has.
-- **The readiness gate budget is now wall-clock bounded too** (§6.4). It used to
-  count only its own 5 s sleeps; with a per-call timeout that would let a slow BMC
-  stretch a "180 s" budget into many minutes of startup. The budget is exhausted by
-  whichever comes first, the step count or the elapsed wall clock — the step count
-  is kept because the wall clock does not advance when `time.sleep()` is stubbed.
+  problem and still terminates the service.
+- **The readiness gate budget is wall-clock bounded too** (§6.4). Each `sdr`
+  call can take up to `IPMITOOL_TIMEOUT`, so counting only the 5 s sleeps would
+  let a slow BMC stretch a "180 s" budget into many minutes of startup. The
+  budget is exhausted by whichever comes first, the step count or the elapsed
+  wall clock — the step count is kept because the wall clock does not advance
+  when `time.sleep()` is stubbed.
 
 ### 6.4 Cold-boot BMC readiness gate (`Ipmi._fan_sensors_ready`)
 
@@ -928,7 +967,7 @@ while True:
   is sampled at most one half-polling-interval late.
 - Each `fc.run()` is internally rate-limited by its own `polling`, so the
   outer loop firing more often than a controller's `polling` is harmless.
-- Only `IpmiError` is caught: a wedged BMC or an `ipmitool_timeout` expiry
+- Only `IpmiError` is caught: a wedged BMC or an `ipmitool` timeout
   (§6.3.1) is logged and the iteration abandoned, never the service; a
   controller fault (a vanished sensor) still terminates as before.
 - `_check_fan_mode()` runs every iteration regardless of the outcome above,
@@ -1287,6 +1326,9 @@ poll. It:
    `smartctl -s standby,now`) when the count of standby disks crosses
    `standby_hd_limit`,
 3. transitions STANDBY → ACTIVE when any disk wakes up.
+
+A `smartctl` error in steps 1–2 (a `sudo` error or a timeout, §6.3.1) is logged,
+and the run ends there with the last known array state.
 
 Disabled automatically when `count == 1`.
 

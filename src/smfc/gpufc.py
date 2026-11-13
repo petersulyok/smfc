@@ -13,6 +13,11 @@ from smfc.log import Log
 from smfc.config import GpuConfig, Config
 
 
+# Timeout of a single `nvidia-smi` or `rocm-smi` execution (sec). A normal call ends in 0.1-3 seconds; without
+# the NVIDIA persistence mode the driver starts at every `nvidia-smi` call, which takes a few seconds more.
+# The timeout stops an SMI command that waits forever, so that it cannot stop the control loop.
+SMI_TIMEOUT: int = 15
+
 class GpuFc(FanController):
     """Class for GPU fan controller."""
 
@@ -58,6 +63,7 @@ class GpuFc(FanController):
             subprocess.CompletedProcess: result of the executed subprocess
         Raises:
             FileNotFoundError: command not found
+            RuntimeError: the command did not finish within `SMI_TIMEOUT` seconds
         """
         r: subprocess.CompletedProcess  # Result of the executed process
         args: List[str] = []  # List of arguments
@@ -66,7 +72,10 @@ class GpuFc(FanController):
         args.append(command_path)
         args.extend(arguments)
         # May raise FileNotFoundError if command is not found.
-        r = subprocess.run(args, check=False, capture_output=True, text=True)
+        try:
+            r = subprocess.run(args, check=False, capture_output=True, text=True, timeout=SMI_TIMEOUT)
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(f"{command_path} timed out after {SMI_TIMEOUT} seconds: {' '.join(args)}") from e
         return r
 
     def _get_nth_temp(self, index: int) -> float:
@@ -77,6 +86,7 @@ class GpuFc(FanController):
             float: temperature value
         Raises:
             FileNotFoundError:  file or command cannot be found
+            RuntimeError:       the SMI command timed out
             ValueError:         invalid temperature value
             IndexError:         invalid index
         """
