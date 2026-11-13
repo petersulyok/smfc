@@ -171,7 +171,7 @@ The CONST fan controller reads no temperature, so it uses `enabled=`, `ipmi_zone
 | **Device identification** | `gpu_type=` (`nvidia` or `amd`) and `gpu_device_ids=` -- the indices of the cards |
 | **Other parameters** | `nvidia_smi_path=`, `rocm_smi_path=`, `amd_temp_sensor=` (`0`-junction, `1`-edge, `2`-memory) |
 | **Docker** | The standard image does **not** support it. Use the `-nvidia` or the `-amd` image variant, which needs the NVIDIA Container Toolkit or the `amdgpu` driver on the host. See [DOCKER.md](https://github.com/petersulyok/smfc/blob/main/docker/DOCKER.md). |
-| **Need to know** | • The matching command must be installed. `smfc` checks it at startup.<br>• One SMI call per polling window covers **every** index of the section, not one call per card. So a failed call affects all GPUs of the section at once, and their `error_tolerance` budgets advance in lockstep.<br>• `amd_temp_sensor=` applies to AMD cards only. Nvidia cards report one temperature. |
+| **Need to know** | • The matching command must be installed. `smfc` checks it at startup.<br>• A call of the SMI command stops after 15 seconds and counts as a read error. With Nvidia GPUs, enable the persistence daemon (`systemctl enable --now nvidia-persistenced`), otherwise the driver starts at every `nvidia-smi` call, which can be slow.<br>• One SMI call per polling window covers **every** index of the section, not one call per card. So a failed call affects all GPUs of the section at once, and their `error_tolerance` budgets advance in lockstep.<br>• `amd_temp_sensor=` applies to AMD cards only. Nvidia cards report one temperature. |
 
 ##### 1.2.5 NPU fan controller
 
