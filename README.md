@@ -1424,6 +1424,19 @@ root@home:~# ipmitool sel list
 If the problematic fan (causing the alert) is identified, then you must adjust its threshold. This process could take several adjustment cycles. Be patient :)
 You may read [this chapter](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds) for more details. 
 
+### Q: How should I upgrade the BMC firmware?
+Stop `smfc` before the upgrade, and start it when the BMC answers again:
+
+```
+systemctl stop smfc
+# upgrade the BMC firmware, and wait until the BMC answers again
+systemctl start smfc
+```
+
+The BMC does not answer IPMI commands during the upgrade, so `smfc` cannot control the fans. If `smfc` runs during the upgrade, it logs errors, and the fans may stay at full speed after it. In this case, restart the service with `systemctl restart smfc`.
+
+On boards using FULL mode, `exit_level=` sets the fan level when `smfc` stops. Use the default value (`100`) for an upgrade, because a lower value or `-1` can leave the fans at a low level with nothing regulating them (see [chapter 1.6](https://github.com/petersulyok/smfc/blob/main/README.md#16-service-termination)). After the upgrade, configure the IPMI thresholds again (see [chapter 6](https://github.com/petersulyok/smfc/blob/main/README.md#6-ipmi-fan-control-and-sensor-thresholds)).
+
 ### Q: How does the author test/use this service?
 The configuration is the following:
 
